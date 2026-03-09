@@ -30,6 +30,7 @@ router.get("/:mediaId", async (req: Request, res: Response) => {
   const kind = ((req.query.kind as string) || "audio").toString().toLowerCase();
 
   if (!token) {
+    console.warn("[media/stream] missing token", { mediaId, kind });
     return res.status(401).json({ success: false, message: "Token required" });
   }
   if (!Number.isFinite(mediaId) || mediaId <= 0) {
@@ -41,12 +42,19 @@ router.get("/:mediaId", async (req: Request, res: Response) => {
     payload = verifyPlaybackToken(token);
   } catch (err: any) {
     if (err instanceof MediaInvalidTokenException) {
+      console.warn("[media/stream] invalid token", { mediaId, kind, error: err?.message });
       return res.status(401).json({ success: false, message: err.message });
     }
+    console.warn("[media/stream] token verification failed", { mediaId, kind, error: err?.message });
     return res.status(401).json({ success: false, message: "Invalid token" });
   }
 
   if (payload.mediaId !== mediaId) {
+    console.warn("[media/stream] token media mismatch", {
+      mediaId,
+      payloadMediaId: payload.mediaId,
+      kind
+    });
     return res.status(403).json({ success: false, message: "Token does not match media" });
   }
 

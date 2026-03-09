@@ -34,12 +34,22 @@ export function verifyPlaybackToken(token: string): SignedMediaTokenPayload {
   const config = getMediaConfig();
   try {
     const decoded = jwt.verify(token, config.mediaSignedTokenSecret) as any;
-    if (decoded?.purpose !== PURPOSE_PLAYBACK || !decoded?.mediaId || !decoded?.userId) {
+    const mediaId = Number(decoded?.mediaId);
+    const userId = Number(decoded?.userId);
+    const hasUserId = decoded != null && Object.prototype.hasOwnProperty.call(decoded, "userId");
+    if (
+      decoded?.purpose !== PURPOSE_PLAYBACK ||
+      !Number.isFinite(mediaId) ||
+      mediaId <= 0 ||
+      !hasUserId ||
+      !Number.isFinite(userId) ||
+      userId < 0
+    ) {
       throw new MediaInvalidTokenException("Invalid token payload");
     }
     return {
-      mediaId: Number(decoded.mediaId),
-      userId: Number(decoded.userId),
+      mediaId,
+      userId,
       purpose: decoded.purpose,
       exp: decoded.exp,
       iat: decoded.iat

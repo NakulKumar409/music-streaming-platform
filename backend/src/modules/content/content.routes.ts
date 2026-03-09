@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { pool } from "../../common/db";
 import { checkContentAccess } from "../../common/accessControl";
+import { getMediaConfig } from "../../config/media.config";
+import { createPlaybackToken } from "../../shared/security/signed-media-token.service";
 
 const router = Router();
 
@@ -153,7 +155,21 @@ router.get("/artist/:artistId", (req, res) => {
       const userId = req.user?.id ? Number(req.user.id) : null;
       
       const rows = await pool.query(
-        `SELECT id, title, type, thumbnail_url, media_url, audio_url, video_url, storage_key, video_storage_key, thumbnail_storage_key, created_at, subscription_required
+        `SELECT id,
+                title,
+                type,
+                thumbnail_url,
+                media_url,
+                audio_url,
+                video_url,
+                storage_key,
+                video_storage_key,
+                thumbnail_storage_key,
+                created_at,
+                subscription_required,
+                visibility,
+                status,
+                is_approved
          FROM content_items
          WHERE artist_id = $1
            AND COALESCE(is_approved, false) = true
@@ -163,42 +179,61 @@ router.get("/artist/:artistId", (req, res) => {
         [artistId]
       );
 
-      const items = await Promise.all((rows.rows ?? []).map(async (r: any) => {
-        const { isLocked } = await checkContentAccess(userId, r.id);
-        const type = (r.type ?? "").toString().toLowerCase();
-        const mediaType = type === "video" ? "video" : "audio";
+      const mediaCfg = getMediaConfig();
+      const streamRoute = (mediaCfg.localPrivateStreamRoute || "media/stream").replace(/^\//, "");
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      const issueStreamUrl = (contentId: number, kind: "audio" | "video") => {
+        const token = createPlaybackToken(contentId, userId ?? 0, mediaCfg.mediaUrlTtlSeconds);
+        return `${baseUrl}/${streamRoute}/${contentId}?token=${encodeURIComponent(token)}&kind=${encodeURIComponent(
+          kind
+        )}`;
+      };
 
-        const storageKeyForType = mediaType === 'video' ? (r.video_storage_key ?? r.storage_key) : r.storage_key;
-        const hasNewStorage = !!storageKeyForType;
+      const items = await Promise.all(
+        (rows.rows ?? []).map(async (r: any) => {
+          const { isLocked } = await checkContentAccess(userId, r.id);
+          const type = (r.type ?? "").toString().toLowerCase();
+          const mediaType = type === "video" ? "video" : "audio";
 
-        const legacyMediaUrlRaw =
-          mediaType === 'video'
-            ? (r.video_url ?? r.media_url)
-            : (r.audio_url ?? r.media_url);
-        const unlockedMediaUrl = hasNewStorage ? null : toAbsoluteUrl(req, legacyMediaUrlRaw);
-        const finalMediaUrl = isLocked ? restrictedMediaUrl(req, mediaType) : unlockedMediaUrl;
+          const storageKeyForType =
+            mediaType === "video" ? (r.video_storage_key ?? r.storage_key) : r.storage_key;
+          const hasNewStorage = !!storageKeyForType;
 
-        const thumbnailUrl = r.thumbnail_url
-          ? toAbsoluteUrl(req, r.thumbnail_url)
-          : r.thumbnail_storage_key
-            ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
-            : null;
-        
-        return {
-          id: r.id,
-          title: r.title,
-          type,
-          mediaType,
-          thumbnailUrl,
-          artwork: thumbnailUrl,
-          mediaUrl: finalMediaUrl,
-          fileUrl: finalMediaUrl,
-          useStreamAccess: hasNewStorage,
-          subscriptionRequired: Boolean(r.subscription_required),
-          isLocked,
-          createdAt: r.created_at,
-        };
-      }));
+          const legacyMediaUrlRaw =
+            mediaType === "video"
+              ? (r.video_url ?? r.media_url)
+              : (r.audio_url ?? r.media_url);
+
+          // For new storage rows, prefer signed stream URL like /content/history
+          const streamUrl =
+            hasNewStorage && !isLocked ? issueStreamUrl(r.id, mediaType) : null;
+
+          const unlockedMediaUrl = streamUrl || (!hasNewStorage ? toAbsoluteUrl(req, legacyMediaUrlRaw) : null);
+          const finalMediaUrl = isLocked ? restrictedMediaUrl(req, mediaType) : unlockedMediaUrl;
+
+          const thumbnailUrl = r.thumbnail_url
+            ? toAbsoluteUrl(req, r.thumbnail_url)
+            : r.thumbnail_storage_key
+              ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
+              : null;
+
+          return {
+            id: r.id,
+            title: r.title,
+            type,
+            mediaType,
+            thumbnailUrl,
+            artwork: thumbnailUrl,
+            mediaUrl: finalMediaUrl,
+            fileUrl: finalMediaUrl,
+            // We return a direct stream URL, so client does not need POST /stream/access
+            useStreamAccess: false,
+            subscriptionRequired: Boolean(r.subscription_required),
+            isLocked,
+            createdAt: r.created_at
+          };
+        })
+      );
 
       return res.json({ success: true, items });
     } catch (err: any) {

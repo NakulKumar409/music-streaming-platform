@@ -290,34 +290,43 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         shouldDuckAndroid: true,
       });
 
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: playbackUrl },
-        { shouldPlay: true },
-        updateProgressFromStatus
-      );
-
-      soundRef.current = sound;
-
       try {
-        await sound.setProgressUpdateIntervalAsync(500);
-      } catch {
-        // ignore
-      }
-      try {
-        await sound.setRateAsync(stateRef.current.playbackRate, true);
-      } catch {
-        // ignore
-      }
-      try {
-        await sound.setVolumeAsync(stateRef.current.volume);
-      } catch {
-        // ignore
-      }
+        console.log('[MediaPlayer] Loading audio', { playbackUrl });
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: playbackUrl },
+          { shouldPlay: true },
+          updateProgressFromStatus
+        );
 
-      setState((s) => ({
-        ...s,
-        isPlaying: true,
-      }));
+        soundRef.current = sound;
+
+        try {
+          await sound.setProgressUpdateIntervalAsync(500);
+        } catch {
+          // ignore
+        }
+        try {
+          await sound.setRateAsync(stateRef.current.playbackRate, true);
+        } catch {
+          // ignore
+        }
+        try {
+          await sound.setVolumeAsync(stateRef.current.volume);
+        } catch {
+          // ignore
+        }
+
+        setState((s) => ({
+          ...s,
+          isPlaying: true,
+        }));
+      } catch (err) {
+        console.warn('[MediaPlayer] Failed to create or play audio', err);
+        Alert.alert(
+          'Playback Error',
+          'Could not start audio playback. Please check the media URL and try again.'
+        );
+      }
     },
     [stopVideo, unloadAudio, updateProgressFromStatus]
   );
