@@ -86,7 +86,7 @@ export default function VideoScreen({ navigation }: any) {
     const mapped: VideoCard[] = raw
       .map((it) => {
         const mediaTypeRaw = (it.mediaType ?? it.type ?? '').toString().toLowerCase();
-        const mediaType = mediaTypeRaw === 'video' ? 'video' : 'audio';
+        const mediaType = mediaTypeRaw.includes('video') ? 'video' : 'audio';
         if (mediaType !== 'video') return null;
 
         const artworkUrl = (it.thumbnailUrl ?? it.artwork ?? '').toString() || FALLBACK_ARTWORK;

@@ -97,9 +97,9 @@ router.get("/", (req, res) => {
 
       const items = await Promise.all((rows.rows ?? []).map(async (r: any) => {
         const { isLocked } = await checkContentAccess(userId, r.id);
-        const mediaType = ((r.type ?? '').toString().toLowerCase() === 'video' ? 'video' : 'audio') as
-          | 'audio'
-          | 'video';
+        const typeRaw = (r.type ?? '').toString().toLowerCase();
+        const hasVideo = Boolean(r.video_storage_key || r.video_url);
+        const mediaType = (typeRaw.includes('video') || hasVideo ? 'video' : 'audio') as 'audio' | 'video';
 
         const storageKeyForType = mediaType === 'video' ? (r.video_storage_key ?? r.storage_key) : r.storage_key;
         const hasNewStorage = !!storageKeyForType;
