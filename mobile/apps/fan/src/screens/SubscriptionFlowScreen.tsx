@@ -188,16 +188,14 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
 
       const renewDate = formatRenewDate(subscription?.end_date);
 
-      const parentNav = typeof navigation?.getParent === 'function' ? navigation.getParent() : null;
+      const parentNav = navigation.getParent?.();
       const targetArtistId = artistIdValue;
 
       if (parentNav?.navigate) {
-        parentNav.navigate('LibraryTab', {
+        parentNav.navigate('AccountTab', {
           screen: 'SubscriptionDetail',
           params: {
             artistId: targetArtistId,
-            status: 'Active',
-            renewDate,
           },
         });
       } else {

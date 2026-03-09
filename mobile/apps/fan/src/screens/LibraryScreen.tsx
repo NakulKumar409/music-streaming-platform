@@ -176,16 +176,18 @@ export default function LibraryScreen({ navigation }: any) {
             <Pressable
               style={styles.recentCard}
               onPress={() => {
-                if (!item.mediaUrl) return;
+                if (!item.mediaUrl && !item.useStreamAccess) return;
                 playQueue(
                   [
                     {
                       id: item.id,
+                      contentId: item.id,
                       title: item.title,
                       artistName: item.artistName,
                       mediaType: item.mediaType,
                       artworkUrl: item.artworkUrl,
-                      mediaUrl: item.mediaUrl,
+                      mediaUrl: item.mediaUrl || '',
+                      useStreamAccess: item.useStreamAccess,
                     },
                   ],
                   0

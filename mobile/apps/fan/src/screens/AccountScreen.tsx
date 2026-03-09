@@ -15,7 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../store/authStore';
-import { CreditCard, HelpCircle, LogOut, User } from 'lucide-react-native';
+import { CreditCard, HelpCircle, Library, LogOut, User } from 'lucide-react-native';
 import { userService, type AudioQualityPref, type SubscriptionPlanSummary, type Transaction } from '../services/userService';
 import { JWT_STORAGE_KEY } from '../services/api';
 import { resetToLogin } from '../navigation/rootNavigation';
@@ -304,6 +304,14 @@ export default function AccountScreen() {
         {/* Account Settings */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Settings</Text>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => navigation.navigate('MyLibrary')}
+          >
+            <Library size={20} color="#fff" />
+            <Text style={styles.menuText}>My Library</Text>
+          </TouchableOpacity>
           
           <TouchableOpacity style={styles.menuItem} onPress={() => setShowTransactions(true)}>
             <CreditCard size={20} color="#fff" />

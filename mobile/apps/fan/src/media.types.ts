@@ -2,6 +2,7 @@ export type MediaType = 'audio' | 'video';
 
 export type MediaItem = {
   id: string;
+  contentId?: string;
   title: string;
   artistName?: string;
   artistId?: string;

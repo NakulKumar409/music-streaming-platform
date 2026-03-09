@@ -78,6 +78,8 @@ export type ApiArtistContentItem = {
   artwork?: string | null;
   mediaUrl?: string | null;
   fileUrl?: string | null;
+  audioUrl?: string | null;
+  videoUrl?: string | null;
   locked?: boolean;
   isLocked?: boolean;
   useStreamAccess?: boolean;
@@ -85,6 +87,7 @@ export type ApiArtistContentItem = {
 
 export type ArtistMediaItem = {
   id: string;
+  contentId?: string;
   title: string;
   mediaType: 'audio' | 'video';
   artworkUrl: string;
@@ -104,29 +107,72 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
   const res = await apiV1.get(`/content/artist/${encodeURIComponent(id)}`);
   const raw: ApiArtistContentItem[] = Array.isArray(res.data?.items) ? res.data.items : [];
 
-  return raw
-    .map((it) => {
-      const mediaTypeRaw = (it.mediaType || it.type || '').toString().toLowerCase();
-      const isVideoCapable = mediaTypeRaw === 'video' || mediaTypeRaw === 'audio_video' || mediaTypeRaw === 'audiovideo';
-      const mediaType: ArtistMediaItem['mediaType'] = isVideoCapable ? 'video' : 'audio';
-      const artworkUrl =
-        resolveMediaUrl((it.artwork || it.thumbnailUrl || '').toString()) ||
-        'https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=1400&q=80';
-      const mediaUrl = resolveMediaUrl((it.mediaUrl || it.fileUrl || '').toString()) || '';
-      const useStreamAccess = Boolean(it.useStreamAccess);
-      const item: ArtistMediaItem = {
-        id: String(it.id),
-        title: (it.title ?? 'Untitled').toString(),
-        mediaType,
-        artworkUrl,
-        mediaUrl,
-        locked: false,
-        useStreamAccess,
-      };
+  const items: ArtistMediaItem[] = [];
 
-      return item;
-    })
-    .filter((it) => Boolean(it.mediaUrl) || it.useStreamAccess);
+  for (const it of raw) {
+    const contentId = String(it.id);
+    const title = (it.title ?? 'Untitled').toString();
+    const artworkUrl =
+      resolveMediaUrl((it.artwork || it.thumbnailUrl || '').toString()) ||
+      'https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=1400&q=80';
+
+    const typeRaw = (it.mediaType || it.type || '').toString().toLowerCase();
+    const isAudioVideo = typeRaw === 'audio_video' || typeRaw === 'audiovideo' || typeRaw === 'audio+video';
+    const isVideoOnly = typeRaw === 'video';
+
+    const audioUrl = resolveMediaUrl((it.audioUrl || '').toString()) || '';
+    const videoUrl = resolveMediaUrl((it.videoUrl || '').toString()) || '';
+    const fallbackUrl = resolveMediaUrl((it.mediaUrl || it.fileUrl || '').toString()) || '';
+    const useStreamAccess = Boolean(it.useStreamAccess);
+
+    const effectiveAudioUrl = audioUrl || (!isVideoOnly ? fallbackUrl : '');
+    const effectiveVideoUrl = videoUrl || (isVideoOnly ? fallbackUrl : '');
+
+    if (isAudioVideo) {
+      if (effectiveAudioUrl || useStreamAccess) {
+        items.push({
+          id: `${contentId}:audio`,
+          contentId,
+          title,
+          mediaType: 'audio',
+          artworkUrl,
+          mediaUrl: effectiveAudioUrl,
+          locked: false,
+          useStreamAccess,
+        });
+      }
+      if (effectiveVideoUrl || useStreamAccess) {
+        items.push({
+          id: `${contentId}:video`,
+          contentId,
+          title,
+          mediaType: 'video',
+          artworkUrl,
+          mediaUrl: effectiveVideoUrl,
+          locked: false,
+          useStreamAccess,
+        });
+      }
+      continue;
+    }
+
+    const mediaType: ArtistMediaItem['mediaType'] = isVideoOnly ? 'video' : 'audio';
+    const mediaUrl = mediaType === 'video' ? effectiveVideoUrl : effectiveAudioUrl;
+    if (!mediaUrl && !useStreamAccess) continue;
+
+    items.push({
+      id: contentId,
+      contentId,
+      title,
+      mediaType,
+      artworkUrl,
+      mediaUrl,
+      locked: false,
+      useStreamAccess,
+    });
+  }
+
+  return items;
 }
 
 export async function fetchVerifiedArtists(): Promise<ArtistListItem[]> {

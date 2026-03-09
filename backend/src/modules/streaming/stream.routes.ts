@@ -6,6 +6,7 @@ import { Router } from "express";
 import { pool } from "../../common/db";
 import { requestPlaybackAccess } from "../../modules/media/media-access.service";
 import { getStorageService } from "../../shared/storage/services/storage.service";
+import { getMediaConfig } from "../../config/media.config";
 import {
   MediaNotFoundException,
   MediaNotReadyException,
@@ -35,10 +36,35 @@ router.post("/access", async (req: any, res: any) => {
       userId: req.user?.id ?? null,
       kind
     });
+
+    const mediaCfg = getMediaConfig();
+    const configuredBase = (mediaCfg.appBaseUrl || "").replace(/\/+$/, "");
+    const requestBase = `${req.protocol}://${req.get("host")}`;
+    const streamRoute = (mediaCfg.localPrivateStreamRoute || "/media/stream").replace(/\/+$/, "");
+
+    const rawUrl = (result.playbackUrl ?? "").toString();
+    let playbackUrl = rawUrl;
+
+    // 1) If the strategy used APP_BASE_URL, rewrite it to current request host/port.
+    if (configuredBase && rawUrl.startsWith(configuredBase)) {
+      playbackUrl = `${requestBase}${rawUrl.slice(configuredBase.length)}`;
+    }
+
+    // 2) If it's a local private stream URL, always return it rooted at request host/port.
+    // This avoids cases where APP_BASE_URL defaults to localhost:3000 which is not reachable by devices.
+    try {
+      const u = new URL(playbackUrl);
+      if (u.pathname.startsWith(streamRoute)) {
+        playbackUrl = `${requestBase}${u.pathname}${u.search}`;
+      }
+    } catch {
+      // ignore invalid URL
+    }
+
     return res.json({
       success: true,
       mediaId: result.mediaId,
-      playbackUrl: result.playbackUrl,
+      playbackUrl,
       expiresIn: result.expiresIn,
       contentType: result.contentType,
       contentLength: result.contentLength,

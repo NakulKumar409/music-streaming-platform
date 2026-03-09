@@ -17,6 +17,7 @@ export type RecentlyPlayedItem = {
   artistName: string;
   artworkUrl: string | null;
   mediaUrl: string | null;
+  useStreamAccess?: boolean;
   playedAt: string;
 };
 
@@ -44,6 +45,7 @@ export async function fetchRecentlyPlayed(limit = 15): Promise<RecentlyPlayedIte
     artistName: (it.artistName ?? 'Artist').toString(),
     artworkUrl: it.artworkUrl ?? null,
     mediaUrl: it.mediaUrl ?? null,
+    useStreamAccess: Boolean(it.useStreamAccess ?? (!it.mediaUrl && it.id)),
     playedAt: (it.playedAt ?? new Date().toISOString()).toString(),
   }));
 }

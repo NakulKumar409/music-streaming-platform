@@ -3,17 +3,19 @@ import { StyleSheet } from 'react-native';
 
 import { createBottomTabNavigator, type BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { BlurView } from 'expo-blur';
-import { Home as HomeIcon, Library, Search, User } from 'lucide-react-native';
+import { Home as HomeIcon, Music, PlayCircle, Search, User } from 'lucide-react-native';
 
-import AccountScreen from '../screens/AccountScreen';
 import SearchScreen from '../screens/SearchScreen';
+import AccountStackNavigator from './AccountStackNavigator';
+import AudioStackNavigator from './AudioStackNavigator';
 import HomeStackNavigator from './HomeStackNavigator';
-import LibraryStackNavigator from './LibraryStackNavigator';
+import VideoStackNavigator from './VideoStackNavigator';
 
 export type MainTabParamList = {
   HomeTab: undefined;
   SearchTab: undefined;
-  LibraryTab: undefined;
+  AudioTab: undefined;
+  VideoTab: undefined;
   AccountTab: undefined;
 };
 
@@ -37,7 +39,8 @@ export default function MainTabsNavigator() {
           const iconSize = size ?? 24;
           if (route.name === 'HomeTab') return <HomeIcon color={color} size={iconSize} />;
           if (route.name === 'SearchTab') return <Search color={color} size={iconSize} />;
-          if (route.name === 'LibraryTab') return <Library color={color} size={iconSize} />;
+          if (route.name === 'AudioTab') return <Music color={color} size={iconSize} />;
+          if (route.name === 'VideoTab') return <PlayCircle color={color} size={iconSize} />;
           return <User color={color} size={iconSize} />;
         },
         tabBarItemStyle: styles.tabBarItem,
@@ -45,8 +48,9 @@ export default function MainTabsNavigator() {
     >
       <Tab.Screen name="HomeTab" component={HomeStackNavigator} options={{ title: 'Home' }} />
       <Tab.Screen name="SearchTab" component={SearchScreen} options={{ title: 'Search' }} />
-      <Tab.Screen name="LibraryTab" component={LibraryStackNavigator} options={{ title: 'Library' }} />
-      <Tab.Screen name="AccountTab" component={AccountScreen} options={{ title: 'Account' }} />
+      <Tab.Screen name="AudioTab" component={AudioStackNavigator} options={{ title: 'Audio' }} />
+      <Tab.Screen name="VideoTab" component={VideoStackNavigator} options={{ title: 'Video' }} />
+      <Tab.Screen name="AccountTab" component={AccountStackNavigator} options={{ title: 'Account' }} />
     </Tab.Navigator>
   );
 }

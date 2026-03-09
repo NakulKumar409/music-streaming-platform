@@ -193,23 +193,31 @@ router.get("/artist/:artistId", (req, res) => {
         (rows.rows ?? []).map(async (r: any) => {
           const { isLocked } = await checkContentAccess(userId, r.id);
           const type = (r.type ?? "").toString().toLowerCase();
-          const mediaType = type === "video" ? "video" : "audio";
 
-          const storageKeyForType =
-            mediaType === "video" ? (r.video_storage_key ?? r.storage_key) : r.storage_key;
-          const hasNewStorage = !!storageKeyForType;
+          const hasAudio = Boolean(r.storage_key || r.audio_url || r.media_url);
+          const hasVideo = Boolean(r.video_storage_key || r.video_url);
 
-          const legacyMediaUrlRaw =
-            mediaType === "video"
-              ? (r.video_url ?? r.media_url)
-              : (r.audio_url ?? r.media_url);
+          const inferredMediaType = type === "video" ? "video" : "audio";
 
-          // For new storage rows, prefer signed stream URL like /content/history
-          const streamUrl =
-            hasNewStorage && !isLocked ? issueStreamUrl(r.id, mediaType) : null;
+          const hasNewAudioStorage = Boolean(r.storage_key);
+          const hasNewVideoStorage = Boolean(r.video_storage_key || (type === "video" && r.storage_key));
 
-          const unlockedMediaUrl = streamUrl || (!hasNewStorage ? toAbsoluteUrl(req, legacyMediaUrlRaw) : null);
-          const finalMediaUrl = isLocked ? restrictedMediaUrl(req, mediaType) : unlockedMediaUrl;
+          const legacyAudioUrlRaw = r.audio_url ?? r.media_url;
+          const legacyVideoUrlRaw = r.video_url ?? r.media_url;
+
+          const streamAudioUrl = hasNewAudioStorage && !isLocked ? issueStreamUrl(r.id, "audio") : null;
+          const streamVideoUrl = hasNewVideoStorage && !isLocked ? issueStreamUrl(r.id, "video") : null;
+
+          const unlockedAudioUrl =
+            streamAudioUrl || (!hasNewAudioStorage ? toAbsoluteUrl(req, legacyAudioUrlRaw) : null);
+          const unlockedVideoUrl =
+            streamVideoUrl || (!hasNewVideoStorage ? toAbsoluteUrl(req, legacyVideoUrlRaw) : null);
+
+          const finalAudioUrl = hasAudio ? (isLocked ? restrictedMediaUrl(req, "audio") : unlockedAudioUrl) : null;
+          const finalVideoUrl = hasVideo ? (isLocked ? restrictedMediaUrl(req, "video") : unlockedVideoUrl) : null;
+
+          const finalMediaUrl = inferredMediaType === "video" ? finalVideoUrl : finalAudioUrl;
+          const useStreamAccess = Boolean((inferredMediaType === "video" ? hasNewVideoStorage : hasNewAudioStorage) && !isLocked);
 
           const thumbnailUrl = r.thumbnail_url
             ? toAbsoluteUrl(req, r.thumbnail_url)
@@ -221,13 +229,15 @@ router.get("/artist/:artistId", (req, res) => {
             id: r.id,
             title: r.title,
             type,
-            mediaType,
+            mediaType: inferredMediaType,
             thumbnailUrl,
             artwork: thumbnailUrl,
             mediaUrl: finalMediaUrl,
             fileUrl: finalMediaUrl,
-            // We return a direct stream URL, so client does not need POST /stream/access
-            useStreamAccess: false,
+            audioUrl: finalAudioUrl,
+            videoUrl: finalVideoUrl,
+            // We return direct stream URLs, so client does not need POST /stream/access
+            useStreamAccess,
             subscriptionRequired: Boolean(r.subscription_required),
             isLocked,
             createdAt: r.created_at

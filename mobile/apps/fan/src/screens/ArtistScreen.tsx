@@ -30,6 +30,7 @@ import { Colors } from '../theme';
 
 type Song = {
   id: string;
+  contentId?: string;
   title: string;
   artist: string;
   duration: string;
@@ -142,6 +143,7 @@ export default function ArtistScreen({ navigation, route }: any) {
 
         const toSong = (it: ArtistMediaItem): Song => ({
           id: it.id,
+          contentId: it.contentId,
           title: it.title,
           artist: a.name,
           duration: it.mediaType === 'video' ? 'Video' : 'Audio',
@@ -175,7 +177,7 @@ export default function ArtistScreen({ navigation, route }: any) {
     if (!initialMediaId) return;
     if (!songs.length) return;
 
-    const match = songs.find((s) => s.id === initialMediaId);
+    const match = songs.find((s) => s.id === initialMediaId || s.contentId === initialMediaId);
     if (!match) return;
 
     if (match.mediaType === 'audio') setActiveTab('Audio');
@@ -185,6 +187,7 @@ export default function ArtistScreen({ navigation, route }: any) {
       .filter((s) => Boolean(s.mediaUrl) || s.useStreamAccess)
       .map((s) => ({
         id: s.id,
+        contentId: s.contentId,
         title: s.title,
         artistName: s.artist,
         artistId: artist.id,
@@ -194,7 +197,7 @@ export default function ArtistScreen({ navigation, route }: any) {
         isLocked: false,
         useStreamAccess: s.useStreamAccess,
       }));
-    const idx = queue.findIndex((q) => q.id === initialMediaId);
+    const idx = queue.findIndex((q) => q.id === initialMediaId || q.contentId === initialMediaId);
     if (idx < 0) return;
 
     playQueue(queue, idx).catch(() => undefined);

@@ -16,7 +16,7 @@ import { navigationRef } from '../navigation/rootNavigation';
 
 import MediaPlayerOverlay from '../ui/MediaPlayerOverlay';
 import { recordPlayback } from '../services/libraryService';
-import { getPlaybackUrl } from '../services/streamService';
+import { getPlaybackUrl, normalizePlaybackUrl } from '../services/streamService';
 
 import type { MediaItem, MediaType, PlayerState } from '../media.types';
 
@@ -99,7 +99,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     if (!currentItem?.id) return;
     if (!state.isPlaying) return;
 
-    const key = `${currentItem.id}`;
+    const key = `${currentItem.contentId ?? currentItem.id}`;
 
     // avoid multiple immediate calls when state updates rapidly
     if (lastRecordedRef.current === key) return;
@@ -269,10 +269,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       await stopVideo();
       await unloadAudio();
 
-      let playbackUrl = item.mediaUrl;
+      let playbackUrl = normalizePlaybackUrl(item.mediaUrl);
       if (item.useStreamAccess) {
         try {
-          playbackUrl = await getPlaybackUrl(item.id, 'audio');
+          playbackUrl = await getPlaybackUrl(item.contentId ?? item.id, 'audio');
         } catch (e) {
           console.warn('[MediaPlayer] getPlaybackUrl failed', e);
           Alert.alert('Playback Error', 'Could not get playback URL. Try again.');
@@ -355,7 +355,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       if (item.mediaType === 'video' && item.useStreamAccess) {
         try {
-          const url = await getPlaybackUrl(item.id, 'video');
+          const url = await getPlaybackUrl(item.contentId ?? item.id, 'video');
           item = { ...item, mediaUrl: url };
           nextState.queue[nextState.currentIndex] = item;
         } catch (e) {
