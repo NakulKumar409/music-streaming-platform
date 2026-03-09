@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import { globalLimiter } from "./common/security/rateLimit";
 import { validateEnv } from "./config/env.validation";
-import { ensureContentMediaColumns } from "./config/ensure-schema";
+import { ensureContentMediaColumns, ensureUsersSchema } from "./config/ensure-schema";
 import fanRoutes from "./routes/fan";
 import artistRoutes from "./routes/artist";
 import adminRoutes from "./routes/admin";
@@ -207,6 +207,7 @@ const PORT = process.env.PORT || 8000;
   createStorageProvider();
   const storageConfig = validateEnv();
   getDeliveryStrategyForProvider(storageConfig.storageProvider);
+  await ensureUsersSchema();
   await ensureContentMediaColumns();
 
   app.listen(PORT, () => {
