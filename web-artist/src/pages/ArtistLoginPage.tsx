@@ -33,6 +33,7 @@ export default function ArtistLoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -120,14 +121,76 @@ export default function ArtistLoginPage() {
 
               <div>
                 <div className="text-[13px] text-[#b8a6a1]">Password</div>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="mt-2 w-full h-[44px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-4 text-[14px] text-[#e6d6d2] outline-none focus:border-white/20"
-                  placeholder="••••••"
-                  autoComplete="current-password"
-                />
+                <div className="relative mt-2">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full h-[44px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 pl-4 pr-11 text-[14px] text-[#e6d6d2] outline-none focus:border-white/20"
+                    placeholder="••••••"
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((s) => !s)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-[6px] flex items-center justify-center text-[#b8a6a1] hover:text-[#e6d6d2] hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-white/20"
+                  >
+                    {showPassword ? (
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M3 3L21 21"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                        />
+                        <path
+                          d="M10.6 10.6C10.2 11 10 11.5 10 12C10 13.1 10.9 14 12 14C12.5 14 13 13.8 13.4 13.4"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M9.9 5.1C10.6 4.9 11.3 4.8 12 4.8C18 4.8 21.5 12 21.5 12C20.7 13.6 19.6 15 18.3 16.2M6.8 6.8C4.2 8.7 2.5 12 2.5 12C2.5 12 4.2 15.3 6.8 17.2C8.3 18.3 10.1 19.2 12 19.2C12.9 19.2 13.8 19 14.6 18.7"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    ) : (
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M2.5 12C2.5 12 6 4.8 12 4.8C18 4.8 21.5 12 21.5 12C21.5 12 18 19.2 12 19.2C6 19.2 2.5 12 2.5 12Z"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {error ? (

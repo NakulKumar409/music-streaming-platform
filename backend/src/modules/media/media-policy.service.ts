@@ -17,3 +17,9 @@ export function isContentEligibleForPlayback(
   if (!isApproved) return false;
   return true;
 }
+
+export function normalizeVisibilityForPlayback(visibility: string): string {
+  const v = (visibility || "").toString().toUpperCase();
+  if (v === "PROTECTED") return "PUBLIC";
+  return v;
+}

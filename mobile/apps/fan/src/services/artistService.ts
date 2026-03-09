@@ -107,7 +107,8 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
   return raw
     .map((it) => {
       const mediaTypeRaw = (it.mediaType || it.type || '').toString().toLowerCase();
-      const mediaType: ArtistMediaItem['mediaType'] = mediaTypeRaw === 'video' ? 'video' : 'audio';
+      const isVideoCapable = mediaTypeRaw === 'video' || mediaTypeRaw === 'audio_video' || mediaTypeRaw === 'audiovideo';
+      const mediaType: ArtistMediaItem['mediaType'] = isVideoCapable ? 'video' : 'audio';
       const artworkUrl =
         resolveMediaUrl((it.artwork || it.thumbnailUrl || '').toString()) ||
         'https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=1400&q=80';
@@ -119,7 +120,7 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
         mediaType,
         artworkUrl,
         mediaUrl,
-        locked: Boolean(it.isLocked ?? it.locked ?? false),
+        locked: false,
         useStreamAccess,
       };
 

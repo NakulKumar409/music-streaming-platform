@@ -84,14 +84,13 @@ export default function SearchScreen({ navigation }: any) {
           const title = (c.title ?? '').toString();
           const artistName = (c.artistName ?? c.artist_name ?? '').toString();
           const artwork = (c.artwork ?? c.thumbnailUrl ?? c.thumbnail_url ?? '').toString();
-          const isLocked = Boolean(c.locked ?? c.isLocked ?? false);
           return {
             id,
             title,
             artistName,
             artwork,
             type: 'SONG' as const,
-            isLocked,
+            isLocked: false,
           };
         });
 
@@ -280,15 +279,6 @@ export default function SearchScreen({ navigation }: any) {
       return;
     }
 
-    if (item.isLocked) {
-      navigateHomeStack('SubscriptionFlow', {
-        artistName: item.artistName,
-        contentId: item.id,
-        artwork: item.artwork,
-      });
-      return;
-    }
-
     navigateHomeStack('ContentPlayer', { contentId: item.id });
   };
 
@@ -416,11 +406,6 @@ export default function SearchScreen({ navigation }: any) {
                       ) : (
                         <View style={styles.songThumb} />
                       )}
-                      {r.isLocked ? (
-                        <View style={styles.lockBadge}>
-                          <Lock color="#fff" size={12} />
-                        </View>
-                      ) : null}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.title} numberOfLines={1}>

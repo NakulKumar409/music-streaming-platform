@@ -23,6 +23,11 @@ export class LocalStorageProvider implements IStorageProvider {
     }
   }
 
+  private getMetaPath(storageKey: string): string {
+    const absolutePath = this.getAbsolutePath(storageKey);
+    return `${absolutePath}.meta.json`;
+  }
+
   private getAbsolutePath(storageKey: string): string {
     if (!isSafeStorageKey(storageKey)) {
       throw new StoragePathTraversalException();
@@ -45,6 +50,17 @@ export class LocalStorageProvider implements IStorageProvider {
       this.ensureDirFor(absolutePath);
       const buffer = Buffer.isBuffer(body) ? body : await streamToBuffer(body as Readable);
       fs.writeFileSync(absolutePath, buffer, { flag: "w" });
+
+      try {
+        const metaPath = this.getMetaPath(storageKey);
+        fs.writeFileSync(
+          metaPath,
+          JSON.stringify({ contentType: contentType || null }, null, 2),
+          { flag: "w" }
+        );
+      } catch {
+        // ignore meta write failures
+      }
       return { storageKey, sizeBytes: buffer.length };
     } catch (err: any) {
       throw new StorageUploadFailedException(
@@ -59,6 +75,11 @@ export class LocalStorageProvider implements IStorageProvider {
     if (fs.existsSync(absolutePath)) {
       fs.unlinkSync(absolutePath);
     }
+
+    const metaPath = this.getMetaPath(storageKey);
+    if (fs.existsSync(metaPath)) {
+      fs.unlinkSync(metaPath);
+    }
   }
 
   async exists(storageKey: string): Promise<boolean> {
@@ -70,10 +91,25 @@ export class LocalStorageProvider implements IStorageProvider {
     const absolutePath = this.getAbsolutePath(storageKey);
     if (!fs.existsSync(absolutePath)) return null;
     const stat = fs.statSync(absolutePath);
+
+    let contentType: string | null = null;
+    try {
+      const metaPath = this.getMetaPath(storageKey);
+      if (fs.existsSync(metaPath)) {
+        const raw = fs.readFileSync(metaPath, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (parsed?.contentType && typeof parsed.contentType === "string") {
+          contentType = parsed.contentType;
+        }
+      }
+    } catch {
+      contentType = null;
+    }
     return {
       storageKey,
       contentLength: stat.size,
-      lastModified: stat.mtime
+      lastModified: stat.mtime,
+      contentType: contentType ?? undefined
     };
   }
 

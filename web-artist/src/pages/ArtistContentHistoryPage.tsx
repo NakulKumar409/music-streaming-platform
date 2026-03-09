@@ -90,8 +90,9 @@ export default function ArtistContentHistoryPage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return items.filter((it) => {
-      const hasAudio = Boolean(it.audioUrl || (it.mediaUrl || "").toString().toLowerCase().endsWith(".mp3"));
-      const hasVideo = Boolean(it.videoUrl || (it.mediaUrl || "").toString().toLowerCase().endsWith(".mp4"));
+      const type = (it.type || "").toString().toUpperCase();
+      const hasAudio = Boolean(it.audioUrl || it.mediaUrl) || type === "AUDIO" || type === "AUDIO_VIDEO";
+      const hasVideo = Boolean(it.videoUrl) || type === "VIDEO" || type === "AUDIO_VIDEO";
       if (tab === "AUDIO" && !hasAudio) return false;
       if (tab === "VIDEO" && !hasVideo) return false;
       if (!q) return true;
@@ -100,10 +101,11 @@ export default function ArtistContentHistoryPage() {
   }, [items, query, tab]);
 
   const getDisplayType = (it: HistoryItem) => {
+    const type = (it.type || "").toString().toUpperCase();
     const hasAudio = Boolean(it.audioUrl || it.mediaUrl);
     const hasVideo = Boolean(it.videoUrl);
-    if (hasAudio && hasVideo) return "COMBINED";
-    if (hasVideo) return "VIDEO";
+    if (type === "AUDIO_VIDEO" || (hasAudio && hasVideo)) return "AUDIO+VIDEO";
+    if (type === "VIDEO" || hasVideo) return "VIDEO";
     return "AUDIO";
   };
 
@@ -280,8 +282,9 @@ export default function ArtistContentHistoryPage() {
                       ? "border-rose-500/25 bg-rose-500/10 text-rose-200"
                       : "border-amber-500/25 bg-amber-500/10 text-amber-200";
 
-                  const canPreviewAudio = Boolean(it.audioUrl || it.mediaUrl);
-                  const canPreviewVideo = Boolean(it.videoUrl);
+                  const rawType = (it.type || "").toString().toUpperCase();
+                  const canPreviewAudio = Boolean(it.audioUrl || it.mediaUrl) || rawType === "AUDIO" || rawType === "AUDIO_VIDEO";
+                  const canPreviewVideo = Boolean(it.videoUrl) || rawType === "VIDEO" || rawType === "AUDIO_VIDEO";
                   const typeLabel = getDisplayType(it);
                   return (
                     <tr key={`${id ?? idx}`} className="border-t border-white/10">

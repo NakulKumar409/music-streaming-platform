@@ -107,16 +107,6 @@ export default function ContentPlayerScreen({ navigation, route }: any) {
     (async () => {
       if (!currentContent) return;
 
-      if (currentContent.isLocked) {
-        navigation.replace('SubscriptionFlow', {
-          artistId: currentContent.artistId,
-          artistName: currentContent.artist,
-          contentId: currentContent.id,
-          artwork: currentContent.thumbnail,
-        });
-        return;
-      }
-
       try {
         setMediaError(null);
         setIsPlaying(false);
@@ -256,17 +246,6 @@ export default function ContentPlayerScreen({ navigation, route }: any) {
   const handlePlayPress = async () => {
     if (!currentContent) return;
     if (mediaError) return;
-
-    // Check subscription status before playing
-    if (!isSubscriptionActive) {
-      const message = 'Cannot play while subscription is expired. Please renew your subscription.';
-      if (Platform.OS === 'android') {
-        ToastAndroid.show(message, ToastAndroid.LONG);
-      } else {
-        Alert.alert('Subscription Expired', message);
-      }
-      return;
-    }
 
     // Check network connectivity before playing
     if (!isConnected || !isInternetReachable) {

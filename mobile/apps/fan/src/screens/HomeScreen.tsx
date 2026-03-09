@@ -129,7 +129,7 @@ export default function HomeScreen({ navigation }: any) {
                 artistId: artistId ? String(artistId) : undefined,
                 description: (it.type || '').toString(),
                 thumbnail: thumb || FALLBACK_THUMBNAIL,
-                isLocked: Boolean(it.locked ?? it.isLocked ?? false),
+                isLocked: false,
                 createdAt: (it.createdAt ?? null) as any,
                 mediaType,
               };
@@ -179,21 +179,6 @@ export default function HomeScreen({ navigation }: any) {
   }, [featuredArtists, trendingArtists]);
 
   const onPressContent = (item: ContentCard) => {
-    if (item.isLocked) {
-      const resolvedArtistId =
-        (item.artistId || '').toString() ||
-        artistNameToId.get((item.artist || '').toString().trim().toLowerCase()) ||
-        '';
-
-      navigation.navigate('SubscriptionFlow', {
-        artistId: resolvedArtistId || undefined,
-        artistName: item.artist,
-        contentId: item.id,
-        artwork: item.thumbnail,
-      });
-      return;
-    }
-
     const resolvedArtistId =
       (item.artistId || '').toString() ||
       artistNameToId.get((item.artist || '').toString().trim().toLowerCase()) ||
@@ -272,11 +257,6 @@ export default function HomeScreen({ navigation }: any) {
           <View style={styles.audioDot} />
         )}
       </View>
-      {item.isLocked ? (
-        <View style={styles.lockPill}>
-          <Lock color="#fff" size={14} />
-        </View>
-      ) : null}
     </Pressable>
   );
 

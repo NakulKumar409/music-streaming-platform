@@ -11,6 +11,7 @@ import { getMediaConfig } from "../config/media.config";
 import { generateStorageKey } from "../shared/storage/utils/storage-key.util";
 import { validateFileForUpload } from "../shared/storage/utils/file-validation.util";
 import { getExtensionFromMime } from "../shared/storage/utils/file-metadata.util";
+import { createPlaybackToken } from "../shared/security/signed-media-token.service";
 
 const router = Router();
 
@@ -257,7 +258,7 @@ router.post(
         contentType: videoMime
       });
 
-      const normalizedType = "AUDIO";
+      const normalizedType = "AUDIO_VIDEO";
       const now = new Date().toISOString();
       let insert;
       try {
@@ -265,8 +266,9 @@ router.post(
         `INSERT INTO content_items (
           title, type, artist_id, genre, lifecycle_state, is_approved,
           storage_provider, storage_key, thumbnail_storage_key, video_storage_key, visibility, status,
-          mime_type, file_size_bytes, original_file_name, uploaded_at
-        ) VALUES ($1, $2, $3, $4, 'DRAFT', false, $5, $6, $7, $8, 'PROTECTED', 'DRAFT', $9, $10, $11, $12)
+          mime_type, file_size_bytes, original_file_name, uploaded_at,
+          thumbnail_url, audio_url, video_url
+        ) VALUES ($1, $2, $3, $4, 'DRAFT', false, $5, $6, $7, $8, 'PROTECTED', 'DRAFT', $9, $10, $11, $12, $13, $14, $15)
         RETURNING id, title, type, artist_id, storage_key, thumbnail_storage_key, storage_provider, visibility, status, created_at`,
         [
           trimmedTitle,
@@ -280,7 +282,10 @@ router.post(
           audioMime,
           audio.size ?? null,
           audio.originalname || null,
-          now
+          now,
+          null,
+          null,
+          null
         ]
       );
       } catch (dbErr: any) {
@@ -424,6 +429,14 @@ router.get("/history", requireAuth, requireArtistOrAdmin, async (req: any, res: 
     await ensureContentSchema();
     await ensurePlaysSchema();
 
+    const mediaCfg = getMediaConfig();
+    const streamRoute = (mediaCfg.localPrivateStreamRoute || "media/stream").replace(/^\//, "");
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const issueStreamUrl = (contentId: number, userId: number, kind: "audio" | "video") => {
+      const token = createPlaybackToken(contentId, userId, mediaCfg.mediaUrlTtlSeconds);
+      return `${baseUrl}/${streamRoute}/${contentId}?token=${encodeURIComponent(token)}&kind=${encodeURIComponent(kind)}`;
+    };
+
     const role = (req.user?.role || "").toUpperCase();
 
     if (role === "ADMIN") {
@@ -446,6 +459,9 @@ router.get("/history", requireAuth, requireArtistOrAdmin, async (req: any, res: 
           c.media_url,
           c.audio_url,
           c.video_url,
+          c.storage_provider,
+          c.storage_key,
+          c.video_storage_key,
           c.lifecycle_state,
           c.is_approved,
           c.rejection_reason,
@@ -462,14 +478,22 @@ router.get("/history", requireAuth, requireArtistOrAdmin, async (req: any, res: 
         const lifecycle = (r.lifecycle_state ?? "DRAFT").toString();
         const approved = Boolean(r.is_approved);
         const status = lifecycle.toUpperCase() === "REJECTED" ? "REJECTED" : approved ? "PUBLISHED" : "PENDING";
+        const hasAudio = Boolean(r.audio_url || r.media_url || r.storage_key);
+        const hasVideo = Boolean(r.video_url || r.video_storage_key);
+
+        const audioUrl = hasAudio ? issueStreamUrl(r.id, req.user?.id, "audio") : null;
+        const videoUrl = hasVideo ? issueStreamUrl(r.id, req.user?.id, "video") : null;
+
+        const rawType = (r.type ?? "").toString().toUpperCase();
+        const type = rawType || (hasAudio && hasVideo ? "AUDIO_VIDEO" : hasVideo ? "VIDEO" : "AUDIO");
         return {
           id: r.id,
           title: r.title,
-          type: (r.type ?? "").toString().toLowerCase(),
+          type: type.toLowerCase(),
           thumbnailUrl: r.thumbnail_url ?? null,
           mediaUrl: r.media_url ?? null,
-          audioUrl: r.audio_url ?? null,
-          videoUrl: r.video_url ?? null,
+          audioUrl,
+          videoUrl,
           lifecycleState: lifecycle,
           isApproved: r.is_approved,
           status,
@@ -492,6 +516,9 @@ router.get("/history", requireAuth, requireArtistOrAdmin, async (req: any, res: 
         c.media_url,
         c.audio_url,
         c.video_url,
+        c.storage_provider,
+        c.storage_key,
+        c.video_storage_key,
         c.lifecycle_state,
         c.is_approved,
         c.rejection_reason,
@@ -508,14 +535,22 @@ router.get("/history", requireAuth, requireArtistOrAdmin, async (req: any, res: 
       const lifecycle = (r.lifecycle_state ?? "DRAFT").toString();
       const approved = Boolean(r.is_approved);
       const status = lifecycle.toUpperCase() === "REJECTED" ? "REJECTED" : approved ? "PUBLISHED" : "PENDING";
+      const hasAudio = Boolean(r.audio_url || r.media_url || r.storage_key);
+      const hasVideo = Boolean(r.video_url || r.video_storage_key);
+
+      const audioUrl = hasAudio ? issueStreamUrl(r.id, req.user?.id, "audio") : null;
+      const videoUrl = hasVideo ? issueStreamUrl(r.id, req.user?.id, "video") : null;
+
+      const rawType = (r.type ?? "").toString().toUpperCase();
+      const type = rawType || (hasAudio && hasVideo ? "AUDIO_VIDEO" : hasVideo ? "VIDEO" : "AUDIO");
       return {
         id: r.id,
         title: r.title,
-        type: (r.type ?? "").toString().toLowerCase(),
+        type: type.toLowerCase(),
         thumbnailUrl: r.thumbnail_url ?? null,
         mediaUrl: r.media_url ?? null,
-        audioUrl: r.audio_url ?? null,
-        videoUrl: r.video_url ?? null,
+        audioUrl,
+        videoUrl,
         lifecycleState: lifecycle,
         isApproved: r.is_approved,
         status,

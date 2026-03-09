@@ -18,33 +18,7 @@ import MediaPlayerOverlay from '../ui/MediaPlayerOverlay';
 import { recordPlayback } from '../services/libraryService';
 import { getPlaybackUrl } from '../services/streamService';
 
-export type MediaType = 'audio' | 'video';
-
-export type MediaItem = {
-  id: string;
-  title: string;
-  artistName?: string;
-  artistId?: string;
-  mediaType: MediaType;
-  artworkUrl?: string | null;
-  mediaUrl: string;
-  isLocked?: boolean;
-  /** When true, resolve playback URL via POST /stream/access before playing */
-  useStreamAccess?: boolean;
-};
-
-type PlayerState = {
-  queue: MediaItem[];
-  currentIndex: number;
-  isPlaying: boolean;
-  positionMs: number;
-  durationMs: number;
-  isExpanded: boolean;
-  isShuffle: boolean;
-  repeatMode: 'off' | 'one' | 'all';
-  playbackRate: number;
-  volume: number;
-};
+import type { MediaItem, MediaType, PlayerState } from '../media.types';
 
 type SoundLike = {
   unloadAsync: () => Promise<void>;
@@ -298,7 +272,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       let playbackUrl = item.mediaUrl;
       if (item.useStreamAccess) {
         try {
-          playbackUrl = await getPlaybackUrl(item.id);
+          playbackUrl = await getPlaybackUrl(item.id, 'audio');
         } catch (e) {
           console.warn('[MediaPlayer] getPlaybackUrl failed', e);
           Alert.alert('Playback Error', 'Could not get playback URL. Try again.');
@@ -354,32 +328,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   const blockLockedPlayback = useCallback(
     async (item: MediaItem) => {
-      await unloadAudio();
-      await stopVideo();
-
-      setState((s) => ({
-        ...s,
-        isPlaying: false,
-        positionMs: 0,
-        durationMs: 0,
-      }));
-
-      Alert.alert('Subscription Required', 'Subscription Required');
-
-      if (navigationRef.isReady()) {
-        (navigationRef as any).navigate('MainTabs', {
-          screen: 'HomeTab',
-          params: {
-            screen: 'SubscriptionFlow',
-            params: {
-              artistId: item.artistId,
-              artistName: item.artistName,
-              contentId: item.id,
-              artwork: item.artworkUrl ?? undefined,
-            },
-          },
-        });
-      }
+      void item;
+      return;
     },
     [unloadAudio, stopVideo]
   );
@@ -394,14 +344,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       let item = nextState.queue[nextState.currentIndex];
       if (!item) return;
 
-      if (item.isLocked) {
-        await blockLockedPlayback(item);
-        return;
-      }
-
       if (item.mediaType === 'video' && item.useStreamAccess) {
         try {
-          const url = await getPlaybackUrl(item.id);
+          const url = await getPlaybackUrl(item.id, 'video');
           item = { ...item, mediaUrl: url };
           nextState.queue[nextState.currentIndex] = item;
         } catch (e) {
@@ -434,10 +379,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   const togglePlayPause = useCallback(async () => {
     const item = currentItemRef.current;
-    if (item?.isLocked) {
-      await blockLockedPlayback(item);
-      return;
-    }
     if (stateRef.current.queue.length === 0) return;
 
     if (item.mediaType === 'audio') {
@@ -664,7 +605,24 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   return (
     <MediaPlayerContext.Provider value={value}>
       {children}
-      <MediaPlayerOverlay bottomSafeAreaPadding={Platform.OS === 'web' ? 12 : 0} />
+      <MediaPlayerOverlay
+        bottomSafeAreaPadding={Platform.OS === 'web' ? 12 : 0}
+        state={value.state}
+        currentItem={value.currentItem}
+        togglePlayPause={value.togglePlayPause}
+        skipNext={value.skipNext}
+        skipPrev={value.skipPrev}
+        seekTo={value.seekTo}
+        toggleShuffle={value.toggleShuffle}
+        cycleRepeatMode={value.cycleRepeatMode}
+        setPlaybackRate={value.setPlaybackRate}
+        setVolume={value.setVolume}
+        close={value.close}
+        setExpanded={value.setExpanded}
+        inlineVideoHostActive={value.inlineVideoHostActive}
+        onVideoPlaybackStatusUpdate={value.onVideoPlaybackStatusUpdate}
+        videoRef={value.videoRef}
+      />
     </MediaPlayerContext.Provider>
   );
 }

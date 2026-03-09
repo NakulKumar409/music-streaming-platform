@@ -12,11 +12,13 @@ export type StreamAccessResponse = {
   expiresIn?: number;
   contentType?: string;
   contentLength?: number;
+  message?: string;
 };
 
-export async function getPlaybackUrl(contentId: string): Promise<string> {
+export async function getPlaybackUrl(contentId: string, kind?: 'audio' | 'video'): Promise<string> {
   const res = await apiV1.post<StreamAccessResponse>('/stream/access', {
     contentId: Number(contentId),
+    kind,
   });
   const data = res.data;
   if (!data?.success || !data?.playbackUrl) {

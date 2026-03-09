@@ -16,7 +16,8 @@ import Slider from '@react-native-community/slider';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useMediaPlayer } from '../providers/MediaPlayerProvider';
+import type { AVPlaybackStatus } from 'expo-av';
+import type { MediaItem, PlayerState } from '../media.types';
 import YouTubeVideoControlsOverlay from './YouTubeVideoControlsOverlay';
 import { Colors } from '../theme';
 
@@ -24,30 +25,42 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function MediaPlayerOverlay({
   bottomSafeAreaPadding,
+  state,
+  currentItem,
+  togglePlayPause,
+  skipNext,
+  skipPrev,
+  seekTo,
+  toggleShuffle,
+  cycleRepeatMode,
+  setPlaybackRate,
+  setVolume,
+  close,
+  setExpanded,
+  inlineVideoHostActive,
+  onVideoPlaybackStatusUpdate,
+  videoRef,
 }: {
   bottomSafeAreaPadding?: number;
+  state: PlayerState;
+  currentItem: MediaItem | null;
+  togglePlayPause: () => Promise<void>;
+  skipNext: () => Promise<void>;
+  skipPrev: () => Promise<void>;
+  seekTo: (positionMs: number) => Promise<void>;
+  toggleShuffle: () => void;
+  cycleRepeatMode: () => void;
+  setPlaybackRate: (rate: number) => Promise<void>;
+  setVolume: (volume: number) => Promise<void>;
+  close: () => Promise<void>;
+  setExpanded: (expanded: boolean) => void;
+  inlineVideoHostActive: boolean;
+  onVideoPlaybackStatusUpdate: (status: AVPlaybackStatus) => void;
+  videoRef: React.RefObject<Video>;
 }) {
   const insets = useSafeAreaInsets();
 
   const [expandedVideoAspectRatio, setExpandedVideoAspectRatio] = useState(16 / 9);
-
-  const {
-    state,
-    currentItem,
-    togglePlayPause,
-    skipNext,
-    skipPrev,
-    seekTo,
-    toggleShuffle,
-    cycleRepeatMode,
-    setPlaybackRate,
-    setVolume,
-    close,
-    setExpanded,
-    inlineVideoHostActive,
-    onVideoPlaybackStatusUpdate,
-    videoRef,
-  } = useMediaPlayer();
 
   const isVisible = Boolean(currentItem);
 

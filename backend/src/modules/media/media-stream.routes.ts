@@ -14,9 +14,20 @@ import { MediaNotFoundException } from "../../shared/exceptions/media.exception"
 
 const router = Router();
 
+function inferContentTypeFromKey(storageKey: string | null | undefined): string | null {
+  if (!storageKey) return null;
+  const lower = storageKey.toLowerCase();
+  if (lower.endsWith(".mp3")) return "audio/mpeg";
+  if (lower.endsWith(".mp4")) return "video/mp4";
+  if (lower.endsWith(".wav")) return "audio/wav";
+  if (lower.endsWith(".m4a")) return "audio/mp4";
+  return null;
+}
+
 router.get("/:mediaId", async (req: Request, res: Response) => {
   const mediaId = Number(req.params.mediaId);
   const token = (req.query.token as string)?.trim();
+  const kind = ((req.query.kind as string) || "audio").toString().toLowerCase();
 
   if (!token) {
     return res.status(401).json({ success: false, message: "Token required" });
@@ -44,7 +55,7 @@ router.get("/:mediaId", async (req: Request, res: Response) => {
     return res.status(404).json({ success: false, message: "Media not found" });
   }
 
-  const storageKey = content.storage_key;
+  const storageKey = kind === "video" ? content.video_storage_key : content.storage_key;
   const storageProvider = (content.storage_provider || "local").toString().toLowerCase();
 
   if (!storageKey) {
@@ -68,7 +79,9 @@ router.get("/:mediaId", async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: "File not found" });
     }
     totalLength = meta.contentLength ?? 0;
-    contentType = meta.contentType || "application/octet-stream";
+    const inferred = inferContentTypeFromKey(storageKey);
+    const fromMeta = meta.contentType || "";
+    contentType = fromMeta && fromMeta !== "application/octet-stream" ? fromMeta : inferred || "application/octet-stream";
   } catch (err) {
     return res.status(500).json({ success: false, message: "Failed to get media" });
   }
@@ -91,6 +104,7 @@ router.get("/:mediaId", async (req: Request, res: Response) => {
   res.setHeader("Content-Type", contentType);
   res.setHeader("Accept-Ranges", "bytes");
   res.setHeader("Cache-Control", "private, no-cache");
+  res.setHeader("Content-Disposition", "inline");
 
   if (statusCode === 206) {
     const contentLength = end - start + 1;

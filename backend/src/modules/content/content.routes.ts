@@ -75,7 +75,10 @@ router.get("/", (req, res) => {
            c.type,
            c.thumbnail_url,
            c.media_url,
+           c.audio_url,
+           c.video_url,
            c.storage_key,
+           c.video_storage_key,
            c.thumbnail_storage_key,
            c.created_at,
            c.artist_id,
@@ -95,10 +98,22 @@ router.get("/", (req, res) => {
         const mediaType = ((r.type ?? '').toString().toLowerCase() === 'video' ? 'video' : 'audio') as
           | 'audio'
           | 'video';
-        const hasNewStorage = !!r.storage_key;
-        const unlockedMediaUrl = hasNewStorage ? null : toAbsoluteUrl(req, r.media_url);
+
+        const storageKeyForType = mediaType === 'video' ? (r.video_storage_key ?? r.storage_key) : r.storage_key;
+        const hasNewStorage = !!storageKeyForType;
+
+        const legacyMediaUrlRaw =
+          mediaType === 'video'
+            ? (r.video_url ?? r.media_url)
+            : (r.audio_url ?? r.media_url);
+        const unlockedMediaUrl = hasNewStorage ? null : toAbsoluteUrl(req, legacyMediaUrlRaw);
         const finalMediaUrl = isLocked ? restrictedMediaUrl(req, mediaType) : unlockedMediaUrl;
-        const thumbnailUrl = r.thumbnail_url ? toAbsoluteUrl(req, r.thumbnail_url) : null;
+
+        const thumbnailUrl = r.thumbnail_url
+          ? toAbsoluteUrl(req, r.thumbnail_url)
+          : r.thumbnail_storage_key
+            ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
+            : null;
         
         return {
           id: r.id,
@@ -138,7 +153,7 @@ router.get("/artist/:artistId", (req, res) => {
       const userId = req.user?.id ? Number(req.user.id) : null;
       
       const rows = await pool.query(
-        `SELECT id, title, type, thumbnail_url, media_url, storage_key, created_at, subscription_required
+        `SELECT id, title, type, thumbnail_url, media_url, audio_url, video_url, storage_key, video_storage_key, thumbnail_storage_key, created_at, subscription_required
          FROM content_items
          WHERE artist_id = $1
            AND COALESCE(is_approved, false) = true
@@ -152,10 +167,22 @@ router.get("/artist/:artistId", (req, res) => {
         const { isLocked } = await checkContentAccess(userId, r.id);
         const type = (r.type ?? "").toString().toLowerCase();
         const mediaType = type === "video" ? "video" : "audio";
-        const hasNewStorage = !!r.storage_key;
-        const unlockedMediaUrl = hasNewStorage ? null : toAbsoluteUrl(req, r.media_url);
+
+        const storageKeyForType = mediaType === 'video' ? (r.video_storage_key ?? r.storage_key) : r.storage_key;
+        const hasNewStorage = !!storageKeyForType;
+
+        const legacyMediaUrlRaw =
+          mediaType === 'video'
+            ? (r.video_url ?? r.media_url)
+            : (r.audio_url ?? r.media_url);
+        const unlockedMediaUrl = hasNewStorage ? null : toAbsoluteUrl(req, legacyMediaUrlRaw);
         const finalMediaUrl = isLocked ? restrictedMediaUrl(req, mediaType) : unlockedMediaUrl;
-        const thumbnailUrl = r.thumbnail_url ? toAbsoluteUrl(req, r.thumbnail_url) : null;
+
+        const thumbnailUrl = r.thumbnail_url
+          ? toAbsoluteUrl(req, r.thumbnail_url)
+          : r.thumbnail_storage_key
+            ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
+            : null;
         
         return {
           id: r.id,
@@ -199,7 +226,11 @@ router.get("/:id", (req, res) => {
            c.type,
            c.thumbnail_url,
            c.media_url,
+           c.audio_url,
+           c.video_url,
            c.storage_key,
+           c.video_storage_key,
+           c.thumbnail_storage_key,
            c.subscription_required,
            c.artist_id,
            COALESCE(u.name, u.email) as artist_name
@@ -220,10 +251,22 @@ router.get("/:id", (req, res) => {
       const { isLocked } = await checkContentAccess(userId, r.id);
       const type = (r.type ?? '').toString().toLowerCase();
       const mediaType = type === 'video' ? 'video' : 'audio';
-      const hasNewStorage = !!r.storage_key;
-      const unlockedMediaUrl = hasNewStorage ? null : toAbsoluteUrl(req, r.media_url);
+
+      const storageKeyForType = mediaType === 'video' ? (r.video_storage_key ?? r.storage_key) : r.storage_key;
+      const hasNewStorage = !!storageKeyForType;
+
+      const legacyMediaUrlRaw =
+        mediaType === 'video'
+          ? (r.video_url ?? r.media_url)
+          : (r.audio_url ?? r.media_url);
+      const unlockedMediaUrl = hasNewStorage ? null : toAbsoluteUrl(req, legacyMediaUrlRaw);
       const finalMediaUrl = isLocked ? restrictedMediaUrl(req, mediaType) : unlockedMediaUrl;
-      const thumbnailUrl = r.thumbnail_url ? toAbsoluteUrl(req, r.thumbnail_url) : null;
+
+      const thumbnailUrl = r.thumbnail_url
+        ? toAbsoluteUrl(req, r.thumbnail_url)
+        : r.thumbnail_storage_key
+          ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
+          : null;
       
       return res.json({
         success: true,

@@ -18,7 +18,7 @@ import {
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { ArrowLeft, BadgeCheck, Lock, Settings } from 'lucide-react-native';
+import { ArrowLeft, BadgeCheck, Settings } from 'lucide-react-native';
 import { ResizeMode, Video } from 'expo-av';
 import { useIsFocused } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -146,7 +146,7 @@ export default function ArtistScreen({ navigation, route }: any) {
           artist: a.name,
           duration: it.mediaType === 'video' ? 'Video' : 'Audio',
           thumbnail: it.artworkUrl,
-          locked: it.locked,
+          locked: false,
           mediaType: it.mediaType,
           mediaUrl: it.mediaUrl,
           useStreamAccess: it.useStreamAccess,
@@ -178,16 +178,6 @@ export default function ArtistScreen({ navigation, route }: any) {
     const match = songs.find((s) => s.id === initialMediaId);
     if (!match) return;
 
-    if (match.locked && !isUnlocked) {
-      navigation.navigate('SubscriptionFlow', {
-        artistId: artist.id,
-        artistName: artist.name,
-        contentId: match.id,
-        artwork: match.thumbnail,
-      });
-      return;
-    }
-
     if (match.mediaType === 'audio') setActiveTab('Audio');
     if (match.mediaType === 'video') setActiveTab('Video');
 
@@ -201,7 +191,7 @@ export default function ArtistScreen({ navigation, route }: any) {
         mediaType: s.mediaType,
         artworkUrl: s.thumbnail,
         mediaUrl: s.mediaUrl || '',
-        isLocked: s.locked,
+        isLocked: false,
         useStreamAccess: s.useStreamAccess,
       }));
     const idx = queue.findIndex((q) => q.id === initialMediaId);
@@ -220,13 +210,14 @@ export default function ArtistScreen({ navigation, route }: any) {
   }, [currentItem?.mediaType, isVideoPlaying]);
 
   const isUnlocked = Boolean(route?.params?.unlocked);
+  const isTemporarilyUnlocked = true;
 
   const filteredSongs = useMemo(() => {
-    const baseSongs = isUnlocked ? songs.map((s) => ({ ...s, locked: false })) : songs;
+    const baseSongs = isTemporarilyUnlocked ? songs.map((s) => ({ ...s, locked: false })) : songs;
     if (activeTab === 'All') return baseSongs;
     if (activeTab === 'Audio') return baseSongs.filter((s) => s.mediaType === 'audio');
     return baseSongs.filter((s) => s.mediaType === 'video');
-  }, [activeTab, isUnlocked, songs]);
+  }, [activeTab, isTemporarilyUnlocked, songs]);
 
   const channelContent = useMemo(() => {
     if (activeChannelTab === 'Playlists') return [];
@@ -243,15 +234,6 @@ export default function ArtistScreen({ navigation, route }: any) {
       return; // Block all playback when subscription is expired
     }
     
-    if (song.locked && !isUnlocked) {
-      navigation.navigate('SubscriptionFlow', {
-        artistId: artist.id,
-        artistName: artist.name,
-        contentId: song.id,
-        artwork: song.thumbnail,
-      });
-      return;
-    }
     const queue = filteredSongs
       .filter((s) => Boolean(s.mediaUrl) || s.useStreamAccess)
       .map((s) => ({
@@ -262,7 +244,7 @@ export default function ArtistScreen({ navigation, route }: any) {
         mediaType: s.mediaType,
         artworkUrl: s.thumbnail,
         mediaUrl: s.mediaUrl || '',
-        isLocked: s.locked,
+        isLocked: false,
         useStreamAccess: s.useStreamAccess,
       }));
     const idx = queue.findIndex((q) => q.id === song.id);
@@ -693,15 +675,6 @@ function MediaCard({
           <View style={styles.cardBadgeRight}>
             <Text style={styles.cardBadgeText}>{badgeText}</Text>
           </View>
-
-          {item.locked ? (
-            <View style={styles.cardBadgeLeft}>
-              <View style={styles.cardBadgeLeftIcon}>
-                <Lock color="#fff" size={14} />
-              </View>
-              <Text style={styles.cardBadgeText}>LOCKED</Text>
-            </View>
-          ) : null}
         </View>
 
         <Text style={styles.cardTitle} numberOfLines={2}>
