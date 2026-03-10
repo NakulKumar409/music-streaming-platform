@@ -1,23 +1,24 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
   FlatList,
   Image,
   Pressable,
   RefreshControl,
+  Share,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { BlurView } from 'expo-blur';
-import { Play, Search as SearchIcon } from 'lucide-react-native';
-import { VideoView, useVideoPlayer } from 'expo-video';
+import { BadgeCheck, HelpCircle, Library, Pause, Play, Settings } from 'lucide-react-native';
+import { ResizeMode, Video, type AVPlaybackStatus } from 'expo-av';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { apiV1 } from '../services/api';
 import * as streamService from '../services/streamService';
@@ -40,6 +41,9 @@ type ApiContentItem = {
   isLocked?: boolean;
   locked?: boolean;
   genre?: string | null;
+  viewCount?: number | null;
+  views?: number | null;
+  storageKey?: string | null;
 };
 
 type VideoCard = {
@@ -50,18 +54,71 @@ type VideoCard = {
   artworkUrl: string;
   mediaUrl: string;
   useStreamAccess?: boolean;
+  storageKey?: string | null;
   category: string;
   createdAt?: string | null;
+  viewCount?: number | null;
 };
 
 const FALLBACK_ARTWORK =
   'https://images.unsplash.com/photo-1526948128573-703ee1aeb6fa?auto=format&fit=crop&w=1400&q=80';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const GRID_GAP = 12;
-const GRID_COLS = 2;
-const GRID_ITEM_W = (SCREEN_WIDTH - 20 * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
-const GRID_ITEM_H = Math.round(GRID_ITEM_W * (9 / 16) + 60);
+const HEADER_ASPECT = 16 / 9;
+const HEADER_HEIGHT = Math.round(SCREEN_WIDTH / HEADER_ASPECT);
+const MINI_PLAYER_W = 180;
+const MINI_PLAYER_H = Math.round(MINI_PLAYER_W / HEADER_ASPECT);
+const DOUBLE_TAP_MS = 250;
+const SEEK_DELTA_MS = 10_000;
+
+function clamp(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, n));
+}
+
+function hashColor(input: string): string {
+  let h = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    h = (h << 5) - h + input.charCodeAt(i);
+    h |= 0;
+  }
+  const r = (h & 0xff0000) >> 16;
+  const g = (h & 0x00ff00) >> 8;
+  const b = h & 0x0000ff;
+  const rr = (r + 256) % 256;
+  const gg = (g + 256) % 256;
+  const bb = (b + 256) % 256;
+  return `rgb(${rr},${gg},${bb})`;
+}
+
+function formatCompactViews(v: number | null | undefined): string {
+  const n = typeof v === 'number' && Number.isFinite(v) ? v : null;
+  if (n === null) return '— views';
+  if (n < 1000) return `${n} views`;
+  if (n < 1_000_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}K views`;
+  if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M views`;
+  return `${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B views`;
+}
+
+function formatDateLabel(raw?: string | null): string {
+  if (!raw) return '';
+  const d = new Date(raw);
+  if (!Number.isFinite(d.getTime())) return '';
+  const now = Date.now();
+  const diff = Math.max(0, now - d.getTime());
+  const day = 24 * 60 * 60 * 1000;
+  const days = Math.floor(diff / day);
+  if (days <= 0) return 'Today';
+  if (days === 1) return '1 day ago';
+  if (days < 7) return `${days} days ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks === 1) return '1 week ago';
+  if (weeks < 5) return `${weeks} weeks ago`;
+  const months = Math.floor(days / 30);
+  if (months === 1) return '1 month ago';
+  if (months < 12) return `${months} months ago`;
+  const years = Math.floor(days / 365);
+  return years <= 1 ? '1 year ago' : `${years} years ago`;
+}
 
 function normalizeCategory(raw: unknown): string {
   const c = (raw ?? '').toString().trim();
@@ -74,9 +131,6 @@ export default function VideoScreen() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  const [query, setQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState<string>('All');
   const [items, setItems] = useState<VideoCard[]>([]);
 
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
@@ -84,8 +138,34 @@ export default function VideoScreen() {
   const [activePlaybackUrl, setActivePlaybackUrl] = useState<string | null>(null);
   const [loadingPlaybackUrl, setLoadingPlaybackUrl] = useState(false);
 
+  const [isVideoReady, setIsVideoReady] = useState(false);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [positionMs, setPositionMs] = useState(0);
+  const [durationMs, setDurationMs] = useState(0);
+  const [showUpNext, setShowUpNext] = useState(false);
+  const [upNextSeconds, setUpNextSeconds] = useState(5);
+  const upNextTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const [showControls, setShowControls] = useState(true);
+  const controlsHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playedOnceRef = useRef(false);
+
+  const [showQualitySheet, setShowQualitySheet] = useState(false);
+  const [selectedQuality, setSelectedQuality] = useState<string>('Auto');
+
+  const [scrollY, setScrollY] = useState(0);
+  const [showMini, setShowMini] = useState(false);
+
+  const listRef = useRef<FlatList<VideoCard> | null>(null);
+
+  const videoRef = useRef<Video>(null);
+  const lastTapRef = useRef(0);
+  const lastTapXRef = useRef(0);
+
+  const shimmerX = useRef(new Animated.Value(0)).current;
+
   const fetchAll = useCallback(async () => {
-    const res = await apiV1.get('/content');
+    const res = await apiV1.get('/content', { params: { mediaType: 'video' } });
     const raw: ApiContentItem[] = Array.isArray(res.data?.items) ? res.data.items : [];
 
     const mapped: VideoCard[] = raw
@@ -104,9 +184,11 @@ export default function VideoScreen() {
           artistId: artistIdValue,
           artworkUrl,
           mediaUrl: (it.mediaUrl ?? it.fileUrl ?? '').toString(),
-          useStreamAccess: Boolean(it.useStreamAccess),
+          useStreamAccess: true,
+          storageKey: (it.storageKey ?? null) as any,
           category: normalizeCategory(it.genre),
           createdAt: (it.createdAt ?? null) as any,
+          viewCount: (typeof it.viewCount === 'number' ? it.viewCount : typeof it.views === 'number' ? it.views : null) as any,
         };
       })
       .filter(Boolean) as VideoCard[];
@@ -137,39 +219,13 @@ export default function VideoScreen() {
     load().catch(() => undefined);
   }, [load]);
 
-  const categories = useMemo(() => {
-    const set = new Set<string>();
-    items.forEach((x) => set.add(normalizeCategory(x.category)));
-    const list = Array.from(set).sort((a, b) => a.localeCompare(b));
-    return ['All', 'Trending Videos', ...list.filter((x) => x !== 'Trending Videos')].slice(0, 14);
-  }, [items]);
-
   const trending = useMemo(() => {
-    return [...items]
-      .sort((a, b) => {
-        const ta = a.createdAt ? new Date(String(a.createdAt)).getTime() : 0;
-        const tb = b.createdAt ? new Date(String(b.createdAt)).getTime() : 0;
-        return tb - ta;
-      })
-      .slice(0, 12);
-  }, [items]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return items.filter((x) => {
-      if (activeCategory !== 'All') {
-        if (activeCategory === 'Trending Videos') {
-          // keep all; trending section already shown
-        } else if (normalizeCategory(x.category) !== activeCategory) {
-          return false;
-        }
-      }
-
-      if (!q) return true;
-      const hay = `${x.title} ${x.artistName} ${x.category}`.toLowerCase();
-      return hay.includes(q);
+    return [...items].sort((a, b) => {
+      const ta = a.createdAt ? new Date(String(a.createdAt)).getTime() : 0;
+      const tb = b.createdAt ? new Date(String(b.createdAt)).getTime() : 0;
+      return tb - ta;
     });
-  }, [activeCategory, items, query]);
+  }, [items]);
 
   const pauseGlobalAudioIfNeeded = useCallback(async () => {
     if (currentItem?.mediaType !== 'audio') return;
@@ -181,18 +237,52 @@ export default function VideoScreen() {
     }
   }, [currentItem?.mediaType, playerState.isPlaying, togglePlayPause]);
 
-  const resolvePlaybackUrl = useCallback(async (video: VideoCard) => {
-    if (video.useStreamAccess) {
-      return await streamService.getPlaybackUrl(video.id, 'video');
+  const pauseInlineVideoIfNeeded = useCallback(async () => {
+    try {
+      const v = videoRef.current;
+      if (!v) return;
+      const status = await v.getStatusAsync();
+      const loaded = Boolean((status as any)?.isLoaded);
+      const playing = Boolean((status as any)?.isPlaying);
+      if (loaded && playing) {
+        await v.pauseAsync();
+      }
+    } catch {
+      // ignore
     }
-    return video.mediaUrl ? streamService.normalizePlaybackUrl(video.mediaUrl) : '';
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        pauseInlineVideoIfNeeded().catch(() => undefined);
+      };
+    }, [pauseInlineVideoIfNeeded])
+  );
+
+  const resolvePlaybackUrl = useCallback(async (video: VideoCard) => {
+    try {
+      return await streamService.getPlaybackUrl(video.id, 'video');
+    } catch {
+      return video.mediaUrl ? streamService.normalizePlaybackUrl(video.mediaUrl) : '';
+    }
   }, []);
 
   const onPressVideo = useCallback(
     (video: VideoCard) => {
       (async () => {
+        setShowUpNext(false);
+        setUpNextSeconds(5);
+        if (upNextTimerRef.current) {
+          clearInterval(upNextTimerRef.current);
+          upNextTimerRef.current = null;
+        }
+
         setActiveVideoId(video.id);
         setActiveVideoMeta(video);
+
+        playedOnceRef.current = false;
+        setShowControls(true);
 
         await pauseGlobalAudioIfNeeded();
 
@@ -201,6 +291,8 @@ export default function VideoScreen() {
           const url = await resolvePlaybackUrl(video);
           if (!url) return;
           setActivePlaybackUrl(url);
+          setIsVideoReady(false);
+          setIsVideoPlaying(true);
         } catch {
           // keep placeholder
           setActivePlaybackUrl(null);
@@ -209,388 +301,615 @@ export default function VideoScreen() {
         }
       })().catch(() => undefined);
     },
-    [pauseGlobalAudioIfNeeded, resolvePlaybackUrl]
+    [pauseGlobalAudioIfNeeded, resolvePlaybackUrl, shimmerX]
   );
 
-  const player = useVideoPlayer(
-    activePlaybackUrl ? { uri: activePlaybackUrl } : null,
-    (p) => {
+  useEffect(() => {
+    if (!activePlaybackUrl) return;
+    if (controlsHideTimerRef.current) {
+      clearTimeout(controlsHideTimerRef.current);
+      controlsHideTimerRef.current = null;
+    }
+    controlsHideTimerRef.current = setTimeout(() => {
+      setShowControls(false);
+    }, 2200);
+  }, [activePlaybackUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (controlsHideTimerRef.current) {
+        clearTimeout(controlsHideTimerRef.current);
+        controlsHideTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(shimmerX, {
+        toValue: 1,
+        duration: 1200,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, [shimmerX]);
+
+  useEffect(() => {
+    const deep = scrollY > HEADER_HEIGHT * 2.4;
+    setShowMini(deep && Boolean(activePlaybackUrl) && isVideoPlaying);
+  }, [activePlaybackUrl, isVideoPlaying, scrollY]);
+
+  const onVideoStatusUpdate = useCallback(
+    (status: AVPlaybackStatus) => {
+      const s: any = status as any;
+      if (!s?.isLoaded) {
+        setIsVideoReady(false);
+        return;
+      }
+      setIsVideoReady(true);
+      setIsVideoPlaying(Boolean(s.isPlaying));
+      setPositionMs(Math.max(0, Math.round(Number(s.positionMillis ?? 0))));
+      setDurationMs(Math.max(0, Math.round(Number(s.durationMillis ?? 0))));
+
+       // Some devices/situations report loaded but do not auto-start.
+       // Ensure playback starts once after load if user selected a video.
+       if (!playedOnceRef.current && activePlaybackUrl) {
+         playedOnceRef.current = true;
+         try {
+           videoRef.current?.playAsync();
+         } catch {
+           // ignore
+         }
+       }
+
+      if (s.didJustFinish) {
+        setIsVideoPlaying(false);
+        setShowUpNext(true);
+        setUpNextSeconds(5);
+      }
+    },
+    [activePlaybackUrl]
+  );
+
+  useEffect(() => {
+    if (!showUpNext) return;
+    if (!activeVideoId) return;
+    if (!trending.length) return;
+
+    if (upNextTimerRef.current) {
+      clearInterval(upNextTimerRef.current);
+      upNextTimerRef.current = null;
+    }
+
+    upNextTimerRef.current = setInterval(() => {
+      setUpNextSeconds((s) => {
+        const next = s - 1;
+        if (next <= 0) {
+          if (upNextTimerRef.current) {
+            clearInterval(upNextTimerRef.current);
+            upNextTimerRef.current = null;
+          }
+
+          const idx = trending.findIndex((x) => x.id === activeVideoId);
+          const nextItem = trending[clamp(idx + 1, 0, Math.max(0, trending.length - 1))];
+          if (nextItem && nextItem.id !== activeVideoId) {
+            onPressVideo(nextItem);
+          }
+          return 5;
+        }
+        return next;
+      });
+    }, 1000);
+
+    return () => {
+      if (upNextTimerRef.current) {
+        clearInterval(upNextTimerRef.current);
+        upNextTimerRef.current = null;
+      }
+    };
+  }, [activeVideoId, onPressVideo, showUpNext, trending]);
+
+  const ambientColor = useMemo(() => {
+    const key = `${activeVideoMeta?.id ?? ''}|${activeVideoMeta?.artworkUrl ?? ''}`;
+    return hashColor(key);
+  }, [activeVideoMeta?.artworkUrl, activeVideoMeta?.id]);
+
+  const availableQualities = useMemo(() => {
+    const key = (activeVideoMeta?.storageKey ?? '')?.toString() || '';
+    const list: string[] = ['Auto'];
+    if (/1080/i.test(key)) list.push('1080p');
+    if (/720/i.test(key)) list.push('720p');
+    if (/480/i.test(key)) list.push('480p');
+    return Array.from(new Set(list));
+  }, [activeVideoMeta?.storageKey]);
+
+  const onDoubleTap = useCallback(
+    async (dir: 'back' | 'forward') => {
       try {
-        p.play();
+        const v = videoRef.current;
+        if (!v) return;
+        const status = await v.getStatusAsync();
+        const s: any = status as any;
+        if (!s?.isLoaded) return;
+        const current = Number(s.positionMillis ?? 0);
+        const dur = Number(s.durationMillis ?? 0);
+        const next = dir === 'back' ? current - SEEK_DELTA_MS : current + SEEK_DELTA_MS;
+        const target = clamp(next, 0, dur || Number.MAX_SAFE_INTEGER);
+        await v.setPositionAsync(target);
       } catch {
         // ignore
       }
-    }
+    },
+    []
   );
 
-  const renderGridItem = useCallback(
+  const onPressPlayerSurface = useCallback(
+    async (evt: any) => {
+      const x = Number(evt?.nativeEvent?.locationX ?? 0);
+      const now = Date.now();
+      const delta = now - lastTapRef.current;
+      const lastX = lastTapXRef.current;
+      lastTapRef.current = now;
+      lastTapXRef.current = x;
+
+      if (delta < DOUBLE_TAP_MS && Math.abs(x - lastX) < 50) {
+        const dir = x < SCREEN_WIDTH / 2 ? 'back' : 'forward';
+        await onDoubleTap(dir);
+        setShowControls(true);
+        if (controlsHideTimerRef.current) {
+          clearTimeout(controlsHideTimerRef.current);
+          controlsHideTimerRef.current = null;
+        }
+        controlsHideTimerRef.current = setTimeout(() => setShowControls(false), 1800);
+        return;
+      }
+
+      setShowControls((s) => {
+        const next = !s;
+        if (controlsHideTimerRef.current) {
+          clearTimeout(controlsHideTimerRef.current);
+          controlsHideTimerRef.current = null;
+        }
+        if (next) {
+          controlsHideTimerRef.current = setTimeout(() => setShowControls(false), 2400);
+        }
+        return next;
+      });
+    },
+    [onDoubleTap]
+  );
+
+  const toggleInlinePlayPause = useCallback(async () => {
+    try {
+      const v = videoRef.current;
+      if (!v) return;
+      const status = await v.getStatusAsync();
+      const s: any = status as any;
+      if (!s?.isLoaded) return;
+      if (s.isPlaying) {
+        await v.pauseAsync();
+        setIsVideoPlaying(false);
+      } else {
+        await v.playAsync();
+        setIsVideoPlaying(true);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const onPressShare = useCallback(async () => {
+    try {
+      if (!activeVideoMeta) return;
+      await Share.share({ message: `${activeVideoMeta.title} - ${activeVideoMeta.artistName}` });
+    } catch {
+      // ignore
+    }
+  }, [activeVideoMeta]);
+
+  const renderSkeletonRow = useCallback(
+    (_: any, idx: number) => {
+      const translateX = shimmerX.interpolate({ inputRange: [0, 1], outputRange: [-160, 260] });
+      return (
+        <View style={styles.skelRow} key={`sk-${idx}`}>
+          <View style={styles.skelThumb}>
+            <Animated.View style={[styles.skelShimmer, { transform: [{ translateX }] }]} />
+          </View>
+          <View style={styles.skelMeta}>
+            <View style={styles.skelLineLg}>
+              <Animated.View style={[styles.skelShimmer, { transform: [{ translateX }] }]} />
+            </View>
+            <View style={styles.skelLineSm}>
+              <Animated.View style={[styles.skelShimmer, { transform: [{ translateX }] }]} />
+            </View>
+            <View style={styles.skelLineXs}>
+              <Animated.View style={[styles.skelShimmer, { transform: [{ translateX }] }]} />
+            </View>
+          </View>
+        </View>
+      );
+    },
+    [shimmerX]
+  );
+
+  const renderVideoItem = useCallback(
     ({ item }: { item: VideoCard }) => {
       const isActive = item.id === activeVideoId;
       return (
-      <Pressable
-        style={[styles.gridItem, isActive ? styles.gridItemActive : null]}
-        onPress={() => onPressVideo(item)}
-      >
-        <View style={styles.thumbWrap}>
-          <Image source={{ uri: item.artworkUrl || FALLBACK_ARTWORK }} style={styles.thumb} />
-          <View style={styles.playOverlay}>
-            <View style={styles.playBadge}>
-              <Play size={16} color="#000" />
+        <Pressable style={styles.rowItem} onPress={() => onPressVideo(item)}>
+          <View style={[styles.rowThumbWrap, isActive ? styles.rowThumbWrapActive : null]}>
+            <Image source={{ uri: item.artworkUrl || FALLBACK_ARTWORK }} style={styles.rowThumb} />
+            <View style={styles.rowThumbOverlay}>
+              <View style={styles.rowPlayBadge}>
+                <Play size={16} color="#000" />
+              </View>
             </View>
           </View>
-          {isActive ? <View style={styles.playingPill} /> : null}
-        </View>
-        <Text style={styles.gridTitle} numberOfLines={2}>
-          {item.title}
-        </Text>
-        <Text style={styles.gridSub} numberOfLines={1}>
-          {item.artistName}
-        </Text>
-      </Pressable>
+
+          <View style={styles.rowMeta}>
+            <Text style={styles.rowTitle} numberOfLines={2}>
+              {item.title}
+            </Text>
+            <Text style={styles.rowArtist} numberOfLines={1}>
+              {item.artistName}
+            </Text>
+            <Text style={styles.rowSub} numberOfLines={1}>
+              {`${formatCompactViews(item.viewCount)}${formatDateLabel(item.createdAt) ? `  ·  ${formatDateLabel(item.createdAt)}` : ''}`}
+            </Text>
+          </View>
+        </Pressable>
       );
     },
     [activeVideoId, onPressVideo]
   );
 
   return (
-    <LinearGradient colors={Colors.backgroundGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradient}>
-      <SafeAreaView style={styles.container}>
-        <View style={styles.headerRow}>
-          <Text style={styles.title}>Video</Text>
-        </View>
+    <View style={styles.root}>
+      <LinearGradient colors={Colors.backgroundGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={[`${ambientColor.replace('rgb', 'rgba').replace(')', ',0.20)')}`, 'rgba(0,0,0,0)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
 
-        <View style={styles.headerPlayerWrap}>
-          <BlurView intensity={26} tint="dark" style={styles.headerPlayerBlur}>
-            <View style={styles.headerPlayerFrame}>
-              {activePlaybackUrl && player ? (
-                <VideoView
-                  player={player}
-                  style={styles.headerPlayerVideo}
-                  allowsFullscreen
-                  allowsPictureInPicture
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        {loading ? (
+          <FlatList
+            data={Array.from({ length: 6 })}
+            keyExtractor={(_, idx) => `sk-${idx}`}
+            renderItem={({ item, index }) => renderSkeletonRow(item, index)}
+            showsVerticalScrollIndicator={false}
+            onScroll={(e) => setScrollY(e.nativeEvent.contentOffset.y)}
+            scrollEventThrottle={16}
+            contentContainerStyle={{ paddingTop: HEADER_HEIGHT + 92, paddingBottom: tabBarHeight + 120 }}
+            refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
+          />
+        ) : (
+          <FlatList<VideoCard>
+            ref={(r) => {
+              listRef.current = r;
+            }}
+            data={trending}
+            keyExtractor={(it) => it.id}
+            renderItem={renderVideoItem}
+            showsVerticalScrollIndicator={false}
+            onScroll={(e) => setScrollY(e.nativeEvent.contentOffset.y)}
+            scrollEventThrottle={16}
+            contentContainerStyle={{ paddingTop: HEADER_HEIGHT + 92, paddingBottom: tabBarHeight + 120 }}
+            refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
+            ListEmptyComponent={<Text style={styles.emptyText}>No videos found.</Text>}
+          />
+        )}
+
+        <View style={styles.stickyHeader} pointerEvents="box-none">
+          <View style={styles.headerTopRow}>
+            <Text style={styles.title}>Video</Text>
+          </View>
+
+          <View style={styles.playerFrame}>
+            {activePlaybackUrl ? (
+              <Pressable style={StyleSheet.absoluteFill} onPress={onPressPlayerSurface}>
+                <Video
+                  ref={videoRef}
+                  style={styles.video}
+                  source={{ uri: activePlaybackUrl }}
+                  shouldPlay={isVideoPlaying}
+                  resizeMode={ResizeMode.COVER}
+                  useNativeControls={false}
+                  progressUpdateIntervalMillis={200}
+                  onPlaybackStatusUpdate={onVideoStatusUpdate}
                 />
-              ) : (
-                <View style={styles.headerPlaceholder}>
-                  <Image
-                    source={{ uri: activeVideoMeta?.artworkUrl || FALLBACK_ARTWORK }}
-                    style={styles.headerPlaceholderImg}
-                    blurRadius={8}
-                  />
-                  <View style={styles.headerPlaceholderOverlay}>
-                    {loadingPlaybackUrl ? <ActivityIndicator color="#fff" /> : null}
-                    <Text style={styles.headerPlaceholderText}>
-                      {loadingPlaybackUrl
-                        ? 'Loading video...'
-                        : 'Select a video to play'}
-                    </Text>
+              </Pressable>
+            ) : (
+              <Pressable style={StyleSheet.absoluteFill}>
+                <Image source={{ uri: activeVideoMeta?.artworkUrl || FALLBACK_ARTWORK }} style={styles.heroImg} />
+                <View style={styles.heroOverlay}>
+                  <View style={styles.heroPlayBadge}>
+                    <Play size={20} color="#000" />
                   </View>
+                  {loadingPlaybackUrl ? <ActivityIndicator color="#fff" style={{ marginTop: 12 }} /> : null}
                 </View>
-              )}
+              </Pressable>
+            )}
+
+            <View style={styles.playerTopRight}>
+              <Pressable style={styles.iconBtn} onPress={() => setShowQualitySheet((s) => !s)}>
+                <Settings size={18} color="#fff" />
+              </Pressable>
             </View>
 
-            <View style={styles.headerMetaRow}>
-              <Text style={styles.headerNowPlayingTitle} numberOfLines={1}>
-                {activeVideoMeta?.title ? activeVideoMeta.title : 'Trending Videos'}
-              </Text>
-              <Text style={styles.headerNowPlayingSub} numberOfLines={1}>
-                {activeVideoMeta?.artistName ? activeVideoMeta.artistName : 'Tap any video below to start playing'}
-              </Text>
+            {activePlaybackUrl && showControls ? (
+              <View style={styles.controlsOverlay} pointerEvents="box-none">
+                <Pressable style={styles.playPauseBtn} onPress={toggleInlinePlayPause}>
+                  {isVideoPlaying ? <Pause size={20} color="#000" /> : <Play size={20} color="#000" />}
+                </Pressable>
+              </View>
+            ) : null}
+
+            {showUpNext ? (
+              <View style={styles.upNextOverlay}>
+                <Text style={styles.upNextTitle}>Up Next</Text>
+                <Text style={styles.upNextSub}>Playing next in {upNextSeconds}s</Text>
+              </View>
+            ) : null}
+
+            {!activePlaybackUrl ? (
+              <View style={styles.heroHint}>
+                <Text style={styles.heroHintText}>Tap a video below to start playing</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.metaBlock}>
+            <Text style={styles.nowTitle} numberOfLines={1}>
+              {activeVideoMeta?.title ? activeVideoMeta.title : 'Trending Videos'}
+            </Text>
+            <Text style={styles.nowSub} numberOfLines={1}>
+              {activeVideoMeta?.artistName ? activeVideoMeta.artistName : 'For you'}
+            </Text>
+
+            <View style={styles.actionRow}>
+              <Pressable style={styles.actionBtn} onPress={() => undefined}>
+                <BadgeCheck size={18} color="#fff" />
+                <Text style={styles.actionText}>Like</Text>
+              </Pressable>
+              <Pressable style={styles.actionBtn} onPress={onPressShare}>
+                <HelpCircle size={18} color="#fff" />
+                <Text style={styles.actionText}>Share</Text>
+              </Pressable>
+              <Pressable style={styles.actionBtn} onPress={() => undefined}>
+                <Library size={18} color="#fff" />
+                <Text style={styles.actionText}>Download</Text>
+              </Pressable>
             </View>
-          </BlurView>
+          </View>
+
+          {showQualitySheet ? (
+            <View style={styles.qualitySheet}>
+              {availableQualities.map((q) => {
+                const active = q === selectedQuality;
+                return (
+                  <Pressable
+                    key={q}
+                    style={[styles.qualityPill, active ? styles.qualityPillActive : null]}
+                    onPress={() => {
+                      setSelectedQuality(q);
+                      setShowQualitySheet(false);
+                    }}
+                  >
+                    <Text style={[styles.qualityText, active ? styles.qualityTextActive : null]}>{q}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
         </View>
 
-        <FlatList
-          data={['__content__']}
-          keyExtractor={(x) => x}
-          renderItem={() => null}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: tabBarHeight + 140 }}
-          refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
-          ListHeaderComponent={
-            <View>
-              <View style={styles.searchWrap}>
-                <BlurView intensity={24} tint="dark" style={styles.searchBlur}>
-                  <SearchIcon color="rgba(255,255,255,0.7)" size={18} />
-                  <TextInput
-                    value={query}
-                    onChangeText={setQuery}
-                    placeholder="Search videos"
-                    placeholderTextColor="rgba(255,255,255,0.35)"
-                    style={styles.searchInput}
-                  />
-                </BlurView>
-              </View>
-
-              <View style={styles.sectionRow}>
-                <Text style={styles.sectionTitle}>Trending Videos</Text>
-                {loading ? <ActivityIndicator color="#fff" /> : null}
-              </View>
-
-              <FlatList
-                data={trending}
-                horizontal
-                keyExtractor={(i) => i.id}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.hListContent}
-                renderItem={({ item }) => {
-                  const isActive = item.id === activeVideoId;
-                  return (
-                    <Pressable
-                      style={[styles.trendingCard, isActive ? styles.trendingCardActive : null]}
-                      onPress={() => onPressVideo(item)}
-                    >
-                      <Image source={{ uri: item.artworkUrl || FALLBACK_ARTWORK }} style={styles.trendingImg} />
-                      <View style={styles.trendingMeta}>
-                        <Text style={styles.trendingTitle} numberOfLines={1}>
-                          {item.title}
-                        </Text>
-                        <Text style={styles.trendingSub} numberOfLines={1}>
-                          {item.artistName}
-                        </Text>
-                      </View>
-                      {isActive ? <View style={styles.trendingPlayingBar} /> : null}
-                    </Pressable>
-                  );
-                }}
+        {showMini ? (
+          <Pressable
+            style={[styles.miniPlayerWrap, { bottom: tabBarHeight + 20 }]}
+            onPress={() => {
+              try {
+                listRef.current?.scrollToOffset({ offset: 0, animated: true });
+              } catch {
+                // ignore
+              }
+            }}
+          >
+            <View style={styles.miniPlayerFrame}>
+              <Image
+                source={{ uri: activeVideoMeta?.artworkUrl || FALLBACK_ARTWORK }}
+                style={styles.miniVideo}
               />
-
-              <Text style={[styles.sectionTitle, { marginTop: 20, paddingHorizontal: 20 }]}>Categories</Text>
-              <FlatList
-                data={categories}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                keyExtractor={(c) => c}
-                contentContainerStyle={styles.catRow}
-                renderItem={({ item: c }) => {
-                  const active = c === activeCategory;
-                  return (
-                    <Pressable
-                      key={c}
-                      style={[styles.catPill, active ? styles.catPillActive : null]}
-                      onPress={() => setActiveCategory(c)}
-                    >
-                      <Text style={[styles.catText, active ? styles.catTextActive : null]}>{c}</Text>
-                    </Pressable>
-                  );
-                }}
-              />
-
-              <Text style={[styles.sectionTitle, { marginTop: 18, paddingHorizontal: 20 }]}>Explore</Text>
-              <View style={styles.gridWrap}>
-                <FlatList
-                  data={filtered}
-                  renderItem={renderGridItem}
-                  keyExtractor={(i) => i.id}
-                  numColumns={GRID_COLS}
-                  scrollEnabled={false}
-                  columnWrapperStyle={{ gap: GRID_GAP }}
-                  contentContainerStyle={{ paddingTop: 10, paddingBottom: 10, gap: GRID_GAP }}
-                />
+              <View style={styles.miniOverlay}>
+                <Text style={styles.miniOverlayText}>Now Playing</Text>
               </View>
-
-              {!loading && filtered.length === 0 ? (
-                <Text style={styles.emptyText}>No videos found.</Text>
-              ) : null}
             </View>
-          }
-        />
+          </Pressable>
+        ) : null}
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  gradient: { flex: 1 },
-  container: { flex: 1, backgroundColor: 'transparent' },
-
-  headerRow: {
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 8,
-  },
+  root: { flex: 1, backgroundColor: '#000' },
+  safe: { flex: 1 },
   title: { color: '#fff', fontSize: 28, fontWeight: '900' },
 
-  headerPlayerWrap: {
+  stickyHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+  },
+  headerTopRow: {
+    paddingTop: 18,
+    paddingBottom: 10,
     paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 6,
   },
-  headerPlayerBlur: {
-    borderRadius: 18,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    backgroundColor: 'rgba(10,10,10,0.30)',
-  },
-  headerPlayerFrame: {
+
+  playerFrame: {
     width: '100%',
-    aspectRatio: 16 / 9,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    height: HEADER_HEIGHT,
+    backgroundColor: '#000',
   },
-  headerPlayerVideo: {
+  video: {
     width: '100%',
     height: '100%',
   },
-  headerPlaceholder: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  headerPlaceholderImg: {
+  heroImg: {
     width: '100%',
     height: '100%',
-    opacity: 0.9,
   },
-  headerPlaceholderOverlay: {
+  heroOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    paddingHorizontal: 18,
+    backgroundColor: 'rgba(0,0,0,0.25)',
   },
-  headerPlaceholderText: {
-    marginTop: 10,
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 14,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  headerMetaRow: {
-    paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 12,
-  },
-  headerNowPlayingTitle: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  headerNowPlayingSub: {
-    marginTop: 4,
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  searchWrap: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  searchBlur: {
-    flexDirection: 'row',
+  heroPlayBadge: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    justifyContent: 'center',
+    backgroundColor: Colors.accent,
   },
-  searchInput: {
-    flex: 1,
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-    padding: 0,
-  },
-
-  sectionRow: {
-    marginTop: 18,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sectionTitle: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-
-  hListContent: {
-    paddingLeft: 20,
-    paddingRight: 10,
-    paddingTop: 12,
-  },
-  trendingCard: {
-    width: 210,
-    marginRight: 12,
-    borderRadius: 18,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  trendingCardActive: {
-    borderColor: 'rgba(255,106,0,0.55)',
-    backgroundColor: 'rgba(255,106,0,0.10)',
-  },
-  trendingImg: { width: '100%', height: 118 },
-  trendingMeta: { padding: 12 },
-  trendingTitle: { color: '#fff', fontSize: 14, fontWeight: '900' },
-  trendingSub: { marginTop: 4, color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '700' },
-  trendingPlayingBar: {
+  heroHint: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: 3,
-    backgroundColor: Colors.accent,
-  },
-
-  catRow: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 6,
-    gap: 8,
-  },
-  catPill: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  catPillActive: {
-    borderColor: 'rgba(255,106,0,0.6)',
-    backgroundColor: 'rgba(255,106,0,0.16)',
+  heroHintText: {
+    color: 'rgba(255,255,255,0.80)',
+    fontSize: 12,
+    fontWeight: '800',
+    textAlign: 'center',
   },
-  catText: { color: '#fff', fontSize: 12, fontWeight: '800' },
-  catTextActive: { color: Colors.accent },
 
-  gridWrap: {
-    paddingHorizontal: 20,
-    paddingBottom: 10,
+  playerTopRight: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+    flexDirection: 'row',
+    gap: 10,
   },
-  gridItem: {
-    width: GRID_ITEM_W,
-    minHeight: GRID_ITEM_H,
+  iconBtn: {
+    width: 36,
+    height: 36,
     borderRadius: 18,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    paddingBottom: 12,
+    borderColor: 'rgba(255,255,255,0.16)',
   },
-  gridItemActive: {
-    borderColor: 'rgba(255,106,0,0.55)',
-    backgroundColor: 'rgba(255,106,0,0.10)',
-  },
-  thumbWrap: {
-    width: '100%',
-    height: Math.round(GRID_ITEM_W * (9 / 16)),
-    backgroundColor: 'rgba(255,255,255,0.03)',
-  },
-  thumb: { width: '100%', height: '100%' },
-  playOverlay: {
+
+  controlsOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.10)',
   },
-  playBadge: {
+  playPauseBtn: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.20)',
+  },
+
+  upNextOverlay: {
+    position: 'absolute',
+    left: 12,
+    bottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.60)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  upNextTitle: { color: '#fff', fontSize: 13, fontWeight: '900' },
+  upNextSub: { marginTop: 2, color: 'rgba(255,255,255,0.70)', fontSize: 12, fontWeight: '700' },
+
+  metaBlock: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 12,
+    backgroundColor: 'rgba(0,0,0,0.20)',
+  },
+  nowTitle: { color: '#fff', fontSize: 15, fontWeight: '900' },
+  nowSub: { marginTop: 4, color: 'rgba(255,255,255,0.62)', fontSize: 12, fontWeight: '800' },
+
+  actionRow: { marginTop: 12, flexDirection: 'row', gap: 18 },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  actionText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+
+  qualitySheet: {
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    paddingTop: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.10)',
+  },
+  qualityPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  qualityPillActive: {
+    borderColor: 'rgba(255,106,0,0.60)',
+    backgroundColor: 'rgba(255,106,0,0.16)',
+  },
+  qualityText: { color: 'rgba(255,255,255,0.86)', fontSize: 12, fontWeight: '900' },
+  qualityTextActive: { color: Colors.accent },
+
+  rowItem: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+  },
+  rowThumbWrap: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  rowThumbWrapActive: {
+    borderColor: 'rgba(255,106,0,0.60)',
+  },
+  rowThumb: { width: '100%', height: '100%' },
+  rowThumbOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.10)',
+  },
+  rowPlayBadge: {
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -598,31 +917,55 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: Colors.accent,
   },
-  playingPill: {
+  rowMeta: { paddingTop: 10, paddingBottom: 2 },
+  rowTitle: { color: '#fff', fontSize: 14, fontWeight: '900' },
+  rowArtist: { marginTop: 4, color: 'rgba(255,255,255,0.70)', fontSize: 12, fontWeight: '800' },
+  rowSub: { marginTop: 4, color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '800' },
+
+  skelRow: { paddingHorizontal: 16, paddingTop: 14 },
+  skelThumb: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  skelMeta: { paddingTop: 10 },
+  skelLineLg: { height: 14, borderRadius: 8, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)' },
+  skelLineSm: { marginTop: 8, height: 12, width: '70%', borderRadius: 8, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)' },
+  skelLineXs: { marginTop: 8, height: 11, width: '52%', borderRadius: 8, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)' },
+  skelShimmer: {
     position: 'absolute',
-    left: 10,
-    top: 10,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.accent,
-    borderWidth: 2,
-    borderColor: 'rgba(0,0,0,0.35)',
+    top: 0,
+    bottom: 0,
+    width: 120,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    transform: [{ skewX: '-20deg' } as any],
   },
-  gridTitle: {
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '900',
+
+  miniPlayerWrap: {
+    position: 'absolute',
+    right: 14,
+    width: MINI_PLAYER_W,
   },
-  gridSub: {
-    paddingHorizontal: 12,
-    paddingTop: 4,
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 12,
-    fontWeight: '700',
+  miniPlayerFrame: {
+    width: MINI_PLAYER_W,
+    height: MINI_PLAYER_H,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
   },
+  miniVideo: { width: '100%', height: '100%' },
+  miniOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'flex-start',
+    justifyContent: 'flex-end',
+    padding: 10,
+    backgroundColor: 'rgba(0,0,0,0.20)',
+  },
+  miniOverlayText: { color: '#fff', fontSize: 11, fontWeight: '900' },
 
   emptyText: {
     marginTop: 16,
