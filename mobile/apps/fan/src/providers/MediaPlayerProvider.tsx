@@ -269,7 +269,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       await stopVideo();
       await unloadAudio();
 
-      let playbackUrl = normalizePlaybackUrl(item.mediaUrl);
+      let playbackUrl = item.mediaUrl ? normalizePlaybackUrl(item.mediaUrl) : null;
       if (item.useStreamAccess) {
         try {
           playbackUrl = await getPlaybackUrl(item.contentId ?? item.id, 'audio');

@@ -13,19 +13,25 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Lock, Search as SearchIcon, X } from 'lucide-react-native';
+import { Search as SearchIcon, X } from 'lucide-react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 
 import { Colors } from '../theme';
 import { api, searchApi } from '../services/api';
+import { useMediaPlayer } from '../providers/MediaPlayerProvider';
+import type { MediaItem } from '../media.types';
 
 type SearchResult = {
   id: string;
+  contentId?: string;
   title: string;
   artistName: string;
   artwork: string;
   type: 'ARTIST' | 'SONG';
   isLocked: boolean;
+  mediaType?: 'audio' | 'video';
+  mediaUrl?: string | null;
+  useStreamAccess?: boolean;
 };
 
 type SearchHistoryItem = {
@@ -41,6 +47,7 @@ const RECENT_SEARCHES_STORAGE_KEY = 'recentSearches';
 
 export default function SearchScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
+  const { playQueue } = useMediaPlayer();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -83,14 +90,30 @@ export default function SearchScreen({ navigation }: any) {
           const id = String(c.id);
           const title = (c.title ?? '').toString();
           const artistName = (c.artistName ?? c.artist_name ?? '').toString();
-          const artwork = (c.artwork ?? c.thumbnailUrl ?? c.thumbnail_url ?? '').toString();
+          const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000').replace(
+            /\/+$/,
+            ''
+          );
+          const artworkRaw = (c.artwork ?? c.thumbnailUrl ?? c.thumbnail_url ?? '').toString();
+          const artworkFromStorageKey = c.thumbnail_storage_key
+            ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(String(c.id))}`
+            : '';
+          const artwork = artworkRaw || artworkFromStorageKey;
+
+          const mediaTypeRaw = (c.mediaType ?? c.type ?? '').toString().toLowerCase();
+          const mediaType: SearchResult['mediaType'] = mediaTypeRaw === 'video' ? 'video' : 'audio';
+
           return {
             id,
+            contentId: id,
             title,
             artistName,
             artwork,
             type: 'SONG' as const,
             isLocked: false,
+            mediaType,
+            mediaUrl: (c.mediaUrl ?? c.fileUrl ?? null) as any,
+            useStreamAccess: Boolean(c.useStreamAccess),
           };
         });
 
@@ -272,14 +295,36 @@ export default function SearchScreen({ navigation }: any) {
     });
   };
 
-  const onPressResult = (item: SearchResult) => {
+  const onPressResult = async (item: SearchResult) => {
     saveHistory(item.title).catch(() => undefined);
     if (item.type === 'ARTIST') {
       navigateHomeStack('Artist', { artistId: item.id });
       return;
     }
 
-    navigateHomeStack('ContentPlayer', { contentId: item.id });
+    const songs = allContent.filter((x) => x.type === 'SONG');
+    const queue: MediaItem[] = songs.map((x) => ({
+      id: x.id,
+      contentId: x.contentId ?? x.id,
+      title: x.title,
+      artistName: x.artistName,
+      mediaType: x.mediaType === 'video' ? 'video' : 'audio',
+      artworkUrl: x.artwork,
+      mediaUrl: x.mediaUrl ?? null,
+      useStreamAccess: Boolean(x.useStreamAccess),
+      isLocked: false,
+    }));
+
+    const idx = Math.max(
+      0,
+      queue.findIndex((q) => q.id === item.id)
+    );
+
+    try {
+      await playQueue(queue, idx);
+    } catch (e) {
+      console.warn('[SearchScreen] playQueue failed', e);
+    }
   };
 
   const onClearSearch = () => {

@@ -6,7 +6,6 @@ import {
   Image,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -18,11 +17,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { BlurView } from 'expo-blur';
 import { Play, Search as SearchIcon } from 'lucide-react-native';
+import { VideoView, useVideoPlayer } from 'expo-video';
 
 import { apiV1 } from '../services/api';
+import * as streamService from '../services/streamService';
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
-import type { MediaItem } from '../media.types';
 
 type ApiContentItem = {
   id: string | number;
@@ -68,9 +68,9 @@ function normalizeCategory(raw: unknown): string {
   return c || 'Trending';
 }
 
-export default function VideoScreen({ navigation }: any) {
+export default function VideoScreen() {
   const tabBarHeight = useBottomTabBarHeight();
-  const { playQueue } = useMediaPlayer();
+  const { currentItem, state: playerState, togglePlayPause } = useMediaPlayer();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -78,6 +78,11 @@ export default function VideoScreen({ navigation }: any) {
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [items, setItems] = useState<VideoCard[]>([]);
+
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+  const [activeVideoMeta, setActiveVideoMeta] = useState<VideoCard | null>(null);
+  const [activePlaybackUrl, setActivePlaybackUrl] = useState<string | null>(null);
+  const [loadingPlaybackUrl, setLoadingPlaybackUrl] = useState(false);
 
   const fetchAll = useCallback(async () => {
     const res = await apiV1.get('/content');
@@ -166,40 +171,66 @@ export default function VideoScreen({ navigation }: any) {
     });
   }, [activeCategory, items, query]);
 
-  const startPlayback = useCallback(
-    async (startId: string) => {
-      const queue: MediaItem[] = filtered
-        .filter((x) => Boolean(x.mediaUrl) || x.useStreamAccess)
-        .map((x) => ({
-          id: x.id,
-          contentId: x.id,
-          title: x.title,
-          artistName: x.artistName,
-          artistId: x.artistId,
-          mediaType: 'video',
-          artworkUrl: x.artworkUrl,
-          mediaUrl: x.mediaUrl || '',
-          isLocked: false,
-          useStreamAccess: x.useStreamAccess,
-        }));
+  const pauseGlobalAudioIfNeeded = useCallback(async () => {
+    if (currentItem?.mediaType !== 'audio') return;
+    if (!playerState.isPlaying) return;
+    try {
+      await togglePlayPause();
+    } catch {
+      // ignore
+    }
+  }, [currentItem?.mediaType, playerState.isPlaying, togglePlayPause]);
 
-      const idx = queue.findIndex((q) => q.id === startId || q.contentId === startId);
-      if (idx < 0) return;
-      await playQueue(queue, idx);
-    },
-    [filtered, playQueue]
-  );
+  const resolvePlaybackUrl = useCallback(async (video: VideoCard) => {
+    if (video.useStreamAccess) {
+      return await streamService.getPlaybackUrl(video.id, 'video');
+    }
+    return video.mediaUrl ? streamService.normalizePlaybackUrl(video.mediaUrl) : '';
+  }, []);
 
   const onPressVideo = useCallback(
     (video: VideoCard) => {
-      startPlayback(video.id).catch(() => undefined);
+      (async () => {
+        setActiveVideoId(video.id);
+        setActiveVideoMeta(video);
+
+        await pauseGlobalAudioIfNeeded();
+
+        setLoadingPlaybackUrl(true);
+        try {
+          const url = await resolvePlaybackUrl(video);
+          if (!url) return;
+          setActivePlaybackUrl(url);
+        } catch {
+          // keep placeholder
+          setActivePlaybackUrl(null);
+        } finally {
+          setLoadingPlaybackUrl(false);
+        }
+      })().catch(() => undefined);
     },
-    [startPlayback]
+    [pauseGlobalAudioIfNeeded, resolvePlaybackUrl]
+  );
+
+  const player = useVideoPlayer(
+    activePlaybackUrl ? { uri: activePlaybackUrl } : null,
+    (p) => {
+      try {
+        p.play();
+      } catch {
+        // ignore
+      }
+    }
   );
 
   const renderGridItem = useCallback(
-    ({ item }: { item: VideoCard }) => (
-      <Pressable style={styles.gridItem} onPress={() => onPressVideo(item)}>
+    ({ item }: { item: VideoCard }) => {
+      const isActive = item.id === activeVideoId;
+      return (
+      <Pressable
+        style={[styles.gridItem, isActive ? styles.gridItemActive : null]}
+        onPress={() => onPressVideo(item)}
+      >
         <View style={styles.thumbWrap}>
           <Image source={{ uri: item.artworkUrl || FALLBACK_ARTWORK }} style={styles.thumb} />
           <View style={styles.playOverlay}>
@@ -207,6 +238,7 @@ export default function VideoScreen({ navigation }: any) {
               <Play size={16} color="#000" />
             </View>
           </View>
+          {isActive ? <View style={styles.playingPill} /> : null}
         </View>
         <Text style={styles.gridTitle} numberOfLines={2}>
           {item.title}
@@ -215,94 +247,153 @@ export default function VideoScreen({ navigation }: any) {
           {item.artistName}
         </Text>
       </Pressable>
-    ),
-    [onPressVideo]
+      );
+    },
+    [activeVideoId, onPressVideo]
   );
 
   return (
     <LinearGradient colors={Colors.backgroundGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradient}>
       <SafeAreaView style={styles.container}>
-        <ScrollView
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>Video</Text>
+        </View>
+
+        <View style={styles.headerPlayerWrap}>
+          <BlurView intensity={26} tint="dark" style={styles.headerPlayerBlur}>
+            <View style={styles.headerPlayerFrame}>
+              {activePlaybackUrl && player ? (
+                <VideoView
+                  player={player}
+                  style={styles.headerPlayerVideo}
+                  allowsFullscreen
+                  allowsPictureInPicture
+                />
+              ) : (
+                <View style={styles.headerPlaceholder}>
+                  <Image
+                    source={{ uri: activeVideoMeta?.artworkUrl || FALLBACK_ARTWORK }}
+                    style={styles.headerPlaceholderImg}
+                    blurRadius={8}
+                  />
+                  <View style={styles.headerPlaceholderOverlay}>
+                    {loadingPlaybackUrl ? <ActivityIndicator color="#fff" /> : null}
+                    <Text style={styles.headerPlaceholderText}>
+                      {loadingPlaybackUrl
+                        ? 'Loading video...'
+                        : 'Select a video to play'}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.headerMetaRow}>
+              <Text style={styles.headerNowPlayingTitle} numberOfLines={1}>
+                {activeVideoMeta?.title ? activeVideoMeta.title : 'Trending Videos'}
+              </Text>
+              <Text style={styles.headerNowPlayingSub} numberOfLines={1}>
+                {activeVideoMeta?.artistName ? activeVideoMeta.artistName : 'Tap any video below to start playing'}
+              </Text>
+            </View>
+          </BlurView>
+        </View>
+
+        <FlatList
+          data={['__content__']}
+          keyExtractor={(x) => x}
+          renderItem={() => null}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: tabBarHeight + 140 }}
           refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
-        >
-          <View style={styles.headerRow}>
-            <Text style={styles.title}>Video</Text>
-          </View>
+          ListHeaderComponent={
+            <View>
+              <View style={styles.searchWrap}>
+                <BlurView intensity={24} tint="dark" style={styles.searchBlur}>
+                  <SearchIcon color="rgba(255,255,255,0.7)" size={18} />
+                  <TextInput
+                    value={query}
+                    onChangeText={setQuery}
+                    placeholder="Search videos"
+                    placeholderTextColor="rgba(255,255,255,0.35)"
+                    style={styles.searchInput}
+                  />
+                </BlurView>
+              </View>
 
-          <View style={styles.searchWrap}>
-            <BlurView intensity={24} tint="dark" style={styles.searchBlur}>
-              <SearchIcon color="rgba(255,255,255,0.7)" size={18} />
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search videos"
-                placeholderTextColor="rgba(255,255,255,0.35)"
-                style={styles.searchInput}
+              <View style={styles.sectionRow}>
+                <Text style={styles.sectionTitle}>Trending Videos</Text>
+                {loading ? <ActivityIndicator color="#fff" /> : null}
+              </View>
+
+              <FlatList
+                data={trending}
+                horizontal
+                keyExtractor={(i) => i.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.hListContent}
+                renderItem={({ item }) => {
+                  const isActive = item.id === activeVideoId;
+                  return (
+                    <Pressable
+                      style={[styles.trendingCard, isActive ? styles.trendingCardActive : null]}
+                      onPress={() => onPressVideo(item)}
+                    >
+                      <Image source={{ uri: item.artworkUrl || FALLBACK_ARTWORK }} style={styles.trendingImg} />
+                      <View style={styles.trendingMeta}>
+                        <Text style={styles.trendingTitle} numberOfLines={1}>
+                          {item.title}
+                        </Text>
+                        <Text style={styles.trendingSub} numberOfLines={1}>
+                          {item.artistName}
+                        </Text>
+                      </View>
+                      {isActive ? <View style={styles.trendingPlayingBar} /> : null}
+                    </Pressable>
+                  );
+                }}
               />
-            </BlurView>
-          </View>
 
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>Trending Videos</Text>
-            {loading ? <ActivityIndicator color="#fff" /> : null}
-          </View>
+              <Text style={[styles.sectionTitle, { marginTop: 20, paddingHorizontal: 20 }]}>Categories</Text>
+              <FlatList
+                data={categories}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyExtractor={(c) => c}
+                contentContainerStyle={styles.catRow}
+                renderItem={({ item: c }) => {
+                  const active = c === activeCategory;
+                  return (
+                    <Pressable
+                      key={c}
+                      style={[styles.catPill, active ? styles.catPillActive : null]}
+                      onPress={() => setActiveCategory(c)}
+                    >
+                      <Text style={[styles.catText, active ? styles.catTextActive : null]}>{c}</Text>
+                    </Pressable>
+                  );
+                }}
+              />
 
-          <FlatList
-            data={trending}
-            horizontal
-            keyExtractor={(i) => i.id}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.hListContent}
-            renderItem={({ item }) => (
-              <Pressable style={styles.trendingCard} onPress={() => onPressVideo(item)}>
-                <Image source={{ uri: item.artworkUrl || FALLBACK_ARTWORK }} style={styles.trendingImg} />
-                <View style={styles.trendingMeta}>
-                  <Text style={styles.trendingTitle} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.trendingSub} numberOfLines={1}>
-                    {item.artistName}
-                  </Text>
-                </View>
-              </Pressable>
-            )}
-          />
+              <Text style={[styles.sectionTitle, { marginTop: 18, paddingHorizontal: 20 }]}>Explore</Text>
+              <View style={styles.gridWrap}>
+                <FlatList
+                  data={filtered}
+                  renderItem={renderGridItem}
+                  keyExtractor={(i) => i.id}
+                  numColumns={GRID_COLS}
+                  scrollEnabled={false}
+                  columnWrapperStyle={{ gap: GRID_GAP }}
+                  contentContainerStyle={{ paddingTop: 10, paddingBottom: 10, gap: GRID_GAP }}
+                />
+              </View>
 
-          <Text style={[styles.sectionTitle, { marginTop: 20, paddingHorizontal: 20 }]}>Categories</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catRow}>
-            {categories.map((c) => {
-              const active = c === activeCategory;
-              return (
-                <Pressable
-                  key={c}
-                  style={[styles.catPill, active ? styles.catPillActive : null]}
-                  onPress={() => setActiveCategory(c)}
-                >
-                  <Text style={[styles.catText, active ? styles.catTextActive : null]}>{c}</Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-
-          <Text style={[styles.sectionTitle, { marginTop: 18, paddingHorizontal: 20 }]}>Explore</Text>
-          <View style={styles.gridWrap}>
-            <FlatList
-              data={filtered}
-              renderItem={renderGridItem}
-              keyExtractor={(i) => i.id}
-              numColumns={GRID_COLS}
-              scrollEnabled={false}
-              columnWrapperStyle={{ gap: GRID_GAP }}
-              contentContainerStyle={{ paddingTop: 10, paddingBottom: 10, gap: GRID_GAP }}
-            />
-          </View>
-
-          {!loading && filtered.length === 0 ? (
-            <Text style={styles.emptyText}>No videos found.</Text>
-          ) : null}
-        </ScrollView>
+              {!loading && filtered.length === 0 ? (
+                <Text style={styles.emptyText}>No videos found.</Text>
+              ) : null}
+            </View>
+          }
+        />
       </SafeAreaView>
     </LinearGradient>
   );
@@ -318,6 +409,67 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   title: { color: '#fff', fontSize: 28, fontWeight: '900' },
+
+  headerPlayerWrap: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  headerPlayerBlur: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(10,10,10,0.30)',
+  },
+  headerPlayerFrame: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  headerPlayerVideo: {
+    width: '100%',
+    height: '100%',
+  },
+  headerPlaceholder: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  headerPlaceholderImg: {
+    width: '100%',
+    height: '100%',
+    opacity: 0.9,
+  },
+  headerPlaceholderOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    paddingHorizontal: 18,
+  },
+  headerPlaceholderText: {
+    marginTop: 10,
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 14,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  headerMetaRow: {
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 12,
+  },
+  headerNowPlayingTitle: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  headerNowPlayingSub: {
+    marginTop: 4,
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    fontWeight: '700',
+  },
 
   searchWrap: {
     paddingHorizontal: 20,
@@ -370,10 +522,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
+  trendingCardActive: {
+    borderColor: 'rgba(255,106,0,0.55)',
+    backgroundColor: 'rgba(255,106,0,0.10)',
+  },
   trendingImg: { width: '100%', height: 118 },
   trendingMeta: { padding: 12 },
   trendingTitle: { color: '#fff', fontSize: 14, fontWeight: '900' },
   trendingSub: { marginTop: 4, color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '700' },
+  trendingPlayingBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 3,
+    backgroundColor: Colors.accent,
+  },
 
   catRow: {
     paddingHorizontal: 20,
@@ -410,6 +574,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.08)',
     paddingBottom: 12,
   },
+  gridItemActive: {
+    borderColor: 'rgba(255,106,0,0.55)',
+    backgroundColor: 'rgba(255,106,0,0.10)',
+  },
   thumbWrap: {
     width: '100%',
     height: Math.round(GRID_ITEM_W * (9 / 16)),
@@ -429,6 +597,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.accent,
+  },
+  playingPill: {
+    position: 'absolute',
+    left: 10,
+    top: 10,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.accent,
+    borderWidth: 2,
+    borderColor: 'rgba(0,0,0,0.35)',
   },
   gridTitle: {
     paddingHorizontal: 12,

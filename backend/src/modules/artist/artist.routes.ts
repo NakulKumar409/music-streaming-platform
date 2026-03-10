@@ -19,6 +19,12 @@ const restrictedMediaUrl = (req: any, mediaType: 'audio' | 'video') => {
 };
 
 router.get("/", (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+  res.removeHeader('ETag');
+
   (async () => {
     try {
       const r = await pool.query(
@@ -55,6 +61,12 @@ router.get("/", (req, res) => {
 });
 
 router.get("/:artistId", (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+  res.removeHeader('ETag');
+
   (async () => {
     const artistId = Number(req.params.artistId);
     if (!Number.isFinite(artistId) || artistId <= 0) {

@@ -65,10 +65,19 @@ const restrictedMediaUrl = (req: any, mediaType: 'audio' | 'video') => {
 };
 
 router.get("/", (req, res) => {
+  // Prevent conditional requests (ETag/If-None-Match) from returning 304 with an empty body.
+  // Mobile clients rely on a JSON payload here.
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+  res.removeHeader('ETag');
+
   (async () => {
     try {
       await ensureContentSchema();
       const userId = req.user?.id ? Number(req.user.id) : null;
+      const isDev = process.env.NODE_ENV !== 'production';
       
       const rows = await pool.query(
         `SELECT
@@ -88,8 +97,8 @@ router.get("/", (req, res) => {
            COALESCE(u.name, u.email) as artist_name
          FROM content_items c
          LEFT JOIN users u ON u.id = c.artist_id
-         WHERE COALESCE(c.is_approved, false) = true
-           AND UPPER(COALESCE(c.lifecycle_state, '')) = 'PUBLISHED'
+         WHERE ${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
+           AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})
          ORDER BY c.created_at DESC
          LIMIT 200`,
         []
@@ -111,6 +120,8 @@ router.get("/", (req, res) => {
         const unlockedMediaUrl = hasNewStorage ? null : toAbsoluteUrl(req, legacyMediaUrlRaw);
         const finalMediaUrl = isLocked ? restrictedMediaUrl(req, mediaType) : unlockedMediaUrl;
 
+        const finalAudioUrl = mediaType === 'audio' ? finalMediaUrl : null;
+
         const thumbnailUrl = r.thumbnail_url
           ? toAbsoluteUrl(req, r.thumbnail_url)
           : r.thumbnail_storage_key
@@ -126,6 +137,8 @@ router.get("/", (req, res) => {
           artwork: thumbnailUrl,
           mediaUrl: finalMediaUrl,
           fileUrl: finalMediaUrl,
+          audioUrl: finalAudioUrl,
+          storageKey: storageKeyForType ?? null,
           useStreamAccess: hasNewStorage,
           createdAt: r.created_at,
           artistName: r.artist_name ?? null,
@@ -135,7 +148,23 @@ router.get("/", (req, res) => {
         };
       }));
 
-      return res.json({ success: true, items });
+      const meta = items.reduce(
+        (acc: any, it: any) => {
+          acc.total += 1;
+          if (it?.mediaType === 'video') acc.video += 1;
+          else if (it?.mediaType === 'audio') acc.audio += 1;
+          return acc;
+        },
+        { total: 0, audio: 0, video: 0 }
+      );
+
+      console.log('[fan/content] audio items found', {
+        total: meta.total,
+        audio: meta.audio,
+        video: meta.video
+      });
+
+      return res.json({ success: true, items, meta });
     } catch (err: any) {
       console.error("[fan/content] GET / error", err);
       return res.json({ success: true, items: [] });
@@ -144,6 +173,12 @@ router.get("/", (req, res) => {
 });
 
 router.get("/artist/:artistId", (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+  res.removeHeader('ETag');
+
   (async () => {
     const artistId = Number(req.params.artistId);
     if (!Number.isFinite(artistId) || artistId <= 0) {
@@ -153,6 +188,7 @@ router.get("/artist/:artistId", (req, res) => {
     try {
       await ensureContentSchema();
       const userId = req.user?.id ? Number(req.user.id) : null;
+      const isDev = process.env.NODE_ENV !== 'production';
       
       const rows = await pool.query(
         `SELECT id,
@@ -172,8 +208,8 @@ router.get("/artist/:artistId", (req, res) => {
                 is_approved
          FROM content_items
          WHERE artist_id = $1
-           AND COALESCE(is_approved, false) = true
-           AND UPPER(COALESCE(lifecycle_state, '')) = 'PUBLISHED'
+           AND ${isDev ? "true" : "COALESCE(is_approved, false) = true"}
+           AND UPPER(COALESCE(lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})
          ORDER BY created_at DESC
          LIMIT 500`,
         [artistId]
@@ -244,6 +280,19 @@ router.get("/artist/:artistId", (req, res) => {
           };
         })
       );
+
+      if (process.env.NODE_ENV !== 'production') {
+        const meta = items.reduce(
+          (acc: any, it: any) => {
+            acc.total += 1;
+            if (it?.mediaType === 'video') acc.video += 1;
+            else if (it?.mediaType === 'audio') acc.audio += 1;
+            return acc;
+          },
+          { total: 0, audio: 0, video: 0 }
+        );
+        console.log('[fan/content] artist audio items found', { artistId, ...meta });
+      }
 
       return res.json({ success: true, items });
     } catch (err: any) {

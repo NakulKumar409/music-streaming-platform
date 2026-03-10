@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -17,10 +17,12 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { BadgeCheck, Lock, Play, Search } from 'lucide-react-native';
+import { BadgeCheck, Play, Search } from 'lucide-react-native';
 import { apiV1 } from '../services/api';
 import { fetchVerifiedArtists, type ArtistListItem } from '../services/artistService';
 import { Colors } from '../theme';
+import { useMediaPlayer } from '../providers/MediaPlayerProvider';
+import type { MediaItem } from '../media.types';
 
 const { width } = Dimensions.get('window');
 
@@ -38,6 +40,7 @@ const FALLBACK_THUMBNAIL =
 
 type ContentCard = {
   id: string;
+  contentId?: string;
   title: string;
   artist: string;
   artistId?: string;
@@ -46,6 +49,8 @@ type ContentCard = {
   isLocked: boolean;
   createdAt?: string | null;
   mediaType?: 'audio' | 'video';
+  mediaUrl?: string | null;
+  useStreamAccess?: boolean;
 };
 
 type ApiContentItem = {
@@ -54,12 +59,16 @@ type ApiContentItem = {
   type?: string;
   artwork?: string | null;
   thumbnailUrl?: string | null;
+  thumbnail_storage_key?: string | null;
   locked?: boolean;
   isLocked?: boolean;
   artistName?: string | null;
   artistId?: string | number | null;
   createdAt?: string | null;
   mediaType?: string | null;
+  mediaUrl?: string | null;
+  fileUrl?: string | null;
+  useStreamAccess?: boolean;
   isVerified?: boolean;
   verified?: boolean;
   artist?: {
@@ -72,6 +81,7 @@ type ApiContentItem = {
 
 export default function HomeScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
+  const { playQueue } = useMediaPlayer();
 
   const [loading, setLoading] = useState(true);
   const [artistsLoading, setArtistsLoading] = useState(true);
@@ -116,22 +126,33 @@ export default function HomeScreen({ navigation }: any) {
           const apiItems: ApiContentItem[] = Array.isArray(contentRes.data?.items)
             ? contentRes.data.items
             : [];
+          const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000').replace(
+            /\/+$/,
+            ''
+          );
+
           recentFromApi = apiItems
             .map((it) => {
               const mediaTypeRaw = (it.mediaType || it.type || '').toString().toLowerCase();
               const mediaType: ContentCard['mediaType'] = mediaTypeRaw === 'video' ? 'video' : 'audio';
               const thumb = (it.thumbnailUrl || it.artwork || '').toString();
+              const thumbFallbackFromStorageKey = it.thumbnail_storage_key
+                ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(String(it.id))}`
+                : '';
               const artistId = (it.artistId ?? it.artist?.id ?? '') as any;
               return {
                 id: String(it.id),
+                contentId: String(it.id),
                 title: it.title ?? 'Untitled',
                 artist: String(it.artistName ?? it.artist?.name ?? 'Artist'),
                 artistId: artistId ? String(artistId) : undefined,
                 description: (it.type || '').toString(),
-                thumbnail: thumb || FALLBACK_THUMBNAIL,
+                thumbnail: thumb || thumbFallbackFromStorageKey || FALLBACK_THUMBNAIL,
                 isLocked: false,
                 createdAt: (it.createdAt ?? null) as any,
                 mediaType,
+                mediaUrl: (it.mediaUrl ?? it.fileUrl ?? null) as any,
+                useStreamAccess: Boolean(it.useStreamAccess),
               };
             })
             .sort((a, b) => {
@@ -169,26 +190,30 @@ export default function HomeScreen({ navigation }: any) {
     navigation.navigate('Artist', { artistId });
   };
 
-  const artistNameToId = useMemo(() => {
-    const map = new Map<string, string>();
-    [...featuredArtists, ...trendingArtists].forEach((a) => {
-      const key = (a.name || '').toString().trim().toLowerCase();
-      if (key && a.id) map.set(key, a.id);
-    });
-    return map;
-  }, [featuredArtists, trendingArtists]);
+  const onPressContent = async (item: ContentCard) => {
+    const queue: MediaItem[] = recentlyAdded.map((x) => ({
+      id: x.id,
+      contentId: x.contentId ?? x.id,
+      title: x.title,
+      artistName: x.artist,
+      artistId: x.artistId,
+      mediaType: x.mediaType === 'video' ? 'video' : 'audio',
+      artworkUrl: x.thumbnail,
+      mediaUrl: x.mediaUrl ?? null,
+      useStreamAccess: Boolean(x.useStreamAccess),
+      isLocked: false,
+    }));
 
-  const onPressContent = (item: ContentCard) => {
-    const resolvedArtistId =
-      (item.artistId || '').toString() ||
-      artistNameToId.get((item.artist || '').toString().trim().toLowerCase()) ||
-      '';
-    if (resolvedArtistId) {
-      navigation.navigate('Artist', { artistId: resolvedArtistId, contentId: item.id });
-      return;
+    const idx = Math.max(
+      0,
+      queue.findIndex((q) => q.id === item.id)
+    );
+
+    try {
+      await playQueue(queue, idx);
+    } catch (e) {
+      console.warn('[HomeScreen] playQueue failed', e);
     }
-
-    navigation.navigate('ContentPlayer', { contentId: item.id });
   };
 
   const onPressSeeAllTrending = () => {
@@ -204,7 +229,6 @@ export default function HomeScreen({ navigation }: any) {
         colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.85)']}
         style={styles.featuredOverlay}
       />
-
       <View style={styles.featuredTextWrap}>
         <View style={styles.featuredNameRow}>
           <Text style={styles.featuredArtistName} numberOfLines={1}>
@@ -212,18 +236,11 @@ export default function HomeScreen({ navigation }: any) {
           </Text>
           {item.isVerified ? (
             <View style={styles.verifiedWrap}>
-              <BadgeCheck color="#22c55e" fill="#22c55e" size={18} />
+              <BadgeCheck color="#22c55e" fill="#22c55e" size={16} />
             </View>
           ) : null}
         </View>
-
-        {item.isSubscriptionBased ? (
-          <View style={styles.subscriptionTag}>
-            <Text style={styles.subscriptionTagText}>{item.subText}</Text>
-          </View>
-        ) : (
-          <Text style={styles.featuredSubText}>{item.subText}</Text>
-        )}
+        <Text style={styles.featuredSubText}>{item.subText}</Text>
       </View>
     </Pressable>
   );

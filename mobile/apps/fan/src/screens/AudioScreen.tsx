@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -15,6 +15,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useFocusEffect } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
 import { Play, Search as SearchIcon } from 'lucide-react-native';
 
@@ -65,6 +66,8 @@ export default function AudioScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
   const { playQueue } = useMediaPlayer();
 
+  const lastContentItemsRef = useRef<ApiContentItem[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -72,13 +75,81 @@ export default function AudioScreen({ navigation }: any) {
   const [items, setItems] = useState<AudioCard[]>([]);
 
   const fetchAll = useCallback(async () => {
-    const res = await apiV1.get('/content');
-    const raw: ApiContentItem[] = Array.isArray(res.data?.items) ? res.data.items : [];
+    const res = await apiV1.get(`/content?ts=${Date.now()}`, {
+      headers: {
+        'Cache-Control': 'no-store',
+        Pragma: 'no-cache',
+      },
+    });
 
-    const mapped: AudioCard[] = raw
+    const fromResponse = (data: any): ApiContentItem[] => {
+      if (!data) return [];
+      if (Array.isArray(data?.items)) return data.items;
+      if (Array.isArray(data?.data?.items)) return data.data.items;
+      if (Array.isArray(data?.result?.items)) return data.result.items;
+      if (Array.isArray(data?.content?.items)) return data.content.items;
+      if (Array.isArray(data?.content)) return data.content;
+      if (Array.isArray(data)) return data;
+      return [];
+    };
+
+    const raw: ApiContentItem[] = fromResponse(res.data);
+    if (raw.length > 0) {
+      lastContentItemsRef.current = raw;
+    }
+
+    const effectiveRaw: ApiContentItem[] = raw.length > 0 ? raw : lastContentItemsRef.current;
+
+    if (__DEV__) {
+      const first = effectiveRaw[0] as any;
+      if (first) {
+        console.log('[AudioScreen] /content sample item keys', Object.keys(first));
+        console.log('[AudioScreen] /content sample item mediaType/type', {
+          mediaType: first.mediaType,
+          type: first.type,
+          media_type: first.media_type,
+          fileUrl: first.fileUrl,
+          mediaUrl: first.mediaUrl,
+        });
+      } else {
+        console.log('[AudioScreen] /content returned 0 items');
+      }
+    }
+
+    const detectMediaType = (it: any): 'audio' | 'video' => {
+      const raw = (
+        `${it?.type ?? ''} ${it?.mediaType ?? ''} ${it?.media_type ?? ''} ${it?.contentType ?? ''} ${
+          it?.content_type ?? ''
+        }`
+      )
+        .toString()
+        .toLowerCase();
+
+      if (raw.includes('audio')) return 'audio';
+      if (raw.includes('video')) return 'video';
+
+      const url = (it?.mediaUrl ?? it?.fileUrl ?? it?.url ?? '').toString().toLowerCase();
+      if (url.includes('.mp4') || url.includes('.mov') || url.includes('video')) return 'video';
+      if (url.includes('.mp3') || url.includes('.wav') || url.includes('.aac') || url.includes('audio')) return 'audio';
+
+      return 'audio';
+    };
+
+    if (__DEV__) {
+      const total = effectiveRaw.length;
+      let videoCount = 0;
+      let audioCount = 0;
+      for (const it of effectiveRaw) {
+        const t = detectMediaType(it);
+        if (t === 'video') videoCount += 1;
+        else audioCount += 1;
+      }
+      console.log('[AudioScreen] /content counts', { total, audioCount, videoCount });
+    }
+
+    const mapped: AudioCard[] = effectiveRaw
       .map((it) => {
-        const mediaTypeRaw = (it.mediaType ?? it.type ?? '').toString().toLowerCase();
-        const mediaType = mediaTypeRaw === 'video' ? 'video' : 'audio';
+        const mediaType = detectMediaType(it);
         if (mediaType !== 'audio') return null;
 
         const artworkUrl = (it.thumbnailUrl ?? it.artwork ?? '').toString() || FALLBACK_ARTWORK;
@@ -110,8 +181,10 @@ export default function AudioScreen({ navigation }: any) {
 
         const next = await fetchAll();
         setItems(next);
-      } catch {
-        setItems([]);
+      } catch (e) {
+        if (__DEV__) {
+          console.warn('[AudioScreen] load failed', e);
+        }
       } finally {
         setRefreshing(false);
         setLoading(false);
@@ -123,6 +196,12 @@ export default function AudioScreen({ navigation }: any) {
   useEffect(() => {
     load().catch(() => undefined);
   }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load().catch(() => undefined);
+    }, [load])
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

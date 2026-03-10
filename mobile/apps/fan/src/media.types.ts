@@ -8,7 +8,7 @@ export type MediaItem = {
   artistId?: string;
   mediaType: MediaType;
   artworkUrl?: string | null;
-  mediaUrl: string;
+  mediaUrl: string | null;
   isLocked?: boolean;
   /** When true, resolve playback URL via POST /stream/access before playing */
   useStreamAccess?: boolean;
