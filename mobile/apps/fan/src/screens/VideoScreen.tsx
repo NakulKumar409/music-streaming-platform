@@ -18,7 +18,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { ArrowLeft, BadgeCheck, HelpCircle, Library, Pause, Play, Settings } from 'lucide-react-native';
+import { ArrowLeft, BadgeCheck, HelpCircle, Library, Maximize, Pause, Play, Settings } from 'lucide-react-native';
 import { ResizeMode, Video, type AVPlaybackStatus } from 'expo-av';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
@@ -163,6 +163,10 @@ export default function VideoScreen() {
   const [isSeeking, setIsSeeking] = useState(false);
   const seekValueRef = useRef(0);
 
+  const lastStatusPositionRef = useRef(0);
+  const lastStatusDurationRef = useRef(0);
+  const durationSetForUrlRef = useRef<string | null>(null);
+
   const [showQualitySheet, setShowQualitySheet] = useState(false);
   const [selectedQuality, setSelectedQuality] = useState<string>('Auto');
 
@@ -178,6 +182,13 @@ export default function VideoScreen() {
   const shimmerX = useRef(new Animated.Value(0)).current;
 
   const miniAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Reset throttling/duration once per playback source.
+    lastStatusPositionRef.current = 0;
+    lastStatusDurationRef.current = 0;
+    durationSetForUrlRef.current = activePlaybackUrl ?? null;
+  }, [activePlaybackUrl]);
 
   const fetchAll = useCallback(async () => {
     const res = await apiV1.get('/content', { params: { mediaType: 'video' } });
@@ -209,6 +220,22 @@ export default function VideoScreen() {
       .filter(Boolean) as VideoCard[];
 
     return mapped;
+  }, []);
+
+  const enterFullscreen = useCallback(async () => {
+    try {
+      const v: any = videoRef.current as any;
+      if (!v) return;
+      if (typeof v.presentFullscreenPlayer === 'function') {
+        await v.presentFullscreenPlayer();
+        return;
+      }
+      if (typeof v.presentFullscreen === 'function') {
+        await v.presentFullscreen();
+      }
+    } catch {
+      // ignore
+    }
   }, []);
 
   const stopAndReset = useCallback(async () => {
@@ -477,13 +504,38 @@ export default function VideoScreen() {
     (status: AVPlaybackStatus) => {
       const s: any = status as any;
       if (!s?.isLoaded) {
-        setIsVideoReady(false);
+        if (isVideoReady) setIsVideoReady(false);
         return;
       }
-      setIsVideoReady(true);
-      setIsVideoPlaying(Boolean(s.isPlaying));
-      if (!isSeeking) setPositionMs(Math.max(0, Math.round(Number(s.positionMillis ?? 0))));
-      setDurationMs(Math.max(0, Math.round(Number(s.durationMillis ?? 0))));
+
+      if (!isVideoReady && s.isLoaded) setIsVideoReady(true);
+
+      const nextPlaying = Boolean(s.isPlaying);
+      setIsVideoPlaying((prev) => (prev === nextPlaying ? prev : nextPlaying));
+
+      const nextPos = Math.max(0, Math.round(Number(s.positionMillis ?? 0)));
+      const nextDur = Math.max(0, Math.round(Number(s.durationMillis ?? 0)));
+
+      // Only set duration once per playback URL (metadata load), not on every tick.
+      if (activePlaybackUrl && durationSetForUrlRef.current !== activePlaybackUrl) {
+        durationSetForUrlRef.current = activePlaybackUrl;
+        lastStatusDurationRef.current = 0;
+      }
+
+      if (nextDur > 0 && lastStatusDurationRef.current === 0) {
+        lastStatusDurationRef.current = nextDur;
+        setDurationMs((prev) => (prev === nextDur ? prev : nextDur));
+      }
+
+      // Throttle position updates to avoid excessive render churn.
+      if (!isSeeking) {
+        const lastPos = lastStatusPositionRef.current;
+        const shouldUpdate = Math.abs(nextPos - lastPos) >= 500 || lastPos === 0;
+        if (shouldUpdate) {
+          lastStatusPositionRef.current = nextPos;
+          setPositionMs((prev) => (prev === nextPos ? prev : nextPos));
+        }
+      }
 
        // Some devices/situations report loaded but do not auto-start.
        // Ensure playback starts once after load if user selected a video.
@@ -497,12 +549,12 @@ export default function VideoScreen() {
        }
 
       if (s.didJustFinish) {
-        setIsVideoPlaying(false);
+        setIsVideoPlaying((prev) => (prev ? false : prev));
         setShowUpNext(true);
         setUpNextSeconds(5);
       }
     },
-    [activePlaybackUrl, isSeeking]
+    [activePlaybackUrl, isSeeking, isVideoReady]
   );
 
   useEffect(() => {
@@ -867,6 +919,11 @@ export default function VideoScreen() {
                 <Pressable style={styles.iconBtn} onPress={() => setShowQualitySheet((s) => !s)}>
                   <Settings size={18} color="#fff" />
                 </Pressable>
+                {activePlaybackUrl && showControls ? (
+                  <Pressable style={styles.iconBtn} onPress={() => enterFullscreen().catch(() => undefined)}>
+                    <Maximize size={18} color="#fff" />
+                  </Pressable>
+                ) : null}
               </View>
 
               {activePlaybackUrl && showControls ? (
