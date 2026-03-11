@@ -884,7 +884,7 @@ export default function VideoScreen() {
                 </View>
               ) : null}
 
-              {activePlaybackUrl ? (
+              {activePlaybackUrl && showControls ? (
                 <View style={styles.seekWrap} pointerEvents="box-none">
                   <View style={styles.seekTimesRow}>
                     <Text style={styles.seekTime}>{formatTime(positionMs)}</Text>
