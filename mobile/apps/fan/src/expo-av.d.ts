@@ -24,6 +24,7 @@ declare module 'expo-av' {
     playAsync(): Promise<any>;
     pauseAsync(): Promise<any>;
     stopAsync(): Promise<any>;
+    unloadAsync(): Promise<any>;
     setPositionAsync(positionMillis: number): Promise<any>;
     setStatusAsync(status: any): Promise<any>;
   }
