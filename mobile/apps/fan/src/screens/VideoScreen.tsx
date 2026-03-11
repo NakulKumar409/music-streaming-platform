@@ -6,6 +6,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  LayoutChangeEvent,
   PanResponder,
   Pressable,
   RefreshControl,
@@ -173,6 +174,8 @@ export default function VideoScreen() {
   const [scrollY, setScrollY] = useState(0);
   const [showMini, setShowMini] = useState(false);
 
+  const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState(HEADER_HEIGHT + 92);
+
   const listRef = useRef<FlatList<VideoCard> | null>(null);
 
   const videoRef = useRef<Video>(null);
@@ -182,6 +185,13 @@ export default function VideoScreen() {
   const shimmerX = useRef(new Animated.Value(0)).current;
 
   const miniAnim = useRef(new Animated.Value(0)).current;
+
+  const onHeaderLayout = useCallback((e: LayoutChangeEvent) => {
+    const h = Math.max(0, Math.round(e.nativeEvent.layout.height));
+    if (h > 0) {
+      setMeasuredHeaderHeight((prev) => (Math.abs(prev - h) >= 2 ? h : prev));
+    }
+  }, []);
 
   useEffect(() => {
     // Reset throttling/duration once per playback source.
@@ -837,7 +847,7 @@ export default function VideoScreen() {
             showsVerticalScrollIndicator={false}
             onScroll={(e) => setScrollY(e.nativeEvent.contentOffset.y)}
             scrollEventThrottle={16}
-            contentContainerStyle={{ paddingTop: HEADER_HEIGHT + 92, paddingBottom: tabBarHeight + 120 }}
+            contentContainerStyle={{ paddingTop: measuredHeaderHeight, paddingBottom: tabBarHeight + 120 }}
             refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
           />
         ) : (
@@ -851,39 +861,41 @@ export default function VideoScreen() {
             showsVerticalScrollIndicator={false}
             onScroll={(e) => setScrollY(e.nativeEvent.contentOffset.y)}
             scrollEventThrottle={16}
-            contentContainerStyle={{ paddingTop: HEADER_HEIGHT + 92, paddingBottom: tabBarHeight + 120 }}
+            contentContainerStyle={{ paddingTop: measuredHeaderHeight, paddingBottom: tabBarHeight + 120 }}
             refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
             ListEmptyComponent={<Text style={styles.emptyText}>No videos found.</Text>}
             ListHeaderComponent={listHeader}
+            ListHeaderComponentStyle={listHeader ? { marginBottom: 14 } : undefined}
           />
         )}
 
         <View style={styles.stickyHeader} pointerEvents="box-none">
-          <View style={styles.headerTopRow}>
-            <Text style={styles.title}>Video</Text>
-          </View>
+          <View onLayout={onHeaderLayout}>
+            <View style={styles.headerTopRow}>
+              <Text style={styles.title}>Video</Text>
+            </View>
 
-          <Animated.View
-            style={[
-              styles.playerFrame,
-              showMini
-                ? [
-                    styles.playerFrameMini,
-                    {
-                      position: 'absolute',
-                      width: 180,
-                      height: Math.round(180 / HEADER_ASPECT),
-                      right: 14,
-                      bottom: tabBarHeight + 16,
-                    },
-                  ]
-                : null,
-              // Smooth transition between normal header and mini-player.
-              showMini ? { transform: [{ scale: miniAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1] }) } as any] } : null,
-            ]}
-            pointerEvents="box-none"
-          >
-            <View style={styles.playerInner} pointerEvents="box-none" {...panResponder.panHandlers}>
+            <Animated.View
+              style={[
+                styles.playerFrame,
+                showMini
+                  ? [
+                      styles.playerFrameMini,
+                      {
+                        position: 'absolute',
+                        width: 180,
+                        height: Math.round(180 / HEADER_ASPECT),
+                        right: 14,
+                        bottom: tabBarHeight + 16,
+                      },
+                    ]
+                  : null,
+                // Smooth transition between normal header and mini-player.
+                showMini ? { transform: [{ scale: miniAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1] }) } as any] } : null,
+              ]}
+              pointerEvents="box-none"
+            >
+              <View style={styles.playerInner} pointerEvents="box-none" {...panResponder.panHandlers}>
               {activePlaybackUrl ? (
                 <Pressable style={StyleSheet.absoluteFill} onPress={onPressPlayerSurface}>
                   <Video
@@ -967,51 +979,52 @@ export default function VideoScreen() {
                   <Text style={styles.heroHintText}>Tap a video below to start playing</Text>
                 </View>
               ) : null}
-            </View>
-          </Animated.View>
+              </View>
+            </Animated.View>
 
-          <View style={styles.metaBlock}>
-            <Text style={styles.nowTitle} numberOfLines={1}>
-              {activeVideoMeta?.title ? activeVideoMeta.title : 'Trending Videos'}
-            </Text>
-            <Text style={styles.nowSub} numberOfLines={1}>
-              {activeVideoMeta?.artistName ? activeVideoMeta.artistName : 'For you'}
-            </Text>
+            <View style={styles.metaBlock}>
+              <Text style={styles.nowTitle} numberOfLines={1}>
+                {activeVideoMeta?.title ? activeVideoMeta.title : 'Trending Videos'}
+              </Text>
+              <Text style={styles.nowSub} numberOfLines={1}>
+                {activeVideoMeta?.artistName ? activeVideoMeta.artistName : 'For you'}
+              </Text>
 
-            <View style={styles.actionRow}>
-              <Pressable style={styles.actionBtn} onPress={() => undefined}>
-                <BadgeCheck size={18} color="#fff" />
-                <Text style={styles.actionText}>Like</Text>
-              </Pressable>
-              <Pressable style={styles.actionBtn} onPress={onPressShare}>
-                <HelpCircle size={18} color="#fff" />
-                <Text style={styles.actionText}>Share</Text>
-              </Pressable>
-              <Pressable style={styles.actionBtn} onPress={() => undefined}>
-                <Library size={18} color="#fff" />
-                <Text style={styles.actionText}>Download</Text>
-              </Pressable>
+              <View style={styles.actionRow}>
+                <Pressable style={styles.actionBtn} onPress={() => undefined}>
+                  <BadgeCheck size={18} color="#fff" />
+                  <Text style={styles.actionText}>Like</Text>
+                </Pressable>
+                <Pressable style={styles.actionBtn} onPress={onPressShare}>
+                  <HelpCircle size={18} color="#fff" />
+                  <Text style={styles.actionText}>Share</Text>
+                </Pressable>
+                <Pressable style={styles.actionBtn} onPress={() => undefined}>
+                  <Library size={18} color="#fff" />
+                  <Text style={styles.actionText}>Download</Text>
+                </Pressable>
+              </View>
             </View>
+
+            {showQualitySheet ? (
+              <View style={styles.qualitySheet}>
+                {availableQualities.map((q) => {
+                  const active = q === selectedQuality;
+                  return (
+                    <Pressable
+                      key={q}
+                      style={[styles.qualityPill, active ? styles.qualityPillActive : null]}
+                      onPress={() => {
+                        applyQualitySelection(q).catch(() => undefined);
+                      }}
+                    >
+                      <Text style={[styles.qualityText, active ? styles.qualityTextActive : null]}>{q}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
           </View>
-
-          {showQualitySheet ? (
-            <View style={styles.qualitySheet}>
-              {availableQualities.map((q) => {
-                const active = q === selectedQuality;
-                return (
-                  <Pressable
-                    key={q}
-                    style={[styles.qualityPill, active ? styles.qualityPillActive : null]}
-                    onPress={() => {
-                      applyQualitySelection(q).catch(() => undefined);
-                    }}
-                  >
-                    <Text style={[styles.qualityText, active ? styles.qualityTextActive : null]}>{q}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          ) : null}
         </View>
       </SafeAreaView>
     </View>
@@ -1256,7 +1269,7 @@ const styles = StyleSheet.create({
   relatedWrap: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 4,
+    paddingBottom: 18,
   },
   relatedTitle: {
     color: 'rgba(255,255,255,0.85)',
