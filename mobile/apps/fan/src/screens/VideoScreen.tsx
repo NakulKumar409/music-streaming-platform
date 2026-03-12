@@ -151,6 +151,7 @@ export default function VideoScreen() {
   const [loadingPlaybackUrl, setLoadingPlaybackUrl] = useState(false);
 
   const [isVideoReady, setIsVideoReady] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [positionMs, setPositionMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
@@ -447,6 +448,15 @@ export default function VideoScreen() {
     }
   }, [currentItem?.mediaType, playerState.isPlaying, togglePlayPause]);
 
+  const pauseGlobalPlaybackIfNeeded = useCallback(async () => {
+    if (!playerState.isPlaying) return;
+    try {
+      await togglePlayPause();
+    } catch {
+      // ignore
+    }
+  }, [playerState.isPlaying, togglePlayPause]);
+
   const pauseInlineVideoIfNeeded = useCallback(async () => {
     try {
       const v = videoRef.current;
@@ -499,7 +509,7 @@ export default function VideoScreen() {
   const onPressVideo = useCallback(
     (video: VideoCard) => {
       (async () => {
-        playbackSessionRef.current += 1;
+        const sessionId = (playbackSessionRef.current += 1);
 
         setShowUpNext(false);
         setUpNextSeconds(5);
@@ -515,6 +525,8 @@ export default function VideoScreen() {
         setPositionMs(0);
         setDurationMs(0);
         seekValueRef.current = 0;
+        setIsVideoReady(false);
+        setIsBuffering(true);
 
         setActiveVideoId(video.id);
         setActiveVideoMeta(video);
@@ -522,22 +534,33 @@ export default function VideoScreen() {
         playedOnceRef.current = false;
         setShowControls(true);
 
-        // Stop/unload any previous inline video so it can't resume position.
-        try {
-          await videoRef.current?.unloadAsync();
-        } catch {
-          // ignore
-        }
+        // Stop/unload any previous inline video so it can't block the next stream.
+        // Do not await: cleanup can happen in parallel with fetching the next URL.
+        videoRef.current?.unloadAsync().catch(() => undefined);
+        setActivePlaybackUrl(null);
 
-        await pauseGlobalAudioIfNeeded();
+        await pauseGlobalPlaybackIfNeeded();
 
         setLoadingPlaybackUrl(true);
         try {
           const url = await resolvePlaybackUrl(video);
+          if (sessionId !== playbackSessionRef.current) return;
           if (!url) return;
           setActivePlaybackUrl(url);
           setIsVideoReady(false);
+          setIsBuffering(true);
           setIsVideoPlaying(true);
+
+          // Best-effort immediate autoplay even before the first status tick.
+          setTimeout(() => {
+            if (sessionId !== playbackSessionRef.current) return;
+            videoRef.current
+              ?.setPositionAsync(0)
+              .catch(() => undefined)
+              .finally(() => {
+                videoRef.current?.playAsync().catch(() => undefined);
+              });
+          }, 0);
         } catch {
           // keep placeholder
           setActivePlaybackUrl(null);
@@ -546,7 +569,7 @@ export default function VideoScreen() {
         }
       })().catch(() => undefined);
     },
-    [pauseGlobalAudioIfNeeded, resolvePlaybackUrl, shimmerX]
+    [pauseGlobalPlaybackIfNeeded, resolvePlaybackUrl]
   );
 
   const currentIndex = useMemo(() => {
@@ -655,6 +678,9 @@ export default function VideoScreen() {
       }
 
       if (!isVideoReady && s.isLoaded) setIsVideoReady(true);
+
+      const buffering = Boolean(s.isBuffering);
+      setIsBuffering((prev) => (prev === buffering ? prev : buffering));
 
       const nextPlaying = Boolean(s.isPlaying);
       setIsVideoPlaying((prev) => (prev === nextPlaying ? prev : nextPlaying));
@@ -1050,6 +1076,7 @@ export default function VideoScreen() {
               {activePlaybackUrl ? (
                 <Pressable style={StyleSheet.absoluteFill} onPress={onPressPlayerSurface}>
                   <Video
+                    key={activePlaybackUrl}
                     ref={videoRef}
                     style={styles.video}
                     source={{ uri: activePlaybackUrl }}
