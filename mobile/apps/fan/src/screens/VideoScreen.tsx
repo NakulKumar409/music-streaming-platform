@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { ArrowLeft, BadgeCheck, HelpCircle, Library, Maximize, Pause, Play, Search, Settings, X } from 'lucide-react-native';
 import { ResizeMode, Video, type AVPlaybackStatus } from 'expo-av';
@@ -138,6 +138,7 @@ function normalizeCategory(raw: unknown): string {
 }
 
 export default function VideoScreen() {
+  const navigation = useNavigation<any>();
   const tabBarHeight = useBottomTabBarHeight();
   const { currentItem, state: playerState, togglePlayPause } = useMediaPlayer();
 
@@ -906,6 +907,12 @@ export default function VideoScreen() {
     }
   }, [activeVideoMeta]);
 
+  const onPressArtist = useCallback(() => {
+    const artistId = activeVideoMeta?.artistId;
+    if (!artistId) return;
+    navigation.navigate('Artist', { artistId });
+  }, [activeVideoMeta?.artistId, navigation]);
+
   const renderSkeletonRow = useCallback(
     (_: any, idx: number) => {
       const translateX = shimmerX.interpolate({ inputRange: [0, 1], outputRange: [-160, 260] });
@@ -1191,9 +1198,19 @@ export default function VideoScreen() {
               <Text style={styles.nowTitle} numberOfLines={1}>
                 {activeVideoMeta?.title ? activeVideoMeta.title : 'Trending Videos'}
               </Text>
-              <Text style={styles.nowSub} numberOfLines={1}>
-                {activeVideoMeta?.artistName ? activeVideoMeta.artistName : 'For you'}
-              </Text>
+
+              {activePlaybackUrl && activeVideoMeta?.artistName ? (
+                <Pressable style={styles.artistRow} onPress={onPressArtist}>
+                  <Image source={{ uri: activeVideoMeta.artworkUrl || FALLBACK_ARTWORK }} style={styles.artistAvatar} />
+                  <Text style={styles.artistRowName} numberOfLines={1}>
+                    {activeVideoMeta.artistName}
+                  </Text>
+                </Pressable>
+              ) : (
+                <Text style={styles.nowSub} numberOfLines={1}>
+                  {activeVideoMeta?.artistName ? activeVideoMeta.artistName : 'For you'}
+                </Text>
+              )}
 
               <View style={styles.actionRow}>
                 <Pressable style={styles.actionBtn} onPress={() => undefined}>
@@ -1394,6 +1411,27 @@ const styles = StyleSheet.create({
   },
   nowTitle: { color: '#fff', fontSize: 15, fontWeight: '900' },
   nowSub: { marginTop: 4, color: 'rgba(255,255,255,0.62)', fontSize: 12, fontWeight: '800' },
+
+  artistRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  artistAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  artistRowName: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '900',
+  },
 
   actionRow: { marginTop: 12, flexDirection: 'row', gap: 18 },
   actionBtn: {
