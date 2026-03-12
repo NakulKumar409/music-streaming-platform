@@ -172,10 +172,13 @@ export default function VideoScreen() {
   const [showQualitySheet, setShowQualitySheet] = useState(false);
   const [selectedQuality, setSelectedQuality] = useState<string>('Auto');
 
-  const [scrollY, setScrollY] = useState(0);
   const [showMini, setShowMini] = useState(false);
+  const scrollYRef = useRef(0);
+  const deepScrollRef = useRef(false);
 
   const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState(HEADER_HEIGHT + 92);
+  const headerHeightRef = useRef<number>(HEADER_HEIGHT + 92);
+  const hasMeasuredHeaderRef = useRef(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<VideoCard[] | null>(null);
@@ -188,6 +191,7 @@ export default function VideoScreen() {
   const videoRef = useRef<Video>(null);
   const lastTapRef = useRef(0);
   const lastTapXRef = useRef(0);
+  const playbackSessionRef = useRef(0);
 
   const shimmerX = useRef(new Animated.Value(0)).current;
 
@@ -195,9 +199,21 @@ export default function VideoScreen() {
 
   const onHeaderLayout = useCallback((e: LayoutChangeEvent) => {
     const h = Math.max(0, Math.round(e.nativeEvent.layout.height));
-    if (h > 0) {
-      setMeasuredHeaderHeight((prev) => (Math.abs(prev - h) >= 2 ? h : prev));
-    }
+    if (h <= 0) return;
+
+    // FlatList uses measuredHeaderHeight for paddingTop.
+    // Updating paddingTop can cause another layout pass of the header, which can feedback-loop.
+    // We only need an initial measurement; keep it stable afterwards.
+    if (hasMeasuredHeaderRef.current) return;
+
+    const prev = headerHeightRef.current;
+    // Avoid feedback loops: paddingTop changes can cause tiny layout jitter.
+    // Only update when the height changes meaningfully.
+    if (Math.abs(prev - h) < 8) return;
+
+    headerHeightRef.current = h;
+    hasMeasuredHeaderRef.current = true;
+    setMeasuredHeaderHeight(h);
   }, []);
 
   useEffect(() => {
@@ -205,6 +221,12 @@ export default function VideoScreen() {
     lastStatusPositionRef.current = 0;
     lastStatusDurationRef.current = 0;
     durationSetForUrlRef.current = activePlaybackUrl ?? null;
+
+    // Always reset UI to 0:00 when switching sources.
+    setPositionMs(0);
+    setDurationMs(0);
+    seekValueRef.current = 0;
+    playedOnceRef.current = false;
   }, [activePlaybackUrl]);
 
   const fetchAll = useCallback(async () => {
@@ -477,6 +499,8 @@ export default function VideoScreen() {
   const onPressVideo = useCallback(
     (video: VideoCard) => {
       (async () => {
+        playbackSessionRef.current += 1;
+
         setShowUpNext(false);
         setUpNextSeconds(5);
         if (upNextTimerRef.current) {
@@ -484,11 +508,26 @@ export default function VideoScreen() {
           upNextTimerRef.current = null;
         }
 
+        // Ensure a new selection always starts from 0:00 and does not inherit prior status updates.
+        lastStatusPositionRef.current = 0;
+        lastStatusDurationRef.current = 0;
+        durationSetForUrlRef.current = null;
+        setPositionMs(0);
+        setDurationMs(0);
+        seekValueRef.current = 0;
+
         setActiveVideoId(video.id);
         setActiveVideoMeta(video);
 
         playedOnceRef.current = false;
         setShowControls(true);
+
+        // Stop/unload any previous inline video so it can't resume position.
+        try {
+          await videoRef.current?.unloadAsync();
+        } catch {
+          // ignore
+        }
 
         await pauseGlobalAudioIfNeeded();
 
@@ -579,9 +618,25 @@ export default function VideoScreen() {
   }, [shimmerX]);
 
   useEffect(() => {
-    const deep = scrollY > HEADER_HEIGHT * 2.4;
-    setShowMini(deep && Boolean(activePlaybackUrl) && isVideoPlaying);
-  }, [activePlaybackUrl, isVideoPlaying, scrollY]);
+    const deep = scrollYRef.current > HEADER_HEIGHT * 2.4;
+    const next = deep && Boolean(activePlaybackUrl) && isVideoPlaying;
+    setShowMini((prev) => (prev === next ? prev : next));
+  }, [activePlaybackUrl, isVideoPlaying]);
+
+  const onListScroll = useCallback(
+    (e: any) => {
+      const y = Number(e?.nativeEvent?.contentOffset?.y ?? 0);
+      scrollYRef.current = y;
+
+      const deep = y > HEADER_HEIGHT * 2.4;
+      if (deepScrollRef.current === deep) return;
+      deepScrollRef.current = deep;
+
+      const next = deep && Boolean(activePlaybackUrl) && isVideoPlaying;
+      setShowMini((prev) => (prev === next ? prev : next));
+    },
+    [activePlaybackUrl, isVideoPlaying]
+  );
 
   useEffect(() => {
     Animated.timing(miniAnim, {
@@ -621,6 +676,13 @@ export default function VideoScreen() {
       // Throttle position updates to avoid excessive render churn.
       if (!isSeeking) {
         const lastPos = lastStatusPositionRef.current;
+
+        // When switching videos, some platforms can briefly report a non-zero position
+        // before we get the chance to force seek to 0. Ignore that initial non-zero.
+        if (!playedOnceRef.current && lastPos === 0 && nextPos > 0) {
+          return;
+        }
+
         const shouldUpdate = Math.abs(nextPos - lastPos) >= 500 || lastPos === 0;
         if (shouldUpdate) {
           lastStatusPositionRef.current = nextPos;
@@ -628,16 +690,18 @@ export default function VideoScreen() {
         }
       }
 
-       // Some devices/situations report loaded but do not auto-start.
-       // Ensure playback starts once after load if user selected a video.
-       if (!playedOnceRef.current && activePlaybackUrl) {
-         playedOnceRef.current = true;
-         try {
-           videoRef.current?.playAsync();
-         } catch {
-           // ignore
-         }
-       }
+      // Some devices/situations report loaded but do not auto-start.
+      // Ensure playback starts once after load if user selected a video.
+      // Always force position to 0 so switching videos never resumes.
+      if (!playedOnceRef.current && activePlaybackUrl) {
+        playedOnceRef.current = true;
+        videoRef.current
+          ?.setPositionAsync(0)
+          .catch(() => undefined)
+          .finally(() => {
+            videoRef.current?.playAsync().catch(() => undefined);
+          });
+      }
 
       if (s.didJustFinish) {
         setIsVideoPlaying((prev) => (prev ? false : prev));
@@ -712,7 +776,7 @@ export default function VideoScreen() {
 
       // Backend currently issues a single secure playback URL; re-request on selection to satisfy
       // the "use streamService.getPlaybackUrl" requirement for all variants.
-      const resumeAt = isVideoReady ? positionMs : 0;
+      const resumeAt = 0;
       try {
         setLoadingPlaybackUrl(true);
         const url = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video');
@@ -720,18 +784,16 @@ export default function VideoScreen() {
         playedOnceRef.current = false;
         setIsVideoPlaying(true);
 
-        if (resumeAt > 0) {
-          setTimeout(() => {
-            videoRef.current?.setPositionAsync(resumeAt).catch(() => undefined);
-          }, 250);
-        }
+        setTimeout(() => {
+          videoRef.current?.setPositionAsync(resumeAt).catch(() => undefined);
+        }, 250);
       } catch {
         // ignore
       } finally {
         setLoadingPlaybackUrl(false);
       }
     },
-    [activeVideoMeta, isVideoReady, positionMs]
+    [activeVideoMeta]
   );
 
   const onDoubleTap = useCallback(
@@ -934,7 +996,7 @@ export default function VideoScreen() {
             keyExtractor={(_, idx) => `sk-${idx}`}
             renderItem={({ item, index }) => renderSkeletonRow(item, index)}
             showsVerticalScrollIndicator={false}
-            onScroll={(e) => setScrollY(e.nativeEvent.contentOffset.y)}
+            onScroll={onListScroll}
             scrollEventThrottle={16}
             contentContainerStyle={{ paddingTop: measuredHeaderHeight, paddingBottom: tabBarHeight + 120 }}
             refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
@@ -948,7 +1010,7 @@ export default function VideoScreen() {
             keyExtractor={(it) => it.id}
             renderItem={renderVideoItem}
             showsVerticalScrollIndicator={false}
-            onScroll={(e) => setScrollY(e.nativeEvent.contentOffset.y)}
+            onScroll={onListScroll}
             scrollEventThrottle={16}
             contentContainerStyle={{ paddingTop: measuredHeaderHeight, paddingBottom: tabBarHeight + 120 }}
             refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
@@ -991,7 +1053,6 @@ export default function VideoScreen() {
                     ref={videoRef}
                     style={styles.video}
                     source={{ uri: activePlaybackUrl }}
-                    shouldPlay={isVideoPlaying}
                     resizeMode={ResizeMode.COVER}
                     useNativeControls={false}
                     progressUpdateIntervalMillis={200}

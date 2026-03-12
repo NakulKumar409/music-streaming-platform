@@ -20,7 +20,7 @@ import { BlurView } from 'expo-blur';
 import { Play, Search as SearchIcon } from 'lucide-react-native';
 
 import { apiV1 } from '../services/api';
-import { normalizePlaybackUrl } from '../services/streamService';
+import { getPlaybackUrl, normalizePlaybackUrl } from '../services/streamService';
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import type { MediaItem } from '../media.types';
@@ -66,10 +66,14 @@ export default function AudioScreen({ navigation }: any) {
 
   const lastContentItemsRef = useRef<ApiContentItem[]>([]);
 
+  const playbackUrlCacheRef = useRef<Map<string, { url: string; ts: number }>>(new Map());
+  const prefetchingRef = useRef<Set<string>>(new Set());
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const [query, setQuery] = useState('');
+  const normalizedQuery = useMemo(() => query.trim().toLowerCase(), [query]);
   const [items, setItems] = useState<AudioCard[]>([]);
 
   const [searchResults, setSearchResults] = useState<AudioCard[] | null>(null);
@@ -207,9 +211,52 @@ export default function AudioScreen({ navigation }: any) {
     [fetchAll]
   );
 
+  const prefetchPlaybackUrls = useCallback(async (list: AudioCard[]) => {
+    const now = Date.now();
+    const MAX_AGE_MS = 60_000;
+    const CANDIDATES = list
+      .filter((x) => x.useStreamAccess)
+      .slice(0, 20);
+
+    await Promise.all(
+      CANDIDATES.map(async (x) => {
+        const key = x.contentId ?? x.id;
+        if (!key) return;
+
+        const cached = playbackUrlCacheRef.current.get(key);
+        if (cached && now - cached.ts < MAX_AGE_MS && cached.url) return;
+        if (prefetchingRef.current.has(key)) return;
+
+        prefetchingRef.current.add(key);
+        try {
+          const url = await getPlaybackUrl(key, 'audio');
+          if (!url) return;
+          playbackUrlCacheRef.current.set(key, { url: normalizePlaybackUrl(url), ts: Date.now() });
+        } catch {
+          // ignore
+        } finally {
+          prefetchingRef.current.delete(key);
+        }
+      })
+    );
+  }, []);
+
   useEffect(() => {
     load().catch(() => undefined);
   }, [load]);
+
+  useEffect(() => {
+    if (!items.length) return;
+    if (normalizedQuery) return;
+
+    const t = setTimeout(() => {
+      prefetchPlaybackUrls(items).catch(() => undefined);
+    }, 200);
+
+    return () => {
+      clearTimeout(t);
+    };
+  }, [items, normalizedQuery, prefetchPlaybackUrls]);
 
   useFocusEffect(
     useCallback(() => {
@@ -235,8 +282,6 @@ export default function AudioScreen({ navigation }: any) {
       })
       .slice(0, 10);
   }, [items]);
-
-  const normalizedQuery = useMemo(() => query.trim().toLowerCase(), [query]);
 
   const normalizeForSearch = useCallback((s: string) => {
     return (s ?? '')
@@ -391,6 +436,9 @@ export default function AudioScreen({ navigation }: any) {
       const queue: MediaItem[] = list
         .filter((x) => Boolean(x.mediaUrl) || x.useStreamAccess)
         .map((x) => ({
+          ...(playbackUrlCacheRef.current.get(x.contentId ?? x.id)?.url
+            ? { mediaUrl: playbackUrlCacheRef.current.get(x.contentId ?? x.id)?.url ?? '' }
+            : {}),
           id: x.id,
           contentId: x.contentId,
           title: x.title,
@@ -398,7 +446,9 @@ export default function AudioScreen({ navigation }: any) {
           artistId: x.artistId,
           mediaType: 'audio',
           artworkUrl: x.artworkUrl,
-          mediaUrl: x.mediaUrl ? normalizePlaybackUrl(x.mediaUrl) : '',
+          mediaUrl:
+            playbackUrlCacheRef.current.get(x.contentId ?? x.id)?.url ??
+            (x.mediaUrl ? normalizePlaybackUrl(x.mediaUrl) : ''),
           isLocked: false,
           useStreamAccess: x.useStreamAccess,
         }));

@@ -26,7 +26,7 @@ export default function SplashScreen() {
       >
         <View style={styles.logoWrapper}>
            <Image
-            source={require('../logo.jpg')}
+            source={require('../image.png')}
             style={styles.logo}
             resizeMode="cover"
           />

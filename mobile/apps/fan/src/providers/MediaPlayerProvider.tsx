@@ -87,6 +87,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   const currentItem = state.queue.length ? state.queue[state.currentIndex] ?? null : null;
 
+  const lastVideoContentKeyRef = useRef<string | null>(null);
+
   const playbackRecordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRecordedRef = useRef<string | null>(null);
 
@@ -125,6 +127,31 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   const currentItemRef = useRef<MediaItem | null>(currentItem);
   useEffect(() => {
     currentItemRef.current = currentItem;
+  }, [currentItem]);
+
+  useEffect(() => {
+    const item = currentItem;
+    if (!item) return;
+    if (item.mediaType !== 'video') return;
+
+    const key = String(item.contentId ?? item.id);
+    if (lastVideoContentKeyRef.current === key) return;
+    lastVideoContentKeyRef.current = key;
+
+    // Ensure a new video never inherits the previous video's position.
+    setState((s) => ({
+      ...s,
+      positionMs: 0,
+    }));
+
+    // Video ref may not be mounted/loaded yet; best-effort seek after a tick.
+    const t = setTimeout(() => {
+      videoRef.current?.setPositionAsync(0).catch(() => undefined);
+    }, 0);
+
+    return () => {
+      clearTimeout(t);
+    };
   }, [currentItem]);
 
   const applyPlaybackConfigToCurrent = useCallback(async () => {
@@ -269,8 +296,21 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       await stopVideo();
       await unloadAudio();
 
+      const isSignedStreamUrl = (url: string) => {
+        const u = (url ?? '').toString();
+        if (!u) return false;
+        // Signed local stream URLs look like /media/stream/:id?token=...&kind=audio
+        if (/\/media\/stream\//i.test(u)) return true;
+        if (/\btoken=/i.test(u) && /\bkind=audio\b/i.test(u)) return true;
+        return false;
+      };
+
       let playbackUrl = item.mediaUrl ? normalizePlaybackUrl(item.mediaUrl) : null;
-      if (item.useStreamAccess) {
+
+      // If we already have a signed stream URL, reuse it and avoid a network round-trip.
+      if (item.useStreamAccess && playbackUrl && isSignedStreamUrl(playbackUrl)) {
+        // keep existing playbackUrl
+      } else if (item.useStreamAccess) {
         try {
           playbackUrl = await getPlaybackUrl(item.contentId ?? item.id, 'audio');
         } catch (e) {
