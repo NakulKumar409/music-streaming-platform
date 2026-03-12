@@ -1437,6 +1437,7 @@ const styles = StyleSheet.create({
 
   searchWrap: {
     marginTop: 12,
+    marginBottom: 16,
     marginHorizontal: 20,
     paddingHorizontal: 12,
     paddingVertical: 10,
