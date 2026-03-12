@@ -233,7 +233,8 @@ router.get("/artist/:artistId", (req, res) => {
           const hasAudio = Boolean(r.storage_key || r.audio_url || r.media_url);
           const hasVideo = Boolean(r.video_storage_key || r.video_url);
 
-          const inferredMediaType = type === "video" ? "video" : "audio";
+          const isAudioVideo = type === 'audio_video' || type === 'audiovideo' || type === 'audio+video';
+          const inferredMediaType = isAudioVideo ? 'audio_video' : (type.includes('video') || hasVideo ? 'video' : 'audio');
 
           const hasNewAudioStorage = Boolean(r.storage_key);
           const hasNewVideoStorage = Boolean(r.video_storage_key || (type === "video" && r.storage_key));
@@ -253,7 +254,7 @@ router.get("/artist/:artistId", (req, res) => {
           const finalVideoUrl = hasVideo ? (isLocked ? restrictedMediaUrl(req, "video") : unlockedVideoUrl) : null;
 
           const finalMediaUrl = inferredMediaType === "video" ? finalVideoUrl : finalAudioUrl;
-          const useStreamAccess = Boolean((inferredMediaType === "video" ? hasNewVideoStorage : hasNewAudioStorage) && !isLocked);
+          const useStreamAccess = Boolean((hasNewAudioStorage || hasNewVideoStorage) && !isLocked);
 
           const thumbnailUrl = r.thumbnail_url
             ? toAbsoluteUrl(req, r.thumbnail_url)

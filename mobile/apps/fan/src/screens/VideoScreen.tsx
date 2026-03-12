@@ -1558,8 +1558,9 @@ const styles = StyleSheet.create({
 
   relatedWrap: {
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 20,
     paddingBottom: 18,
+    marginTop: 18,
   },
   relatedTitle: {
     color: 'rgba(255,255,255,0.85)',
