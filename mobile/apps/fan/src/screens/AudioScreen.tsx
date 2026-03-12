@@ -20,6 +20,7 @@ import { BlurView } from 'expo-blur';
 import { Play, Search as SearchIcon } from 'lucide-react-native';
 
 import { apiV1 } from '../services/api';
+import { normalizePlaybackUrl } from '../services/streamService';
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import type { MediaItem } from '../media.types';
@@ -31,6 +32,8 @@ type ApiContentItem = {
   mediaType?: string | null;
   thumbnailUrl?: string | null;
   artwork?: string | null;
+  thumbnail_storage_key?: string | null;
+  thumbnailStorageKey?: string | null;
   mediaUrl?: string | null;
   fileUrl?: string | null;
   artistName?: string | null;
@@ -44,23 +47,18 @@ type ApiContentItem = {
 
 type AudioCard = {
   id: string;
+  contentId: string;
   title: string;
   artistName: string;
   artistId?: string;
   artworkUrl: string;
   mediaUrl: string;
   useStreamAccess?: boolean;
-  genre: string;
   createdAt?: string | null;
 };
 
 const FALLBACK_ARTWORK =
   'https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=1400&q=80';
-
-function normalizeGenre(raw: unknown): string {
-  const g = (raw ?? '').toString().trim();
-  return g || 'Other';
-}
 
 export default function AudioScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
@@ -74,8 +72,16 @@ export default function AudioScreen({ navigation }: any) {
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<AudioCard[]>([]);
 
+  const [searchResults, setSearchResults] = useState<AudioCard[] | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRequestIdRef = useRef(0);
+
   const fetchAll = useCallback(async () => {
     const res = await apiV1.get(`/content?ts=${Date.now()}`, {
+      params: {
+        mediaType: 'audio',
+      },
       headers: {
         'Cache-Control': 'no-store',
         Pragma: 'no-cache',
@@ -152,18 +158,26 @@ export default function AudioScreen({ navigation }: any) {
         const mediaType = detectMediaType(it);
         if (mediaType !== 'audio') return null;
 
-        const artworkUrl = (it.thumbnailUrl ?? it.artwork ?? '').toString() || FALLBACK_ARTWORK;
+        const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
+        const thumbStorageKey = (it.thumbnail_storage_key ?? it.thumbnailStorageKey ?? null) as any;
+        const artworkFromStorageKey = thumbStorageKey
+          ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(String(it.id))}`
+          : '';
+        const artworkUrl =
+          (it.thumbnailUrl ?? it.artwork ?? '').toString() || artworkFromStorageKey || FALLBACK_ARTWORK;
         const artistIdValue = it.artistId !== null && it.artistId !== undefined ? String(it.artistId) : undefined;
+
+        const rawMediaUrl = (it.mediaUrl ?? it.fileUrl ?? '').toString();
 
         return {
           id: String(it.id),
+          contentId: String(it.id),
           title: (it.title ?? 'Untitled').toString(),
           artistName: (it.artistName ?? 'Artist').toString(),
           artistId: artistIdValue,
           artworkUrl,
-          mediaUrl: (it.mediaUrl ?? it.fileUrl ?? '').toString(),
+          mediaUrl: rawMediaUrl ? normalizePlaybackUrl(rawMediaUrl) : '',
           useStreamAccess: Boolean(it.useStreamAccess),
-          genre: normalizeGenre(it.genre),
           createdAt: (it.createdAt ?? null) as any,
         };
       })
@@ -207,7 +221,7 @@ export default function AudioScreen({ navigation }: any) {
     const q = query.trim().toLowerCase();
     if (!q) return items;
     return items.filter((x) => {
-      const hay = `${x.title} ${x.artistName} ${x.genre}`.toLowerCase();
+      const hay = `${x.title} ${x.artistName}`.toLowerCase();
       return hay.includes(q);
     });
   }, [items, query]);
@@ -222,25 +236,169 @@ export default function AudioScreen({ navigation }: any) {
       .slice(0, 10);
   }, [items]);
 
-  const genres = useMemo(() => {
-    const set = new Set<string>();
-    items.forEach((x) => set.add(normalizeGenre(x.genre)));
-    return Array.from(set).sort((a, b) => a.localeCompare(b)).slice(0, 12);
-  }, [items]);
+  const normalizedQuery = useMemo(() => query.trim().toLowerCase(), [query]);
+
+  const normalizeForSearch = useCallback((s: string) => {
+    return (s ?? '')
+      .toString()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }, []);
+
+  const matchesQuery = useCallback(
+    (it: AudioCard, q: string) => {
+      if (!q) return true;
+      const hayRaw = `${it.title ?? ''} ${it.artistName ?? ''}`;
+      const hay = normalizeForSearch(hayRaw);
+      const qq = normalizeForSearch(q);
+      if (!qq) return true;
+
+      const tokens = qq.split(' ').filter(Boolean);
+      if (!tokens.length) return true;
+      return tokens.every((t) => hay.includes(t));
+    },
+    [normalizeForSearch]
+  );
+
+  useEffect(() => {
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
+      searchTimerRef.current = null;
+    }
+
+    const q = normalizedQuery;
+    if (!q) {
+      searchRequestIdRef.current += 1;
+      setSearchResults(null);
+      setSearchLoading(false);
+      return;
+    }
+
+    const requestId = (searchRequestIdRef.current += 1);
+
+    searchTimerRef.current = setTimeout(() => {
+      (async () => {
+        setSearchLoading(true);
+        try {
+          const res = await apiV1.get(`/content?ts=${Date.now()}`, {
+            params: {
+              mediaType: 'audio',
+            },
+            headers: {
+              'Cache-Control': 'no-store',
+              Pragma: 'no-cache',
+            },
+          });
+
+          const fromResponse = (data: any): ApiContentItem[] => {
+            if (!data) return [];
+            if (Array.isArray(data?.items)) return data.items;
+            if (Array.isArray(data?.data?.items)) return data.data.items;
+            if (Array.isArray(data?.result?.items)) return data.result.items;
+            if (Array.isArray(data?.content?.items)) return data.content.items;
+            if (Array.isArray(data?.content)) return data.content;
+            if (Array.isArray(data)) return data;
+            return [];
+          };
+
+          const raw: ApiContentItem[] = fromResponse(res.data);
+          if (requestId !== searchRequestIdRef.current) return;
+          if (raw.length > 0) {
+            lastContentItemsRef.current = raw;
+          }
+
+          const effectiveRaw: ApiContentItem[] = raw.length > 0 ? raw : lastContentItemsRef.current;
+
+          const detectMediaType = (it: any): 'audio' | 'video' => {
+            const raw = (
+              `${it?.type ?? ''} ${it?.mediaType ?? ''} ${it?.media_type ?? ''} ${it?.contentType ?? ''} ${
+                it?.content_type ?? ''
+              }`
+            )
+              .toString()
+              .toLowerCase();
+
+            if (raw.includes('audio')) return 'audio';
+            if (raw.includes('video')) return 'video';
+
+            const url = (it?.mediaUrl ?? it?.fileUrl ?? it?.url ?? '').toString().toLowerCase();
+            if (url.includes('.mp4') || url.includes('.mov') || url.includes('video')) return 'video';
+            if (url.includes('.mp3') || url.includes('.wav') || url.includes('.aac') || url.includes('audio'))
+              return 'audio';
+
+            return 'audio';
+          };
+
+          const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
+
+          const mapped: AudioCard[] = effectiveRaw
+            .map((it) => {
+              const mediaType = detectMediaType(it);
+              if (mediaType !== 'audio') return null;
+
+              const thumbStorageKey = (it.thumbnail_storage_key ?? it.thumbnailStorageKey ?? null) as any;
+              const artworkFromStorageKey = thumbStorageKey
+                ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(String(it.id))}`
+                : '';
+
+              const artworkUrl =
+                (it.thumbnailUrl ?? it.artwork ?? '').toString() || artworkFromStorageKey || FALLBACK_ARTWORK;
+              const artistIdValue =
+                it.artistId !== null && it.artistId !== undefined ? String(it.artistId) : undefined;
+
+              const rawMediaUrl = (it.mediaUrl ?? it.fileUrl ?? '').toString();
+
+              return {
+                id: String(it.id),
+                contentId: String(it.id),
+                title: (it.title ?? 'Untitled').toString(),
+                artistName: (it.artistName ?? 'Artist').toString(),
+                artistId: artistIdValue,
+                artworkUrl,
+                mediaUrl: rawMediaUrl ? normalizePlaybackUrl(rawMediaUrl) : '',
+                useStreamAccess: Boolean(it.useStreamAccess),
+                createdAt: (it.createdAt ?? null) as any,
+              };
+            })
+            .filter(Boolean) as AudioCard[];
+
+          const final = mapped.filter((x) => matchesQuery(x, q));
+          setSearchResults(final);
+        } catch {
+          if (requestId !== searchRequestIdRef.current) return;
+          setSearchResults([]);
+        } finally {
+          if (requestId !== searchRequestIdRef.current) return;
+          setSearchLoading(false);
+        }
+      })().catch(() => undefined);
+    }, 250);
+
+    return () => {
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+        searchTimerRef.current = null;
+      }
+    };
+  }, [matchesQuery, normalizedQuery]);
 
   const startPlayback = useCallback(
     async (startId: string) => {
-      const queue: MediaItem[] = filtered
+      const list = searchResults !== null ? searchResults : filtered;
+
+      const queue: MediaItem[] = list
         .filter((x) => Boolean(x.mediaUrl) || x.useStreamAccess)
         .map((x) => ({
           id: x.id,
-          contentId: x.id,
+          contentId: x.contentId,
           title: x.title,
           artistName: x.artistName,
           artistId: x.artistId,
           mediaType: 'audio',
           artworkUrl: x.artworkUrl,
-          mediaUrl: x.mediaUrl || '',
+          mediaUrl: x.mediaUrl ? normalizePlaybackUrl(x.mediaUrl) : '',
           isLocked: false,
           useStreamAccess: x.useStreamAccess,
         }));
@@ -249,7 +407,7 @@ export default function AudioScreen({ navigation }: any) {
       if (idx < 0) return;
       await playQueue(queue, idx);
     },
-    [filtered, playQueue]
+    [filtered, playQueue, searchResults]
   );
 
   const onPressSong = useCallback(
@@ -284,47 +442,49 @@ export default function AudioScreen({ navigation }: any) {
             </BlurView>
           </View>
 
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>Top Songs</Text>
-            {loading ? <ActivityIndicator color="#fff" /> : null}
-          </View>
+          {searchResults === null ? (
+            <>
+              <View style={styles.sectionRow}>
+                <Text style={styles.sectionTitle}>Top Songs</Text>
+                {loading ? <ActivityIndicator color="#fff" /> : null}
+              </View>
 
-          <FlatList
-            data={topSongs}
-            horizontal
-            keyExtractor={(i) => i.id}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.hListContent}
-            renderItem={({ item }) => (
-              <Pressable style={styles.topCard} onPress={() => onPressSong(item)}>
-                <Image source={{ uri: item.artworkUrl || FALLBACK_ARTWORK }} style={styles.topImg} />
-                <View style={styles.topMeta}>
-                  <Text style={styles.topTitle} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.topSub} numberOfLines={1}>
-                    {item.artistName}
-                  </Text>
-                </View>
-                <View style={styles.playBadge}>
-                  <Play size={14} color="#000" />
-                </View>
-              </Pressable>
-            )}
-          />
+              <FlatList
+                data={topSongs}
+                horizontal
+                keyExtractor={(i) => i.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.hListContent}
+                renderItem={({ item }) => (
+                  <Pressable style={styles.topCard} onPress={() => onPressSong(item)}>
+                    <Image source={{ uri: item.artworkUrl || FALLBACK_ARTWORK }} style={styles.topImg} />
+                    <View style={styles.topMeta}>
+                      <Text style={styles.topTitle} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                      <Text style={styles.topSub} numberOfLines={1}>
+                        {item.artistName}
+                      </Text>
+                    </View>
+                    <View style={styles.playBadge}>
+                      <Play size={14} color="#000" />
+                    </View>
+                  </Pressable>
+                )}
+              />
+            </>
+          ) : (
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionTitle}>Search Results</Text>
+              {searchLoading ? <ActivityIndicator color="#fff" /> : null}
+            </View>
+          )}
 
-          <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Genres</Text>
-          <View style={styles.genreWrap}>
-            {genres.map((g) => (
-              <Pressable key={g} style={styles.genrePill} onPress={() => setQuery(g)}>
-                <Text style={styles.genreText}>{g}</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <Text style={[styles.sectionTitle, { marginTop: 20 }]}>All Audio</Text>
+          {searchResults === null ? (
+            <Text style={[styles.sectionTitle, { marginTop: 20 }]}>All Audio</Text>
+          ) : null}
           <View style={styles.listWrap}>
-            {filtered.map((song) => (
+            {(searchResults ?? filtered).map((song) => (
               <Pressable key={song.id} style={styles.row} onPress={() => onPressSong(song)}>
                 <Image source={{ uri: song.artworkUrl || FALLBACK_ARTWORK }} style={styles.rowImg} />
                 <View style={styles.rowMeta}>
@@ -332,7 +492,7 @@ export default function AudioScreen({ navigation }: any) {
                     {song.title}
                   </Text>
                   <Text style={styles.rowSub} numberOfLines={1}>
-                    {song.artistName} • {song.genre}
+                    {song.artistName}
                   </Text>
                 </View>
                 <View style={styles.rowPlay}>
@@ -340,8 +500,11 @@ export default function AudioScreen({ navigation }: any) {
                 </View>
               </Pressable>
             ))}
-            {!loading && filtered.length === 0 ? (
-              <Text style={styles.emptyText}>No audio found.</Text>
+
+            {searchResults === null ? (
+              !loading && filtered.length === 0 ? <Text style={styles.emptyText}>No audio found.</Text> : null
+            ) : !searchLoading && (searchResults ?? []).length === 0 ? (
+              <Text style={styles.emptyText}>No results found.</Text>
             ) : null}
           </View>
         </ScrollView>
@@ -427,23 +590,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: Colors.accent,
   },
-
-  genreWrap: {
-    paddingHorizontal: 20,
-    marginTop: 10,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  genrePill: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-  },
-  genreText: { color: '#fff', fontSize: 12, fontWeight: '800' },
 
   listWrap: {
     marginTop: 10,

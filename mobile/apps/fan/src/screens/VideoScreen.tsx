@@ -13,13 +13,14 @@ import {
   Share,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { ArrowLeft, BadgeCheck, HelpCircle, Library, Maximize, Pause, Play, Settings } from 'lucide-react-native';
+import { ArrowLeft, BadgeCheck, HelpCircle, Library, Maximize, Pause, Play, Search, Settings, X } from 'lucide-react-native';
 import { ResizeMode, Video, type AVPlaybackStatus } from 'expo-av';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
@@ -176,6 +177,12 @@ export default function VideoScreen() {
 
   const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState(HEADER_HEIGHT + 92);
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<VideoCard[] | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRequestIdRef = useRef(0);
+
   const listRef = useRef<FlatList<VideoCard> | null>(null);
 
   const videoRef = useRef<Video>(null);
@@ -231,6 +238,75 @@ export default function VideoScreen() {
 
     return mapped;
   }, []);
+
+  const normalizedQuery = useMemo(() => searchQuery.trim().toLowerCase(), [searchQuery]);
+
+  const normalizeForSearch = useCallback((s: string) => {
+    return (s ?? '')
+      .toString()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }, []);
+
+  const matchesQuery = useCallback(
+    (it: VideoCard, q: string) => {
+      if (!q) return true;
+      const hayRaw = `${it.title ?? ''} ${it.artistName ?? ''} ${it.category ?? ''}`;
+      const hay = normalizeForSearch(hayRaw);
+      const qq = normalizeForSearch(q);
+      if (!qq) return true;
+
+      const tokens = qq.split(' ').filter(Boolean);
+      if (!tokens.length) return true;
+      return tokens.every((t) => hay.includes(t));
+    },
+    [normalizeForSearch]
+  );
+
+  useEffect(() => {
+    // Real-time (debounced) search that always hits the backend with mediaType=video.
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
+      searchTimerRef.current = null;
+    }
+
+    const q = normalizedQuery;
+    if (!q) {
+      searchRequestIdRef.current += 1;
+      setSearchResults(null);
+      setSearchLoading(false);
+      return;
+    }
+
+    const requestId = (searchRequestIdRef.current += 1);
+
+    searchTimerRef.current = setTimeout(() => {
+      (async () => {
+        setSearchLoading(true);
+        try {
+          const videos = await fetchAll();
+          if (requestId !== searchRequestIdRef.current) return;
+          const filtered = videos.filter((v) => matchesQuery(v, q));
+          setSearchResults(filtered);
+        } catch {
+          if (requestId !== searchRequestIdRef.current) return;
+          setSearchResults([]);
+        } finally {
+          if (requestId !== searchRequestIdRef.current) return;
+          setSearchLoading(false);
+        }
+      })().catch(() => undefined);
+    }, 350);
+
+    return () => {
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+        searchTimerRef.current = null;
+      }
+    };
+  }, [fetchAll, matchesQuery, normalizedQuery]);
 
   const enterFullscreen = useCallback(async () => {
     try {
@@ -334,6 +410,11 @@ export default function VideoScreen() {
     });
   }, [items]);
 
+  const visibleItems = useMemo(() => {
+    if (normalizedQuery) return searchResults ?? [];
+    return trending;
+  }, [normalizedQuery, searchResults, trending]);
+
   const pauseGlobalAudioIfNeeded = useCallback(async () => {
     if (currentItem?.mediaType !== 'audio') return;
     if (!playerState.isPlaying) return;
@@ -431,19 +512,19 @@ export default function VideoScreen() {
 
   const currentIndex = useMemo(() => {
     if (!activeVideoId) return -1;
-    return trending.findIndex((x) => x.id === activeVideoId);
-  }, [activeVideoId, trending]);
+    return visibleItems.findIndex((x) => x.id === activeVideoId);
+  }, [activeVideoId, visibleItems]);
 
   const playNextPrev = useCallback(
     (dir: 'next' | 'prev') => {
-      if (!trending.length) return;
+      if (!visibleItems.length) return;
       const idx = currentIndex;
       if (idx < 0) return;
       const nextIdx = dir === 'next' ? idx + 1 : idx - 1;
-      const next = trending[clamp(nextIdx, 0, trending.length - 1)];
+      const next = visibleItems[clamp(nextIdx, 0, visibleItems.length - 1)];
       if (next && next.id !== activeVideoId) onPressVideo(next);
     },
-    [activeVideoId, currentIndex, onPressVideo, trending]
+    [activeVideoId, currentIndex, onPressVideo, visibleItems]
   );
 
   const panResponder = useMemo(() => {
@@ -570,7 +651,7 @@ export default function VideoScreen() {
   useEffect(() => {
     if (!showUpNext) return;
     if (!activeVideoId) return;
-    if (!trending.length) return;
+    if (!visibleItems.length) return;
 
     if (upNextTimerRef.current) {
       clearInterval(upNextTimerRef.current);
@@ -586,8 +667,8 @@ export default function VideoScreen() {
             upNextTimerRef.current = null;
           }
 
-          const idx = trending.findIndex((x) => x.id === activeVideoId);
-          const nextItem = trending[clamp(idx + 1, 0, Math.max(0, trending.length - 1))];
+          const idx = visibleItems.findIndex((x) => x.id === activeVideoId);
+          const nextItem = visibleItems[clamp(idx + 1, 0, Math.max(0, visibleItems.length - 1))];
           if (nextItem && nextItem.id !== activeVideoId) {
             onPressVideo(nextItem);
           }
@@ -603,7 +684,7 @@ export default function VideoScreen() {
         upNextTimerRef.current = null;
       }
     };
-  }, [activeVideoId, onPressVideo, showUpNext, trending]);
+  }, [activeVideoId, onPressVideo, showUpNext, visibleItems]);
 
   const ambientColor = useMemo(() => {
     const key = `${activeVideoMeta?.id ?? ''}|${activeVideoMeta?.artworkUrl ?? ''}`;
@@ -810,6 +891,7 @@ export default function VideoScreen() {
   }, [activeVideoMeta, trending]);
 
   const listHeader = useMemo(() => {
+    if (normalizedQuery) return null;
     if (!activeVideoMeta) return null;
     if (!related.length) return null;
 
@@ -831,7 +913,14 @@ export default function VideoScreen() {
         ))}
       </View>
     );
-  }, [activeVideoMeta, onPressVideo, related]);
+  }, [activeVideoMeta, normalizedQuery, onPressVideo, related]);
+
+  const listEmpty = useMemo(() => {
+    if (normalizedQuery && searchLoading) {
+      return <Text style={styles.emptyText}>Searching…</Text>;
+    }
+    return <Text style={styles.emptyText}>No videos found.</Text>;
+  }, [normalizedQuery, searchLoading]);
 
   return (
     <View style={styles.root}>
@@ -855,7 +944,7 @@ export default function VideoScreen() {
             ref={(r) => {
               listRef.current = r;
             }}
-            data={trending}
+            data={visibleItems}
             keyExtractor={(it) => it.id}
             renderItem={renderVideoItem}
             showsVerticalScrollIndicator={false}
@@ -863,7 +952,7 @@ export default function VideoScreen() {
             scrollEventThrottle={16}
             contentContainerStyle={{ paddingTop: measuredHeaderHeight, paddingBottom: tabBarHeight + 120 }}
             refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
-            ListEmptyComponent={<Text style={styles.emptyText}>No videos found.</Text>}
+            ListEmptyComponent={listEmpty}
             ListHeaderComponent={listHeader}
             ListHeaderComponentStyle={listHeader ? { marginBottom: 14 } : undefined}
           />
@@ -981,6 +1070,34 @@ export default function VideoScreen() {
               ) : null}
               </View>
             </Animated.View>
+
+            <View style={styles.searchWrap}>
+              <View style={styles.searchIconWrap}>
+                <Search size={18} color="rgba(255,255,255,0.65)" />
+              </View>
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search videos"
+                placeholderTextColor="rgba(255,255,255,0.45)"
+                autoCorrect={false}
+                autoCapitalize="none"
+                style={styles.searchInput}
+              />
+              {searchQuery.trim().length ? (
+                <Pressable
+                  style={styles.searchClearBtn}
+                  onPress={() => {
+                    setSearchQuery('');
+                    setSearchResults(null);
+                  }}
+                  hitSlop={10}
+                >
+                  <X size={18} color="rgba(255,255,255,0.70)" />
+                </Pressable>
+              ) : null}
+              {searchLoading ? <ActivityIndicator color="#fff" size="small" /> : null}
+            </View>
 
             <View style={styles.metaBlock}>
               <Text style={styles.nowTitle} numberOfLines={1}>
@@ -1229,6 +1346,42 @@ const styles = StyleSheet.create({
   },
   qualityText: { color: 'rgba(255,255,255,0.86)', fontSize: 12, fontWeight: '900' },
   qualityTextActive: { color: Colors.accent },
+
+  searchWrap: {
+    marginTop: 12,
+    marginHorizontal: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+  },
+  searchIconWrap: {
+    width: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchInput: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
+    padding: 0,
+  },
+  searchClearBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
 
   rowItem: {
     paddingHorizontal: 16,
