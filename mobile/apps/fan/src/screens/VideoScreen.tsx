@@ -22,6 +22,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { ArrowLeft, BadgeCheck, HelpCircle, Library, Maximize, Pause, Play, Search, Settings, X } from 'lucide-react-native';
 import { ResizeMode, Video, type AVPlaybackStatus } from 'expo-av';
+import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
 
@@ -872,6 +873,8 @@ export default function VideoScreen() {
         }
         if (next) {
           controlsHideTimerRef.current = setTimeout(() => setShowControls(false), 2400);
+        } else {
+          setShowQualitySheet(false);
         }
         return next;
       });
@@ -1103,7 +1106,7 @@ export default function VideoScreen() {
                 </View>
               )}
 
-              {activePlaybackUrl ? (
+              {activePlaybackUrl && showControls ? (
                 <View style={styles.playerTopLeft}>
                   <Pressable style={styles.iconBtn} onPress={() => stopAndReset().catch(() => undefined)}>
                     <ArrowLeft size={18} color="#fff" />
@@ -1112,15 +1115,36 @@ export default function VideoScreen() {
               ) : null}
 
               <View style={styles.playerTopRight}>
-                <Pressable style={styles.iconBtn} onPress={() => setShowQualitySheet((s) => !s)}>
-                  <Settings size={18} color="#fff" />
-                </Pressable>
+                {activePlaybackUrl && showControls ? (
+                  <Pressable style={styles.iconBtn} onPress={() => setShowQualitySheet((s) => !s)}>
+                    <Settings size={18} color="#fff" />
+                  </Pressable>
+                ) : null}
                 {activePlaybackUrl && showControls ? (
                   <Pressable style={styles.iconBtn} onPress={() => enterFullscreen().catch(() => undefined)}>
                     <Maximize size={18} color="#fff" />
                   </Pressable>
                 ) : null}
               </View>
+
+              {showQualitySheet && activePlaybackUrl && showControls ? (
+                <BlurView intensity={55} tint="dark" style={styles.qualitySheet}>
+                  {availableQualities.map((q) => {
+                    const active = q === selectedQuality;
+                    return (
+                      <Pressable
+                        key={q}
+                        style={[styles.qualityPill, active ? styles.qualityPillActive : null]}
+                        onPress={() => {
+                          applyQualitySelection(q).catch(() => undefined);
+                        }}
+                      >
+                        <Text style={[styles.qualityText, active ? styles.qualityTextActive : null]}>{q}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </BlurView>
+              ) : null}
 
               {activePlaybackUrl && showControls ? (
                 <View style={styles.controlsOverlay} pointerEvents="box-none">
@@ -1228,24 +1252,6 @@ export default function VideoScreen() {
               </View>
             </View>
 
-            {showQualitySheet ? (
-              <View style={styles.qualitySheet}>
-                {availableQualities.map((q) => {
-                  const active = q === selectedQuality;
-                  return (
-                    <Pressable
-                      key={q}
-                      style={[styles.qualityPill, active ? styles.qualityPillActive : null]}
-                      onPress={() => {
-                        applyQualitySelection(q).catch(() => undefined);
-                      }}
-                    >
-                      <Text style={[styles.qualityText, active ? styles.qualityTextActive : null]}>{q}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ) : null}
           </View>
         </View>
       </SafeAreaView>
@@ -1448,23 +1454,27 @@ const styles = StyleSheet.create({
   actionText: { color: '#fff', fontSize: 12, fontWeight: '900' },
 
   qualitySheet: {
-    paddingHorizontal: 20,
-    paddingBottom: 10,
-    paddingTop: 10,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.10)',
+    position: 'absolute',
+    right: 12,
+    top: 56,
+    zIndex: 50,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    flexDirection: 'column',
+    gap: 8,
   },
   qualityPill: {
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   qualityPillActive: {
     borderColor: 'rgba(255,106,0,0.60)',
