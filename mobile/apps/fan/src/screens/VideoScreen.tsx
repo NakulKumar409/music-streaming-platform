@@ -2,15 +2,16 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
+  Alert,
   AppState,
   Dimensions,
   FlatList,
   Image,
   LayoutChangeEvent,
   PanResponder,
+  Platform,
   Pressable,
   RefreshControl,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -20,11 +21,20 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { ArrowLeft, BadgeCheck, HelpCircle, Library, Maximize, Pause, Play, Search, Settings, X } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  Maximize,
+  Pause,
+  Play,
+  Search,
+  Settings,
+  X,
+} from 'lucide-react-native';
 import { ResizeMode, Video, type AVPlaybackStatus } from 'expo-av';
 import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
+import Svg, { Path } from 'react-native-svg';
 
 import { apiV1 } from '../services/api';
 import * as streamService from '../services/streamService';
@@ -49,6 +59,8 @@ type ApiContentItem = {
   genre?: string | null;
   viewCount?: number | null;
   views?: number | null;
+  likeCount?: number | null;
+  dislikeCount?: number | null;
   storageKey?: string | null;
 };
 
@@ -64,7 +76,96 @@ type VideoCard = {
   category: string;
   createdAt?: string | null;
   viewCount?: number | null;
+  likeCount?: number | null;
+  dislikeCount?: number | null;
 };
+
+function EngagementIcon({ name, size = 18, color = '#fff' }: { name: 'like' | 'dislike' | 'share' | 'download'; size?: number; color?: string }) {
+  const s = size;
+  const strokeWidth = 1.9;
+
+  if (name === 'like') {
+    return (
+      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M7 11v10H4V11h3Zm0 10h10.1a2 2 0 0 0 2-1.6l1.2-7A2 2 0 0 0 18.3 10H14V6.6a2.6 2.6 0 0 0-4.7-1.6L7 8.5V11Z"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    );
+  }
+
+  if (name === 'dislike') {
+    return (
+      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M7 13V3H4v10h3Zm0 0 2.3 3.5A2.6 2.6 0 0 0 14 14.4V18h4.3a2 2 0 0 0 2-2.4l-1.2-7a2 2 0 0 0-2-1.6H7Z"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    );
+  }
+
+  if (name === 'share') {
+    return (
+      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <Path
+          d="M16 6l-4-4-4 4"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <Path
+          d="M12 2v14"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    );
+  }
+
+  return (
+    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M7 10l5 5 5-5"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M12 15V3"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
 
 const FALLBACK_ARTWORK =
   'https://images.unsplash.com/photo-1526948128573-703ee1aeb6fa?auto=format&fit=crop&w=1400&q=80';
@@ -152,6 +253,10 @@ export default function VideoScreen() {
   const [activePlaybackUrl, setActivePlaybackUrl] = useState<string | null>(null);
   const [loadingPlaybackUrl, setLoadingPlaybackUrl] = useState(false);
 
+  const [reactionStateById, setReactionStateById] = useState<
+    Record<string, { reaction: 'like' | 'dislike' | null; likeDelta: number; dislikeDelta: number }>
+  >({});
+
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
@@ -232,6 +337,8 @@ export default function VideoScreen() {
     playedOnceRef.current = false;
   }, [activePlaybackUrl]);
 
+  const hasPlaybackStarted = Boolean(activePlaybackUrl && isVideoPlaying);
+
   const fetchAll = useCallback(async () => {
     const res = await apiV1.get('/content', { params: { mediaType: 'video' } });
     const raw: ApiContentItem[] = Array.isArray(res.data?.items) ? res.data.items : [];
@@ -257,6 +364,8 @@ export default function VideoScreen() {
           category: normalizeCategory(it.genre),
           createdAt: (it.createdAt ?? null) as any,
           viewCount: (typeof it.viewCount === 'number' ? it.viewCount : typeof it.views === 'number' ? it.views : null) as any,
+          likeCount: (typeof it.likeCount === 'number' ? it.likeCount : null) as any,
+          dislikeCount: (typeof it.dislikeCount === 'number' ? it.dislikeCount : null) as any,
         };
       })
       .filter(Boolean) as VideoCard[];
@@ -901,14 +1010,72 @@ export default function VideoScreen() {
     }
   }, []);
 
-  const onPressShare = useCallback(async () => {
-    try {
-      if (!activeVideoMeta) return;
-      await Share.share({ message: `${activeVideoMeta.title} - ${activeVideoMeta.artistName}` });
-    } catch {
-      // ignore
+  const showComingSoon = useCallback((feature: 'Sharing' | 'Offline Downloads') => {
+    const message =
+      'Feature Coming Soon: We are working hard to bring Sharing/Offline Downloads to you in the next update!';
+    if (Platform.OS === 'android') {
+      const ToastAndroid = require('react-native').ToastAndroid as typeof import('react-native').ToastAndroid;
+      ToastAndroid.show(message, ToastAndroid.LONG);
+      return;
     }
-  }, [activeVideoMeta]);
+    Alert.alert(feature, message);
+  }, []);
+
+  const onPressShare = useCallback(() => {
+    showComingSoon('Sharing');
+  }, [showComingSoon]);
+
+  const onPressDownload = useCallback(() => {
+    showComingSoon('Offline Downloads');
+  }, [showComingSoon]);
+
+  const onPressLike = useCallback(() => {
+    if (!activeVideoMeta?.id) return;
+    const id = activeVideoMeta.id;
+
+    setReactionStateById((prev) => {
+      const cur = prev[id] ?? { reaction: null, likeDelta: 0, dislikeDelta: 0 };
+      const currentReaction = cur.reaction;
+      const nextReaction: 'like' | 'dislike' | null = currentReaction === 'like' ? null : 'like';
+
+      if (currentReaction === 'like') {
+        return { ...prev, [id]: { reaction: nextReaction, likeDelta: cur.likeDelta - 1, dislikeDelta: cur.dislikeDelta } };
+      }
+
+      if (currentReaction === 'dislike') {
+        return {
+          ...prev,
+          [id]: { reaction: nextReaction, likeDelta: cur.likeDelta + 1, dislikeDelta: cur.dislikeDelta - 1 },
+        };
+      }
+
+      return { ...prev, [id]: { reaction: nextReaction, likeDelta: cur.likeDelta + 1, dislikeDelta: cur.dislikeDelta } };
+    });
+  }, [activeVideoMeta?.id]);
+
+  const onPressDislike = useCallback(() => {
+    if (!activeVideoMeta?.id) return;
+    const id = activeVideoMeta.id;
+
+    setReactionStateById((prev) => {
+      const cur = prev[id] ?? { reaction: null, likeDelta: 0, dislikeDelta: 0 };
+      const currentReaction = cur.reaction;
+      const nextReaction: 'like' | 'dislike' | null = currentReaction === 'dislike' ? null : 'dislike';
+
+      if (currentReaction === 'dislike') {
+        return { ...prev, [id]: { reaction: nextReaction, likeDelta: cur.likeDelta, dislikeDelta: cur.dislikeDelta - 1 } };
+      }
+
+      if (currentReaction === 'like') {
+        return {
+          ...prev,
+          [id]: { reaction: nextReaction, likeDelta: cur.likeDelta - 1, dislikeDelta: cur.dislikeDelta + 1 },
+        };
+      }
+
+      return { ...prev, [id]: { reaction: nextReaction, likeDelta: cur.likeDelta, dislikeDelta: cur.dislikeDelta + 1 } };
+    });
+  }, [activeVideoMeta?.id]);
 
   const onPressArtist = useCallback(() => {
     const artistId = activeVideoMeta?.artistId;
@@ -991,6 +1158,7 @@ export default function VideoScreen() {
   const listHeader = useMemo(() => {
     if (normalizedQuery) return null;
     if (!activeVideoMeta) return null;
+    if (!hasPlaybackStarted) return null;
     if (!related.length) return null;
 
     return (
@@ -1011,7 +1179,7 @@ export default function VideoScreen() {
         ))}
       </View>
     );
-  }, [activeVideoMeta, normalizedQuery, onPressVideo, related]);
+  }, [activeVideoMeta, hasPlaybackStarted, normalizedQuery, onPressVideo, related]);
 
   const listEmpty = useMemo(() => {
     if (normalizedQuery && searchLoading) {
@@ -1034,7 +1202,7 @@ export default function VideoScreen() {
             showsVerticalScrollIndicator={false}
             onScroll={onListScroll}
             scrollEventThrottle={16}
-            contentContainerStyle={{ paddingTop: measuredHeaderHeight, paddingBottom: tabBarHeight + 120 }}
+            contentContainerStyle={{ paddingTop: measuredHeaderHeight + 48, paddingBottom: tabBarHeight + 120 }}
             refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
           />
         ) : (
@@ -1048,11 +1216,11 @@ export default function VideoScreen() {
             showsVerticalScrollIndicator={false}
             onScroll={onListScroll}
             scrollEventThrottle={16}
-            contentContainerStyle={{ paddingTop: measuredHeaderHeight, paddingBottom: tabBarHeight + 120 }}
+            contentContainerStyle={{ paddingTop: measuredHeaderHeight + 48, paddingBottom: tabBarHeight + 120 }}
             refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
             ListEmptyComponent={listEmpty}
             ListHeaderComponent={listHeader}
-            ListHeaderComponentStyle={listHeader ? { marginBottom: 14 } : undefined}
+            ListHeaderComponentStyle={listHeader ? { marginTop: 20, marginBottom: 16 } : undefined}
           />
         )}
 
@@ -1190,6 +1358,77 @@ export default function VideoScreen() {
               </View>
             </Animated.View>
 
+            <View style={styles.metaBlock}>
+              {hasPlaybackStarted && activeVideoMeta ? (
+                <>
+                  <Text style={styles.nowTitle} numberOfLines={1}>
+                    {activeVideoMeta.title}
+                  </Text>
+
+                  <Pressable style={styles.artistRow} onPress={onPressArtist}>
+                    <Image source={{ uri: activeVideoMeta.artworkUrl || FALLBACK_ARTWORK }} style={styles.artistAvatar} />
+                    <View style={styles.artistMeta}>
+                      <Text style={styles.artistRowName} numberOfLines={1}>
+                        {activeVideoMeta.artistName}
+                      </Text>
+                      <Text style={styles.artistStats} numberOfLines={1}>
+                        {`${formatCompactViews(activeVideoMeta.viewCount)}  ·  ${formatDateLabel(activeVideoMeta.createdAt)}`}
+                      </Text>
+                    </View>
+                  </Pressable>
+
+                  {(() => {
+                    const id = activeVideoMeta.id;
+                    const state = reactionStateById[id] ?? { reaction: null, likeDelta: 0, dislikeDelta: 0 };
+                    const reaction = state.reaction;
+                    const likeBase = typeof activeVideoMeta.likeCount === 'number' ? activeVideoMeta.likeCount : null;
+                    const dislikeBase = typeof activeVideoMeta.dislikeCount === 'number' ? activeVideoMeta.dislikeCount : null;
+                    const likeCount = typeof likeBase === 'number' ? Math.max(0, likeBase + state.likeDelta) : null;
+                    const dislikeCount = typeof dislikeBase === 'number' ? Math.max(0, dislikeBase + state.dislikeDelta) : null;
+
+                    const likeActive = reaction === 'like';
+                    const dislikeActive = reaction === 'dislike';
+
+                    return (
+                      <View style={styles.engagementIconsRow}>
+                        <Pressable
+                          style={[styles.engagementIconBtn, likeActive ? styles.engagementIconBtnActive : null]}
+                          onPress={onPressLike}
+                          hitSlop={8}
+                        >
+                          <EngagementIcon name="like" color={likeActive ? Colors.accent : '#fff'} />
+                          {typeof likeCount === 'number' ? (
+                            <Text style={[styles.engagementIconCount, likeActive ? styles.engagementIconCountActive : null]}>
+                              {formatCompactViews(likeCount).replace(' views', '')}
+                            </Text>
+                          ) : null}
+                        </Pressable>
+                        <Pressable
+                          style={[styles.engagementIconBtn, dislikeActive ? styles.engagementIconBtnActive : null]}
+                          onPress={onPressDislike}
+                          hitSlop={8}
+                        >
+                          <EngagementIcon name="dislike" color={dislikeActive ? Colors.accent : '#fff'} />
+                          {typeof dislikeCount === 'number' ? (
+                            <Text style={[styles.engagementIconCount, dislikeActive ? styles.engagementIconCountActive : null]}>
+                              {formatCompactViews(dislikeCount).replace(' views', '')}
+                            </Text>
+                          ) : null}
+                        </Pressable>
+                        <Pressable style={styles.engagementIconBtn} onPress={onPressShare} hitSlop={8}>
+                          <EngagementIcon name="share" />
+                        </Pressable>
+                        <Pressable style={styles.engagementIconBtn} onPress={onPressDownload} hitSlop={8}>
+                          <EngagementIcon name="download" />
+                        </Pressable>
+                      </View>
+                    );
+                  })()}
+
+                </>
+              ) : null}
+            </View>
+
             <View style={styles.searchWrap}>
               <View style={styles.searchIconWrap}>
                 <Search size={18} color="rgba(255,255,255,0.65)" />
@@ -1218,40 +1457,6 @@ export default function VideoScreen() {
               {searchLoading ? <ActivityIndicator color="#fff" size="small" /> : null}
             </View>
 
-            <View style={styles.metaBlock}>
-              <Text style={styles.nowTitle} numberOfLines={1}>
-                {activeVideoMeta?.title ? activeVideoMeta.title : 'Trending Videos'}
-              </Text>
-
-              {activePlaybackUrl && activeVideoMeta?.artistName ? (
-                <Pressable style={styles.artistRow} onPress={onPressArtist}>
-                  <Image source={{ uri: activeVideoMeta.artworkUrl || FALLBACK_ARTWORK }} style={styles.artistAvatar} />
-                  <Text style={styles.artistRowName} numberOfLines={1}>
-                    {activeVideoMeta.artistName}
-                  </Text>
-                </Pressable>
-              ) : (
-                <Text style={styles.nowSub} numberOfLines={1}>
-                  {activeVideoMeta?.artistName ? activeVideoMeta.artistName : 'For you'}
-                </Text>
-              )}
-
-              <View style={styles.actionRow}>
-                <Pressable style={styles.actionBtn} onPress={() => undefined}>
-                  <BadgeCheck size={18} color="#fff" />
-                  <Text style={styles.actionText}>Like</Text>
-                </Pressable>
-                <Pressable style={styles.actionBtn} onPress={onPressShare}>
-                  <HelpCircle size={18} color="#fff" />
-                  <Text style={styles.actionText}>Share</Text>
-                </Pressable>
-                <Pressable style={styles.actionBtn} onPress={() => undefined}>
-                  <Library size={18} color="#fff" />
-                  <Text style={styles.actionText}>Download</Text>
-                </Pressable>
-              </View>
-            </View>
-
           </View>
         </View>
       </SafeAreaView>
@@ -1269,6 +1474,8 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
+    paddingBottom: 10,
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
   headerTopRow: {
     paddingTop: 18,
@@ -1419,10 +1626,15 @@ const styles = StyleSheet.create({
   nowSub: { marginTop: 4, color: 'rgba(255,255,255,0.62)', fontSize: 12, fontWeight: '800' },
 
   artistRow: {
-    marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flex: 1,
+    minWidth: 160,
+  },
+  artistMeta: {
+    flex: 1,
+    minWidth: 120,
   },
   artistAvatar: {
     width: 36,
@@ -1433,25 +1645,49 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.10)',
   },
   artistRowName: {
-    flex: 1,
     color: '#fff',
     fontSize: 13,
     fontWeight: '900',
   },
 
-  actionRow: { marginTop: 12, flexDirection: 'row', gap: 18 },
-  actionBtn: {
+  artistStats: {
+    marginTop: 2,
+    color: 'rgba(255,255,255,0.60)',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  engagementIconsRow: {
+    marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    gap: 18,
+  },
+  engagementIconBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.10)',
   },
-  actionText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+  engagementIconBtnActive: {
+    backgroundColor: 'rgba(255,106,0,0.16)',
+    borderColor: 'rgba(255,106,0,0.55)',
+  },
+  engagementIconCount: {
+    color: 'rgba(255,255,255,0.90)',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  engagementIconCountActive: {
+    color: Colors.accent,
+  },
+
+  actionRow: { marginTop: 12, flexDirection: 'row', gap: 18 },
 
   qualitySheet: {
     position: 'absolute',
@@ -1485,7 +1721,7 @@ const styles = StyleSheet.create({
 
   searchWrap: {
     marginTop: 12,
-    marginBottom: 16,
+    marginBottom: 26,
     marginHorizontal: 20,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -1493,9 +1729,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   searchIconWrap: {
     width: 22,
@@ -1560,7 +1796,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 20,
     paddingBottom: 18,
-    marginTop: 18,
+    marginTop: 26,
   },
   relatedTitle: {
     color: 'rgba(255,255,255,0.85)',

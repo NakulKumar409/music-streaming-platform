@@ -50,6 +50,56 @@ const ensureContentSchema = async () => {
   );
 };
 
+const ensurePlaysSchema = async () => {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS content_plays (
+      id SERIAL PRIMARY KEY,
+      content_id INT NOT NULL,
+      user_id INT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+
+  await pool.query("ALTER TABLE content_plays ADD COLUMN IF NOT EXISTS content_id INT");
+  await pool.query("ALTER TABLE content_plays ADD COLUMN IF NOT EXISTS user_id INT");
+  await pool.query(
+    "ALTER TABLE content_plays ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()"
+  );
+
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS idx_content_plays_content_id ON content_plays(content_id)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS idx_content_plays_created_at ON content_plays(created_at)"
+  );
+};
+
+const ensureReactionsSchema = async () => {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS content_reactions (
+      id SERIAL PRIMARY KEY,
+      content_id INT NOT NULL,
+      user_id INT NOT NULL,
+      reaction VARCHAR(20) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+
+  await pool.query("ALTER TABLE content_reactions ADD COLUMN IF NOT EXISTS content_id INT");
+  await pool.query("ALTER TABLE content_reactions ADD COLUMN IF NOT EXISTS user_id INT");
+  await pool.query("ALTER TABLE content_reactions ADD COLUMN IF NOT EXISTS reaction VARCHAR(20)");
+  await pool.query(
+    "ALTER TABLE content_reactions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()"
+  );
+
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_content_reactions_unique ON content_reactions(content_id, user_id)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS idx_content_reactions_content_id ON content_reactions(content_id)"
+  );
+};
+
 const toAbsoluteUrl = (req: any, value: any) => {
   const raw = (value ?? "").toString().trim();
   if (!raw) return null;
@@ -76,6 +126,8 @@ router.get("/", (req, res) => {
   (async () => {
     try {
       await ensureContentSchema();
+      await ensurePlaysSchema();
+      await ensureReactionsSchema();
       const userId = req.user?.id ? Number(req.user.id) : null;
       const isDev = process.env.NODE_ENV !== 'production';
       
@@ -159,6 +211,27 @@ router.get("/", (req, res) => {
           : r.thumbnail_storage_key
             ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
             : null;
+
+        const [viewCount, likeCount, dislikeCount] = await Promise.all([
+          pool
+            .query('SELECT COUNT(*)::int as c FROM content_plays WHERE content_id = $1', [r.id])
+            .then((x) => Number(x.rows?.[0]?.c ?? 0))
+            .catch(() => 0),
+          pool
+            .query(
+              "SELECT COUNT(*)::int as c FROM content_reactions WHERE content_id = $1 AND reaction = 'like'",
+              [r.id]
+            )
+            .then((x) => Number(x.rows?.[0]?.c ?? 0))
+            .catch(() => 0),
+          pool
+            .query(
+              "SELECT COUNT(*)::int as c FROM content_reactions WHERE content_id = $1 AND reaction = 'dislike'",
+              [r.id]
+            )
+            .then((x) => Number(x.rows?.[0]?.c ?? 0))
+            .catch(() => 0),
+        ]);
         
         return {
           id: r.id,
@@ -176,7 +249,10 @@ router.get("/", (req, res) => {
           artistName: r.artist_name ?? null,
           artistId: r.artist_id,
           subscriptionRequired: Boolean(r.subscription_required),
-          isLocked
+          isLocked,
+          viewCount,
+          likeCount,
+          dislikeCount
         };
       }));
 
@@ -294,6 +370,27 @@ router.get("/artist/:artistId", (req, res) => {
               ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
               : null;
 
+          const [viewCount, likeCount, dislikeCount] = await Promise.all([
+            pool
+              .query('SELECT COUNT(*)::int as c FROM content_plays WHERE content_id = $1', [r.id])
+              .then((x) => Number(x.rows?.[0]?.c ?? 0))
+              .catch(() => 0),
+            pool
+              .query(
+                "SELECT COUNT(*)::int as c FROM content_reactions WHERE content_id = $1 AND reaction = 'like'",
+                [r.id]
+              )
+              .then((x) => Number(x.rows?.[0]?.c ?? 0))
+              .catch(() => 0),
+            pool
+              .query(
+                "SELECT COUNT(*)::int as c FROM content_reactions WHERE content_id = $1 AND reaction = 'dislike'",
+                [r.id]
+              )
+              .then((x) => Number(x.rows?.[0]?.c ?? 0))
+              .catch(() => 0),
+          ]);
+
           return {
             id: r.id,
             title: r.title,
@@ -309,7 +406,10 @@ router.get("/artist/:artistId", (req, res) => {
             useStreamAccess,
             subscriptionRequired: Boolean(r.subscription_required),
             isLocked,
-            createdAt: r.created_at
+            createdAt: r.created_at,
+            viewCount,
+            likeCount,
+            dislikeCount
           };
         })
       );
