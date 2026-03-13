@@ -37,3 +37,8 @@ declare module 'expo-av' {
     STRETCH: any;
   };
 }
+
+declare module '*.png' {
+  const value: any;
+  export default value;
+}

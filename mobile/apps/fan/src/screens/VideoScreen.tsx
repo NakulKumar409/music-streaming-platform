@@ -15,6 +15,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -24,8 +25,6 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import {
   ArrowLeft,
   Maximize,
-  Pause,
-  Play,
   Search,
   Settings,
   X,
@@ -40,6 +39,8 @@ import { apiV1 } from '../services/api';
 import * as streamService from '../services/streamService';
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
+import PauseButtonImg from '../pausebuttton.png';
+import PlayButtonImg from '../playbutton.png';
 
 type ApiContentItem = {
   id: string | number;
@@ -79,6 +80,15 @@ type VideoCard = {
   likeCount?: number | null;
   dislikeCount?: number | null;
 };
+
+function toCount(v: unknown): number | null {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string') {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
 
 function EngagementIcon({ name, size = 18, color = '#fff' }: { name: 'like' | 'dislike' | 'share' | 'download'; size?: number; color?: string }) {
   const s = size;
@@ -244,6 +254,9 @@ export default function VideoScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { currentItem, state: playerState, togglePlayPause } = useMediaPlayer();
 
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isLandscape = windowWidth > windowHeight;
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [items, setItems] = useState<VideoCard[]>([]);
@@ -252,6 +265,8 @@ export default function VideoScreen() {
   const [activeVideoMeta, setActiveVideoMeta] = useState<VideoCard | null>(null);
   const [activePlaybackUrl, setActivePlaybackUrl] = useState<string | null>(null);
   const [loadingPlaybackUrl, setLoadingPlaybackUrl] = useState(false);
+
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [reactionStateById, setReactionStateById] = useState<
     Record<string, { reaction: 'like' | 'dislike' | null; likeDelta: number; dislikeDelta: number }>
@@ -363,9 +378,9 @@ export default function VideoScreen() {
           storageKey: (it.storageKey ?? null) as any,
           category: normalizeCategory(it.genre),
           createdAt: (it.createdAt ?? null) as any,
-          viewCount: (typeof it.viewCount === 'number' ? it.viewCount : typeof it.views === 'number' ? it.views : null) as any,
-          likeCount: (typeof it.likeCount === 'number' ? it.likeCount : null) as any,
-          dislikeCount: (typeof it.dislikeCount === 'number' ? it.dislikeCount : null) as any,
+          viewCount: (toCount(it.viewCount) ?? toCount(it.views) ?? 0) as any,
+          likeCount: (toCount(it.likeCount) ?? 0) as any,
+          dislikeCount: (toCount(it.dislikeCount) ?? 0) as any,
         };
       })
       .filter(Boolean) as VideoCard[];
@@ -442,20 +457,12 @@ export default function VideoScreen() {
     };
   }, [fetchAll, matchesQuery, normalizedQuery]);
 
-  const enterFullscreen = useCallback(async () => {
-    try {
-      const v: any = videoRef.current as any;
-      if (!v) return;
-      if (typeof v.presentFullscreenPlayer === 'function') {
-        await v.presentFullscreenPlayer();
-        return;
-      }
-      if (typeof v.presentFullscreen === 'function') {
-        await v.presentFullscreen();
-      }
-    } catch {
-      // ignore
-    }
+  const enterFullscreen = useCallback(() => {
+    setIsFullscreen(true);
+  }, []);
+
+  const exitFullscreen = useCallback(() => {
+    setIsFullscreen(false);
   }, []);
 
   const stopAndReset = useCallback(async () => {
@@ -753,24 +760,39 @@ export default function VideoScreen() {
 
   useEffect(() => {
     const deep = scrollYRef.current > HEADER_HEIGHT * 2.4;
-    const next = deep && Boolean(activePlaybackUrl) && isVideoPlaying;
+    const next = !isFullscreen && deep && Boolean(activePlaybackUrl) && isVideoPlaying;
     setShowMini((prev) => (prev === next ? prev : next));
-  }, [activePlaybackUrl, isVideoPlaying]);
+  }, [activePlaybackUrl, isFullscreen, isVideoPlaying]);
 
   const onListScroll = useCallback(
     (e: any) => {
-      const y = Number(e?.nativeEvent?.contentOffset?.y ?? 0);
+      const y = Math.max(0, e?.nativeEvent?.contentOffset?.y ?? 0);
       scrollYRef.current = y;
 
       const deep = y > HEADER_HEIGHT * 2.4;
       if (deepScrollRef.current === deep) return;
       deepScrollRef.current = deep;
 
-      const next = deep && Boolean(activePlaybackUrl) && isVideoPlaying;
+      const next = !isFullscreen && deep && Boolean(activePlaybackUrl) && isVideoPlaying;
       setShowMini((prev) => (prev === next ? prev : next));
     },
-    [activePlaybackUrl, isVideoPlaying]
+    [activePlaybackUrl, isFullscreen, isVideoPlaying]
   );
+
+  useEffect(() => {
+    const stackParent: any = navigation.getParent?.();
+    const tabParent: any = stackParent?.getParent?.() ?? stackParent;
+    if (!tabParent?.setOptions) return;
+
+    const hideTabBar = isLandscape && (isFullscreen || isVideoPlaying);
+    tabParent.setOptions({
+      tabBarStyle: hideTabBar ? { display: 'none' } : undefined,
+    });
+
+    return () => {
+      tabParent.setOptions({ tabBarStyle: undefined });
+    };
+  }, [isFullscreen, isLandscape, isVideoPlaying, navigation]);
 
   useEffect(() => {
     Animated.timing(miniAnim, {
@@ -1110,14 +1132,18 @@ export default function VideoScreen() {
 
   const renderVideoItem = useCallback(
     ({ item }: { item: VideoCard }) => {
-      const isActive = item.id === activeVideoId;
+      const isActive = activeVideoId != null && String(item.id) === String(activeVideoId);
       return (
         <Pressable style={styles.rowItem} onPress={() => onPressVideo(item)}>
           <View style={[styles.rowThumbWrap, isActive ? styles.rowThumbWrapActive : null]}>
             <Image source={{ uri: item.artworkUrl || FALLBACK_ARTWORK }} style={styles.rowThumb} />
             <View style={styles.rowThumbOverlay}>
               <View style={styles.rowPlayBadge}>
-                <Play size={16} color="#000" />
+                <Image
+                  source={PauseButtonImg}
+                  style={styles.rowPlayImg}
+                  resizeMode="contain"
+                />
               </View>
             </View>
           </View>
@@ -1224,7 +1250,7 @@ export default function VideoScreen() {
           />
         )}
 
-        <View style={styles.stickyHeader} pointerEvents="box-none">
+        <View style={[styles.stickyHeader, isFullscreen ? styles.stickyHeaderFullscreen : null]} pointerEvents="box-none">
           <View onLayout={onHeaderLayout}>
             <View style={styles.headerTopRow}>
               <Text style={styles.title}>Video</Text>
@@ -1233,6 +1259,7 @@ export default function VideoScreen() {
             <Animated.View
               style={[
                 styles.playerFrame,
+                isFullscreen ? styles.playerFrameFullscreen : null,
                 showMini
                   ? [
                       styles.playerFrameMini,
@@ -1258,7 +1285,7 @@ export default function VideoScreen() {
                     ref={videoRef}
                     style={styles.video}
                     source={{ uri: activePlaybackUrl }}
-                    resizeMode={ResizeMode.COVER}
+                    resizeMode={isFullscreen || isLandscape ? ResizeMode.CONTAIN : ResizeMode.COVER}
                     useNativeControls={false}
                     progressUpdateIntervalMillis={200}
                     onPlaybackStatusUpdate={onVideoStatusUpdate}
@@ -1289,8 +1316,17 @@ export default function VideoScreen() {
                   </Pressable>
                 ) : null}
                 {activePlaybackUrl && showControls ? (
-                  <Pressable style={styles.iconBtn} onPress={() => enterFullscreen().catch(() => undefined)}>
-                    <Maximize size={18} color="#fff" />
+                  <Pressable
+                    style={styles.iconBtn}
+                    onPress={() => {
+                      if (isFullscreen) {
+                        exitFullscreen();
+                      } else {
+                        enterFullscreen();
+                      }
+                    }}
+                  >
+                    {isFullscreen ? <X size={18} color="#fff" /> : <Maximize size={18} color="#fff" />}
                   </Pressable>
                 ) : null}
               </View>
@@ -1316,8 +1352,18 @@ export default function VideoScreen() {
 
               {activePlaybackUrl && showControls ? (
                 <View style={styles.controlsOverlay} pointerEvents="box-none">
-                  <Pressable style={styles.playPauseBtn} onPress={toggleInlinePlayPause}>
-                    {isVideoPlaying ? <Pause size={20} color="#000" /> : <Play size={20} color="#000" />}
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.playPauseBtn,
+                      pressed ? styles.playPauseBtnPressed : null,
+                    ]}
+                    onPress={toggleInlinePlayPause}
+                  >
+                    <Image
+                      source={isVideoPlaying ? PlayButtonImg : PauseButtonImg}
+                      style={styles.playPauseImg}
+                      resizeMode="contain"
+                    />
                   </Pressable>
                 </View>
               ) : null}
@@ -1372,7 +1418,7 @@ export default function VideoScreen() {
                         {activeVideoMeta.artistName}
                       </Text>
                       <Text style={styles.artistStats} numberOfLines={1}>
-                        {`${formatCompactViews(activeVideoMeta.viewCount)}  ·  ${formatDateLabel(activeVideoMeta.createdAt)}`}
+                        {`${formatCompactViews(activeVideoMeta.viewCount ?? 0)}  ·  ${formatDateLabel(activeVideoMeta.createdAt)}`}
                       </Text>
                     </View>
                   </Pressable>
@@ -1477,6 +1523,13 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
+  stickyHeaderFullscreen: {
+    bottom: 0,
+    paddingBottom: 0,
+    backgroundColor: '#000',
+    zIndex: 999,
+    elevation: 999,
+  },
   headerTopRow: {
     paddingTop: 18,
     paddingBottom: 10,
@@ -1487,6 +1540,9 @@ const styles = StyleSheet.create({
     width: '100%',
     height: HEADER_HEIGHT,
     backgroundColor: '#000',
+  },
+  playerFrameFullscreen: {
+    height: Dimensions.get('window').height,
   },
   playerFrameMini: {
     position: 'absolute',
@@ -1572,9 +1628,17 @@ const styles = StyleSheet.create({
     borderRadius: 33,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.20)',
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderColor: 'transparent',
+  },
+  playPauseBtnPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.95 }],
+  },
+  playPauseImg: {
+    width: 60,
+    height: 60,
   },
 
   seekWrap: {
@@ -1780,12 +1844,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.10)',
   },
   rowPlayBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.accent,
+    backgroundColor: 'transparent',
+  },
+  rowPlayImg: {
+    width: 60,
+    height: 60,
   },
   rowMeta: { paddingTop: 10, paddingBottom: 2 },
   rowTitle: { color: '#fff', fontSize: 14, fontWeight: '900' },
