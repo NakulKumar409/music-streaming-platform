@@ -1377,10 +1377,7 @@ export default function VideoScreen() {
               ) : null}
 
               {activePlaybackUrl && showControls ? (
-                <View
-                  style={[styles.seekWrap, !isFullscreen ? { bottom: tabBarHeight + 8 } : null]}
-                  pointerEvents="box-none"
-                >
+                <View style={styles.seekWrap} pointerEvents="box-none">
                   <View style={styles.seekTimesRow}>
                     <Text style={styles.seekTime}>{formatTime(positionMs)}</Text>
                     <Text style={styles.seekTime}>{formatTime(durationMs)}</Text>
