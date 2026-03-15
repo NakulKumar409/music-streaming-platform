@@ -31,7 +31,7 @@ import {
 } from 'lucide-react-native';
 import { ResizeMode, Video, type AVPlaybackStatus } from 'expo-av';
 import { BlurView } from 'expo-blur';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
 import Svg, { Path } from 'react-native-svg';
 
@@ -253,6 +253,8 @@ export default function VideoScreen() {
   const navigation = useNavigation<any>();
   const tabBarHeight = useBottomTabBarHeight();
   const { currentItem, state: playerState, togglePlayPause } = useMediaPlayer();
+
+  const insets = useSafeAreaInsets();
 
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isLandscape = windowWidth > windowHeight;
@@ -1280,7 +1282,11 @@ export default function VideoScreen() {
             >
               <View style={styles.playerInner} pointerEvents="box-none" {...panResponder.panHandlers}>
               {activePlaybackUrl ? (
-                <Pressable style={StyleSheet.absoluteFill} onPress={onPressPlayerSurface}>
+                <Pressable
+                  style={[StyleSheet.absoluteFill, styles.playerSurfacePressable]}
+                  pointerEvents={showControls ? 'none' : 'auto'}
+                  onPress={onPressPlayerSurface}
+                >
                   <Video
                     key={activePlaybackUrl}
                     ref={videoRef}
@@ -1303,14 +1309,23 @@ export default function VideoScreen() {
               )}
 
               {activePlaybackUrl && showControls ? (
-                <View style={styles.playerTopLeft}>
-                  <Pressable style={styles.iconBtn} onPress={() => stopAndReset().catch(() => undefined)}>
+                <View style={[styles.playerTopLeft, isFullscreen ? { top: insets.top + 12 } : null]}>
+                  <Pressable
+                    style={styles.iconBtn}
+                    onPress={() => {
+                      if (isFullscreen) {
+                        exitFullscreen();
+                      } else {
+                        stopAndReset().catch(() => undefined);
+                      }
+                    }}
+                  >
                     <ArrowLeft size={18} color="#fff" />
                   </Pressable>
                 </View>
               ) : null}
 
-              <View style={styles.playerTopRight}>
+              <View style={[styles.playerTopRight, isFullscreen ? { top: insets.top + 12 } : null]}>
                 {activePlaybackUrl && showControls ? (
                   <Pressable style={styles.iconBtn} onPress={() => setShowQualitySheet((s) => !s)}>
                     <Settings size={18} color="#fff" />
@@ -1596,6 +1611,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 12,
     top: 12,
+    zIndex: 30,
+    elevation: 30,
     flexDirection: 'row',
     gap: 10,
   },
@@ -1603,6 +1620,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 12,
     top: 12,
+    zIndex: 30,
+    elevation: 30,
     flexDirection: 'row',
     gap: 10,
   },
@@ -1621,7 +1640,14 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 10,
+    elevation: 10,
     backgroundColor: 'rgba(0,0,0,0.10)',
+  },
+
+  playerSurfacePressable: {
+    zIndex: -1,
+    elevation: -1,
   },
   playPauseBtn: {
     width: 66,
@@ -1647,6 +1673,8 @@ const styles = StyleSheet.create({
     left: 10,
     right: 10,
     bottom: 8,
+    zIndex: 25,
+    elevation: 25,
     paddingHorizontal: 8,
     paddingVertical: 8,
     borderRadius: 14,
