@@ -494,7 +494,7 @@ export default function VideoScreen() {
       setPositionMs(0);
       setDurationMs(0);
       setShowUpNext(false);
-      setUpNextSeconds(5);
+      setUpNextSeconds(3);
       setShowControls(true);
       playedOnceRef.current = false;
       setShowQualitySheet(false);
@@ -780,11 +780,10 @@ export default function VideoScreen() {
   );
 
   useEffect(() => {
-    const stackParent: any = navigation.getParent?.();
-    const tabParent: any = stackParent?.getParent?.() ?? stackParent;
+    const tabParent: any = navigation.getParent?.('fan-tabs') ?? navigation.getParent?.()?.getParent?.();
     if (!tabParent?.setOptions) return;
 
-    const hideTabBar = isLandscape && (isFullscreen || isVideoPlaying);
+    const hideTabBar = isFullscreen;
     tabParent.setOptions({
       tabBarStyle: hideTabBar ? { display: 'none' } : undefined,
     });
@@ -792,7 +791,7 @@ export default function VideoScreen() {
     return () => {
       tabParent.setOptions({ tabBarStyle: undefined });
     };
-  }, [isFullscreen, isLandscape, isVideoPlaying, navigation]);
+  }, [isFullscreen, navigation]);
 
   useEffect(() => {
     Animated.timing(miniAnim, {
@@ -1252,14 +1251,16 @@ export default function VideoScreen() {
 
         <View style={[styles.stickyHeader, isFullscreen ? styles.stickyHeaderFullscreen : null]} pointerEvents="box-none">
           <View onLayout={onHeaderLayout}>
-            <View style={styles.headerTopRow}>
-              <Text style={styles.title}>Video</Text>
-            </View>
+            {!isFullscreen ? (
+              <View style={styles.headerTopRow}>
+                <Text style={styles.title}>Video</Text>
+              </View>
+            ) : null}
 
             <Animated.View
               style={[
                 styles.playerFrame,
-                isFullscreen ? styles.playerFrameFullscreen : null,
+                isFullscreen ? [{ width: windowWidth, height: windowHeight } as any] : null,
                 showMini
                   ? [
                       styles.playerFrameMini,
@@ -1376,7 +1377,10 @@ export default function VideoScreen() {
               ) : null}
 
               {activePlaybackUrl && showControls ? (
-                <View style={styles.seekWrap} pointerEvents="box-none">
+                <View
+                  style={[styles.seekWrap, !isFullscreen ? { bottom: tabBarHeight + 8 } : null]}
+                  pointerEvents="box-none"
+                >
                   <View style={styles.seekTimesRow}>
                     <Text style={styles.seekTime}>{formatTime(positionMs)}</Text>
                     <Text style={styles.seekTime}>{formatTime(durationMs)}</Text>
