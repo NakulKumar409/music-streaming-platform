@@ -38,6 +38,7 @@ export default function MediaPlayerOverlay({
   close,
   setExpanded,
   inlineVideoHostActive,
+  inlineAudioHostActive,
   onVideoPlaybackStatusUpdate,
   videoRef,
 }: {
@@ -55,6 +56,7 @@ export default function MediaPlayerOverlay({
   close: () => Promise<void>;
   setExpanded: (expanded: boolean) => void;
   inlineVideoHostActive: boolean;
+  inlineAudioHostActive: boolean;
   onVideoPlaybackStatusUpdate: (status: AVPlaybackStatus) => void;
   videoRef: React.RefObject<Video>;
 }) {
@@ -190,6 +192,10 @@ export default function MediaPlayerOverlay({
   }
 
   if (currentItem.mediaType === 'video') {
+    return null;
+  }
+
+  if (inlineAudioHostActive) {
     return null;
   }
 

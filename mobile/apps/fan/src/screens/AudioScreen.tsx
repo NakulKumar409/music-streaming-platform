@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -17,13 +19,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
-import { Play, Search as SearchIcon } from 'lucide-react-native';
+import { ArrowLeft, Play, Search as SearchIcon } from 'lucide-react-native';
+import Slider from '@react-native-community/slider';
+import Svg, { Path } from 'react-native-svg';
 
 import { apiV1 } from '../services/api';
 import { getPlaybackUrl, normalizePlaybackUrl } from '../services/streamService';
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import type { MediaItem } from '../media.types';
+import PauseButtonImg from '../pausebuttton.png';
+import PlayButtonImg from '../playbutton.png';
 
 type ApiContentItem = {
   id: string | number;
@@ -36,9 +42,14 @@ type ApiContentItem = {
   thumbnailStorageKey?: string | null;
   mediaUrl?: string | null;
   fileUrl?: string | null;
+  audioUrl?: string | null;
   artistName?: string | null;
   artistId?: string | number | null;
   createdAt?: string | null;
+  viewCount?: number | string | null;
+  views?: number | string | null;
+  likeCount?: number | string | null;
+  dislikeCount?: number | string | null;
   useStreamAccess?: boolean;
   isLocked?: boolean;
   locked?: boolean;
@@ -55,14 +66,121 @@ type AudioCard = {
   mediaUrl: string;
   useStreamAccess?: boolean;
   createdAt?: string | null;
+  viewCount?: number | null;
+  likeCount?: number | null;
+  dislikeCount?: number | null;
 };
 
 const FALLBACK_ARTWORK =
   'https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=1400&q=80';
 
+function EngagementIcon({
+  name,
+  size = 18,
+  color = '#fff',
+}: {
+  name: 'like' | 'dislike' | 'share' | 'download';
+  size?: number;
+  color?: string;
+}) {
+  const s = size;
+  const strokeWidth = 1.9;
+
+  if (name === 'like') {
+    return (
+      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M7 11v10H4V11h3Zm0 10h10.1a2 2 0 0 0 2-1.6l1.2-7A2 2 0 0 0 18.3 10H14V6.6a2.6 2.6 0 0 0-4.7-1.6L7 8.5V11Z"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    );
+  }
+
+  if (name === 'dislike') {
+    return (
+      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M7 13V3H4v10h3Zm0 0 2.3 3.5A2.6 2.6 0 0 0 14 14.4V18h4.3a2 2 0 0 0 2-2.4l-1.2-7a2 2 0 0 0-2-1.6H7Z"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    );
+  }
+
+  if (name === 'share') {
+    return (
+      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <Path
+          d="M16 6l-4-4-4 4"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <Path
+          d="M12 2v14"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    );
+  }
+
+  return (
+    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M7 10l5 5 5-5"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M12 15V3"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 export default function AudioScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
-  const { playQueue } = useMediaPlayer();
+  const {
+    playQueue,
+    currentItem,
+    state: playerState,
+    togglePlayPause,
+    skipNext,
+    skipPrev,
+    seekTo,
+    setInlineAudioHostActive,
+  } = useMediaPlayer();
 
   const lastContentItemsRef = useRef<ApiContentItem[]>([]);
 
@@ -80,6 +198,160 @@ export default function AudioScreen({ navigation }: any) {
   const [searchLoading, setSearchLoading] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRequestIdRef = useRef(0);
+
+  const [reactionStateById, setReactionStateById] = useState<
+    Record<string, { reaction: 'like' | 'dislike' | null; likeDelta: number; dislikeDelta: number }>
+  >({});
+
+  const [showNowPlayingSection, setShowNowPlayingSection] = useState(true);
+  const [showNowPlayingOptions, setShowNowPlayingOptions] = useState(false);
+  const [isSeeking, setIsSeeking] = useState(false);
+  const seekValueRef = useRef(0);
+
+  const hasActiveAudio = Boolean(currentItem?.mediaType === 'audio');
+
+  useEffect(() => {
+    if (!hasActiveAudio) return;
+    setShowNowPlayingSection(true);
+  }, [hasActiveAudio, currentItem?.contentId, currentItem?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setInlineAudioHostActive(true);
+      return () => {
+        setInlineAudioHostActive(false);
+      };
+    }, [setInlineAudioHostActive])
+  );
+
+  const positionForUi = isSeeking ? seekValueRef.current : playerState.positionMs;
+
+  const formatTime = useCallback((ms: number) => {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const mm = Math.floor(totalSeconds / 60);
+    const ss = totalSeconds % 60;
+    return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+  }, []);
+
+  const onSeekStart = useCallback(() => {
+    setIsSeeking(true);
+    seekValueRef.current = playerState.positionMs;
+  }, [playerState.positionMs]);
+
+  const onSeekChange = useCallback((value: number) => {
+    seekValueRef.current = value;
+  }, []);
+
+  const onSeekComplete = useCallback(
+    (value: number) => {
+      setIsSeeking(false);
+      seekTo(value).catch(() => undefined);
+    },
+    [seekTo]
+  );
+
+  const toCount = useCallback((v: any): number | null => {
+    if (v === null || v === undefined) return null;
+    const n = typeof v === 'string' ? Number(v) : v;
+    return typeof n === 'number' && Number.isFinite(n) ? n : null;
+  }, []);
+
+  const formatCompactViews = useCallback((v: number | null | undefined): string => {
+    const n = typeof v === 'number' && Number.isFinite(v) ? v : null;
+    if (n === null) return '—';
+    if (n < 1000) return `${n}`;
+    if (n < 1_000_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}K`;
+    if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+    return `${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`;
+  }, []);
+
+  const formatDateLabel = useCallback((raw?: string | null): string => {
+    if (!raw) return '';
+    const d = new Date(raw);
+    if (!Number.isFinite(d.getTime())) return '';
+    const now = Date.now();
+    const diff = Math.max(0, now - d.getTime());
+    const day = 24 * 60 * 60 * 1000;
+    const days = Math.floor(diff / day);
+    if (days <= 0) return 'Today';
+    if (days === 1) return '1 day ago';
+    if (days < 7) return `${days} days ago`;
+    const weeks = Math.floor(days / 7);
+    if (weeks === 1) return '1 week ago';
+    if (weeks < 5) return `${weeks} weeks ago`;
+    const months = Math.floor(days / 30);
+    if (months === 1) return '1 month ago';
+    if (months < 12) return `${months} months ago`;
+    const years = Math.floor(days / 365);
+    return years <= 1 ? '1 year ago' : `${years} years ago`;
+  }, []);
+
+  const showComingSoon = useCallback((feature: 'Sharing' | 'Offline Downloads') => {
+    const message =
+      'Feature Coming Soon: We are working hard to bring Sharing/Offline Downloads to you in the next update!';
+    if (Platform.OS === 'android') {
+      const ToastAndroid = require('react-native').ToastAndroid as typeof import('react-native').ToastAndroid;
+      ToastAndroid.show(message, ToastAndroid.LONG);
+      return;
+    }
+    Alert.alert(feature, message);
+  }, []);
+
+  const onPressShare = useCallback(() => {
+    showComingSoon('Sharing');
+  }, [showComingSoon]);
+
+  const onPressDownload = useCallback(() => {
+    showComingSoon('Offline Downloads');
+  }, [showComingSoon]);
+
+  const onPressLike = useCallback(
+    (id: string) => {
+      setReactionStateById((prev) => {
+        const cur = prev[id] ?? { reaction: null, likeDelta: 0, dislikeDelta: 0 };
+        const currentReaction = cur.reaction;
+        const nextReaction: 'like' | 'dislike' | null = currentReaction === 'like' ? null : 'like';
+
+        if (currentReaction === 'like') {
+          return { ...prev, [id]: { reaction: nextReaction, likeDelta: cur.likeDelta - 1, dislikeDelta: cur.dislikeDelta } };
+        }
+
+        if (currentReaction === 'dislike') {
+          return {
+            ...prev,
+            [id]: { reaction: nextReaction, likeDelta: cur.likeDelta + 1, dislikeDelta: cur.dislikeDelta - 1 },
+          };
+        }
+
+        return { ...prev, [id]: { reaction: nextReaction, likeDelta: cur.likeDelta + 1, dislikeDelta: cur.dislikeDelta } };
+      });
+    },
+    []
+  );
+
+  const onPressDislike = useCallback(
+    (id: string) => {
+      setReactionStateById((prev) => {
+        const cur = prev[id] ?? { reaction: null, likeDelta: 0, dislikeDelta: 0 };
+        const currentReaction = cur.reaction;
+        const nextReaction: 'like' | 'dislike' | null = currentReaction === 'dislike' ? null : 'dislike';
+
+        if (currentReaction === 'dislike') {
+          return { ...prev, [id]: { reaction: nextReaction, likeDelta: cur.likeDelta, dislikeDelta: cur.dislikeDelta - 1 } };
+        }
+
+        if (currentReaction === 'like') {
+          return {
+            ...prev,
+            [id]: { reaction: nextReaction, likeDelta: cur.likeDelta - 1, dislikeDelta: cur.dislikeDelta + 1 },
+          };
+        }
+
+        return { ...prev, [id]: { reaction: nextReaction, likeDelta: cur.likeDelta, dislikeDelta: cur.dislikeDelta + 1 } };
+      });
+    },
+    []
+  );
 
   const fetchAll = useCallback(async () => {
     const res = await apiV1.get(`/content?ts=${Date.now()}`, {
@@ -171,7 +443,11 @@ export default function AudioScreen({ navigation }: any) {
           (it.thumbnailUrl ?? it.artwork ?? '').toString() || artworkFromStorageKey || FALLBACK_ARTWORK;
         const artistIdValue = it.artistId !== null && it.artistId !== undefined ? String(it.artistId) : undefined;
 
-        const rawMediaUrl = (it.mediaUrl ?? it.fileUrl ?? '').toString();
+        const rawMediaUrl = (it.mediaUrl ?? it.fileUrl ?? it.audioUrl ?? '').toString();
+
+        const viewCount = toCount((it as any).viewCount) ?? toCount((it as any).views) ?? null;
+        const likeCount = toCount((it as any).likeCount) ?? null;
+        const dislikeCount = toCount((it as any).dislikeCount) ?? null;
 
         return {
           id: String(it.id),
@@ -183,6 +459,9 @@ export default function AudioScreen({ navigation }: any) {
           mediaUrl: rawMediaUrl ? normalizePlaybackUrl(rawMediaUrl) : '',
           useStreamAccess: Boolean(it.useStreamAccess),
           createdAt: (it.createdAt ?? null) as any,
+          viewCount,
+          likeCount,
+          dislikeCount,
         };
       })
       .filter(Boolean) as AudioCard[];
@@ -393,7 +672,11 @@ export default function AudioScreen({ navigation }: any) {
               const artistIdValue =
                 it.artistId !== null && it.artistId !== undefined ? String(it.artistId) : undefined;
 
-              const rawMediaUrl = (it.mediaUrl ?? it.fileUrl ?? '').toString();
+              const rawMediaUrl = (it.mediaUrl ?? it.fileUrl ?? it.audioUrl ?? '').toString();
+
+              const viewCount = toCount((it as any).viewCount) ?? toCount((it as any).views) ?? null;
+              const likeCount = toCount((it as any).likeCount) ?? null;
+              const dislikeCount = toCount((it as any).dislikeCount) ?? null;
 
               return {
                 id: String(it.id),
@@ -405,6 +688,9 @@ export default function AudioScreen({ navigation }: any) {
                 mediaUrl: rawMediaUrl ? normalizePlaybackUrl(rawMediaUrl) : '',
                 useStreamAccess: Boolean(it.useStreamAccess),
                 createdAt: (it.createdAt ?? null) as any,
+                viewCount,
+                likeCount,
+                dislikeCount,
               };
             })
             .filter(Boolean) as AudioCard[];
@@ -467,6 +753,13 @@ export default function AudioScreen({ navigation }: any) {
     [startPlayback]
   );
 
+  const activeAudioMeta = useMemo(() => {
+    if (currentItem?.mediaType !== 'audio') return null;
+    const key = String(currentItem.contentId ?? currentItem.id ?? '');
+    if (!key) return null;
+    return items.find((x) => x.id === key || x.contentId === key) ?? null;
+  }, [currentItem?.contentId, currentItem?.id, currentItem?.mediaType, items]);
+
   return (
     <LinearGradient colors={Colors.backgroundGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradient}>
       <SafeAreaView style={styles.container}>
@@ -492,7 +785,139 @@ export default function AudioScreen({ navigation }: any) {
             </BlurView>
           </View>
 
-          {searchResults === null ? (
+          {hasActiveAudio && activeAudioMeta && !showNowPlayingSection ? (
+            <View style={styles.nowPlayingCollapsedWrap}>
+              <Pressable
+                style={styles.nowPlayingShowPill}
+                onPress={() => setShowNowPlayingSection(true)}
+                hitSlop={8}
+              >
+                <Text style={styles.nowPlayingShowText}>Show Player</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {hasActiveAudio && activeAudioMeta && showNowPlayingSection ? (
+            <View style={styles.nowPlayingWrap}>
+              <Pressable
+                style={styles.nowPlayingHeader}
+                onPress={() => setShowNowPlayingOptions((s) => !s)}
+                hitSlop={8}
+              >
+                <View style={styles.nowPlayingHeaderText}>
+                  <Text style={styles.nowPlayingTitle} numberOfLines={1}>
+                    {activeAudioMeta.title}
+                  </Text>
+                  <Text style={styles.nowPlayingSub} numberOfLines={1}>
+                    {`${activeAudioMeta.artistName}  ·  ${formatCompactViews(activeAudioMeta.viewCount ?? 0)} views  ·  ${formatDateLabel(activeAudioMeta.createdAt)}`}
+                  </Text>
+                </View>
+                <View style={styles.nowPlayingRightActions}>
+                  <Pressable
+                    onPress={() => setShowNowPlayingSection(false)}
+                    hitSlop={8}
+                    style={styles.nowPlayingHidePill}
+                  >
+                    <Text style={styles.nowPlayingHideText}>Hide</Text>
+                  </Pressable>
+                  <Text style={styles.nowPlayingToggle}>{showNowPlayingOptions ? 'Options' : 'Options'}</Text>
+                </View>
+              </Pressable>
+
+              {showNowPlayingOptions
+                ? (() => {
+                    const id = activeAudioMeta.id;
+                    const state = reactionStateById[id] ?? { reaction: null, likeDelta: 0, dislikeDelta: 0 };
+                    const reaction = state.reaction;
+                    const likeBase = typeof activeAudioMeta.likeCount === 'number' ? activeAudioMeta.likeCount : null;
+                    const dislikeBase = typeof activeAudioMeta.dislikeCount === 'number' ? activeAudioMeta.dislikeCount : null;
+                    const likeCount = typeof likeBase === 'number' ? Math.max(0, likeBase + state.likeDelta) : null;
+                    const dislikeCount = typeof dislikeBase === 'number' ? Math.max(0, dislikeBase + state.dislikeDelta) : null;
+
+                    const likeActive = reaction === 'like';
+                    const dislikeActive = reaction === 'dislike';
+
+                    return (
+                      <>
+                        <View style={styles.inlinePlayerWrap}>
+                          <View style={styles.inlinePlayerTimes}>
+                            <Text style={styles.inlineTime}>{formatTime(positionForUi)}</Text>
+                            <Text style={styles.inlineTime}>{formatTime(playerState.durationMs)}</Text>
+                          </View>
+                          <Slider
+                            style={styles.inlineSlider}
+                            minimumValue={0}
+                            maximumValue={Math.max(1, playerState.durationMs || 1)}
+                            value={Math.min(positionForUi, playerState.durationMs || 1)}
+                            minimumTrackTintColor="#FFFFFF"
+                            maximumTrackTintColor="rgba(255,255,255,0.22)"
+                            thumbTintColor="#FFFFFF"
+                            onSlidingStart={onSeekStart}
+                            onValueChange={onSeekChange}
+                            onSlidingComplete={onSeekComplete}
+                          />
+                          <View style={styles.inlineControls}>
+                            <Pressable style={styles.inlineBtn} onPress={() => skipPrev().catch(() => undefined)}>
+                              <ArrowLeft size={18} color="#fff" />
+                            </Pressable>
+                            <Pressable style={styles.inlineBtn} onPress={() => togglePlayPause().catch(() => undefined)}>
+                              <Image
+                                source={playerState.isPlaying ? PauseButtonImg : PlayButtonImg}
+                                style={styles.inlinePlayImg}
+                                resizeMode="contain"
+                              />
+                            </Pressable>
+                            <Pressable style={styles.inlineBtn} onPress={() => skipNext().catch(() => undefined)}>
+                              <View style={{ transform: [{ rotate: '180deg' }] }}>
+                                <ArrowLeft size={18} color="#fff" />
+                              </View>
+                            </Pressable>
+                          </View>
+                        </View>
+
+                        <View style={styles.engagementRow}>
+                          <Pressable
+                            style={[styles.engagementBtn, likeActive ? styles.engagementBtnActive : null]}
+                            onPress={() => onPressLike(id)}
+                            hitSlop={8}
+                          >
+                            <EngagementIcon name="like" size={16} color={likeActive ? Colors.accent : '#fff'} />
+                            <Text style={[styles.engagementCount, likeActive ? styles.engagementCountActive : null]}>
+                              {typeof likeCount === 'number' ? formatCompactViews(likeCount) : '—'}
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            style={[styles.engagementBtn, dislikeActive ? styles.engagementBtnActive : null]}
+                            onPress={() => onPressDislike(id)}
+                            hitSlop={8}
+                          >
+                            <EngagementIcon name="dislike" size={16} color={dislikeActive ? Colors.accent : '#fff'} />
+                            <Text style={[styles.engagementCount, dislikeActive ? styles.engagementCountActive : null]}>
+                              {typeof dislikeCount === 'number' ? formatCompactViews(dislikeCount) : '—'}
+                            </Text>
+                          </Pressable>
+
+                          <Pressable style={styles.engagementBtn} onPress={onPressShare} hitSlop={8}>
+                            <EngagementIcon name="share" size={16} color="#fff" />
+                          </Pressable>
+                          <Pressable style={styles.engagementBtn} onPress={onPressDownload} hitSlop={8}>
+                            <EngagementIcon name="download" size={16} color="#fff" />
+                          </Pressable>
+                        </View>
+                      </>
+                    );
+                  })()
+                : null}
+            </View>
+          ) : null}
+
+          {searchResults !== null ? (
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionTitle}>Search Results</Text>
+              {searchLoading ? <ActivityIndicator color="#fff" /> : null}
+            </View>
+          ) : (
             <>
               <View style={styles.sectionRow}>
                 <Text style={styles.sectionTitle}>Top Songs</Text>
@@ -523,16 +948,12 @@ export default function AudioScreen({ navigation }: any) {
                 )}
               />
             </>
-          ) : (
-            <View style={styles.sectionRow}>
-              <Text style={styles.sectionTitle}>Search Results</Text>
-              {searchLoading ? <ActivityIndicator color="#fff" /> : null}
-            </View>
           )}
 
           {searchResults === null ? (
             <Text style={[styles.sectionTitle, { marginTop: 20 }]}>All Audio</Text>
           ) : null}
+
           <View style={styles.listWrap}>
             {(searchResults ?? filtered).map((song) => (
               <Pressable key={song.id} style={styles.row} onPress={() => onPressSong(song)}>
@@ -640,6 +1061,145 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: Colors.accent,
   },
+
+  nowPlayingWrap: {
+    marginTop: 16,
+    marginHorizontal: 20,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  nowPlayingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  nowPlayingHeaderText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  nowPlayingRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  nowPlayingHidePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  nowPlayingHideText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  nowPlayingTitle: { color: '#fff', fontSize: 14, fontWeight: '900' },
+  nowPlayingSub: { marginTop: 4, color: 'rgba(255,255,255,0.62)', fontSize: 12, fontWeight: '700' },
+  nowPlayingToggle: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
+    fontWeight: '900',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+
+  nowPlayingCollapsedWrap: {
+    marginTop: 12,
+    marginHorizontal: 20,
+    alignItems: 'flex-end',
+  },
+  nowPlayingShowPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  nowPlayingShowText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+
+  inlinePlayerWrap: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  inlinePlayerTimes: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  inlineTime: {
+    color: 'rgba(255,255,255,0.80)',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  inlineSlider: {
+    width: '100%',
+    height: 18,
+  },
+  inlineControls: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+  },
+  inlineBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  inlinePlayImg: {
+    width: 24,
+    height: 24,
+  },
+
+  engagementRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  engagementBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  engagementBtnActive: {
+    backgroundColor: 'rgba(255,106,0,0.16)',
+    borderColor: 'rgba(255,106,0,0.55)',
+  },
+  engagementCount: { color: 'rgba(255,255,255,0.90)', fontSize: 12, fontWeight: '900' },
+  engagementCountActive: { color: Colors.accent },
 
   listWrap: {
     marginTop: 10,

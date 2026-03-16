@@ -51,6 +51,9 @@ type MediaPlayerContextValue = {
   inlineVideoHostActive: boolean;
   setInlineVideoHostActive: (active: boolean) => void;
 
+  inlineAudioHostActive: boolean;
+  setInlineAudioHostActive: (active: boolean) => void;
+
   onVideoPlaybackStatusUpdate: (status: AVPlaybackStatus) => void;
 
   videoRef: React.RefObject<Video>;
@@ -81,6 +84,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PlayerState>(EMPTY_STATE);
 
   const [inlineVideoHostActive, setInlineVideoHostActive] = useState(false);
+  const [inlineAudioHostActive, setInlineAudioHostActive] = useState(false);
 
   const soundRef = useRef<SoundLike | null>(null);
   const videoRef = useRef<Video>(null);
@@ -626,6 +630,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       inlineVideoHostActive,
       setInlineVideoHostActive,
+
+      inlineAudioHostActive,
+      setInlineAudioHostActive,
       onVideoPlaybackStatusUpdate,
       videoRef,
     }),
@@ -633,6 +640,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       close,
       currentItem,
       cycleRepeatMode,
+      inlineAudioHostActive,
       inlineVideoHostActive,
       onVideoPlaybackStatusUpdate,
       playQueue,
@@ -641,6 +649,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       setRepeatMode,
       setExpanded,
       setShuffle,
+      setInlineAudioHostActive,
       skipNext,
       skipPrev,
       state,
@@ -669,6 +678,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         close={value.close}
         setExpanded={value.setExpanded}
         inlineVideoHostActive={value.inlineVideoHostActive}
+        inlineAudioHostActive={value.inlineAudioHostActive}
         onVideoPlaybackStatusUpdate={value.onVideoPlaybackStatusUpdate}
         videoRef={value.videoRef}
       />
