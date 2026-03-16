@@ -1,7 +1,9 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   Dimensions,
   Image,
+  PanResponder,
   Pressable,
   StyleSheet,
   Text,
@@ -70,6 +72,59 @@ export default function MediaPlayerOverlay({
     const extra = bottomSafeAreaPadding ?? 0;
     return Math.max(insets.bottom, 0) + 84 + extra;
   }, [bottomSafeAreaPadding, insets.bottom]);
+
+  const audioDragY = useRef(new Animated.Value(0)).current;
+  const audioDragOffsetRef = useRef(0);
+
+  const clampAudioDragY = useCallback(
+    (raw: number) => {
+      // Allow dragging up, but prevent moving off-screen.
+      // Negative values move the mini player up.
+      const MIN_TOP_PADDING = Math.max(12, insets.top + 12);
+      const ESTIMATED_PLAYER_HEIGHT = 210;
+      const maxUp = -Math.max(0, Dimensions.get('window').height - bottomOffset - MIN_TOP_PADDING - ESTIMATED_PLAYER_HEIGHT);
+      return Math.min(0, Math.max(maxUp, raw));
+    },
+    [bottomOffset, insets.top]
+  );
+
+  const audioPanResponder = useMemo(() => {
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => currentItem?.mediaType === 'audio',
+      onMoveShouldSetPanResponder: (_evt, gesture) => {
+        if (currentItem?.mediaType !== 'audio') return false;
+        return Math.abs(gesture.dy) > 6;
+      },
+      onPanResponderGrant: () => {
+        // Stop any in-flight animation and start from the current offset.
+        audioDragY.stopAnimation((value) => {
+          audioDragOffsetRef.current = typeof value === 'number' ? value : 0;
+        });
+      },
+      onPanResponderMove: (_evt, gesture) => {
+        const next = clampAudioDragY(audioDragOffsetRef.current + gesture.dy);
+        audioDragY.setValue(next);
+      },
+      onPanResponderRelease: (_evt, gesture) => {
+        const next = clampAudioDragY(audioDragOffsetRef.current + gesture.dy);
+        audioDragOffsetRef.current = next;
+        Animated.spring(audioDragY, {
+          toValue: next,
+          useNativeDriver: true,
+          tension: 120,
+          friction: 14,
+        }).start();
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(audioDragY, {
+          toValue: audioDragOffsetRef.current,
+          useNativeDriver: true,
+          tension: 120,
+          friction: 14,
+        }).start();
+      },
+    });
+  }, [audioDragY, clampAudioDragY, currentItem?.mediaType]);
 
   const [isSeeking, setIsSeeking] = useState(false);
   const seekValueRef = useRef<number>(0);
@@ -201,7 +256,10 @@ export default function MediaPlayerOverlay({
 
   return (
     <View pointerEvents="box-none" style={styles.root}>
-      <View style={[styles.miniWrap, { bottom: bottomOffset }]}>
+      <Animated.View
+        style={[styles.miniWrap, { bottom: bottomOffset, transform: [{ translateY: audioDragY }] }]}
+        {...(currentItem.mediaType === 'audio' ? audioPanResponder.panHandlers : {})}
+      >
         <BlurView intensity={26} tint="dark" style={styles.miniPlayer}>
           <Pressable onPress={() => setExpanded(currentItem.mediaType === 'video')}>
             <Image
@@ -300,7 +358,7 @@ export default function MediaPlayerOverlay({
             <X color="#fff" size={18} />
           </Pressable>
         </BlurView>
-      </View>
+      </Animated.View>
     </View>
   );
 }

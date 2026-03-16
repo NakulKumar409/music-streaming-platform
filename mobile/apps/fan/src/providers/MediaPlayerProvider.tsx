@@ -89,6 +89,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   const soundRef = useRef<SoundLike | null>(null);
   const videoRef = useRef<Video>(null);
 
+  const audioLoadTokenRef = useRef(0);
+
   const currentItem = state.queue.length ? state.queue[state.currentIndex] ?? null : null;
 
   const lastVideoContentKeyRef = useRef<string | null>(null);
@@ -297,8 +299,12 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   const loadAndPlayAudio = useCallback(
     async (item: MediaItem) => {
+      const loadToken = (audioLoadTokenRef.current += 1);
       await stopVideo();
       await unloadAudio();
+
+      // If another load started while we were stopping/unloading, abort.
+      if (loadToken !== audioLoadTokenRef.current) return;
 
       const isSignedStreamUrl = (url: string) => {
         const u = (url ?? '').toString();
@@ -341,6 +347,16 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           { shouldPlay: true },
           updateProgressFromStatus
         );
+
+        // If a newer load has started, immediately unload this sound to prevent overlap.
+        if (loadToken !== audioLoadTokenRef.current) {
+          try {
+            await sound.unloadAsync();
+          } catch {
+            // ignore
+          }
+          return;
+        }
 
         soundRef.current = sound;
 

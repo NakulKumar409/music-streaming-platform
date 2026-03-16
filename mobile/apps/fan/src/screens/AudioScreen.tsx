@@ -186,6 +186,7 @@ export default function AudioScreen({ navigation }: any) {
 
   const playbackUrlCacheRef = useRef<Map<string, { url: string; ts: number }>>(new Map());
   const prefetchingRef = useRef<Set<string>>(new Set());
+  const startPlaybackInFlightRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -717,6 +718,9 @@ export default function AudioScreen({ navigation }: any) {
 
   const startPlayback = useCallback(
     async (startId: string) => {
+      if (startPlaybackInFlightRef.current) return;
+      startPlaybackInFlightRef.current = true;
+
       const list = searchResults !== null ? searchResults : filtered;
 
       const queue: MediaItem[] = list
@@ -741,16 +745,30 @@ export default function AudioScreen({ navigation }: any) {
 
       const idx = queue.findIndex((q) => q.id === startId || q.contentId === startId);
       if (idx < 0) return;
-      await playQueue(queue, idx);
+
+      try {
+        await playQueue(queue, idx);
+      } finally {
+        startPlaybackInFlightRef.current = false;
+      }
     },
     [filtered, playQueue, searchResults]
   );
 
   const onPressSong = useCallback(
     (song: AudioCard) => {
+      const currentKey = currentItem?.mediaType === 'audio' ? String(currentItem.contentId ?? currentItem.id ?? '') : '';
+      const tappedKey = String(song.contentId ?? song.id ?? '');
+
+      // If user taps the same song repeatedly, just toggle play/pause.
+      if (currentKey && tappedKey && currentKey === tappedKey) {
+        togglePlayPause().catch(() => undefined);
+        return;
+      }
+
       startPlayback(song.id).catch(() => undefined);
     },
-    [startPlayback]
+    [currentItem?.contentId, currentItem?.id, currentItem?.mediaType, startPlayback, togglePlayPause]
   );
 
   const activeAudioMeta = useMemo(() => {
