@@ -8,9 +8,13 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Alert, AppState, Platform } from 'react-native';
 
-import { Audio, type AVPlaybackStatus, Video } from 'expo-av';
+import {
+  Audio,
+  type AVPlaybackStatus,
+  Video,
+} from 'expo-av';
 
 import { navigationRef } from '../navigation/rootNavigation';
 
@@ -48,6 +52,10 @@ type MediaPlayerContextValue = {
   close: () => Promise<void>;
   setExpanded: (expanded: boolean) => void;
 
+  videoAudioOnlyMode: boolean;
+  videoRestoreNonce: number;
+  videoRestorePositionMs: number;
+
   inlineVideoHostActive: boolean;
   setInlineVideoHostActive: (active: boolean) => void;
 
@@ -83,6 +91,13 @@ export function useMediaPlayer() {
 export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PlayerState>(EMPTY_STATE);
 
+  const IOS_INTERRUPTION_DO_NOT_MIX = 1;
+  const ANDROID_INTERRUPTION_DUCK_OTHERS = 1;
+
+  const [videoAudioOnlyMode, setVideoAudioOnlyMode] = useState(false);
+  const [videoRestoreNonce, setVideoRestoreNonce] = useState(0);
+  const videoRestorePositionMsRef = useRef(0);
+
   const [inlineVideoHostActive, setInlineVideoHostActive] = useState(false);
   const [inlineAudioHostActive, setInlineAudioHostActive] = useState(false);
 
@@ -102,6 +117,83 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  useEffect(() => {
+    // Ensure audio can continue in background (iOS playback category + silent mode + background).
+    Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      allowsRecordingIOS: false,
+      interruptionModeIOS: IOS_INTERRUPTION_DO_NOT_MIX,
+      staysActiveInBackground: true,
+      shouldDuckAndroid: true,
+      interruptionModeAndroid: ANDROID_INTERRUPTION_DUCK_OTHERS,
+    }).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      console.log('App state changed to:', next);
+      const item = currentItemRef.current;
+      const s = stateRef.current;
+
+      if (next !== 'active') {
+        if (item?.mediaType === 'video' && s.isPlaying) {
+          // Do NOT pause. Keep playback going, but mark UI as audio-only.
+          videoRestorePositionMsRef.current = s.positionMs;
+          setVideoAudioOnlyMode(true);
+          Audio.setAudioModeAsync({
+            playsInSilentModeIOS: true,
+            allowsRecordingIOS: false,
+            interruptionModeIOS: IOS_INTERRUPTION_DO_NOT_MIX,
+            staysActiveInBackground: true,
+            shouldDuckAndroid: true,
+            interruptionModeAndroid: ANDROID_INTERRUPTION_DUCK_OTHERS,
+          }).catch(() => undefined);
+
+          // iOS can briefly pause the playback object during the transition; force resume.
+          (async () => {
+            try {
+              await (videoRef.current as any)?.setVolumeAsync?.(1.0);
+            } catch {
+              // ignore
+            }
+            try {
+              await videoRef.current?.playAsync();
+            } catch {
+              // ignore
+            }
+          })().catch(() => undefined);
+        }
+        return;
+      }
+
+      // Back to active: re-show video and ask consumers to restore position.
+      if (videoAudioOnlyMode) {
+        setVideoAudioOnlyMode(false);
+        setVideoRestoreNonce((n) => n + 1);
+
+        // Best-effort: keep volume at 1.0 and re-assert play if we were playing.
+        if (s.isPlaying) {
+          (async () => {
+            try {
+              await (videoRef.current as any)?.setVolumeAsync?.(1.0);
+            } catch {
+              // ignore
+            }
+            try {
+              await videoRef.current?.playAsync();
+            } catch {
+              // ignore
+            }
+          })().catch(() => undefined);
+        }
+      }
+    });
+
+    return () => {
+      sub.remove();
+    };
+  }, [videoAudioOnlyMode]);
 
   useEffect(() => {
     if (!currentItem?.id) return;
@@ -644,6 +736,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       close,
       setExpanded,
 
+      videoAudioOnlyMode,
+      videoRestoreNonce,
+      videoRestorePositionMs: videoRestorePositionMsRef.current,
+
       inlineVideoHostActive,
       setInlineVideoHostActive,
 
@@ -673,6 +769,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       setInlineVideoHostActive,
       toggleShuffle,
       togglePlayPause,
+      videoAudioOnlyMode,
+      videoRestoreNonce,
     ]
   );
 

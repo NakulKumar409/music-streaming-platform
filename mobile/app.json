@@ -39,7 +39,10 @@
       ]
     },
     "ios": {
-      "bundleIdentifier": "com.moinimran.fanapp"
+      "bundleIdentifier": "com.moinimran.fanapp",
+      "infoPlist": {
+        "UIBackgroundModes": ["audio"]
+      }
     }
   }
 }

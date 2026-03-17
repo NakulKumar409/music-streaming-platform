@@ -29,7 +29,12 @@ import {
   Settings,
   X,
 } from 'lucide-react-native';
-import { ResizeMode, Video, type AVPlaybackStatus } from 'expo-av';
+import {
+  Audio,
+  ResizeMode,
+  Video,
+  type AVPlaybackStatus,
+} from 'expo-av';
 import { BlurView } from 'expo-blur';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
@@ -252,7 +257,11 @@ function normalizeCategory(raw: unknown): string {
 export default function VideoScreen() {
   const navigation = useNavigation<any>();
   const tabBarHeight = useBottomTabBarHeight();
-  const { currentItem, state: playerState, togglePlayPause } = useMediaPlayer();
+  const {
+    currentItem,
+    state: playerState,
+    togglePlayPause,
+  } = useMediaPlayer();
 
   const insets = useSafeAreaInsets();
 
@@ -318,6 +327,15 @@ export default function VideoScreen() {
   const lastTapXRef = useRef(0);
   const playbackSessionRef = useRef(0);
 
+  const [bgAudioOnlyMode, setBgAudioOnlyMode] = useState(false);
+  const bgWasPlayingRef = useRef(false);
+
+  const IOS_INTERRUPTION_DO_NOT_MIX = 1;
+  const ANDROID_INTERRUPTION_DUCK_OTHERS = 1;
+
+  const resumeAfterUrlChangeRef = useRef<number | null>(null);
+  const tokenRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const shimmerX = useRef(new Animated.Value(0)).current;
 
   const miniAnim = useRef(new Animated.Value(0)).current;
@@ -353,6 +371,166 @@ export default function VideoScreen() {
     seekValueRef.current = 0;
     playedOnceRef.current = false;
   }, [activePlaybackUrl]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      console.log('App state changed to:', next);
+      if (!activePlaybackUrl) return;
+
+      const shouldBackground = next === 'inactive' || next === 'background';
+      if (shouldBackground) {
+        if (bgAudioOnlyMode) return;
+
+        (async () => {
+          let wasPlaying = isVideoPlaying;
+          try {
+            const status = await videoRef.current?.getStatusAsync();
+            const s: any = status as any;
+            if (s?.isLoaded) {
+              wasPlaying = Boolean(s.isPlaying);
+            }
+          } catch {
+            // ignore
+          }
+
+          bgWasPlayingRef.current = wasPlaying;
+          setBgAudioOnlyMode(true);
+
+          await Audio.setAudioModeAsync({
+            playsInSilentModeIOS: true,
+            allowsRecordingIOS: false,
+            interruptionModeIOS: IOS_INTERRUPTION_DO_NOT_MIX,
+            staysActiveInBackground: true,
+            shouldDuckAndroid: true,
+            interruptionModeAndroid: ANDROID_INTERRUPTION_DUCK_OTHERS,
+          });
+
+          // Keep volume at 1.0 and force resume during the transition.
+          try {
+            await (videoRef.current as any)?.setVolumeAsync?.(1.0);
+          } catch {
+            // ignore
+          }
+          if (wasPlaying) {
+            videoRef.current?.playAsync().catch(() => undefined);
+          }
+        })().catch(() => undefined);
+
+        return;
+      }
+
+      if (next === 'active' && bgAudioOnlyMode) {
+        setBgAudioOnlyMode(false);
+        const shouldPlay = Boolean(bgWasPlayingRef.current);
+        (async () => {
+          try {
+            await (videoRef.current as any)?.setVolumeAsync?.(1.0);
+          } catch {
+            // ignore
+          }
+          if (shouldPlay) {
+            videoRef.current?.playAsync().catch(() => undefined);
+          }
+        })().catch(() => undefined);
+      }
+    });
+
+    return () => {
+      sub.remove();
+    };
+  }, [activePlaybackUrl, activeVideoMeta?.id, bgAudioOnlyMode, isVideoPlaying]);
+
+  const base64Decode = useCallback((input: string): string => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+    let str = input.replace(/\s+/g, '');
+    let output = '';
+    let bc = 0;
+    let bs: number;
+    let buffer: number;
+
+    for (let idx = 0; idx < str.length; idx += 1) {
+      buffer = chars.indexOf(str.charAt(idx));
+      if (buffer < 0) continue;
+      bs = bc % 4 ? bs * 64 + buffer : buffer;
+      bc += 1;
+      if (bc % 4) continue;
+      output += String.fromCharCode((bs >> 16) & 255, (bs >> 8) & 255, bs & 255);
+    }
+
+    // Handle padding removal
+    output = output.replace(/\0+$/, '');
+    return output;
+  }, []);
+
+  const decodeJwtExpMsFromUrl = useCallback((url: string | null): number | null => {
+    if (!url) return null;
+    try {
+      const tokenMatch = url.match(/[?&]token=([^&]+)/i);
+      if (!tokenMatch?.[1]) return null;
+      const token = decodeURIComponent(tokenMatch[1]);
+      const parts = token.split('.');
+      if (parts.length < 2) return null;
+      const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const pad = payloadB64.length % 4;
+      const padded = payloadB64 + (pad ? '='.repeat(4 - pad) : '');
+      const json = globalThis.atob ? globalThis.atob(padded) : base64Decode(padded);
+      const payload = JSON.parse(json);
+      const expSec = Number(payload?.exp ?? 0);
+      if (!Number.isFinite(expSec) || expSec <= 0) return null;
+      return expSec * 1000;
+    } catch {
+      return null;
+    }
+  }, [base64Decode]);
+
+  const scheduleTokenRefresh = useCallback(
+    (url: string | null) => {
+      if (tokenRefreshTimerRef.current) {
+        clearTimeout(tokenRefreshTimerRef.current);
+        tokenRefreshTimerRef.current = null;
+      }
+
+      const expMs = decodeJwtExpMsFromUrl(url);
+      if (!expMs) return;
+
+      // Refresh 30s before expiry (min 5s).
+      const now = Date.now();
+      const delay = Math.max(5000, expMs - now - 30_000);
+      tokenRefreshTimerRef.current = setTimeout(() => {
+        (async () => {
+          if (!activeVideoMeta?.id) return;
+          const v = videoRef.current;
+          let pos = lastStatusPositionRef.current;
+          try {
+            const status = await v?.getStatusAsync();
+            const s: any = status as any;
+            if (s?.isLoaded) pos = Math.max(0, Math.round(Number(s.positionMillis ?? pos)));
+          } catch {
+            // ignore
+          }
+
+          try {
+            const nextUrl = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video');
+            resumeAfterUrlChangeRef.current = pos;
+            setActivePlaybackUrl(nextUrl);
+          } catch {
+            // ignore
+          }
+        })().catch(() => undefined);
+      }, delay);
+    },
+    [activeVideoMeta?.id, decodeJwtExpMsFromUrl]
+  );
+
+  useEffect(() => {
+    scheduleTokenRefresh(activePlaybackUrl);
+    return () => {
+      if (tokenRefreshTimerRef.current) {
+        clearTimeout(tokenRefreshTimerRef.current);
+        tokenRefreshTimerRef.current = null;
+      }
+    };
+  }, [activePlaybackUrl, scheduleTokenRefresh]);
 
   const hasPlaybackStarted = Boolean(activePlaybackUrl && isVideoPlaying);
 
@@ -671,6 +849,16 @@ export default function VideoScreen() {
           setIsBuffering(true);
           setIsVideoPlaying(true);
 
+          // Critical for iOS lock screen: put app in playback category + allow background.
+          Audio.setAudioModeAsync({
+            playsInSilentModeIOS: true,
+            allowsRecordingIOS: false,
+            interruptionModeIOS: IOS_INTERRUPTION_DO_NOT_MIX,
+            staysActiveInBackground: true,
+            shouldDuckAndroid: true,
+            interruptionModeAndroid: ANDROID_INTERRUPTION_DUCK_OTHERS,
+          }).catch(() => undefined);
+
           // Best-effort immediate autoplay even before the first status tick.
           setTimeout(() => {
             if (sessionId !== playbackSessionRef.current) return;
@@ -855,8 +1043,11 @@ export default function VideoScreen() {
       // Always force position to 0 so switching videos never resumes.
       if (!playedOnceRef.current && activePlaybackUrl) {
         playedOnceRef.current = true;
+        const resumeAt = resumeAfterUrlChangeRef.current;
+        resumeAfterUrlChangeRef.current = null;
+        const target = typeof resumeAt === 'number' ? Math.max(0, Math.round(resumeAt)) : 0;
         videoRef.current
-          ?.setPositionAsync(0)
+          ?.setPositionAsync(target)
           .catch(() => undefined)
           .finally(() => {
             videoRef.current?.playAsync().catch(() => undefined);
@@ -1290,7 +1481,7 @@ export default function VideoScreen() {
                   <Video
                     key={activePlaybackUrl}
                     ref={videoRef}
-                    style={styles.video}
+                    style={bgAudioOnlyMode ? [styles.video, styles.videoOffscreen] : styles.video}
                     source={{ uri: activePlaybackUrl }}
                     resizeMode={isFullscreen || isLandscape ? ResizeMode.CONTAIN : ResizeMode.COVER}
                     useNativeControls={false}
@@ -1584,6 +1775,11 @@ const styles = StyleSheet.create({
   video: {
     width: '100%',
     height: '100%',
+  },
+  videoOffscreen: {
+    position: 'absolute',
+    left: -9999,
+    top: 0,
   },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
