@@ -19,8 +19,7 @@ type SummaryData = {
   totalArtists: number;
   totalActiveSubscriptions: number;
   revenueToday: number;
-  pendingApprovals: number;
-  pendingReviewCount?: number;
+  activeReports?: number;
   alerts?: {
     draftCount?: number;
     failedPaymentsCount?: number;
@@ -163,9 +162,6 @@ export default function AdminHomePage() {
   const failedPaymentsCount =
     Number(alerts?.failedPayments?.length ?? summary?.alerts?.failedPaymentsCount ?? 0) ||
     0;
-
-  const pendingReviewCount =
-    Number((summary as any)?.pendingReviewCount ?? summary?.pendingApprovals ?? draftCount ?? 0) || 0;
 
   const growthChartData = growth.map((p: SeriesPoint) => ({
     name: p.date.slice(5),
@@ -315,6 +311,52 @@ export default function AdminHomePage() {
               )}
             </Link>
 
+            <Link to="/admin/moderation" className="block focus:outline-none">
+              {loading ? (
+                <div className="relative overflow-hidden rounded-[6px] border border-white/10 bg-[#1a1414]/45 px-5 py-4">
+                  <div className="space-y-3">
+                    <Skeleton className="h-[10px] w-[110px]" />
+                    <Skeleton className="h-[30px] w-[90px]" />
+                  </div>
+                </div>
+              ) : (
+                <DashboardCard
+                  title="Active Reports"
+                  value={formatCompact(Number((summary as any)?.activeReports ?? 0) || 0)}
+                  accent="orange"
+                  className="cursor-pointer transition hover:border-white/20"
+                  icon={
+                    <svg
+                      width="22"
+                      height="22"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M12 9V13"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M12 17H12.01"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  }
+                />
+              )}
+            </Link>
+
             {loading ? (
               <div className="relative overflow-hidden rounded-[6px] border border-white/10 bg-[#1a1414]/45 px-5 py-4">
                 <div className="space-y-3">
@@ -384,51 +426,6 @@ export default function AdminHomePage() {
               />
             )}
 
-            <Link to="/admin/content-approval" className="block focus:outline-none">
-              {loading ? (
-                <div className="relative overflow-hidden rounded-[6px] border border-white/10 bg-[#1a1414]/45 px-5 py-4">
-                  <div className="space-y-3">
-                    <Skeleton className="h-[10px] w-[140px]" />
-                    <Skeleton className="h-[30px] w-[80px]" />
-                  </div>
-                </div>
-              ) : (
-                <DashboardCard
-                  title="Pending Approvals"
-                  value={formatCompact(summary?.pendingApprovals ?? 0)}
-                  accent="orange"
-                  className="cursor-pointer transition hover:border-white/20"
-                  icon={
-                    <svg
-                      width="22"
-                      height="22"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M12 2L22 8V16L12 22L2 16V8L12 2Z"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M12 8V12"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="M12 16H12.01"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  }
-                />
-              )}
-            </Link>
           </div>
 
           <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -439,32 +436,8 @@ export default function AdminHomePage() {
 
                 <div className="mt-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => navigate("/admin/content-approval")}
-                      className="flex items-center justify-between w-full text-left"
-                    >
-                      <div className="flex items-center gap-3 text-[13px] text-[#cdbdb8] hover:text-[#e6d6d2]">
-                        <div className="h-[14px] w-[10px] rounded-[2px] bg-[#7a3f31]/60 border border-white/10" />
-                        <div>
-                          {loading ? (
-                            <Skeleton className="h-[14px] w-[170px]" />
-                          ) : (
-                            <>
-                              <span className="text-[#e6d6d2]">{pendingReviewCount}</span> content items pending review
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <div className="rounded-[4px] bg-[#7a4b28]/45 border border-[#c9853b]/25 px-3 py-[3px] text-[12px] text-[#d8b58a]">
-                        Pending
-                      </div>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3 text-[13px] text-[#cdbdb8]">
-                      <div className="h-[14px] w-[10px] rounded-[2px] bg-[#7a3f31]/60 border border-white/10" />
+                      <div className="h-[14px] w-[10px] rounded-[2px] bg-rose-500/40 border border-white/10" />
                       <div>
                         {loading ? (
                           <Skeleton className="h-[14px] w-[200px]" />

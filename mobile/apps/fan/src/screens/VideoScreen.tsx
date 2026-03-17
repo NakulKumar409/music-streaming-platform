@@ -8,6 +8,7 @@ import {
   FlatList,
   Image,
   LayoutChangeEvent,
+  Modal,
   PanResponder,
   Platform,
   Pressable,
@@ -23,6 +24,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import {
+  AlertTriangle,
   ArrowLeft,
   Maximize,
   Search,
@@ -39,13 +41,17 @@ import { BlurView } from 'expo-blur';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
 import Svg, { Path } from 'react-native-svg';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { apiV1 } from '../services/api';
+import { contentApi } from '../services/api';
 import * as streamService from '../services/streamService';
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import PauseButtonImg from '../pausebuttton.png';
 import PlayButtonImg from '../playbutton.png';
+
+const REPORTED_CONTENT_STORAGE_KEY = 'reportedContentIds';
 
 type ApiContentItem = {
   id: string | number;
@@ -309,6 +315,10 @@ export default function VideoScreen() {
   const [showMini, setShowMini] = useState(false);
   const scrollYRef = useRef(0);
   const deepScrollRef = useRef(false);
+
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportedContentIds, setReportedContentIds] = useState<Record<string, boolean>>({});
 
   const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState(HEADER_HEIGHT + 92);
   const headerHeightRef = useRef<number>(HEADER_HEIGHT + 92);
@@ -722,6 +732,23 @@ export default function VideoScreen() {
   useEffect(() => {
     load().catch(() => undefined);
   }, [load]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(REPORTED_CONTENT_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        const ids = Array.isArray(parsed) ? (parsed as any[]).map((x) => String(x)) : [];
+        const map: Record<string, true> = {};
+        ids.forEach((id) => {
+          if (id) map[id] = true;
+        });
+        setReportedContentIds(map);
+      } catch {
+        setReportedContentIds({});
+      }
+    })().catch(() => undefined);
+  }, []);
 
   const trending = useMemo(() => {
     return [...items].sort((a, b) => {
@@ -1243,6 +1270,60 @@ export default function VideoScreen() {
     showComingSoon('Offline Downloads');
   }, [showComingSoon]);
 
+  const showThankYou = useCallback(() => {
+    const message = 'Thank you for reporting.';
+    if (Platform.OS === 'android') {
+      const ToastAndroid = require('react-native').ToastAndroid as typeof import('react-native').ToastAndroid;
+      ToastAndroid.show(message, ToastAndroid.SHORT);
+      return;
+    }
+    Alert.alert('Reported', message);
+  }, []);
+
+  const persistReported = useCallback(async (next: Record<string, boolean>) => {
+    try {
+      await AsyncStorage.setItem(
+        REPORTED_CONTENT_STORAGE_KEY,
+        JSON.stringify(Object.keys(next).filter((k) => Boolean(next[k])))
+      );
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const submitReport = useCallback(
+    async (reason: 'Spam' | 'Inappropriate' | 'Copyright') => {
+      if (!activeVideoMeta?.id) return;
+      const id = String(activeVideoMeta.id);
+      if (reportedContentIds[id]) return;
+
+      setReportSubmitting(true);
+      try {
+        const res = await contentApi.post('/report', {
+          contentId: activeVideoMeta.id,
+          reason,
+        });
+
+        if (!res?.data?.success) {
+          throw new Error(res?.data?.message || 'Failed to submit report');
+        }
+
+        setReportedContentIds((prev) => {
+          const next = { ...prev, [id]: true };
+          persistReported(next).catch(() => undefined);
+          return next;
+        });
+        setReportModalOpen(false);
+        showThankYou();
+      } catch (e: any) {
+        Alert.alert('Report Failed', e?.message || 'Failed to submit report. Please try again.');
+      } finally {
+        setReportSubmitting(false);
+      }
+    },
+    [activeVideoMeta?.id, activeVideoMeta, persistReported, reportedContentIds, showThankYou]
+  );
+
   const onPressLike = useCallback(() => {
     if (!activeVideoMeta?.id) return;
     const id = activeVideoMeta.id;
@@ -1420,7 +1501,7 @@ export default function VideoScreen() {
             showsVerticalScrollIndicator={false}
             onScroll={onListScroll}
             scrollEventThrottle={16}
-            contentContainerStyle={{ paddingTop: measuredHeaderHeight + 48, paddingBottom: tabBarHeight + 120 }}
+            contentContainerStyle={{ paddingTop: measuredHeaderHeight + 88, paddingBottom: tabBarHeight + 120 }}
             refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
           />
         ) : (
@@ -1434,11 +1515,11 @@ export default function VideoScreen() {
             showsVerticalScrollIndicator={false}
             onScroll={onListScroll}
             scrollEventThrottle={16}
-            contentContainerStyle={{ paddingTop: measuredHeaderHeight + 48, paddingBottom: tabBarHeight + 120 }}
+            contentContainerStyle={{ paddingTop: measuredHeaderHeight + 88, paddingBottom: tabBarHeight + 120 }}
             refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
             ListEmptyComponent={listEmpty}
             ListHeaderComponent={listHeader}
-            ListHeaderComponentStyle={listHeader ? { marginTop: 20, marginBottom: 16 } : undefined}
+            ListHeaderComponentStyle={listHeader ? { marginTop: 36, marginBottom: 16 } : undefined}
           />
         )}
 
@@ -1674,6 +1755,35 @@ export default function VideoScreen() {
                         <Pressable style={styles.engagementIconBtn} onPress={onPressDownload} hitSlop={8}>
                           <EngagementIcon name="download" />
                         </Pressable>
+                        <Pressable
+                          style={[
+                            styles.engagementIconBtn,
+                            activeVideoMeta?.id && reportedContentIds[String(activeVideoMeta.id)] ? styles.reportIconBtnDisabled : null,
+                          ]}
+                          onPress={() => {
+                            if (!activeVideoMeta?.id) return;
+                            if (reportedContentIds[String(activeVideoMeta.id)]) return;
+                            setReportModalOpen(true);
+                          }}
+                          hitSlop={8}
+                        >
+                          <AlertTriangle
+                            size={18}
+                            color={
+                              activeVideoMeta?.id && reportedContentIds[String(activeVideoMeta.id)]
+                                ? 'rgba(255,255,255,0.35)'
+                                : '#fff'
+                            }
+                          />
+                          <Text
+                            style={[
+                              styles.engagementIconCount,
+                              activeVideoMeta?.id && reportedContentIds[String(activeVideoMeta.id)] ? styles.reportTextDisabled : null,
+                            ]}
+                          >
+                            Report
+                          </Text>
+                        </Pressable>
                       </View>
                     );
                   })()}
@@ -1683,36 +1793,86 @@ export default function VideoScreen() {
             </View>
 
             <View style={styles.searchWrap}>
-              <View style={styles.searchIconWrap}>
-                <Search size={18} color="rgba(255,255,255,0.65)" />
-              </View>
-              <TextInput
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder="Search videos"
-                placeholderTextColor="rgba(255,255,255,0.45)"
-                autoCorrect={false}
-                autoCapitalize="none"
-                style={styles.searchInput}
-              />
-              {searchQuery.trim().length ? (
-                <Pressable
-                  style={styles.searchClearBtn}
-                  onPress={() => {
-                    setSearchQuery('');
-                    setSearchResults(null);
-                  }}
-                  hitSlop={10}
-                >
-                  <X size={18} color="rgba(255,255,255,0.70)" />
-                </Pressable>
-              ) : null}
-              {searchLoading ? <ActivityIndicator color="#fff" size="small" /> : null}
+              <BlurView intensity={24} tint="dark" style={styles.searchBlur}>
+                <Search size={18} color="rgba(255,255,255,0.7)" />
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search videos"
+                  placeholderTextColor="rgba(255,255,255,0.35)"
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  style={styles.searchInput}
+                />
+                {searchQuery.trim().length ? (
+                  <Pressable
+                    style={styles.searchClearBtn}
+                    onPress={() => {
+                      setSearchQuery('');
+                      setSearchResults(null);
+                    }}
+                    hitSlop={10}
+                  >
+                    <X size={18} color="rgba(255,255,255,0.70)" />
+                  </Pressable>
+                ) : null}
+                {searchLoading ? <ActivityIndicator color="#fff" size="small" /> : null}
+              </BlurView>
             </View>
 
           </View>
         </View>
       </SafeAreaView>
+
+      <Modal
+        visible={reportModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!reportSubmitting) setReportModalOpen(false);
+        }}
+      >
+        <Pressable
+          style={styles.reportModalBackdrop}
+          onPress={() => {
+            if (!reportSubmitting) setReportModalOpen(false);
+          }}
+        />
+        <View style={styles.reportModalCard}>
+          <Text style={styles.reportModalTitle}>Report content</Text>
+          <Text style={styles.reportModalSub}>Select a reason</Text>
+
+          <Pressable
+            style={({ pressed }) => [styles.reportReasonBtn, pressed ? styles.reportReasonBtnPressed : null]}
+            disabled={reportSubmitting}
+            onPress={() => submitReport('Spam')}
+          >
+            <Text style={styles.reportReasonText}>Spam</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.reportReasonBtn, pressed ? styles.reportReasonBtnPressed : null]}
+            disabled={reportSubmitting}
+            onPress={() => submitReport('Inappropriate')}
+          >
+            <Text style={styles.reportReasonText}>Inappropriate</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.reportReasonBtn, pressed ? styles.reportReasonBtnPressed : null]}
+            disabled={reportSubmitting}
+            onPress={() => submitReport('Copyright')}
+          >
+            <Text style={styles.reportReasonText}>Copyright</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.reportCancelBtn, pressed ? styles.reportCancelBtnPressed : null]}
+            disabled={reportSubmitting}
+            onPress={() => setReportModalOpen(false)}
+          >
+            <Text style={styles.reportCancelText}>{reportSubmitting ? 'Submitting...' : 'Cancel'}</Text>
+          </Pressable>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1945,12 +2105,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
   },
-
   engagementIconsRow: {
-    marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 18,
+    justifyContent: 'space-between',
+    marginTop: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   engagementIconBtn: {
     flexDirection: 'row',
@@ -1974,6 +2138,77 @@ const styles = StyleSheet.create({
   },
   engagementIconCountActive: {
     color: Colors.accent,
+  },
+
+  reportIconBtnDisabled: {
+    opacity: 0.65,
+  },
+  reportTextDisabled: {
+    color: 'rgba(255,255,255,0.40)',
+  },
+
+  reportModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  reportModalCard: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    bottom: 26,
+    borderRadius: 18,
+    padding: 16,
+    backgroundColor: 'rgba(20,20,20,0.96)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  reportModalTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  reportModalSub: {
+    marginTop: 6,
+    marginBottom: 12,
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  reportReasonBtn: {
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    marginBottom: 10,
+  },
+  reportReasonBtnPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.99 }],
+  },
+  reportReasonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  reportCancelBtn: {
+    marginTop: 4,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+  },
+  reportCancelBtnPressed: {
+    opacity: 0.85,
+  },
+  reportCancelText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 13,
+    fontWeight: '800',
   },
 
   actionRow: { marginTop: 12, flexDirection: 'row', gap: 18 },
@@ -2009,29 +2244,27 @@ const styles = StyleSheet.create({
   qualityTextActive: { color: Colors.accent },
 
   searchWrap: {
-    marginTop: 12,
-    marginBottom: 26,
-    marginHorizontal: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 14,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 12,
+  },
+  searchBlur: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  searchIconWrap: {
-    width: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
   searchInput: {
     flex: 1,
     color: '#fff',
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
     padding: 0,
   },
   searchClearBtn: {

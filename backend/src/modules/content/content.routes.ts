@@ -18,9 +18,10 @@ const ensureContentSchema = async () => {
       audio_url TEXT,
       video_url TEXT,
       genre VARCHAR(80),
-      lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
-      is_approved BOOLEAN NOT NULL DEFAULT false,
+      lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'PUBLISHED',
+      is_approved BOOLEAN NOT NULL DEFAULT true,
       rejection_reason TEXT,
+      report_count INT NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
@@ -34,10 +35,10 @@ const ensureContentSchema = async () => {
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS video_url TEXT");
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS genre VARCHAR(80)");
   await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'DRAFT'"
+    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'PUBLISHED'"
   );
   await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT false"
+    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT true"
   );
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS rejection_reason TEXT");
   await pool.query(
@@ -48,6 +49,73 @@ const ensureContentSchema = async () => {
   await pool.query(
     "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS subscription_required BOOLEAN NOT NULL DEFAULT false"
   );
+  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS status VARCHAR(20)").catch(() => undefined);
+  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS report_count INT NOT NULL DEFAULT 0").catch(() => undefined);
+
+  await pool
+    .query("ALTER TABLE content_items ALTER COLUMN lifecycle_state SET DEFAULT 'PUBLISHED'")
+    .catch(() => undefined);
+  await pool
+    .query("ALTER TABLE content_items ALTER COLUMN is_approved SET DEFAULT true")
+    .catch(() => undefined);
+
+  await pool
+    .query("ALTER TABLE content_items ALTER COLUMN status SET DEFAULT 'APPROVED'")
+    .catch(() => undefined);
+
+  await pool
+    .query("ALTER TABLE content_items ALTER COLUMN report_count SET DEFAULT 0")
+    .catch(() => undefined);
+
+  // Idempotent: publish any legacy pending items.
+  await pool
+    .query(
+      `UPDATE content_items
+       SET is_approved = true,
+           lifecycle_state = 'PUBLISHED',
+           status = COALESCE(NULLIF(status, ''), 'APPROVED'),
+           published_at = COALESCE(published_at, now()),
+           rejection_reason = NULL
+       WHERE COALESCE(is_approved, false) = false
+         AND UPPER(COALESCE(lifecycle_state, 'DRAFT')) = 'DRAFT'`
+    )
+    .catch(() => undefined);
+
+  // Backfill: older rows may have status NULL or 'PENDING' even though they were effectively published.
+  // Fan feeds now require status='APPROVED', so normalize legacy rows.
+  await pool
+    .query(
+      `UPDATE content_items
+       SET status = 'APPROVED',
+           is_approved = true,
+           lifecycle_state = COALESCE(NULLIF(lifecycle_state, ''), 'PUBLISHED'),
+           published_at = COALESCE(published_at, now()),
+           rejection_reason = NULL
+       WHERE status IS NULL
+          OR NULLIF(BTRIM(status), '') IS NULL
+          OR UPPER(status) = 'PENDING'`
+    )
+    .catch(() => undefined);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS reports (
+      id SERIAL PRIMARY KEY,
+      reason VARCHAR(80) NOT NULL,
+      content_id INT NOT NULL,
+      user_id INT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS reason VARCHAR(80)").catch(() => undefined);
+  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS content_id INT").catch(() => undefined);
+  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS user_id INT").catch(() => undefined);
+  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()").catch(() => undefined);
+
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_unique_content_user ON reports(content_id, user_id)"
+  ).catch(() => undefined);
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_reports_content_id ON reports(content_id)").catch(() => undefined);
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_reports_user_id ON reports(user_id)").catch(() => undefined);
 };
 
 const ensurePlaysSchema = async () => {
@@ -152,6 +220,7 @@ router.get("/", (req, res) => {
            FROM content_items c
            LEFT JOIN users u ON u.id = c.artist_id
            WHERE ${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
+             AND UPPER(COALESCE(c.status, 'APPROVED')) = 'APPROVED'
              AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})
            ORDER BY c.created_at DESC
            LIMIT 200`,
@@ -178,6 +247,7 @@ router.get("/", (req, res) => {
              FROM content_items c
              LEFT JOIN users u ON u.id = c.artist_id
              WHERE ${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
+               AND UPPER(COALESCE(c.status, 'APPROVED')) = 'APPROVED'
                AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})
              ORDER BY c.created_at DESC
              LIMIT 200`,
@@ -317,6 +387,7 @@ router.get("/artist/:artistId", (req, res) => {
          FROM content_items
          WHERE artist_id = $1
            AND ${isDev ? "true" : "COALESCE(is_approved, false) = true"}
+           AND UPPER(COALESCE(status, 'APPROVED')) = 'APPROVED'
            AND UPPER(COALESCE(lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})
          ORDER BY created_at DESC
          LIMIT 500`,

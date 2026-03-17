@@ -4,6 +4,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -19,17 +20,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
-import { ArrowLeft, Play, Search as SearchIcon } from 'lucide-react-native';
+import { AlertTriangle, ArrowLeft, Play, Search as SearchIcon } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
 import Svg, { Path } from 'react-native-svg';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { apiV1 } from '../services/api';
+import { contentApi } from '../services/api';
 import { getPlaybackUrl, normalizePlaybackUrl } from '../services/streamService';
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import type { MediaItem } from '../media.types';
 import PauseButtonImg from '../pausebuttton.png';
 import PlayButtonImg from '../playbutton.png';
+
+const REPORTED_CONTENT_STORAGE_KEY = 'reportedContentIds';
 
 type ApiContentItem = {
   id: string | number;
@@ -209,12 +214,94 @@ export default function AudioScreen({ navigation }: any) {
   const [isSeeking, setIsSeeking] = useState(false);
   const seekValueRef = useRef(0);
 
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportedContentIds, setReportedContentIds] = useState<Record<string, boolean>>({});
+
   const hasActiveAudio = Boolean(currentItem?.mediaType === 'audio');
 
   useEffect(() => {
     if (!hasActiveAudio) return;
     setShowNowPlayingSection(true);
   }, [hasActiveAudio, currentItem?.contentId, currentItem?.id]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(REPORTED_CONTENT_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        const ids = Array.isArray(parsed) ? (parsed as any[]).map((x) => String(x)) : [];
+        const map: Record<string, true> = {};
+        ids.forEach((id) => {
+          if (id) map[id] = true;
+        });
+        setReportedContentIds(map);
+      } catch {
+        setReportedContentIds({});
+      }
+    })().catch(() => undefined);
+  }, []);
+
+  const showThankYou = useCallback(() => {
+    const message = 'Thank you for reporting.';
+    if (Platform.OS === 'android') {
+      const ToastAndroid = require('react-native').ToastAndroid as typeof import('react-native').ToastAndroid;
+      ToastAndroid.show(message, ToastAndroid.SHORT);
+      return;
+    }
+    Alert.alert('Reported', message);
+  }, []);
+
+  const persistReported = useCallback(async (next: Record<string, boolean>) => {
+    try {
+      await AsyncStorage.setItem(
+        REPORTED_CONTENT_STORAGE_KEY,
+        JSON.stringify(Object.keys(next).filter((k) => Boolean(next[k])))
+      );
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const activeAudioMeta = useMemo(() => {
+    if (currentItem?.mediaType !== 'audio') return null;
+    const key = String(currentItem.contentId ?? currentItem.id ?? '');
+    if (!key) return null;
+    return items.find((x) => x.id === key || x.contentId === key) ?? null;
+  }, [currentItem?.contentId, currentItem?.id, currentItem?.mediaType, items]);
+
+  const submitReport = useCallback(
+    async (reason: 'Spam' | 'Inappropriate' | 'Copyright') => {
+      if (!activeAudioMeta?.contentId && !activeAudioMeta?.id) return;
+      const id = String(activeAudioMeta.contentId ?? activeAudioMeta.id);
+      if (reportedContentIds[id]) return;
+
+      setReportSubmitting(true);
+      try {
+        const res = await contentApi.post('/report', {
+          contentId: activeAudioMeta.contentId ?? activeAudioMeta.id,
+          reason,
+        });
+
+        if (!res?.data?.success) {
+          throw new Error(res?.data?.message || 'Failed to submit report');
+        }
+
+        setReportedContentIds((prev) => {
+          const next = { ...prev, [id]: true };
+          persistReported(next).catch(() => undefined);
+          return next;
+        });
+        setReportModalOpen(false);
+        showThankYou();
+      } catch (e: any) {
+        Alert.alert('Report Failed', e?.message || 'Failed to submit report. Please try again.');
+      } finally {
+        setReportSubmitting(false);
+      }
+    },
+    [activeAudioMeta, persistReported, reportedContentIds, showThankYou]
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -771,13 +858,6 @@ export default function AudioScreen({ navigation }: any) {
     [currentItem?.contentId, currentItem?.id, currentItem?.mediaType, startPlayback, togglePlayPause]
   );
 
-  const activeAudioMeta = useMemo(() => {
-    if (currentItem?.mediaType !== 'audio') return null;
-    const key = String(currentItem.contentId ?? currentItem.id ?? '');
-    if (!key) return null;
-    return items.find((x) => x.id === key || x.contentId === key) ?? null;
-  }, [currentItem?.contentId, currentItem?.id, currentItem?.mediaType, items]);
-
   return (
     <LinearGradient colors={Colors.backgroundGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradient}>
       <SafeAreaView style={styles.container}>
@@ -922,6 +1002,37 @@ export default function AudioScreen({ navigation }: any) {
                           <Pressable style={styles.engagementBtn} onPress={onPressDownload} hitSlop={8}>
                             <EngagementIcon name="download" size={16} color="#fff" />
                           </Pressable>
+
+                          <Pressable
+                            style={[
+                              styles.engagementBtn,
+                              reportedContentIds[String(activeAudioMeta.contentId ?? activeAudioMeta.id)] ? styles.reportBtnDisabled : null,
+                            ]}
+                            onPress={() => {
+                              const key = String(activeAudioMeta.contentId ?? activeAudioMeta.id);
+                              if (!key) return;
+                              if (reportedContentIds[key]) return;
+                              setReportModalOpen(true);
+                            }}
+                            hitSlop={8}
+                          >
+                            <AlertTriangle
+                              size={16}
+                              color={
+                                reportedContentIds[String(activeAudioMeta.contentId ?? activeAudioMeta.id)]
+                                  ? 'rgba(255,255,255,0.35)'
+                                  : '#fff'
+                              }
+                            />
+                            <Text
+                              style={[
+                                styles.engagementCount,
+                                reportedContentIds[String(activeAudioMeta.contentId ?? activeAudioMeta.id)] ? styles.reportTextDisabled : null,
+                              ]}
+                            >
+                              Report
+                            </Text>
+                          </Pressable>
                         </View>
                       </>
                     );
@@ -998,6 +1109,56 @@ export default function AudioScreen({ navigation }: any) {
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      <Modal
+        visible={reportModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!reportSubmitting) setReportModalOpen(false);
+        }}
+      >
+        <Pressable
+          style={styles.reportModalBackdrop}
+          onPress={() => {
+            if (!reportSubmitting) setReportModalOpen(false);
+          }}
+        />
+        <View style={styles.reportModalCard}>
+          <Text style={styles.reportModalTitle}>Report content</Text>
+          <Text style={styles.reportModalSub}>Select a reason</Text>
+
+          <Pressable
+            style={({ pressed }) => [styles.reportReasonBtn, pressed ? styles.reportReasonBtnPressed : null]}
+            disabled={reportSubmitting}
+            onPress={() => submitReport('Spam')}
+          >
+            <Text style={styles.reportReasonText}>Spam</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.reportReasonBtn, pressed ? styles.reportReasonBtnPressed : null]}
+            disabled={reportSubmitting}
+            onPress={() => submitReport('Inappropriate')}
+          >
+            <Text style={styles.reportReasonText}>Inappropriate</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.reportReasonBtn, pressed ? styles.reportReasonBtnPressed : null]}
+            disabled={reportSubmitting}
+            onPress={() => submitReport('Copyright')}
+          >
+            <Text style={styles.reportReasonText}>Copyright</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.reportCancelBtn, pressed ? styles.reportCancelBtnPressed : null]}
+            disabled={reportSubmitting}
+            onPress={() => setReportModalOpen(false)}
+          >
+            <Text style={styles.reportCancelText}>{reportSubmitting ? 'Submitting...' : 'Cancel'}</Text>
+          </Pressable>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -1218,6 +1379,76 @@ const styles = StyleSheet.create({
   },
   engagementCount: { color: 'rgba(255,255,255,0.90)', fontSize: 12, fontWeight: '900' },
   engagementCountActive: { color: Colors.accent },
+  reportBtnDisabled: {
+    opacity: 0.65,
+  },
+  reportTextDisabled: {
+    color: 'rgba(255,255,255,0.40)',
+  },
+
+  reportModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  reportModalCard: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    bottom: 26,
+    borderRadius: 18,
+    padding: 16,
+    backgroundColor: 'rgba(20,20,20,0.96)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  reportModalTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  reportModalSub: {
+    marginTop: 6,
+    marginBottom: 12,
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  reportReasonBtn: {
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    marginBottom: 10,
+  },
+  reportReasonBtnPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.99 }],
+  },
+  reportReasonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  reportCancelBtn: {
+    marginTop: 4,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+  },
+  reportCancelBtnPressed: {
+    opacity: 0.85,
+  },
+  reportCancelText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 13,
+    fontWeight: '800',
+  },
 
   listWrap: {
     marginTop: 10,

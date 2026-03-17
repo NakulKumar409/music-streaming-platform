@@ -23,6 +23,8 @@ model users {
   is_verified              Boolean?
   subscription_price       Decimal        @default(0) @db.Decimal
   status                   String         @default("ACTIVE") @db.VarChar(20)
+  trustScore               Int            @default(100)
+  strikeCount              Int            @default(0)
   verified                 Boolean?
   profile_image_url        String?
   bio                      String?
@@ -50,6 +52,7 @@ model users {
   search_history           search_history[]
   subscriptions            subscriptions[]
   playback_history         playback_history[]
+  reports                  reports[]
 }
 
 model transactions {
@@ -96,9 +99,10 @@ model content_items {
   audio_url             String?
   video_url             String?
   genre                 String?   @db.VarChar(80)
-  lifecycle_state       String    @default("DRAFT") @db.VarChar(20)
-  is_approved           Boolean   @default(false)
+  lifecycle_state       String    @default("PUBLISHED") @db.VarChar(20)
+  is_approved           Boolean   @default(true)
   rejection_reason      String?
+  reportCount            Int       @default(0) @map("report_count")
   created_at            DateTime  @default(now()) @db.Timestamptz(6)
   published_at          DateTime? @db.Timestamptz(6)
   subscription_required Boolean   @default(false)
@@ -107,13 +111,29 @@ model content_items {
   storage_key           String?   @map("storage_key") @db.Text
   thumbnail_storage_key  String?   @map("thumbnail_storage_key") @db.Text
   visibility            String?   @default("PROTECTED") @db.VarChar(30)
-  status                String?   @db.VarChar(20)
+  status                String?   @default("APPROVED") @db.VarChar(20)
   mime_type             String?   @map("mime_type") @db.VarChar(100)
   file_size_bytes       Int?      @map("file_size_bytes")
   original_file_name    String?   @map("original_file_name") @db.VarChar(255)
   video_storage_key     String?   @map("video_storage_key") @db.Text
   uploaded_at           DateTime? @map("uploaded_at") @db.Timestamptz(6)
   playback_history      playback_history[]
+  reports               reports[]
+}
+
+model reports {
+  id         Int          @id @default(autoincrement())
+  reason     String       @db.VarChar(80)
+  contentId  Int          @map("content_id")
+  userId     Int          @map("user_id")
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  content    content_items @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  user       users         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([contentId])
+  @@index([userId])
+  @@unique([contentId, userId])
 }
 
 model subscriptions {

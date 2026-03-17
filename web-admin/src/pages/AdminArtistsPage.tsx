@@ -398,25 +398,6 @@ export default function AdminArtistsPage() {
             </div>
           </div>
 
-          {filter.toLowerCase() === "pending" ? (
-            <div className="mt-3 flex items-center gap-3">
-              <span className="inline-flex items-center rounded-[6px] border border-[#c9853b]/25 bg-[#7a4b28]/30 px-3 py-1 text-[12px] text-[#d8b58a]">
-                Filter: Pending approvals
-              </span>
-              <button
-                type="button"
-                className="text-[12px] text-[#b8a6a1] hover:text-white"
-                onClick={() => {
-                  const nextParams: any = {};
-                  if (search.trim()) nextParams.search = search.trim();
-                  setSearchParams(nextParams);
-                }}
-              >
-                Clear
-              </button>
-            </div>
-          ) : null}
-
           {apiError ? (
             <div className="mt-4 rounded-[6px] border border-[#e3a1a1]/25 bg-[#7a4b28]/30 px-4 py-3 text-[13px] text-[#e3a1a1]">
               Error: {apiError}

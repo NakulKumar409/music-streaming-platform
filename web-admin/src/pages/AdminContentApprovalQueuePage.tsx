@@ -13,7 +13,9 @@ type PendingItem = {
   fileUrl?: string | null;
   audioUrl?: string | null;
   videoUrl?: string | null;
-  status: "PENDING";
+  status: string;
+  reportCount?: number;
+  reasons?: Array<{ reason: string; count: number }>;
   artist?: {
     id: number;
     name: string | null;
@@ -186,10 +188,10 @@ function PremiumPlayLogo() {
   );
 }
 
-function PendingBadge() {
+function FlaggedBadge() {
   return (
     <span className="inline-flex items-center rounded-[4px] bg-[#7a4b28]/45 border border-[#c9853b]/25 px-3 py-[4px] text-[12px] text-[#d8b58a]">
-      Pending
+      Flagged
     </span>
   );
 }
@@ -210,12 +212,12 @@ export default function AdminContentApprovalQueuePage() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [previewItem, setPreviewItem] = useState<PendingItem | null>(null);
 
-  const pendingQueryKey = ["admin", "content", "pending"] as const;
+  const pendingQueryKey = ["admin", "content", "flagged"] as const;
 
   const pendingQuery = useQuery({
     queryKey: pendingQueryKey,
     queryFn: async () => {
-      const res = await http.get("/api/v1/admin/content/pending");
+      const res = await http.get("/api/v1/admin/content/flagged");
       const next = Array.isArray(res.data?.items) ? (res.data.items as PendingItem[]) : [];
       return next;
     }
@@ -230,9 +232,9 @@ export default function AdminContentApprovalQueuePage() {
     videoUrl: toAbsoluteUrl(x.videoUrl ?? null, baseUrl)
   }));
 
-  const approveMutation = useMutation({
+  const restoreMutation = useMutation({
     mutationFn: async (id: number) => {
-      await http.patch(`/api/v1/admin/content/${id}/approve`, {});
+      await http.post(`/api/v1/admin/content/${id}/restore`, {});
       return id;
     },
     onMutate: async (id: number) => {
@@ -242,18 +244,6 @@ export default function AdminContentApprovalQueuePage() {
       queryClient.setQueryData<PendingItem[]>(pendingQueryKey, (old: PendingItem[] | undefined) =>
         (old ?? []).filter((x: PendingItem) => x.id !== id)
       );
-      queryClient.setQueryData<any>(["admin", "analytics", "dashboard-data"], (old: any) => {
-        if (!old) return old;
-        const prevPending = Number(old?.summary?.pendingApprovals ?? 0) || 0;
-        return {
-          ...old,
-          summary: {
-            ...(old.summary ?? {}),
-            pendingApprovals: Math.max(0, prevPending - 1),
-            pendingReviewCount: Math.max(0, prevPending - 1)
-          }
-        };
-      });
       return { previous };
     },
     onError: (_err: unknown, _id: number, ctx: { previous: PendingItem[] } | undefined) => {
@@ -266,9 +256,9 @@ export default function AdminContentApprovalQueuePage() {
     }
   });
 
-  const rejectMutation = useMutation({
+  const deleteStrikeMutation = useMutation({
     mutationFn: async (id: number) => {
-      await http.patch(`/api/v1/admin/content/${id}/reject`, {});
+      await http.post(`/api/v1/admin/content/${id}/delete-strike`, {});
       return id;
     },
     onMutate: async (id: number) => {
@@ -278,18 +268,6 @@ export default function AdminContentApprovalQueuePage() {
       queryClient.setQueryData<PendingItem[]>(pendingQueryKey, (old: PendingItem[] | undefined) =>
         (old ?? []).filter((x: PendingItem) => x.id !== id)
       );
-      queryClient.setQueryData<any>(["admin", "analytics", "dashboard-data"], (old: any) => {
-        if (!old) return old;
-        const prevPending = Number(old?.summary?.pendingApprovals ?? 0) || 0;
-        return {
-          ...old,
-          summary: {
-            ...(old.summary ?? {}),
-            pendingApprovals: Math.max(0, prevPending - 1),
-            pendingReviewCount: Math.max(0, prevPending - 1)
-          }
-        };
-      });
       return { previous };
     },
     onError: (_err: unknown, _id: number, ctx: { previous: PendingItem[] } | undefined) => {
@@ -308,7 +286,7 @@ export default function AdminContentApprovalQueuePage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <PremiumPlayLogo />
-            <div className="text-[18px] font-light tracking-wide text-[#e6d6d2]">Content Approval Queue</div>
+            <div className="text-[18px] font-light tracking-wide text-[#e6d6d2]">Moderation Queue</div>
           </div>
 
           <div className="flex items-center gap-4">
@@ -333,13 +311,13 @@ export default function AdminContentApprovalQueuePage() {
           </div>
         </div>
 
-        <div className="mt-8 text-[34px] font-light tracking-wide text-[#e6d6d2]">Content Approval Queue</div>
+        <div className="mt-8 text-[34px] font-light tracking-wide text-[#e6d6d2]">Moderation Queue</div>
 
         <div className="mt-6 rounded-[10px] border border-white/10 bg-[#141010]/35 backdrop-blur shadow-[0_30px_80px_rgba(0,0,0,0.55)]">
           <div className="px-6 py-4 border-b border-white/10">
-            <div className="grid grid-cols-[1fr_140px_120px_260px] gap-4 text-[12px] uppercase tracking-widest text-[#b8a6a1]">
+            <div className="grid grid-cols-[1fr_220px_120px_260px] gap-4 text-[12px] uppercase tracking-widest text-[#b8a6a1]">
               <div>Content</div>
-              <div>Status</div>
+              <div>Reports</div>
               <div>Type</div>
               <div className="text-right pr-2">Actions</div>
             </div>
@@ -348,7 +326,7 @@ export default function AdminContentApprovalQueuePage() {
           <div className="divide-y divide-white/10">
             {pendingQuery.isLoading ? (
               <div className="px-6 py-6 space-y-4">
-                <div className="grid grid-cols-[1fr_140px_120px_260px] gap-4 items-center">
+                <div className="grid grid-cols-[1fr_220px_120px_260px] gap-4 items-center">
                   <div className="flex items-center gap-4 min-w-0">
                     <Skeleton className="h-[66px] w-[66px] rounded-[10px]" />
                     <div className="min-w-0 space-y-2">
@@ -356,7 +334,7 @@ export default function AdminContentApprovalQueuePage() {
                       <Skeleton className="h-[12px] w-[140px]" />
                     </div>
                   </div>
-                  <Skeleton className="h-[22px] w-[84px]" />
+                  <Skeleton className="h-[22px] w-[140px]" />
                   <Skeleton className="h-[14px] w-[80px]" />
                   <div className="flex items-center justify-end gap-3">
                     <Skeleton className="h-[34px] w-[42px]" />
@@ -364,7 +342,7 @@ export default function AdminContentApprovalQueuePage() {
                     <Skeleton className="h-[34px] w-[92px]" />
                   </div>
                 </div>
-                <div className="grid grid-cols-[1fr_140px_120px_260px] gap-4 items-center">
+                <div className="grid grid-cols-[1fr_220px_120px_260px] gap-4 items-center">
                   <div className="flex items-center gap-4 min-w-0">
                     <Skeleton className="h-[66px] w-[66px] rounded-[10px]" />
                     <div className="min-w-0 space-y-2">
@@ -372,7 +350,7 @@ export default function AdminContentApprovalQueuePage() {
                       <Skeleton className="h-[12px] w-[120px]" />
                     </div>
                   </div>
-                  <Skeleton className="h-[22px] w-[84px]" />
+                  <Skeleton className="h-[22px] w-[140px]" />
                   <Skeleton className="h-[14px] w-[80px]" />
                   <div className="flex items-center justify-end gap-3">
                     <Skeleton className="h-[34px] w-[42px]" />
@@ -380,7 +358,7 @@ export default function AdminContentApprovalQueuePage() {
                     <Skeleton className="h-[34px] w-[92px]" />
                   </div>
                 </div>
-                <div className="grid grid-cols-[1fr_140px_120px_260px] gap-4 items-center">
+                <div className="grid grid-cols-[1fr_220px_120px_260px] gap-4 items-center">
                   <div className="flex items-center gap-4 min-w-0">
                     <Skeleton className="h-[66px] w-[66px] rounded-[10px]" />
                     <div className="min-w-0 space-y-2">
@@ -388,7 +366,7 @@ export default function AdminContentApprovalQueuePage() {
                       <Skeleton className="h-[12px] w-[160px]" />
                     </div>
                   </div>
-                  <Skeleton className="h-[22px] w-[84px]" />
+                  <Skeleton className="h-[22px] w-[140px]" />
                   <Skeleton className="h-[14px] w-[80px]" />
                   <div className="flex items-center justify-end gap-3">
                     <Skeleton className="h-[34px] w-[42px]" />
@@ -398,16 +376,18 @@ export default function AdminContentApprovalQueuePage() {
                 </div>
               </div>
             ) : items.length === 0 ? (
-              <div className="px-6 py-10 text-[13px] text-[#b8a6a1]">No items pending review.</div>
+              <div className="px-6 py-10 text-[13px] text-[#b8a6a1]">No flagged items.</div>
             ) : (
               items.map((item: PendingItem) => {
                 const artistName = item.artist?.name || "Unknown artist";
                 const hasAudio = Boolean(item.audioUrl || item.mediaUrl || item.fileUrl);
                 const hasVideo = Boolean(item.videoUrl);
                 const typeLabel = hasAudio && hasVideo ? "COMBINED" : hasVideo ? "VIDEO" : "AUDIO";
+                const reportCount = Number(item.reportCount ?? 0);
+                const reasons = Array.isArray(item.reasons) ? item.reasons : [];
                 return (
                   <div key={item.id} className="px-6 py-4">
-                    <div className="grid grid-cols-[1fr_140px_120px_260px] gap-4 items-center">
+                    <div className="grid grid-cols-[1fr_220px_120px_260px] gap-4 items-center">
                       <div className="flex items-center gap-4 min-w-0">
                         <div className="h-[66px] w-[66px] rounded-[10px] bg-[#0e0a0a]/50 border border-white/10 overflow-hidden flex items-center justify-center">
                           {item.thumbnailUrl ? (
@@ -423,7 +403,22 @@ export default function AdminContentApprovalQueuePage() {
                       </div>
 
                       <div>
-                        <PendingBadge />
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <FlaggedBadge />
+                            <div className="text-[12px] text-[#a99792]">{reportCount} reports</div>
+                          </div>
+                          {reasons.length ? (
+                            <div className="text-[12px] text-[#b8a6a1]">
+                              {reasons
+                                .slice(0, 3)
+                                .map((r) => `${String(r?.reason ?? '').toString()}: ${Number(r?.count ?? 0)}`)
+                                .join(" · ")}
+                            </div>
+                          ) : (
+                            <div className="text-[12px] text-[#8d7b77]">No reasons</div>
+                          )}
+                        </div>
                       </div>
 
                       <div className="text-[13px] text-[#cdbdb8]">{typeLabel}</div>
@@ -441,19 +436,19 @@ export default function AdminContentApprovalQueuePage() {
                         <button
                           type="button"
                           disabled={busyId === item.id}
-                          onClick={() => approveMutation.mutate(item.id)}
+                          onClick={() => restoreMutation.mutate(item.id)}
                           className="h-[34px] px-5 rounded-[6px] border border-[#2b5a3b]/45 bg-gradient-to-b from-[#2d5639] to-[#1a2f23] text-[13px] font-light text-[#d9eadf] shadow-[0_10px_25px_rgba(0,0,0,0.35)] disabled:opacity-60"
                         >
-                          Approve
+                          Restore
                         </button>
 
                         <button
                           type="button"
                           disabled={busyId === item.id}
-                          onClick={() => rejectMutation.mutate(item.id)}
+                          onClick={() => deleteStrikeMutation.mutate(item.id)}
                           className="h-[34px] px-5 rounded-[6px] border border-[#6e2c2c]/40 bg-gradient-to-b from-[#5d1f1f] to-[#2f1212] text-[13px] font-light text-[#f0d2d2] shadow-[0_10px_25px_rgba(0,0,0,0.35)] disabled:opacity-60"
                         >
-                          Reject
+                          Delete & Strike
                         </button>
                       </div>
                     </div>

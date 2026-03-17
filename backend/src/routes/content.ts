@@ -49,9 +49,10 @@ const ensureContentSchema = async () => {
       audio_url TEXT,
       video_url TEXT,
       genre VARCHAR(80),
-      lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
-      is_approved BOOLEAN NOT NULL DEFAULT false,
+      lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'PUBLISHED',
+      is_approved BOOLEAN NOT NULL DEFAULT true,
       rejection_reason TEXT,
+      report_count INT NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
@@ -65,10 +66,10 @@ const ensureContentSchema = async () => {
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS video_url TEXT");
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS genre VARCHAR(80)");
   await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'DRAFT'"
+    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'PUBLISHED'"
   );
   await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT false"
+    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT true"
   );
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS rejection_reason TEXT");
   await pool.query(
@@ -88,11 +89,62 @@ const ensureContentSchema = async () => {
     "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS visibility VARCHAR(30) DEFAULT 'PROTECTED'"
   );
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS status VARCHAR(20)");
+  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS report_count INT NOT NULL DEFAULT 0");
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS mime_type VARCHAR(100)");
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS file_size_bytes INT");
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS original_file_name VARCHAR(255)");
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS uploaded_at TIMESTAMPTZ");
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS video_storage_key TEXT");
+
+  // Ensure defaults match the current "auto-live" policy.
+  await pool
+    .query("ALTER TABLE content_items ALTER COLUMN lifecycle_state SET DEFAULT 'PUBLISHED'")
+    .catch(() => undefined);
+  await pool
+    .query("ALTER TABLE content_items ALTER COLUMN is_approved SET DEFAULT true")
+    .catch(() => undefined);
+
+  await pool
+    .query("ALTER TABLE content_items ALTER COLUMN status SET DEFAULT 'APPROVED'")
+    .catch(() => undefined);
+
+  await pool
+    .query("ALTER TABLE content_items ALTER COLUMN report_count SET DEFAULT 0")
+    .catch(() => undefined);
+
+  // One-time / idempotent migration: publish any legacy pending items.
+  await pool
+    .query(
+      `UPDATE content_items
+       SET is_approved = true,
+           lifecycle_state = 'PUBLISHED',
+           status = COALESCE(NULLIF(status, ''), 'APPROVED'),
+           published_at = COALESCE(published_at, now()),
+           rejection_reason = NULL
+       WHERE COALESCE(is_approved, false) = false
+         AND UPPER(COALESCE(lifecycle_state, 'DRAFT')) = 'DRAFT'`
+    )
+    .catch(() => undefined);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS reports (
+      id SERIAL PRIMARY KEY,
+      reason VARCHAR(80) NOT NULL,
+      content_id INT NOT NULL,
+      user_id INT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS reason VARCHAR(80)");
+  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS content_id INT");
+  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS user_id INT");
+  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()");
+
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_unique_content_user ON reports(content_id, user_id)"
+  );
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_reports_content_id ON reports(content_id)");
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_reports_user_id ON reports(user_id)");
 };
 
 const ensurePlaysSchema = async () => {
@@ -127,6 +179,8 @@ const ensureUploadsDir = () => {
   return dir;
 };
 
+const REPORT_THRESHOLD = 5;
+
 const mediaConfig = () => getMediaConfig();
 const maxAudioBytes = () => mediaConfig().maxUploadAudioBytes;
 const maxVideoBytes = () => mediaConfig().maxUploadVideoBytes;
@@ -160,9 +214,26 @@ router.post(
     try {
       await ensureContentSchema();
 
-      const { title, genre } = req.body as {
+      const flaggedCount = await pool
+        .query(
+          "SELECT COUNT(*)::int as c FROM content_items WHERE artist_id = $1 AND UPPER(COALESCE(status, '')) = 'FLAGGED'",
+          [artistId]
+        )
+        .then((r) => Number(r.rows?.[0]?.c ?? 0))
+        .catch(() => 0);
+
+      if (flaggedCount >= 3) {
+        return res.status(403).json({
+          success: false,
+          message: "Uploads temporarily restricted due to flagged content. Please contact support.",
+          correlationId
+        });
+      }
+
+      const { title, genre, type } = req.body as {
         title?: string;
         genre?: string;
+        type?: string;
       };
 
       const trimmedTitle = (title || "").trim();
@@ -266,9 +337,10 @@ router.post(
         `INSERT INTO content_items (
           title, type, artist_id, genre, lifecycle_state, is_approved,
           storage_provider, storage_key, thumbnail_storage_key, video_storage_key, visibility, status,
+          published_at,
           mime_type, file_size_bytes, original_file_name, uploaded_at,
           thumbnail_url, audio_url, video_url
-        ) VALUES ($1, $2, $3, $4, 'DRAFT', false, $5, $6, $7, $8, 'PROTECTED', 'DRAFT', $9, $10, $11, $12, $13, $14, $15)
+        ) VALUES ($1, $2, $3, $4, 'PUBLISHED', true, $5, $6, $7, $8, 'PROTECTED', 'APPROVED', now(), $9, $10, $11, $12, $13, $14, $15)
         RETURNING id, title, type, artist_id, storage_key, thumbnail_storage_key, storage_provider, visibility, status, created_at`,
         [
           trimmedTitle,
@@ -311,7 +383,7 @@ router.post(
           storageKey: row.storage_key,
           thumbnailStorageKey: row.thumbnail_storage_key,
           visibility: row.visibility,
-          status: row.status ?? "PENDING",
+          status: row.status ?? "PUBLISHED",
           createdAt: row.created_at
         },
         correlationId
@@ -326,6 +398,79 @@ router.post(
     }
   }
 );
+
+router.post("/report", requireAuth, async (req: any, res: any) => {
+  const correlationId = req?.correlationId || "-";
+  const userId = Number(req.user?.id);
+  if (!Number.isFinite(userId) || userId <= 0) {
+    return res.status(401).json({ success: false, message: "Unauthorized", correlationId });
+  }
+
+  const { contentId, reason } = req.body as { contentId?: any; reason?: string };
+  const cid = Number(contentId);
+  const trimmedReason = (reason || "").trim();
+
+  if (!Number.isFinite(cid) || cid <= 0) {
+    return res.status(400).json({ success: false, message: "contentId is required", correlationId });
+  }
+  if (!trimmedReason) {
+    return res.status(400).json({ success: false, message: "reason is required", correlationId });
+  }
+
+  try {
+    await ensureContentSchema();
+
+    const inserted = await pool.query(
+      `INSERT INTO reports (reason, content_id, user_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (content_id, user_id) DO NOTHING
+       RETURNING id`,
+      [trimmedReason, cid, userId]
+    );
+
+    if (!inserted.rows?.length) {
+      const row = await pool
+        .query("SELECT report_count, status FROM content_items WHERE id = $1 LIMIT 1", [cid])
+        .then((r) => r.rows?.[0] ?? null)
+        .catch(() => null);
+
+      return res.status(200).json({
+        success: true,
+        duplicate: true,
+        reportCount: Number(row?.report_count ?? 0),
+        status: (row?.status ?? "APPROVED").toString(),
+        correlationId
+      });
+    }
+
+    const updated = await pool.query(
+      `UPDATE content_items
+       SET report_count = COALESCE(report_count, 0) + 1
+       WHERE id = $1
+       RETURNING report_count, status`,
+      [cid]
+    );
+
+    const reportCount = Number(updated.rows?.[0]?.report_count ?? 0);
+    let status = (updated.rows?.[0]?.status ?? "APPROVED").toString();
+
+    if (reportCount >= REPORT_THRESHOLD && status.toUpperCase() !== "FLAGGED") {
+      const flagged = await pool.query(
+        `UPDATE content_items
+         SET status = 'FLAGGED'
+         WHERE id = $1
+         RETURNING status`,
+        [cid]
+      );
+      status = (flagged.rows?.[0]?.status ?? status).toString();
+    }
+
+    return res.json({ success: true, duplicate: false, reportCount, status, correlationId });
+  } catch (err: any) {
+    console.error("[content/report] error", correlationId, err?.message);
+    return res.status(500).json({ success: false, message: "Failed to submit report", correlationId });
+  }
+});
 
 router.get("/mine", requireAuth, requireArtist, async (req: any, res: any) => {
   const correlationId = req?.correlationId || "-";
@@ -373,6 +518,23 @@ router.post("/upload-metadata", uploadLimiter, requireAuth, requireArtist, async
   try {
     await ensureContentSchema();
 
+    const artistId = req.user?.id;
+    const flaggedCount = await pool
+      .query(
+        "SELECT COUNT(*)::int as c FROM content_items WHERE artist_id = $1 AND UPPER(COALESCE(status, '')) = 'FLAGGED'",
+        [artistId]
+      )
+      .then((r) => Number(r.rows?.[0]?.c ?? 0))
+      .catch(() => 0);
+
+    if (flaggedCount >= 3) {
+      return res.status(403).json({
+        success: false,
+        message: "Uploads temporarily restricted due to flagged content. Please contact support.",
+        correlationId
+      });
+    }
+
     const { title, type, thumbnailUrl } = req.body as {
       title?: string;
       type?: string;
@@ -390,11 +552,9 @@ router.post("/upload-metadata", uploadLimiter, requireAuth, requireArtist, async
       });
     }
 
-    const artistId = req.user?.id;
-
     const insert = await pool.query(
-      `INSERT INTO content_items (title, type, artist_id, thumbnail_url, lifecycle_state, is_approved)
-       VALUES ($1, $2, $3, $4, 'DRAFT', false)
+      `INSERT INTO content_items (title, type, artist_id, thumbnail_url, lifecycle_state, is_approved, published_at, status)
+       VALUES ($1, $2, $3, $4, 'PUBLISHED', true, now(), 'APPROVED')
        RETURNING id, title, type, artist_id, thumbnail_url, lifecycle_state, is_approved, created_at`,
       [trimmedTitle, normalizedType, artistId, thumbnailUrl ?? null]
     );

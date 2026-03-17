@@ -25,6 +25,14 @@ export const apiV1 = axios.create({
   timeout: DEFAULT_TIMEOUT_MS,
 });
 
+export const contentApi = axios.create({
+  baseURL: `${HOST_BASE_URL}/api/v1/content`,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  timeout: DEFAULT_TIMEOUT_MS,
+});
+
 export const searchApi = axios.create({
   baseURL: `${HOST_BASE_URL}/api/v1/search`,
   headers: {
@@ -58,8 +66,27 @@ function attachRetry(client: typeof api) {
 attachRetry(api);
 attachRetry(apiV1);
 attachRetry(searchApi);
+attachRetry(contentApi);
 
 api.interceptors.request.use(async (config) => {
+  const token =
+    (await AsyncStorage.getItem(USER_TOKEN_STORAGE_KEY)) ??
+    (await AsyncStorage.getItem(JWT_STORAGE_KEY));
+
+  if (token) {
+    const headers =
+      config.headers instanceof AxiosHeaders
+        ? config.headers
+        : new AxiosHeaders(config.headers);
+
+    headers.set('Authorization', `Bearer ${token}`);
+    config.headers = headers;
+  }
+
+  return config;
+});
+
+contentApi.interceptors.request.use(async (config) => {
   const token =
     (await AsyncStorage.getItem(USER_TOKEN_STORAGE_KEY)) ??
     (await AsyncStorage.getItem(JWT_STORAGE_KEY));

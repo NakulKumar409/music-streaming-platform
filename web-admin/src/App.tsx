@@ -15,7 +15,7 @@ export default function App() {
       <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
       <Route path="/admin/artists" element={<AdminArtistsPage />} />
       <Route path="/admin/artists/:id" element={<AdminArtistDetailPage />} />
-      <Route path="/admin/content-approval" element={<AdminContentApprovalQueuePage />} />
+      <Route path="/admin/moderation" element={<AdminContentApprovalQueuePage />} />
       <Route path="*" element={<Navigate to="/admin/login" replace />} />
     </Routes>
   );

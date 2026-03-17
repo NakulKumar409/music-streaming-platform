@@ -71,8 +71,8 @@ const ensureContentSchema = async () => {
       thumbnail_url TEXT,
       media_url TEXT,
       genre VARCHAR(80),
-      lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
-      is_approved BOOLEAN NOT NULL DEFAULT false,
+      lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'PUBLISHED',
+      is_approved BOOLEAN NOT NULL DEFAULT true,
       rejection_reason TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
@@ -85,10 +85,10 @@ const ensureContentSchema = async () => {
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS media_url TEXT");
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS genre VARCHAR(80)");
   await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'DRAFT'"
+    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'PUBLISHED'"
   );
   await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT false"
+    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT true"
   );
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS rejection_reason TEXT");
   await pool.query(
@@ -101,6 +101,27 @@ const ensureContentSchema = async () => {
   await pool.query(
     "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS subscription_required BOOLEAN NOT NULL DEFAULT false"
   );
+
+  await pool
+    .query("ALTER TABLE content_items ALTER COLUMN lifecycle_state SET DEFAULT 'PUBLISHED'")
+    .catch(() => undefined);
+  await pool
+    .query("ALTER TABLE content_items ALTER COLUMN is_approved SET DEFAULT true")
+    .catch(() => undefined);
+
+  // Idempotent: publish any legacy pending items.
+  await pool
+    .query(
+      `UPDATE content_items
+       SET is_approved = true,
+           lifecycle_state = 'PUBLISHED',
+           status = COALESCE(NULLIF(status, ''), 'PUBLISHED'),
+           published_at = COALESCE(published_at, now()),
+           rejection_reason = NULL
+       WHERE COALESCE(is_approved, false) = false
+         AND UPPER(COALESCE(lifecycle_state, 'DRAFT')) = 'DRAFT'`
+    )
+    .catch(() => undefined);
 };
 
 const ensurePlaysSchema = async () => {

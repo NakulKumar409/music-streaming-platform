@@ -67,8 +67,8 @@ router.get("/dashboard-data", requireAuth, requireAdmin, async (req, res) => {
     []
   );
 
-  const pendingApprovals = await safeScalarNumber(
-    "SELECT COUNT(*)::int as value FROM content_items WHERE COALESCE(is_approved, false) = false AND UPPER(COALESCE(lifecycle_state, 'DRAFT')) = 'DRAFT'",
+  const activeReports = await safeScalarNumber(
+    "SELECT COUNT(*)::int as value FROM content_items WHERE UPPER(COALESCE(status, '')) = 'FLAGGED'",
     []
   );
 
@@ -97,8 +97,7 @@ router.get("/dashboard-data", requireAuth, requireAdmin, async (req, res) => {
     totalArtists,
     totalActiveSubscriptions,
     revenueToday,
-    pendingApprovals,
-    pendingReviewCount: pendingApprovals,
+    activeReports,
     alerts: {
       draftCount,
       failedPaymentsCount
@@ -185,8 +184,8 @@ router.get("/summary", requireAuth, requireAdmin, async (req, res) => {
     []
   );
 
-  const pendingApprovals = await safeScalarNumber(
-    "SELECT COUNT(*)::int as value FROM content_items WHERE COALESCE(is_approved, false) = false AND UPPER(COALESCE(lifecycle_state, 'DRAFT')) = 'DRAFT'",
+  const activeReports = await safeScalarNumber(
+    "SELECT COUNT(*)::int as value FROM content_items WHERE UPPER(COALESCE(status, '')) = 'FLAGGED'",
     []
   );
 
@@ -216,8 +215,7 @@ router.get("/summary", requireAuth, requireAdmin, async (req, res) => {
     totalArtists,
     totalActiveSubscriptions,
     revenueToday,
-    pendingApprovals,
-    pendingReviewCount: pendingApprovals,
+    activeReports,
     alerts: {
       draftCount,
       failedPaymentsCount

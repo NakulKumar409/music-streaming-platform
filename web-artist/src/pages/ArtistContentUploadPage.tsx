@@ -175,11 +175,8 @@ function UnifiedUploadSection({
         <div>
           <div className="text-[15px] tracking-wide text-[#e6d6d2]">Upload Content</div>
           <div className="mt-1 text-[12px] text-[#b8a6a1]">
-            Fill out details, preview locally, then post for admin review.
+            Fill out details, preview locally, then post.
           </div>
-        </div>
-        <div className="text-[11px] rounded-[999px] border border-amber-500/25 bg-amber-500/10 text-amber-200 px-2.5 py-1">
-          Pending until approved
         </div>
       </div>
 
@@ -372,7 +369,7 @@ function UnifiedUploadSection({
             </div>
 
             <div className="mt-4 text-[12px] text-[#b8a6a1]">
-              Preview happens locally on your device. Posting will submit for admin approval.
+              Preview happens locally on your device.
             </div>
           </div>
         </div>
@@ -437,7 +434,7 @@ export default function ArtistContentUploadPage() {
         throw new Error(res.data?.message || "Upload failed");
       }
 
-      setSuccess("Posted successfully. Waiting for Admin approval.");
+      setSuccess("Post is now Live on Fan App!");
 
       setForm({ title: "", genre: "", thumbnailFile: null, audioFile: null, videoFile: null });
     } catch (e: any) {
@@ -453,7 +450,7 @@ export default function ArtistContentUploadPage() {
         <div className="flex items-start justify-between gap-6">
           <div>
             <div className="text-[18px] font-light tracking-wide">Content Upload</div>
-            <div className="mt-1 text-[13px] text-[#b8a6a1]">Upload audio and video with local previews. New posts are pending until admin approval.</div>
+            <div className="mt-1 text-[13px] text-[#b8a6a1]">Upload audio and video with local previews. New posts go live immediately.</div>
           </div>
         </div>
 

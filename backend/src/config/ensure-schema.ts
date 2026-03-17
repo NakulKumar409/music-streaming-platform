@@ -14,6 +14,8 @@ export async function ensureUsersSchema(): Promise<void> {
       status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
       is_verified BOOLEAN NOT NULL DEFAULT false,
       verified BOOLEAN NOT NULL DEFAULT false,
+      trust_score INT NOT NULL DEFAULT 100,
+      strike_count INT NOT NULL DEFAULT 0,
       name VARCHAR(255),
       profile_image_url TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -29,6 +31,12 @@ export async function ensureUsersSchema(): Promise<void> {
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image_url TEXT");
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()");
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()");
+
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS trust_score INT NOT NULL DEFAULT 100");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS strike_count INT NOT NULL DEFAULT 0");
+
+  await pool.query("ALTER TABLE users ALTER COLUMN trust_score SET DEFAULT 100").catch(() => undefined);
+  await pool.query("ALTER TABLE users ALTER COLUMN strike_count SET DEFAULT 0").catch(() => undefined);
 
   await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email)");
   await pool.query("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)");
@@ -46,9 +54,10 @@ export async function ensureContentMediaColumns(): Promise<void> {
       audio_url TEXT,
       video_url TEXT,
       genre VARCHAR(80),
-      lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
-      is_approved BOOLEAN NOT NULL DEFAULT false,
+      lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'PUBLISHED',
+      is_approved BOOLEAN NOT NULL DEFAULT true,
       rejection_reason TEXT,
+      report_count INT NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       published_at TIMESTAMPTZ,
       subscription_required BOOLEAN NOT NULL DEFAULT false
@@ -59,9 +68,59 @@ export async function ensureContentMediaColumns(): Promise<void> {
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS thumbnail_storage_key TEXT");
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS visibility VARCHAR(30) DEFAULT 'PROTECTED'");
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS status VARCHAR(20)");
+  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS report_count INT NOT NULL DEFAULT 0");
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS mime_type VARCHAR(100)");
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS file_size_bytes INT");
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS original_file_name VARCHAR(255)");
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS uploaded_at TIMESTAMPTZ");
   await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS video_storage_key TEXT");
+
+  await pool
+    .query("ALTER TABLE content_items ALTER COLUMN lifecycle_state SET DEFAULT 'PUBLISHED'")
+    .catch(() => undefined);
+  await pool
+    .query("ALTER TABLE content_items ALTER COLUMN is_approved SET DEFAULT true")
+    .catch(() => undefined);
+
+  await pool
+    .query("ALTER TABLE content_items ALTER COLUMN status SET DEFAULT 'APPROVED'")
+    .catch(() => undefined);
+
+  await pool
+    .query("ALTER TABLE content_items ALTER COLUMN report_count SET DEFAULT 0")
+    .catch(() => undefined);
+
+  // Idempotent: publish any legacy pending items.
+  await pool
+    .query(
+      `UPDATE content_items
+       SET is_approved = true,
+           lifecycle_state = 'PUBLISHED',
+           status = COALESCE(NULLIF(status, ''), 'APPROVED'),
+           published_at = COALESCE(published_at, now()),
+           rejection_reason = NULL
+       WHERE COALESCE(is_approved, false) = false
+         AND UPPER(COALESCE(lifecycle_state, 'DRAFT')) = 'DRAFT'`
+    )
+    .catch(() => undefined);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS reports (
+      id SERIAL PRIMARY KEY,
+      reason VARCHAR(80) NOT NULL,
+      content_id INT NOT NULL,
+      user_id INT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS reason VARCHAR(80)");
+  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS content_id INT");
+  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS user_id INT");
+  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()");
+
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_unique_content_user ON reports(content_id, user_id)"
+  );
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_reports_content_id ON reports(content_id)");
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_reports_user_id ON reports(user_id)");
 }
