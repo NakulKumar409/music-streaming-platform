@@ -2,6 +2,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import ArtistLoginPage from "./pages/ArtistLoginPage";
 import ArtistDashboardPage from "./pages/ArtistDashboardPage";
 import PendingApprovalPage from "./pages/PendingApprovalPage";
+import ArtistSignupPage from "./pages/ArtistSignupPage";
+import ArtistUnderReviewPage from "./pages/ArtistUnderReviewPage";
+import ArtistRejectedPage from "./pages/ArtistRejectedPage";
 import ArtistShell from "./components/ArtistShell";
 import ArtistAccountPage from "./pages/ArtistAccountPage";
 import ArtistPricingPage from "./pages/ArtistPricingPage";
@@ -15,6 +18,9 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Navigate to="/artist/login" replace />} />
       <Route path="/artist/login" element={<ArtistLoginPage />} />
+      <Route path="/artist/signup" element={<ArtistSignupPage />} />
+      <Route path="/artist/under-review" element={<ArtistUnderReviewPage />} />
+      <Route path="/artist/rejected" element={<ArtistRejectedPage />} />
       <Route path="/artist/pending-approval" element={<PendingApprovalPage />} />
       <Route element={<ArtistShell />}>
         <Route path="/artist/dashboard" element={<ArtistDashboardPage />} />

@@ -130,7 +130,6 @@ export default function AdminArtistDetailPage() {
   const artistFetchInFlightRef = useRef(false);
   const historyFetchInFlightRef = useRef(false);
 
-  const [menuOpen, setMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [artist, setArtist] = useState<ArtistDetail | null>(null);
@@ -475,76 +474,8 @@ export default function AdminArtistDetailPage() {
 
       <div className="relative mx-auto w-full max-w-[1200px] px-6 pb-12">
         <div className="pt-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <PremiumPlayLogo />
-              <Link
-                to="/admin/artists"
-                className="text-[13px] text-[#b8a6a1] hover:text-white"
-              >
-                Artists
-              </Link>
-            </div>
-
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((v) => !v)}
-                className="flex items-center gap-2 text-[13px] text-[#d8c7c3] hover:text-white"
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M20 21V19C20 16.7909 18.2091 15 16 15H8C5.79086 15 4 16.7909 4 19V21"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M12 11C14.2091 11 16 9.20914 16 7C16 4.79086 14.2091 3 12 3C9.79086 3 8 4.79086 8 7C8 9.20914 9.79086 11 12 11Z"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <span>Admin</span>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M6 9L12 15L18 9"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-
-              {menuOpen ? (
-                <div className="absolute right-0 mt-3 w-[180px] rounded-[6px] border border-white/10 bg-[#141010]/90 backdrop-blur px-2 py-2 shadow-[0_18px_40px_rgba(0,0,0,0.55)]">
-                  <button
-                    type="button"
-                    className="w-full text-left px-3 py-2 text-[13px] text-[#d8c7c3] hover:bg-white/5 rounded-[4px]"
-                    onClick={() => {
-                      localStorage.removeItem("adminToken");
-                      navigate("/admin/login", { replace: true });
-                    }}
-                  >
-                    Logout
-                  </button>
-                </div>
-              ) : null}
-            </div>
+          <div className="hidden">
+            <PremiumPlayLogo />
           </div>
 
           <div className="mt-6 relative overflow-hidden rounded-[10px] border border-white/10 bg-[#1a1414]/35 shadow-[0_30px_70px_rgba(0,0,0,0.35)]">

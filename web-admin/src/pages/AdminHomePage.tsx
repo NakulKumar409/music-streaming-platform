@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Bar,
@@ -121,7 +121,6 @@ function DashboardCard({
 
 export default function AdminHomePage() {
   const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const backgroundStyle = useMemo(() => {
     return {
@@ -132,8 +131,8 @@ export default function AdminHomePage() {
     } as const;
   }, []);
 
-  const dashboardQuery = useQuery({
-    queryKey: ["admin", "analytics", "dashboard-data"],
+  const { data, isLoading } = useQuery({
+    queryKey: ["adminDashboardData"],
     queryFn: async () => {
       try {
         const res = await http.get<DashboardDataResponse>(
@@ -151,11 +150,32 @@ export default function AdminHomePage() {
     }
   });
 
-  const loading = dashboardQuery.isLoading;
-  const summary = dashboardQuery.data?.summary ?? null;
-  const growth = dashboardQuery.data?.growth ?? [];
-  const revenue = dashboardQuery.data?.revenue ?? [];
-  const alerts = dashboardQuery.data?.alerts ?? null;
+  const [pendingApps, setPendingApps] = useState<number | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await http.get("/api/v1/admin/pending-artists");
+        const items = Array.isArray((res.data as any)?.items) ? ((res.data as any).items as any[]) : [];
+        if (!mounted) return;
+        setPendingApps(items.length);
+      } catch {
+        if (!mounted) return;
+        setPendingApps(null);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const loading = isLoading;
+  const summary = data?.summary ?? null;
+  const growth = data?.growth ?? [];
+  const revenue = data?.revenue ?? [];
+  const alerts = data?.alerts ?? null;
 
   const draftCount =
     Number(alerts?.drafts?.length ?? summary?.alerts?.draftCount ?? 0) || 0;
@@ -179,79 +199,8 @@ export default function AdminHomePage() {
 
       <div className="relative mx-auto w-full max-w-[1200px] px-6 pb-12">
         <div className="pt-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <PremiumPlayLogo />
-              <Link to="/admin/artists" className="text-[13px] text-[#b8a6a1] hover:text-white">
-                Artists
-              </Link>
-              <Link
-                to="/admin/analytics"
-                className="text-[13px] text-[#b8a6a1] hover:text-white"
-              >
-                Analytics
-              </Link>
-            </div>
-
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((v) => !v)}
-                className="flex items-center gap-2 text-[13px] text-[#d8c7c3] hover:text-white"
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M20 21V19C20 16.7909 18.2091 15 16 15H8C5.79086 15 4 16.7909 4 19V21"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M12 11C14.2091 11 16 9.20914 16 7C16 4.79086 14.2091 3 12 3C9.79086 3 8 4.79086 8 7C8 9.20914 9.79086 11 12 11Z"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <span>Admin</span>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M6 9L12 15L18 9"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-
-              {menuOpen ? (
-                <div className="absolute right-0 mt-3 w-[180px] rounded-[6px] border border-white/10 bg-[#141010]/90 backdrop-blur px-2 py-2 shadow-[0_18px_40px_rgba(0,0,0,0.55)]">
-                  <button
-                    type="button"
-                    className="w-full text-left px-3 py-2 text-[13px] text-[#d8c7c3] hover:bg-white/5 rounded-[4px]"
-                    onClick={() => {
-                      localStorage.removeItem("adminToken");
-                      navigate("/admin/login", { replace: true });
-                    }}
-                  >
-                    Logout
-                  </button>
-                </div>
-              ) : null}
-            </div>
+          <div className="hidden">
+            <PremiumPlayLogo />
           </div>
 
           <div className="mt-10 text-[40px] leading-[44px] font-light tracking-wide text-[#e0c7c0]">
@@ -304,6 +253,46 @@ export default function AdminHomePage() {
                         stroke="currentColor"
                         strokeWidth="1.5"
                         strokeLinecap="round"
+                      />
+                    </svg>
+                  }
+                />
+              )}
+            </Link>
+
+            <Link to="/admin/artist-applications" className="block focus:outline-none">
+              {loading ? (
+                <div className="relative overflow-hidden rounded-[6px] border border-white/10 bg-[#1a1414]/45 px-5 py-4">
+                  <div className="space-y-3">
+                    <Skeleton className="h-[10px] w-[150px]" />
+                    <Skeleton className="h-[30px] w-[90px]" />
+                  </div>
+                </div>
+              ) : (
+                <DashboardCard
+                  title="Pending Applications"
+                  value={formatCompact(pendingApps ?? 0)}
+                  accent="orange"
+                  className="cursor-pointer transition hover:border-white/20"
+                  icon={
+                    <svg
+                      width="22"
+                      height="22"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M12 6V12L16 14"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
                       />
                     </svg>
                   }

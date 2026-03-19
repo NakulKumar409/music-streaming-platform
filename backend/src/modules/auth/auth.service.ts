@@ -5,8 +5,12 @@ import { pool } from "../../common/db";
 export class AuthService {
   async register(email: string, password: string) {
     try {
+      const normalizedEmail = String(email || "")
+        .trim()
+        .toLowerCase();
+
       const existingUserQuery = "SELECT id FROM users WHERE email = $1";
-      const existingUser = await pool.query(existingUserQuery, [email]);
+      const existingUser = await pool.query(existingUserQuery, [normalizedEmail]);
 
       if (existingUser.rows.length > 0) {
         return { success: false, message: "Email already exists" };
@@ -15,7 +19,7 @@ export class AuthService {
       const hashedPassword = await bcrypt.hash(password, 10);
 
       const insertUserQuery = "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id";
-      await pool.query(insertUserQuery, [email, hashedPassword]);
+      await pool.query(insertUserQuery, [normalizedEmail, hashedPassword]);
 
       return { success: true, message: "User registered successfully" };
     } catch (error) {
@@ -24,15 +28,19 @@ export class AuthService {
   }
 
   async login(email: string, password: string) {
+    const normalizedEmail = String(email || "")
+      .trim()
+      .toLowerCase();
+
     let userResult;
     try {
       const userQuery =
         "SELECT id, email, password, status, role, COALESCE(is_verified, verified, false) as is_verified FROM users WHERE email = $1";
-      userResult = await pool.query(userQuery, [email]);
+      userResult = await pool.query(userQuery, [normalizedEmail]);
     } catch (err: any) {
       if (err?.code === "42703") {
         const userQuery = "SELECT id, email, password, role FROM users WHERE email = $1";
-        userResult = await pool.query(userQuery, [email]);
+        userResult = await pool.query(userQuery, [normalizedEmail]);
       } else {
         throw err;
       }

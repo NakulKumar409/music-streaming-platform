@@ -8,6 +8,7 @@
     "build": "npx prisma generate && (tsc --skipLibCheck || echo 'Build Warnings Ignored')",
     "start": "node dist/app.js",
     "seed": "ts-node-dev --transpile-only src/scripts/seed-users.ts",
+    "backfill:artist-status": "ts-node --transpile-only src/scripts/backfill-artist-status-approved.ts",
     "test:storage": "ts-node --transpile-only src/scripts/test-storage-connection.ts",
     "prisma": "prisma",
     "db:pull": "prisma db pull",

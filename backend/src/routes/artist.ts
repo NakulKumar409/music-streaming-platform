@@ -1,5 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import { requireAuth } from "../common/auth/requireAuth";
 import { pool } from "../common/db";
 import { uploadLimiter } from "../common/security/rateLimit";
@@ -16,6 +17,7 @@ const requireArtist = (req: any, res: any, next: any) => {
       success: false,
       message: "Forbidden"
     });
+
   }
   return next();
 };
@@ -56,10 +58,260 @@ const ensureArtistSchema = async () => {
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT");
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_image_url TEXT");
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS accent_color VARCHAR(20)");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS social_links JSONB").catch(() => undefined);
   await pool.query(
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_price NUMERIC NOT NULL DEFAULT 0"
   );
+
+  await pool
+    .query("ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_status VARCHAR(20) NOT NULL DEFAULT 'PENDING'")
+    .catch(() => undefined);
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_bio TEXT").catch(() => undefined);
+  await pool
+    .query("ALTER TABLE users ADD COLUMN IF NOT EXISTS portfolio_links TEXT[] NOT NULL DEFAULT '{}'")
+    .catch(() => undefined);
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ").catch(() => undefined);
+  await pool
+    .query("ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_appeal_message TEXT")
+    .catch(() => undefined);
+  await pool
+    .query("ALTER TABLE users ALTER COLUMN artist_status SET DEFAULT 'PENDING'")
+    .catch(() => undefined);
 };
+
+router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
+  const correlationId = req?.correlationId || "-";
+
+  try {
+    await ensureArtistSchema();
+
+    const {
+      email,
+      password,
+      artistName,
+      bio,
+      portfolioLinks,
+      phone
+    } = req.body as {
+      email?: string;
+      password?: string;
+      artistName?: string;
+      bio?: string;
+      portfolioLinks?: any;
+      phone?: string;
+    };
+
+    const trimmedEmail = (email || "").trim().toLowerCase();
+    const trimmedPassword = (password || "").toString();
+    const trimmedName = (artistName || "").trim();
+    const trimmedBio = (bio || "").trim();
+
+    const links = Array.isArray(portfolioLinks)
+      ? portfolioLinks
+          .map((x) => (x ?? "").toString().trim())
+          .filter(Boolean)
+          .slice(0, 20)
+      : typeof portfolioLinks === "string"
+        ? portfolioLinks
+            .split("\n")
+            .map((x) => x.trim())
+            .filter(Boolean)
+            .slice(0, 20)
+        : [];
+
+    if (!trimmedEmail) {
+      return res.status(400).json({ success: false, message: "email is required", correlationId });
+    }
+    if (!trimmedPassword || trimmedPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "password is required (min 6 chars)",
+        correlationId
+      });
+    }
+    if (!trimmedName) {
+      return res.status(400).json({ success: false, message: "artistName is required", correlationId });
+    }
+    if (!trimmedBio) {
+      return res.status(400).json({ success: false, message: "bio is required", correlationId });
+    }
+    if (!links.length) {
+      return res.status(400).json({
+        success: false,
+        message: "portfolioLinks is required",
+        correlationId
+      });
+    }
+
+    const existing = await safeRows<any>(
+      "SELECT id, role FROM users WHERE LOWER(email) = $1 LIMIT 1",
+      [trimmedEmail],
+      []
+    );
+
+    const hashedPassword = await bcrypt.hash(trimmedPassword, 10);
+
+    let userId: number | null = null;
+    if (!existing.length) {
+      const inserted = await pool.query(
+        `INSERT INTO users (email, password, name, role, status, is_verified, verified, phone, artist_status, artist_bio, portfolio_links, onboarded_at, created_at, updated_at)
+         VALUES ($1, $2, $3, 'ARTIST', 'ACTIVE', false, false, $4, 'PENDING', $5, $6, now(), now(), now())
+         RETURNING id`,
+        [trimmedEmail, hashedPassword, trimmedName, phone ?? null, trimmedBio, links]
+      );
+      userId = Number(inserted.rows?.[0]?.id ?? 0) || null;
+    } else {
+      const r = (existing[0]?.role ?? "").toString().toUpperCase();
+      if (r && r !== "ARTIST" && r !== "FAN") {
+        return res.status(409).json({ success: false, message: "Email already in use", correlationId });
+      }
+
+      const updated = await pool.query(
+        `UPDATE users
+         SET password = $2,
+             name = $3,
+             role = 'ARTIST',
+             status = COALESCE(status, 'ACTIVE'),
+             is_verified = false,
+             verified = false,
+             phone = COALESCE($4, phone),
+             artist_status = 'PENDING',
+             artist_bio = $5,
+             portfolio_links = $6,
+             onboarded_at = now(),
+             updated_at = now()
+         WHERE LOWER(email) = $1
+         RETURNING id`,
+        [trimmedEmail, hashedPassword, trimmedName, phone ?? null, trimmedBio, links]
+      );
+      userId = Number(updated.rows?.[0]?.id ?? 0) || null;
+    }
+
+    if (!userId) {
+      return res.status(500).json({ success: false, message: "Failed to onboard artist", correlationId });
+    }
+
+    const token = jwt.sign(
+      { id: userId, email: trimmedEmail, role: "ARTIST" },
+      process.env.JWT_SECRET as string,
+      { expiresIn: "1d" }
+    );
+
+    console.log(
+      `[AUDIT] ${JSON.stringify({
+        event: "artist_onboard_submitted",
+        correlationId,
+        userId,
+        email: trimmedEmail,
+        artistStatus: "PENDING"
+      })}`
+    );
+
+    return res.status(201).json({
+      success: true,
+      token,
+      pendingApproval: true,
+      user: {
+        id: userId,
+        email: trimmedEmail,
+        role: "ARTIST",
+        isVerified: false,
+        status: "ACTIVE"
+      },
+      correlationId
+    });
+  } catch (err: any) {
+    console.error("[artist/onboard] error", correlationId, err?.message);
+    return res.status(500).json({ success: false, message: "Failed to submit application", correlationId });
+  }
+});
+
+router.patch("/onboard", requireAuth, requireArtist, async (req: any, res: any) => {
+  const correlationId = req?.correlationId || "-";
+  const artistUserId = req.user?.id;
+
+  try {
+    await ensureArtistSchema();
+
+    const { artistName, bio, portfolioLinks, phone } = req.body as {
+      artistName?: string;
+      bio?: string;
+      portfolioLinks?: any;
+      phone?: string;
+    };
+
+    const trimmedName = (artistName || "").trim();
+    const trimmedBio = (bio || "").trim();
+
+    const links = Array.isArray(portfolioLinks)
+      ? portfolioLinks
+          .map((x) => (x ?? "").toString().trim())
+          .filter(Boolean)
+          .slice(0, 20)
+      : typeof portfolioLinks === "string"
+        ? portfolioLinks
+            .split("\n")
+            .map((x) => x.trim())
+            .filter(Boolean)
+            .slice(0, 20)
+        : [];
+
+    if (!trimmedName) {
+      return res.status(400).json({ success: false, message: "artistName is required", correlationId });
+    }
+    if (!trimmedBio) {
+      return res.status(400).json({ success: false, message: "bio is required", correlationId });
+    }
+    if (!links.length) {
+      return res.status(400).json({ success: false, message: "portfolioLinks is required", correlationId });
+    }
+
+    await pool.query(
+      `UPDATE users
+       SET name = $2,
+           phone = COALESCE($3, phone),
+           artist_bio = $4,
+           portfolio_links = $5,
+           artist_status = 'PENDING',
+           onboarded_at = now(),
+           updated_at = now()
+       WHERE id = $1 AND UPPER(role) = 'ARTIST'`,
+      [artistUserId, trimmedName, phone ?? null, trimmedBio, links]
+    );
+
+    audit(req, { event: "artist_onboard_resubmitted", outcome: "success" });
+    return res.json({ success: true, correlationId });
+  } catch (err: any) {
+    audit(req, { event: "artist_onboard_resubmitted", outcome: "error", message: err?.message || String(err) });
+    return res.status(500).json({ success: false, message: "Failed to resubmit application", correlationId });
+  }
+});
+
+router.patch("/appeal", requireAuth, requireArtist, async (req: any, res: any) => {
+  const correlationId = req?.correlationId || "-";
+  const artistUserId = req.user?.id;
+
+  try {
+    await ensureArtistSchema();
+
+    const { message } = req.body as { message?: string };
+    const msg = (message ?? "").toString().trim();
+    if (!msg) {
+      return res.status(400).json({ success: false, message: "message is required", correlationId });
+    }
+
+    await pool.query(
+      "UPDATE users SET artist_appeal_message = $2, updated_at = now() WHERE id = $1 AND UPPER(role) = 'ARTIST'",
+      [artistUserId, msg]
+    );
+
+    audit(req, { event: "artist_appeal_submitted", outcome: "success" });
+    return res.json({ success: true, correlationId });
+  } catch (err: any) {
+    audit(req, { event: "artist_appeal_submitted", outcome: "error", message: err?.message || String(err) });
+    return res.status(500).json({ success: false, message: "Failed to submit appeal", correlationId });
+  }
+});
 
 const ensureContentSchema = async () => {
   await pool.query(`
@@ -261,11 +513,18 @@ router.get("/me", requireAuth, requireArtist, async (req: any, res: any) => {
       `SELECT id, email, name,
         COALESCE(is_verified, verified, false) as is_verified,
         COALESCE(status, 'ACTIVE') as status,
+        COALESCE(artist_status, 'PENDING') as artist_status,
         profile_image_url,
         banner_image_url,
         bio,
+        artist_bio,
+        portfolio_links,
+        onboarded_at,
+        artist_appeal_message,
         accent_color,
-        subscription_price
+        social_links,
+        subscription_price,
+        admin_remarks
        FROM users
        WHERE id = $1 AND UPPER(role) = 'ARTIST'
        LIMIT 1`,
@@ -287,10 +546,17 @@ router.get("/me", requireAuth, requireArtist, async (req: any, res: any) => {
         name: u.name ?? null,
         isVerified: Boolean(u.is_verified),
         status: (u.status ?? "ACTIVE").toString(),
+        artistStatus: (u.artist_status ?? "PENDING").toString(),
         profileImageUrl: u.profile_image_url ?? null,
         bannerImageUrl: u.banner_image_url ?? null,
         bio: u.bio ?? "",
+        artistBio: u.artist_bio ?? null,
+        portfolioLinks: Array.isArray(u.portfolio_links) ? u.portfolio_links : [],
+        onboardedAt: u.onboarded_at ?? null,
+        appealMessage: u.artist_appeal_message ?? null,
+        adminNote: u.admin_remarks ?? null,
         accentColor: u.accent_color ?? null,
+        socialLinks: u.social_links ?? null,
         subscriptionPrice: Number(u.subscription_price ?? 0)
       },
       earlyAccessDays: EARLY_ACCESS_DAYS,
@@ -309,13 +575,21 @@ router.patch("/me", requireAuth, requireArtist, async (req: any, res: any) => {
   try {
     await ensureArtistSchema();
 
-    const { name, bio, profileImageUrl, bannerImageUrl, accentColor } = req.body as {
+    const { name, bio, profileImageUrl, bannerImageUrl, accentColor, socialLinks } = req.body as {
       name?: string | null;
       bio?: string | null;
       profileImageUrl?: string | null;
       bannerImageUrl?: string | null;
       accentColor?: string | null;
+      socialLinks?: Record<string, any> | null;
     };
+
+    const socialLinksJson =
+      socialLinks === undefined
+        ? undefined
+        : socialLinks
+          ? JSON.stringify(socialLinks)
+          : null;
 
     await pool.query(
       `UPDATE users
@@ -323,9 +597,18 @@ router.patch("/me", requireAuth, requireArtist, async (req: any, res: any) => {
            bio = COALESCE($3, bio),
            profile_image_url = COALESCE($4, profile_image_url),
            banner_image_url = COALESCE($5, banner_image_url),
-           accent_color = COALESCE($6, accent_color)
+           accent_color = COALESCE($6, accent_color),
+           social_links = COALESCE($7, social_links)
        WHERE id = $1 AND UPPER(role) = 'ARTIST'`,
-      [artistUserId, name ?? null, bio ?? null, profileImageUrl ?? null, bannerImageUrl ?? null, accentColor ?? null]
+      [
+        artistUserId,
+        name ?? null,
+        bio ?? null,
+        profileImageUrl ?? null,
+        bannerImageUrl ?? null,
+        accentColor ?? null,
+        socialLinksJson as any
+      ]
     );
 
     audit(req, {
@@ -336,7 +619,8 @@ router.patch("/me", requireAuth, requireArtist, async (req: any, res: any) => {
         bio: typeof bio === "string",
         profileImageUrl: typeof profileImageUrl === "string",
         bannerImageUrl: typeof bannerImageUrl === "string",
-        accentColor: typeof accentColor === "string"
+        accentColor: typeof accentColor === "string",
+        socialLinks: socialLinks !== undefined
       }
     });
 

@@ -9,6 +9,15 @@ const ensureArtistOnboardingSchema = async () => {
   await pool.query(
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR NOT NULL DEFAULT 'ACTIVE'"
   );
+  await pool
+    .query("ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_status VARCHAR(20) NOT NULL DEFAULT 'PENDING'")
+    .catch(() => undefined);
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_bio TEXT").catch(() => undefined);
+  await pool
+    .query("ALTER TABLE users ADD COLUMN IF NOT EXISTS portfolio_links TEXT[] NOT NULL DEFAULT '{}'")
+    .catch(() => undefined);
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ").catch(() => undefined);
+  await pool.query("ALTER TABLE users ALTER COLUMN artist_status SET DEFAULT 'PENDING'").catch(() => undefined);
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN");
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN");
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ");

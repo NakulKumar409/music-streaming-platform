@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { http } from "../services/http";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import Skeleton from "../components/Skeleton";
 
 type ArtistListItem = {
@@ -19,21 +19,6 @@ type ArtistsListResponse = {
   items: ArtistListItem[];
   totalCount: number;
   totalPages: number;
-};
-
-type CreateArtistResponse = {
-  success: boolean;
-  artist?: {
-    id: number | null;
-    name: string | null;
-    email: string;
-    role: string;
-    status: string;
-    isVerified: boolean;
-    phone?: string | null;
-    genre?: string | null;
-    subscriptionPrice?: number;
-  };
 };
 
 function PremiumPlayLogo() {
@@ -111,19 +96,8 @@ function formatPrice(n: number) {
 
 export default function AdminArtistsPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createName, setCreateName] = useState("");
-  const [createEmail, setCreateEmail] = useState("");
-  const [createPassword, setCreatePassword] = useState("");
-  const [createPhone, setCreatePhone] = useState("");
-  const [createGenre, setCreateGenre] = useState("");
-  const [createSubscriptionPrice, setCreateSubscriptionPrice] = useState("0");
-  const [createBusy, setCreateBusy] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
 
   const page = Number(searchParams.get("page") || "1") || 1;
@@ -210,69 +184,6 @@ export default function AdminArtistsPage() {
     }, 250);
   };
 
-  const onCreateArtist = async () => {
-    setCreateBusy(true);
-    setCreateError(null);
-    try {
-      const res = await http.post<CreateArtistResponse>("/api/v1/admin/artists/create", {
-        name: createName || null,
-        email: createEmail,
-        temporaryPassword: createPassword,
-        phone: createPhone || null,
-        genre: createGenre || null,
-        subscriptionPrice: createSubscriptionPrice
-      });
-
-      if (!res.data?.success) {
-        setCreateError(res.data?.artist ? "Failed to create artist" : "Request failed");
-        return;
-      }
-
-      const a = res.data.artist;
-      if (a) {
-        const mapped: ArtistListItem = {
-          id: a.id ?? 0,
-          name: a.name,
-          email: a.email,
-          profileImage: null,
-          isVerified: Boolean(a.isVerified),
-          subscriptionPrice: Number(a.subscriptionPrice ?? 0),
-          status: a.status
-        };
-
-        queryClient.setQueryData<ArtistsListResponse>(artistsQueryKey, (prev: ArtistsListResponse | undefined) => {
-          if (!prev) {
-            return {
-              success: true,
-              items: [mapped],
-              totalCount: 1,
-              totalPages: 1
-            };
-          }
-
-          return {
-            ...prev,
-            items: [mapped, ...prev.items],
-            totalCount: (prev.totalCount ?? 0) + 1
-          };
-        });
-      }
-
-      setCreateOpen(false);
-      setCreateName("");
-      setCreateEmail("");
-      setCreatePassword("");
-      setCreatePhone("");
-      setCreateGenre("");
-      setCreateSubscriptionPrice("0");
-    } catch (e: any) {
-      const msg = e?.response?.data?.message || e?.message || "Failed to create artist";
-      setCreateError(msg);
-    } finally {
-      setCreateBusy(false);
-    }
-  };
-
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[#4b1927] text-white">
       <div className="absolute inset-0 opacity-25" style={backgroundStyle} />
@@ -280,76 +191,8 @@ export default function AdminArtistsPage() {
 
       <div className="relative mx-auto w-full max-w-[1200px] px-6 pb-12">
         <div className="pt-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <PremiumPlayLogo />
-              <Link
-                to="/admin/home"
-                className="text-[13px] text-[#b8a6a1] hover:text-white"
-              >
-                Admin Home
-              </Link>
-            </div>
-
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((v) => !v)}
-                className="flex items-center gap-2 text-[13px] text-[#d8c7c3] hover:text-white"
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M20 21V19C20 16.7909 18.2091 15 16 15H8C5.79086 15 4 16.7909 4 19V21"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M12 11C14.2091 11 16 9.20914 16 7C16 4.79086 14.2091 3 12 3C9.79086 3 8 4.79086 8 7C8 9.20914 9.79086 11 12 11Z"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <span>Admin</span>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M6 9L12 15L18 9"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-
-              {menuOpen ? (
-                <div className="absolute right-0 mt-3 w-[180px] rounded-[6px] border border-white/10 bg-[#141010]/90 backdrop-blur px-2 py-2 shadow-[0_18px_40px_rgba(0,0,0,0.55)]">
-                  <button
-                    type="button"
-                    className="w-full text-left px-3 py-2 text-[13px] text-[#d8c7c3] hover:bg-white/5 rounded-[4px]"
-                    onClick={() => {
-                      localStorage.removeItem("adminToken");
-                      navigate("/admin/login", { replace: true });
-                    }}
-                  >
-                    Logout
-                  </button>
-                </div>
-              ) : null}
-            </div>
+          <div className="hidden">
+            <PremiumPlayLogo />
           </div>
 
           <div className="mt-10 flex items-end justify-between">
@@ -387,14 +230,6 @@ export default function AdminArtistsPage() {
                   className="w-full h-[34px] rounded-[5px] bg-[#141010]/35 border border-white/10 pl-10 pr-3 text-[13px] text-[#d8c7c3] placeholder:text-[#6e5c59] outline-none focus:border-white/20"
                 />
               </div>
-
-              <button
-                type="button"
-                onClick={() => setCreateOpen(true)}
-                className="h-[36px] px-4 rounded-[6px] border border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] text-[13px] font-light tracking-wide text-[#e6d6d2] shadow-[0_10px_25px_rgba(0,0,0,0.35)]"
-              >
-                Create artist
-              </button>
             </div>
           </div>
 
@@ -542,99 +377,6 @@ export default function AdminArtistsPage() {
             </div>
           </div>
 
-          {createOpen ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-              <div className="w-full max-w-[420px] rounded-[10px] border border-white/10 bg-[#141010]/95 backdrop-blur px-6 py-6 shadow-[0_30px_80px_rgba(0,0,0,0.75)]">
-                <div className="text-[16px] tracking-wide text-[#e6d6d2]">Create new artist</div>
-                <div className="mt-4 space-y-4">
-                  <div>
-                    <div className="text-[13px] text-[#b8a6a1]">Name (optional)</div>
-                    <input
-                      value={createName}
-                      onChange={(e) => setCreateName(e.target.value)}
-                      className="mt-2 w-full h-[40px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-3 text-[13px] text-[#e6d6d2] outline-none focus:border-white/20"
-                      placeholder="Artist name"
-                    />
-                  </div>
-                  <div>
-                    <div className="text-[13px] text-[#b8a6a1]">Email</div>
-                    <input
-                      value={createEmail}
-                      onChange={(e) => setCreateEmail(e.target.value)}
-                      className="mt-2 w-full h-[40px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-3 text-[13px] text-[#e6d6d2] outline-none focus:border-white/20"
-                      placeholder="artist@example.com"
-                      autoComplete="email"
-                    />
-                  </div>
-                  <div>
-                    <div className="text-[13px] text-[#b8a6a1]">Phone</div>
-                    <input
-                      value={createPhone}
-                      onChange={(e) => setCreatePhone(e.target.value)}
-                      className="mt-2 w-full h-[40px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-3 text-[13px] text-[#e6d6d2] outline-none focus:border-white/20"
-                      placeholder="+1 555 123 4567"
-                      autoComplete="tel"
-                    />
-                  </div>
-                  <div>
-                    <div className="text-[13px] text-[#b8a6a1]">Genre</div>
-                    <input
-                      value={createGenre}
-                      onChange={(e) => setCreateGenre(e.target.value)}
-                      className="mt-2 w-full h-[40px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-3 text-[13px] text-[#e6d6d2] outline-none focus:border-white/20"
-                      placeholder="Hip-hop, Pop, Classical..."
-                    />
-                  </div>
-                  <div>
-                    <div className="text-[13px] text-[#b8a6a1]">Subscription Price</div>
-                    <input
-                      value={createSubscriptionPrice}
-                      onChange={(e) => setCreateSubscriptionPrice(e.target.value)}
-                      className="mt-2 w-full h-[40px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-3 text-[13px] text-[#e6d6d2] outline-none focus:border-white/20"
-                      placeholder="0"
-                      inputMode="decimal"
-                    />
-                  </div>
-                  <div>
-                    <div className="text-[13px] text-[#b8a6a1]">Temporary password</div>
-                    <input
-                      type="password"
-                      value={createPassword}
-                      onChange={(e) => setCreatePassword(e.target.value)}
-                      className="mt-2 w-full h-[40px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-3 text-[13px] text-[#e6d6d2] outline-none focus:border-white/20"
-                      placeholder="Temporary password"
-                      autoComplete="new-password"
-                    />
-                  </div>
-                  {createError ? (
-                    <div className="text-[13px] text-[#e3a1a1]">{createError}</div>
-                  ) : null}
-                  <div className="flex items-center justify-end gap-3 pt-2">
-                    <button
-                      type="button"
-                      disabled={createBusy}
-                      onClick={() => {
-                        if (createBusy) return;
-                        setCreateOpen(false);
-                        setCreateError(null);
-                      }}
-                      className="h-[36px] px-4 rounded-[6px] border border-white/10 bg-[#0e0a0a]/35 text-[13px] text-[#d8c7c3] disabled:opacity-60"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      disabled={createBusy}
-                      onClick={onCreateArtist}
-                      className="h-[36px] px-4 rounded-[6px] border border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] text-[13px] font-light tracking-wide text-[#e6d6d2] shadow-[0_10px_25px_rgba(0,0,0,0.45)] disabled:opacity-60"
-                    >
-                      {createBusy ? "Creating..." : "Create"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
         </div>
       </div>
     </div>

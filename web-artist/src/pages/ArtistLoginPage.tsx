@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { http } from "../services/http";
 
 type LoginResponse = {
@@ -14,6 +14,15 @@ type LoginResponse = {
     status?: string;
   };
   message?: string;
+};
+
+type MeResponse = {
+  success: boolean;
+  artist?: {
+    artistStatus?: string;
+    isVerified?: boolean;
+    status?: string;
+  };
 };
 
 function PremiumPlayLogo() {
@@ -44,12 +53,48 @@ export default function ArtistLoginPage() {
     } as const;
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const token = localStorage.getItem("artistToken");
+      if (!token) return;
+
+      try {
+        const meRes = await http.get<MeResponse>("/api/v1/artist/me");
+        if (!mounted) return;
+        const artistStatus = (meRes.data?.artist?.artistStatus ?? "").toString().toUpperCase();
+
+        if (artistStatus === "APPROVED") {
+          navigate("/artist/dashboard", { replace: true });
+          return;
+        }
+        if (artistStatus === "PENDING") {
+          navigate("/artist/under-review", { replace: true });
+          return;
+        }
+        if (artistStatus === "REJECTED") {
+          navigate("/artist/rejected", { replace: true });
+          return;
+        }
+      } catch (e: any) {
+        const status = e?.response?.status;
+        if (status === 401 || status === 403) {
+          localStorage.removeItem("artistToken");
+        }
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [navigate]);
+
   const onSubmit = async () => {
     setBusy(true);
     setError(null);
 
     try {
-      const res = await http.post<LoginResponse>("/api/v1/fan/auth/login", {
+      const res = await http.post<LoginResponse>("/api/v1/auth/login", {
         email,
         password
       });
@@ -78,14 +123,33 @@ export default function ArtistLoginPage() {
          return;
        }
 
-      if (!isVerified || res.data?.pendingApproval) {
-        navigate("/artist/pending-approval", { replace: true });
-        return;
-      }
-
       if (status !== "ACTIVE") {
         localStorage.removeItem("artistToken");
         setError("Your artist account is not active. Please contact support.");
+        return;
+      }
+
+      try {
+        const meRes = await http.get<MeResponse>("/api/v1/artist/me");
+        const artistStatus = (meRes.data?.artist?.artistStatus ?? "").toString().toUpperCase();
+        if (artistStatus === "APPROVED") {
+          navigate("/artist/dashboard", { replace: true });
+          return;
+        }
+        if (artistStatus === "PENDING") {
+          navigate("/artist/under-review", { replace: true });
+          return;
+        }
+        if (artistStatus === "REJECTED") {
+          navigate("/artist/rejected", { replace: true });
+          return;
+        }
+      } catch {
+        // ignore; fall back to legacy logic
+      }
+
+      if (!isVerified || res.data?.pendingApproval) {
+        navigate("/artist/under-review", { replace: true });
         return;
       }
 
@@ -201,10 +265,17 @@ export default function ArtistLoginPage() {
                 type="button"
                 disabled={busy}
                 onClick={onSubmit}
-                className="w-full h-[46px] rounded-[7px] border border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] text-[15px] font-light tracking-wide text-[#e6d6d2] shadow-[0_10px_25px_rgba(0,0,0,0.35)] disabled:opacity-60"
+                className="h-[46px] w-full rounded-[7px] border border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] text-[15px] font-light tracking-wide text-[#e6d6d2] shadow-[0_10px_25px_rgba(0,0,0,0.35)] disabled:opacity-60"
               >
                 {busy ? "Logging in..." : "Log in"}
               </button>
+
+              <div className="pt-1 text-[13px] text-[#a99792]">
+                Don&apos;t have an artist account?{" "}
+                <Link to="/artist/signup" className="text-[#e6d6d2] hover:underline">
+                  Register here
+                </Link>
+              </div>
 
               <div className="text-center">
                 <a

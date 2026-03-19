@@ -283,32 +283,8 @@ export default function AdminContentApprovalQueuePage() {
   return (
     <div className="min-h-screen w-full bg-[#0a0808] text-white" style={backgroundStyle}>
       <div className="mx-auto w-full max-w-[1100px] px-6 py-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <PremiumPlayLogo />
-            <div className="text-[18px] font-light tracking-wide text-[#e6d6d2]">Moderation Queue</div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              className="text-[13px] text-[#a99792] hover:text-[#e6d6d2]"
-              onClick={() => navigate("/admin/home")}
-            >
-              Back
-            </button>
-
-            <button
-              type="button"
-              className="text-[13px] text-[#a99792] hover:text-[#e6d6d2]"
-              onClick={() => {
-                localStorage.removeItem("adminToken");
-                navigate("/admin/login", { replace: true });
-              }}
-            >
-              Logout
-            </button>
-          </div>
+        <div className="hidden">
+          <PremiumPlayLogo />
         </div>
 
         <div className="mt-8 text-[34px] font-light tracking-wide text-[#e6d6d2]">Moderation Queue</div>
