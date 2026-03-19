@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Image,
   LayoutAnimation,
+  Linking,
   Pressable,
   ScrollView,
   StatusBar,
@@ -14,11 +15,12 @@ import {
   Platform,
   UIManager,
 } from 'react-native';
+import Svg, { Path, Rect, Circle } from 'react-native-svg';
 
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { ArrowLeft, BadgeCheck, Settings } from 'lucide-react-native';
+import { ArrowLeft, BadgeCheck, Instagram, Settings } from 'lucide-react-native';
 import { ResizeMode, Video } from 'expo-av';
 import { useIsFocused } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,6 +29,49 @@ import { fetchArtistById, fetchArtistMedia, type ArtistDetail, type ArtistMediaI
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import YouTubeVideoControlsOverlay from '../ui/YouTubeVideoControlsOverlay';
 import { Colors } from '../theme';
+
+function SpotifyIcon({ size = 18 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Circle cx="12" cy="12" r="12" fill="#1DB954" />
+      <Path
+        d="M6.8 10.2c4.2-1.2 8.6-.9 12.6.8"
+        fill="none"
+        stroke="#0a0a0a"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        opacity="0.85"
+      />
+      <Path
+        d="M7.6 13.0c3.4-0.9 6.7-0.6 9.8 0.9"
+        fill="none"
+        stroke="#0a0a0a"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        opacity="0.85"
+      />
+      <Path
+        d="M8.4 15.7c2.6-0.6 5.1-0.4 7.4 0.7"
+        fill="none"
+        stroke="#0a0a0a"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        opacity="0.85"
+      />
+    </Svg>
+  );
+}
+
+function YouTubeIcon({ size = 18 }: { size?: number }) {
+  const w = size;
+  const h = (size * 0.78);
+  return (
+    <Svg width={w} height={h} viewBox="0 0 24 19" preserveAspectRatio="xMidYMid meet">
+      <Rect x="0" y="0" width="24" height="19" rx="4.2" fill="#FF0000" />
+      <Path d="M10 5.2L16 9.5L10 13.8V5.2Z" fill="#ffffff" />
+    </Svg>
+  );
+}
 
 type Song = {
   id: string;
@@ -48,6 +93,10 @@ type Artist = {
   subscribers: string;
   profileImage: string;
   coverImage: string;
+  bio: string;
+  spotifyUrl: string | null;
+  youtubeUrl: string | null;
+  instagramUrl: string | null;
 };
 
 type TabKey = 'All' | 'Audio' | 'Video';
@@ -113,6 +162,7 @@ export default function ArtistScreen({ navigation, route }: any) {
   useEffect(() => {
     let mounted = true;
     (async () => {
+      if (!isFocused) return;
       try {
         setLoading(true);
         setError(null);
@@ -139,6 +189,10 @@ export default function ArtistScreen({ navigation, route }: any) {
           subscribers: deriveSubscribersLabel(a.id),
           profileImage: a.profileImageUrl,
           coverImage: a.coverImageUrl,
+          bio: (a as any).bio ?? '',
+          spotifyUrl: (a as any).spotifyUrl ?? null,
+          youtubeUrl: (a as any).youtubeUrl ?? null,
+          instagramUrl: (a as any).instagramUrl ?? null,
         };
 
         const toSong = (it: ArtistMediaItem): Song => ({
@@ -170,7 +224,7 @@ export default function ArtistScreen({ navigation, route }: any) {
     return () => {
       mounted = false;
     };
-  }, [artistId]);
+  }, [artistId, isFocused]);
 
   useEffect(() => {
     if (!artist) return;
@@ -343,6 +397,10 @@ export default function ArtistScreen({ navigation, route }: any) {
                       name={artist.name}
                       verified={artist.verified}
                       subscribersLabel={artist.subscribers}
+                      bio={artist.bio}
+                      spotifyUrl={artist.spotifyUrl}
+                      youtubeUrl={artist.youtubeUrl}
+                      instagramUrl={artist.instagramUrl}
                       onBack={() => navigation.goBack()}
                       onSubscribe={() => navigation.navigate('SubscriptionFlow')}
                       onJoin={() => navigation.navigate('SubscriptionFlow')}
@@ -485,6 +543,10 @@ function ProfileHeaderSection({
   name,
   verified,
   subscribersLabel,
+  bio,
+  spotifyUrl,
+  youtubeUrl,
+  instagramUrl,
   onBack,
   onSubscribe,
   onJoin,
@@ -494,10 +556,42 @@ function ProfileHeaderSection({
   name: string;
   verified: boolean;
   subscribersLabel: string;
+  bio: string;
+  spotifyUrl: string | null;
+  youtubeUrl: string | null;
+  instagramUrl: string | null;
   onBack: () => void;
   onSubscribe: () => void;
   onJoin: () => void;
 }) {
+  const openUrl = async (raw: string) => {
+    const trimmed = (raw || '').toString().trim();
+    if (!trimmed) return;
+    const url = trimmed.startsWith('http://') || trimmed.startsWith('https://') ? trimmed : `https://${trimmed}`;
+    try {
+      const ok = await Linking.canOpenURL(url);
+      if (!ok) return;
+      await Linking.openURL(url);
+    } catch {
+      // ignore
+    }
+  };
+
+  const [socialHint, setSocialHint] = useState<string | null>(null);
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showHint = (label: string) => {
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    setSocialHint(label);
+    hintTimerRef.current = setTimeout(() => setSocialHint(null), 1500);
+  };
+
+  const hideHint = () => {
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    hintTimerRef.current = null;
+    setSocialHint(null);
+  };
+
   return (
     <View style={styles.profileWrap}>
       <View style={styles.bannerWrap}>
@@ -528,6 +622,56 @@ function ProfileHeaderSection({
           ) : null}
         </View>
         <Text style={styles.profileSubs}>{subscribersLabel}</Text>
+
+        {bio ? (
+          <Text style={styles.profileBio} numberOfLines={4}>
+            {bio}
+          </Text>
+        ) : null}
+
+        {spotifyUrl || youtubeUrl || instagramUrl ? (
+          <View style={styles.socialWrap}>
+            <View style={styles.socialRow}>
+              {spotifyUrl ? (
+                <Pressable
+                  onPress={() => openUrl(spotifyUrl)}
+                  onPressIn={() => showHint('Spotify')}
+                  onPressOut={hideHint}
+                  onLongPress={() => showHint('Spotify')}
+                  delayLongPress={220}
+                  style={({ pressed }) => [styles.socialIconBtn, pressed ? styles.socialIconBtnPressed : null]}
+                >
+                  <SpotifyIcon size={18} />
+                </Pressable>
+              ) : null}
+              {youtubeUrl ? (
+                <Pressable
+                  onPress={() => openUrl(youtubeUrl)}
+                  onPressIn={() => showHint('YouTube')}
+                  onPressOut={hideHint}
+                  onLongPress={() => showHint('YouTube')}
+                  delayLongPress={220}
+                  style={({ pressed }) => [styles.socialIconBtn, pressed ? styles.socialIconBtnPressed : null]}
+                >
+                  <YouTubeIcon size={18} />
+                </Pressable>
+              ) : null}
+              {instagramUrl ? (
+                <Pressable
+                  onPress={() => openUrl(instagramUrl)}
+                  onPressIn={() => showHint('Instagram')}
+                  onPressOut={hideHint}
+                  onLongPress={() => showHint('Instagram')}
+                  delayLongPress={220}
+                  style={({ pressed }) => [styles.socialIconBtn, pressed ? styles.socialIconBtnPressed : null]}
+                >
+                  <Instagram size={18} color="rgba(255,255,255,0.92)" />
+                </Pressable>
+              ) : null}
+            </View>
+            {socialHint ? <Text style={styles.socialHint}>{socialHint}</Text> : null}
+          </View>
+        ) : null}
 
         <View style={styles.actionsRow}>
           <Pressable onPress={onSubscribe} style={styles.subscribeBtn}>
@@ -876,7 +1020,52 @@ const styles = StyleSheet.create({
     marginTop: 6,
     color: 'rgba(255,255,255,0.70)',
     fontSize: 13,
-    fontWeight: '600',
+  },
+  profileBio: {
+    marginTop: 10,
+    paddingHorizontal: 18,
+    color: 'rgba(255,255,255,0.82)',
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  socialRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  socialWrap: {
+    marginTop: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  socialHint: {
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+    color: 'rgba(255,255,255,0.86)',
+    fontSize: 12,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  socialIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  socialIconBtnPressed: {
+    transform: [{ scale: 0.98 }],
+    backgroundColor: 'rgba(255,255,255,0.10)',
   },
   actionsRow: {
     marginTop: 14,

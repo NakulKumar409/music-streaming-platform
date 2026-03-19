@@ -18,6 +18,12 @@ const restrictedMediaUrl = (req: any, mediaType: 'audio' | 'video') => {
   return toAbsoluteUrl(req, path);
 };
 
+const ensureFanArtistProfileSchema = async () => {
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT").catch(() => undefined);
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_bio TEXT").catch(() => undefined);
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS social_links JSONB").catch(() => undefined);
+};
+
 router.get("/", (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.setHeader('Pragma', 'no-cache');
@@ -74,11 +80,15 @@ router.get("/:artistId", (req, res) => {
     }
 
     try {
+      await ensureFanArtistProfileSchema();
       const rows = await pool.query(
         `SELECT id,
           name,
           COALESCE(is_verified, verified, false) as is_verified,
           profile_image_url,
+          bio,
+          artist_bio,
+          social_links,
           COALESCE(status, 'ACTIVE') as status,
           COALESCE(subscription_price, 0) as subscription_price,
           COALESCE(genre, '') as genre
@@ -94,6 +104,13 @@ router.get("/:artistId", (req, res) => {
       }
 
       const row: any = rows.rows[0];
+      const socialLinks = (row.social_links ?? null) as any;
+      const spotifyUrl = (socialLinks?.spotify ?? null) ? String(socialLinks.spotify) : null;
+      const youtubeUrl = (socialLinks?.youtube ?? null) ? String(socialLinks.youtube) : null;
+      const instagramUrl = (socialLinks?.instagram ?? null) ? String(socialLinks.instagram) : null;
+      const primaryBio = (row.bio ?? '').toString().trim();
+      const fallbackBio = (row.artist_bio ?? '').toString().trim();
+      const bio = primaryBio || fallbackBio;
       return res.json({
         success: true,
         artist: {
@@ -102,6 +119,11 @@ router.get("/:artistId", (req, res) => {
           isVerified: Boolean(row.is_verified),
           profileImageUrl: toAbsoluteUrl(req, row.profile_image_url),
           coverImageUrl: toAbsoluteUrl(req, row.profile_image_url),
+          bio,
+          socialLinks: socialLinks ?? null,
+          spotifyUrl,
+          youtubeUrl,
+          instagramUrl,
           status: (row.status ?? 'ACTIVE').toString(),
           subscriptionPrice: Number(row.subscription_price ?? 0),
           genre: (row.genre ?? '').toString(),

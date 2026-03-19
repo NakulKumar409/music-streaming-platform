@@ -7,6 +7,15 @@ export type ApiArtist = {
   verified?: boolean;
   profileImageUrl?: string | null;
   coverImageUrl?: string | null;
+  bio?: string | null;
+  spotifyUrl?: string | null;
+  youtubeUrl?: string | null;
+  instagramUrl?: string | null;
+  socialLinks?: {
+    spotify?: string | null;
+    youtube?: string | null;
+    instagram?: string | null;
+  } | null;
   subscriptionPrice?: number | string | null;
   status?: string | null;
   genre?: string | null;
@@ -41,6 +50,10 @@ export type ArtistDetail = {
   isVerified: boolean;
   profileImageUrl: string;
   coverImageUrl: string;
+  bio: string;
+  spotifyUrl: string | null;
+  youtubeUrl: string | null;
+  instagramUrl: string | null;
   status: string;
   subscriptionPrice: number;
   genre: string;
@@ -57,12 +70,23 @@ export async function fetchArtistById(artistId: string): Promise<ArtistDetail | 
   const imageUrl =
     resolveImageUrl((a.coverImageUrl || a.profileImageUrl || '').toString()) || FALLBACK_ARTIST_IMAGE;
 
+  const socials = (a.socialLinks ?? null) as any;
+  const spotifyUrl = ((a.spotifyUrl ?? socials?.spotify) || null) ? String((a.spotifyUrl ?? socials?.spotify) as any) : null;
+  const youtubeUrl = ((a.youtubeUrl ?? socials?.youtube) || null) ? String((a.youtubeUrl ?? socials?.youtube) as any) : null;
+  const instagramUrl = ((a.instagramUrl ?? socials?.instagram) || null)
+    ? String((a.instagramUrl ?? socials?.instagram) as any)
+    : null;
+
   return {
     id: String(a.id),
     name: (a.name ?? 'Artist').toString(),
     isVerified: Boolean(a.isVerified ?? a.verified ?? false),
     profileImageUrl: resolveImageUrl((a.profileImageUrl || '').toString()) || imageUrl,
     coverImageUrl: imageUrl,
+    bio: (a.bio ?? '').toString(),
+    spotifyUrl,
+    youtubeUrl,
+    instagramUrl,
     status: (a.status ?? 'ACTIVE').toString(),
     subscriptionPrice: Number.isFinite(subscriptionPrice) ? subscriptionPrice : 0,
     genre: (a.genre ?? '').toString(),
