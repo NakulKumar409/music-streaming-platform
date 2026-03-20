@@ -27,6 +27,10 @@ const ensureArtistOnboardingSchema = async () => {
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30)");
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS genre VARCHAR(120)");
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS social_links JSONB");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false").catch(() => undefined);
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ").catch(() => undefined);
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS deletion_reason TEXT").catch(() => undefined);
+  await pool.query("ALTER TABLE users ALTER COLUMN is_deleted SET DEFAULT false").catch(() => undefined);
   await pool.query(
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS revenue_share_percentage NUMERIC NOT NULL DEFAULT 90"
   );
@@ -276,6 +280,13 @@ router.get("/", requireAuth, requireAdmin, async (req, res) => {
   const whereParts: string[] = ["UPPER(role) = 'ARTIST'"];
   const params: any[] = [];
 
+  // Default behavior: only show active (non-deleted) artists unless explicitly filtering.
+  if (filter === "inactive" || filter === "deleted") {
+    whereParts.push("COALESCE(is_deleted, false) = true");
+  } else {
+    whereParts.push("COALESCE(is_deleted, false) = false");
+  }
+
   if (filter === "pending") {
     whereParts.push("COALESCE(is_verified, verified, false) = false");
   }
@@ -301,7 +312,10 @@ router.get("/", requireAuth, requireAdmin, async (req, res) => {
     `SELECT id, name, email, profile_image_url, role,
       COALESCE(is_verified, verified, false) as is_verified,
       COALESCE(subscription_price, 0) as subscription_price,
-      COALESCE(status, 'ACTIVE') as status
+      COALESCE(status, 'ACTIVE') as status,
+      COALESCE(is_deleted, false) as is_deleted,
+      deleted_at,
+      deletion_reason
      FROM users
      ${whereSql}
      ORDER BY created_at DESC NULLS LAST, id DESC
@@ -316,7 +330,10 @@ router.get("/", requireAuth, requireAdmin, async (req, res) => {
     profileImage: u.profile_image_url ?? null,
     isVerified: Boolean(u.is_verified),
     subscriptionPrice: Number(u.subscription_price ?? 0),
-    status: (u.status ?? "ACTIVE").toString()
+    status: (u.status ?? "ACTIVE").toString(),
+    isDeleted: Boolean(u.is_deleted),
+    deletedAt: u.deleted_at ?? null,
+    deletionReason: u.deletion_reason ?? null
   }));
 
   const totalPages = Math.max(1, Math.ceil(totalCount / limit));
@@ -349,6 +366,9 @@ router.get("/:id", requireAuth, requireAdmin, async (req, res) => {
       COALESCE(is_verified, verified, false) as is_verified,
       COALESCE(subscription_price, 0) as subscription_price,
       COALESCE(status, 'ACTIVE') as status,
+      COALESCE(is_deleted, false) as is_deleted,
+      deleted_at,
+      deletion_reason,
       last_login,
       phone,
       genre,
@@ -418,6 +438,9 @@ router.get("/:id", requireAuth, requireAdmin, async (req, res) => {
       bannerImage: u.banner_image_url ?? null,
       isVerified: Boolean(u.is_verified),
       subscriptionPrice: Number(u.subscription_price ?? 0),
+      isDeleted: Boolean(u.is_deleted),
+      deletedAt: u.deleted_at ?? null,
+      deletionReason: u.deletion_reason ?? null,
       phone: u.phone ?? null,
       genre: u.genre ?? null,
       bio: u.bio ?? "",
@@ -431,6 +454,100 @@ router.get("/:id", requireAuth, requireAdmin, async (req, res) => {
       lastLogin: u.last_login ?? null
     }
   });
+});
+
+router.patch("/:id/soft-delete", requireAuth, requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    return res.status(400).json({ success: false, message: "Invalid id" });
+  }
+
+  const correlationId = (req as any)?.correlationId || "-";
+  const reason = String(req.body?.reason ?? req.body?.deletionReason ?? "").trim();
+  if (!reason) {
+    return res.status(400).json({ success: false, message: "Deletion reason is required", correlationId });
+  }
+
+  try {
+    await ensureArtistOnboardingSchema();
+  } catch {
+    // ignore
+  }
+
+  try {
+    const updated = await pool.query(
+      `UPDATE users
+       SET is_deleted = true,
+           deleted_at = now(),
+           deletion_reason = $2,
+           updated_at = now()
+       WHERE id = $1 AND UPPER(role) = 'ARTIST'
+       RETURNING id, COALESCE(is_deleted, false) as is_deleted, deleted_at, deletion_reason`,
+      [id, reason]
+    );
+
+    if (!updated.rows?.length) {
+      return res.status(404).json({ success: false, message: "Artist not found", correlationId });
+    }
+
+    return res.json({
+      success: true,
+      artist: {
+        id: updated.rows[0].id,
+        isDeleted: Boolean(updated.rows[0].is_deleted),
+        deletedAt: updated.rows[0].deleted_at ?? null,
+        deletionReason: updated.rows[0].deletion_reason ?? null
+      },
+      correlationId
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || "Failed to soft delete artist", correlationId });
+  }
+});
+
+router.patch("/:id/reactivate", requireAuth, requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    return res.status(400).json({ success: false, message: "Invalid id" });
+  }
+
+  const correlationId = (req as any)?.correlationId || "-";
+
+  try {
+    await ensureArtistOnboardingSchema();
+  } catch {
+    // ignore
+  }
+
+  try {
+    const updated = await pool.query(
+      `UPDATE users
+       SET is_deleted = false,
+           deleted_at = NULL,
+           deletion_reason = NULL,
+           updated_at = now()
+       WHERE id = $1 AND UPPER(role) = 'ARTIST'
+       RETURNING id, COALESCE(is_deleted, false) as is_deleted, deleted_at, deletion_reason`,
+      [id]
+    );
+
+    if (!updated.rows?.length) {
+      return res.status(404).json({ success: false, message: "Artist not found", correlationId });
+    }
+
+    return res.json({
+      success: true,
+      artist: {
+        id: updated.rows[0].id,
+        isDeleted: Boolean(updated.rows[0].is_deleted),
+        deletedAt: updated.rows[0].deleted_at ?? null,
+        deletionReason: updated.rows[0].deletion_reason ?? null
+      },
+      correlationId
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err?.message || "Failed to reactivate artist", correlationId });
+  }
 });
 
 router.patch("/:id", requireAuth, requireAdmin, async (req, res) => {

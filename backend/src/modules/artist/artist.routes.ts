@@ -22,6 +22,8 @@ const ensureFanArtistProfileSchema = async () => {
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT").catch(() => undefined);
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_bio TEXT").catch(() => undefined);
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS social_links JSONB").catch(() => undefined);
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false").catch(() => undefined);
+  await pool.query("ALTER TABLE users ALTER COLUMN is_deleted SET DEFAULT false").catch(() => undefined);
 };
 
 router.get("/", (req, res) => {
@@ -33,6 +35,7 @@ router.get("/", (req, res) => {
 
   (async () => {
     try {
+      await ensureFanArtistProfileSchema();
       const r = await pool.query(
         `SELECT id,
           name,
@@ -43,6 +46,7 @@ router.get("/", (req, res) => {
           COALESCE(genre, '') as genre
          FROM users
          WHERE UPPER(role) = 'ARTIST'
+           AND COALESCE(is_deleted, false) = false
            AND COALESCE(is_verified, verified, false) = true
            AND COALESCE(status, 'ACTIVE') = 'ACTIVE'
          ORDER BY id DESC
@@ -95,6 +99,7 @@ router.get("/:artistId", (req, res) => {
          FROM users
          WHERE id = $1
            AND UPPER(role) = 'ARTIST'
+           AND COALESCE(is_deleted, false) = false
          LIMIT 1`,
         [artistId]
       );
@@ -144,14 +149,17 @@ router.get("/:artistId/content", (req, res) => {
 
     try {
       const userId = req.user?.id ? Number(req.user.id) : null;
+      await ensureFanArtistProfileSchema();
       
       const rows = await pool.query(
         `SELECT id, title, type, thumbnail_url, media_url, created_at, subscription_required
-         FROM content_items
-         WHERE artist_id = $1
+         FROM content_items c
+         LEFT JOIN users u ON u.id = c.artist_id
+         WHERE c.artist_id = $1
+           AND COALESCE(u.is_deleted, false) = false
            AND COALESCE(is_approved, false) = true
            AND UPPER(COALESCE(lifecycle_state, '')) = 'PUBLISHED'
-         ORDER BY created_at DESC
+         ORDER BY c.created_at DESC
          LIMIT 500`,
         [artistId]
       );

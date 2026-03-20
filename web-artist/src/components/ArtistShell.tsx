@@ -80,8 +80,8 @@ export default function ArtistShell() {
           : "";
         if (status && status !== "ACTIVE") {
           localStorage.removeItem("artistToken");
-          if (location.pathname !== "/artist/login") {
-            navigate("/artist/login", { replace: true });
+          if (location.pathname !== "/artist/account-inactive") {
+            navigate("/artist/account-inactive", { replace: true });
           }
           return;
         }
@@ -108,6 +108,17 @@ export default function ArtistShell() {
         }
       } catch (e: any) {
         const status = e?.response?.status;
+        if (status === 403) {
+          const msg = (e?.response?.data?.message ?? "").toString().toLowerCase();
+          if (msg.includes("inactive") || msg.includes("suspended")) {
+            localStorage.removeItem("artistToken");
+            if (location.pathname !== "/artist/account-inactive") {
+              navigate("/artist/account-inactive", { replace: true });
+            }
+            return;
+          }
+        }
+
         if (status === 401 || status === 403) {
           localStorage.removeItem("artistToken");
           if (location.pathname !== "/artist/login") {

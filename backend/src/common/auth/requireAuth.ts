@@ -49,7 +49,7 @@ export const requireAuth = async (
     let dbUser: any = null;
     try {
       const result = await pool.query(
-        "SELECT id, role, COALESCE(status, 'ACTIVE') as status FROM users WHERE id = $1",
+        "SELECT id, role, COALESCE(status, 'ACTIVE') as status, COALESCE(is_deleted, false) as is_deleted FROM users WHERE id = $1",
         [userId]
       );
       dbUser = result.rows?.[0] ?? null;
@@ -67,6 +67,14 @@ export const requireAuth = async (
     const role = (dbUser.role ?? tokenRole ?? "").toString().toUpperCase();
     const status = (dbUser.status ?? decoded.status ?? "ACTIVE").toString().toUpperCase();
 
+    const isDeleted = Boolean((dbUser as any)?.is_deleted);
+    if (role === "ARTIST" && isDeleted) {
+      return res.status(403).json({
+        success: false,
+        message: "Artist account is inactive"
+      });
+    }
+
     if (role === "ARTIST" && status === "SUSPENDED") {
       return res.status(403).json({
         success: false,
@@ -78,7 +86,8 @@ export const requireAuth = async (
       ...decoded,
       id: dbUser.id,
       role,
-      status
+      status,
+      isDeleted
     };
 
     next();

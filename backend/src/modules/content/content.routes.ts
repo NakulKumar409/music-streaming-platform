@@ -220,6 +220,7 @@ router.get("/", (req, res) => {
            FROM content_items c
            LEFT JOIN users u ON u.id = c.artist_id
            WHERE ${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
+             AND COALESCE(u.is_deleted, false) = false
              AND UPPER(COALESCE(c.status, 'APPROVED')) = 'APPROVED'
              AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})
            ORDER BY c.created_at DESC
@@ -247,6 +248,7 @@ router.get("/", (req, res) => {
              FROM content_items c
              LEFT JOIN users u ON u.id = c.artist_id
              WHERE ${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
+               AND COALESCE(u.is_deleted, false) = false
                AND UPPER(COALESCE(c.status, 'APPROVED')) = 'APPROVED'
                AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})
              ORDER BY c.created_at DESC
@@ -384,12 +386,14 @@ router.get("/artist/:artistId", (req, res) => {
                 visibility,
                 status,
                 is_approved
-         FROM content_items
-         WHERE artist_id = $1
+         FROM content_items c
+         LEFT JOIN users u ON u.id = c.artist_id
+         WHERE c.artist_id = $1
+           AND COALESCE(u.is_deleted, false) = false
            AND ${isDev ? "true" : "COALESCE(is_approved, false) = true"}
            AND UPPER(COALESCE(status, 'APPROVED')) = 'APPROVED'
            AND UPPER(COALESCE(lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})
-         ORDER BY created_at DESC
+         ORDER BY c.created_at DESC
          LIMIT 500`,
         [artistId]
       );

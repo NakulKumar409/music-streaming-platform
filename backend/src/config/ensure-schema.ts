@@ -11,6 +11,9 @@ export async function ensureUsersSchema(): Promise<void> {
       email VARCHAR(255) NOT NULL UNIQUE,
       password TEXT NOT NULL,
       role VARCHAR(20) NOT NULL DEFAULT 'FAN',
+      is_deleted BOOLEAN NOT NULL DEFAULT false,
+      deleted_at TIMESTAMPTZ,
+      deletion_reason TEXT,
       status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
       artist_status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
       is_verified BOOLEAN NOT NULL DEFAULT false,
@@ -28,6 +31,9 @@ export async function ensureUsersSchema(): Promise<void> {
   `);
 
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'FAN'");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false").catch(() => undefined);
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ").catch(() => undefined);
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS deletion_reason TEXT").catch(() => undefined);
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'");
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_status VARCHAR(20) NOT NULL DEFAULT 'PENDING'").catch(() => undefined);
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT false");
@@ -44,12 +50,14 @@ export async function ensureUsersSchema(): Promise<void> {
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS strike_count INT NOT NULL DEFAULT 0");
 
   await pool.query("ALTER TABLE users ALTER COLUMN artist_status SET DEFAULT 'PENDING'").catch(() => undefined);
+  await pool.query("ALTER TABLE users ALTER COLUMN is_deleted SET DEFAULT false").catch(() => undefined);
   await pool.query("ALTER TABLE users ALTER COLUMN trust_score SET DEFAULT 100").catch(() => undefined);
   await pool.query("ALTER TABLE users ALTER COLUMN strike_count SET DEFAULT 0").catch(() => undefined);
 
   await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email)");
   await pool.query("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)");
   await pool.query("CREATE INDEX IF NOT EXISTS idx_users_artist_status ON users(artist_status)").catch(() => undefined);
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_users_is_deleted ON users(is_deleted)").catch(() => undefined);
 }
 
 export async function ensureContentMediaColumns(): Promise<void> {

@@ -5,6 +5,7 @@ import PendingApprovalPage from "./pages/PendingApprovalPage";
 import ArtistSignupPage from "./pages/ArtistSignupPage";
 import ArtistUnderReviewPage from "./pages/ArtistUnderReviewPage";
 import ArtistRejectedPage from "./pages/ArtistRejectedPage";
+import ArtistAccountInactivePage from "./pages/ArtistAccountInactivePage";
 import ArtistShell from "./components/ArtistShell";
 import ArtistAccountPage from "./pages/ArtistAccountPage";
 import ArtistPricingPage from "./pages/ArtistPricingPage";
@@ -19,6 +20,7 @@ export default function App() {
       <Route path="/" element={<Navigate to="/artist/login" replace />} />
       <Route path="/artist/login" element={<ArtistLoginPage />} />
       <Route path="/artist/signup" element={<ArtistSignupPage />} />
+      <Route path="/artist/account-inactive" element={<ArtistAccountInactivePage />} />
       <Route path="/artist/under-review" element={<ArtistUnderReviewPage />} />
       <Route path="/artist/rejected" element={<ArtistRejectedPage />} />
       <Route path="/artist/pending-approval" element={<PendingApprovalPage />} />

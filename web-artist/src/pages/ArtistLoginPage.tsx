@@ -78,6 +78,15 @@ export default function ArtistLoginPage() {
         }
       } catch (e: any) {
         const status = e?.response?.status;
+        if (status === 403) {
+          const msg = (e?.response?.data?.message ?? "").toString().toLowerCase();
+          if (msg.includes("inactive") || msg.includes("suspended")) {
+            localStorage.removeItem("artistToken");
+            navigate("/artist/account-inactive", { replace: true });
+            return;
+          }
+        }
+
         if (status === 401 || status === 403) {
           localStorage.removeItem("artistToken");
         }
@@ -156,6 +165,16 @@ export default function ArtistLoginPage() {
       navigate("/artist/dashboard", { replace: true });
     } catch (e: any) {
       const msg = e?.response?.data?.message || e?.message || "Login failed";
+      const status = e?.response?.status;
+      if (status === 403) {
+        const lower = String(msg).toLowerCase();
+        if (lower.includes("inactive") || lower.includes("suspended")) {
+          localStorage.removeItem("artistToken");
+          navigate("/artist/account-inactive", { replace: true });
+          return;
+        }
+      }
+
       setError(msg);
     } finally {
       setBusy(false);

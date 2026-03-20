@@ -12,6 +12,9 @@ type ArtistListItem = {
   isVerified: boolean;
   subscriptionPrice: number;
   status: string;
+  isDeleted?: boolean;
+  deletedAt?: string | null;
+  deletionReason?: string | null;
 };
 
 type ArtistsListResponse = {
@@ -184,6 +187,15 @@ export default function AdminArtistsPage() {
     }, 250);
   };
 
+  const setFilter = (nextFilter: string) => {
+    const nextParams: any = {};
+    const f = (nextFilter || "").trim();
+    if (f) nextParams.filter = f;
+    const s = search.trim();
+    if (s) nextParams.search = s;
+    setSearchParams(nextParams);
+  };
+
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[#4b1927] text-white">
       <div className="absolute inset-0 opacity-25" style={backgroundStyle} />
@@ -201,6 +213,30 @@ export default function AdminArtistsPage() {
             </div>
 
             <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFilter("")}
+                  className={`h-[34px] px-3 rounded-[6px] border text-[12px] tracking-wide transition-colors ${
+                    !filter
+                      ? "border-white/15 bg-white/10 text-[#e6d6d2]"
+                      : "border-white/10 bg-[#141010]/35 text-[#b8a6a1] hover:text-[#e6d6d2]"
+                  }`}
+                >
+                  Active
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilter("inactive")}
+                  className={`h-[34px] px-3 rounded-[6px] border text-[12px] tracking-wide transition-colors ${
+                    filter.toLowerCase() === "inactive" || filter.toLowerCase() === "deleted"
+                      ? "border-white/15 bg-white/10 text-[#e6d6d2]"
+                      : "border-white/10 bg-[#141010]/35 text-[#b8a6a1] hover:text-[#e6d6d2]"
+                  }`}
+                >
+                  Inactive
+                </button>
+              </div>
               <div className="relative w-full max-w-[260px]">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6e5c59]">
                   <svg
@@ -288,6 +324,7 @@ export default function AdminArtistsPage() {
                   {items.map((a: ArtistListItem) => {
                     const status = (a.status || "ACTIVE").toUpperCase();
                     const isSuspended = status === "SUSPENDED";
+                    const isDeleted = Boolean((a as any).isDeleted);
                     return (
                       <div
                         key={a.id}
@@ -318,7 +355,11 @@ export default function AdminArtistsPage() {
                         <div className="text-[#e6d6d2]">{formatPrice(a.subscriptionPrice)}</div>
 
                         <div>
-                          {isSuspended ? (
+                          {isDeleted ? (
+                            <span className="inline-flex items-center rounded-[4px] bg-[#3a1b1b]/55 border border-[#e3a1a1]/20 px-3 py-[3px] text-[12px] text-[#f0d2d2]">
+                              Inactive
+                            </span>
+                          ) : isSuspended ? (
                             <span className="inline-flex items-center rounded-[4px] bg-[#7a4b28]/45 border border-[#c9853b]/25 px-3 py-[3px] text-[12px] text-[#d8b58a]">
                               Suspended
                             </span>

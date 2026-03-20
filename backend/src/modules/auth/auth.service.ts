@@ -35,7 +35,7 @@ export class AuthService {
     let userResult;
     try {
       const userQuery =
-        "SELECT id, email, password, status, role, COALESCE(is_verified, verified, false) as is_verified FROM users WHERE email = $1";
+        "SELECT id, email, password, status, role, COALESCE(is_verified, verified, false) as is_verified, COALESCE(is_deleted, false) as is_deleted FROM users WHERE email = $1";
       userResult = await pool.query(userQuery, [normalizedEmail]);
     } catch (err: any) {
       if (err?.code === "42703") {
@@ -64,7 +64,14 @@ export class AuthService {
     const role = (user.role ?? "USER").toString().toUpperCase();
     const status = (user.status ?? "ACTIVE").toString().toUpperCase();
     const isVerified = Boolean((user as any).is_verified);
+    const isDeleted = Boolean((user as any).is_deleted);
     const pendingApproval = role === "ARTIST" && !isVerified;
+
+    if (role === "ARTIST" && isDeleted) {
+      const e: any = new Error("Artist account is inactive");
+      e.status = 403;
+      throw e;
+    }
 
     if (role === "ARTIST" && status === "SUSPENDED") {
       const e: any = new Error("Artist account is suspended");

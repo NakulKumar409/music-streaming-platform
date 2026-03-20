@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -15,12 +15,12 @@ import {
   Platform,
   UIManager,
 } from 'react-native';
-import Svg, { Path, Rect, Circle } from 'react-native-svg';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Path, Rect, Circle } from 'react-native-svg';
 
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { ArrowLeft, BadgeCheck, Instagram, Settings } from 'lucide-react-native';
+import { ArrowLeft, BadgeCheck, Settings } from 'lucide-react-native';
 import { ResizeMode, Video } from 'expo-av';
 import { useIsFocused } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -69,6 +69,37 @@ function YouTubeIcon({ size = 18 }: { size?: number }) {
     <Svg width={w} height={h} viewBox="0 0 24 19" preserveAspectRatio="xMidYMid meet">
       <Rect x="0" y="0" width="24" height="19" rx="4.2" fill="#FF0000" />
       <Path d="M10 5.2L16 9.5L10 13.8V5.2Z" fill="#ffffff" />
+    </Svg>
+  );
+}
+
+function InstagramBrandIcon({ size = 18 }: { size?: number }) {
+  const r = 5.2;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet">
+      <Defs>
+        <SvgLinearGradient id="igGradient" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor="#F58529" />
+          <Stop offset="0.35" stopColor="#DD2A7B" />
+          <Stop offset="0.7" stopColor="#8134AF" />
+          <Stop offset="1" stopColor="#515BD4" />
+        </SvgLinearGradient>
+      </Defs>
+
+      <Rect x="2" y="2" width="20" height="20" rx={r} fill="url(#igGradient)" />
+
+      <Rect
+        x="6.6"
+        y="6.6"
+        width="10.8"
+        height="10.8"
+        rx="3"
+        fill="none"
+        stroke="#ffffff"
+        strokeWidth="1.7"
+      />
+      <Circle cx="12" cy="12" r="3.0" fill="none" stroke="#ffffff" strokeWidth="1.7" />
+      <Circle cx="16.4" cy="7.6" r="1.0" fill="#ffffff" />
     </Svg>
   );
 }
@@ -156,21 +187,29 @@ export default function ArtistScreen({ navigation, route }: any) {
     setIsSubscriptionActive(true); // Reset after navigation
   };
 
-  const artistId = (route?.params?.artistId ?? '').toString();
+  const artistIdParam = (route?.params?.artistId ?? '').toString();
+  const artistId = artistIdParam.includes(':') ? artistIdParam.split(':')[0] : artistIdParam;
   const initialMediaId = (route?.params?.contentId ?? '').toString();
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       if (!isFocused) return;
+
+      if (!artistId) {
+        console.warn('[ArtistScreen] missing artistId param', { params: route?.params });
+        setArtist(null);
+        setSongs([]);
+        setError('Artist not found');
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         setError(null);
 
-        const [artistRes, mediaRes] = await Promise.all([
-          fetchArtistById(artistId),
-          fetchArtistMedia(artistId),
-        ]);
+        const artistRes = await fetchArtistById(artistId);
 
         if (!mounted) return;
 
@@ -209,9 +248,29 @@ export default function ArtistScreen({ navigation, route }: any) {
         });
 
         setArtist(normalizedArtist);
-        setSongs(mediaRes.map(toSong));
-      } catch {
+
+        try {
+          const mediaRes = await fetchArtistMedia(artistId);
+          if (!mounted) return;
+          setSongs(mediaRes.map(toSong));
+        } catch (e: any) {
+          if (!mounted) return;
+          console.warn('[ArtistScreen] fetchArtistMedia failed', {
+            artistId,
+            message: e?.message,
+            status: e?.response?.status,
+            data: e?.response?.data,
+          });
+          setSongs([]);
+        }
+      } catch (e: any) {
         if (!mounted) return;
+        console.warn('[ArtistScreen] fetchArtistById failed', {
+          artistId,
+          message: e?.message,
+          status: e?.response?.status,
+          data: e?.response?.data,
+        });
         setError('Failed to load artist');
         setArtist(null);
         setSongs([]);
@@ -577,21 +636,6 @@ function ProfileHeaderSection({
     }
   };
 
-  const [socialHint, setSocialHint] = useState<string | null>(null);
-  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const showHint = (label: string) => {
-    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
-    setSocialHint(label);
-    hintTimerRef.current = setTimeout(() => setSocialHint(null), 1500);
-  };
-
-  const hideHint = () => {
-    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
-    hintTimerRef.current = null;
-    setSocialHint(null);
-  };
-
   return (
     <View style={styles.profileWrap}>
       <View style={styles.bannerWrap}>
@@ -635,11 +679,7 @@ function ProfileHeaderSection({
               {spotifyUrl ? (
                 <Pressable
                   onPress={() => openUrl(spotifyUrl)}
-                  onPressIn={() => showHint('Spotify')}
-                  onPressOut={hideHint}
-                  onLongPress={() => showHint('Spotify')}
-                  delayLongPress={220}
-                  style={({ pressed }) => [styles.socialIconBtn, pressed ? styles.socialIconBtnPressed : null]}
+                  style={styles.socialIconBtn}
                 >
                   <SpotifyIcon size={18} />
                 </Pressable>
@@ -647,11 +687,7 @@ function ProfileHeaderSection({
               {youtubeUrl ? (
                 <Pressable
                   onPress={() => openUrl(youtubeUrl)}
-                  onPressIn={() => showHint('YouTube')}
-                  onPressOut={hideHint}
-                  onLongPress={() => showHint('YouTube')}
-                  delayLongPress={220}
-                  style={({ pressed }) => [styles.socialIconBtn, pressed ? styles.socialIconBtnPressed : null]}
+                  style={styles.socialIconBtn}
                 >
                   <YouTubeIcon size={18} />
                 </Pressable>
@@ -659,17 +695,12 @@ function ProfileHeaderSection({
               {instagramUrl ? (
                 <Pressable
                   onPress={() => openUrl(instagramUrl)}
-                  onPressIn={() => showHint('Instagram')}
-                  onPressOut={hideHint}
-                  onLongPress={() => showHint('Instagram')}
-                  delayLongPress={220}
-                  style={({ pressed }) => [styles.socialIconBtn, pressed ? styles.socialIconBtnPressed : null]}
+                  style={styles.socialIconBtn}
                 >
-                  <Instagram size={18} color="rgba(255,255,255,0.92)" />
+                  <InstagramBrandIcon size={18} />
                 </Pressable>
               ) : null}
             </View>
-            {socialHint ? <Text style={styles.socialHint}>{socialHint}</Text> : null}
           </View>
         ) : null}
 
@@ -1040,18 +1071,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  socialHint: {
-    marginTop: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    overflow: 'hidden',
-    color: 'rgba(255,255,255,0.86)',
-    fontSize: 12,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
   },
   socialIconBtn: {
     width: 38,

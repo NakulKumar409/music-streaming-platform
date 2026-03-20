@@ -128,8 +128,19 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
   const id = (artistId || '').toString();
   if (!id) return [];
 
-  const res = await apiV1.get(`/content/artist/${encodeURIComponent(id)}`);
-  const raw: ApiArtistContentItem[] = Array.isArray(res.data?.items) ? res.data.items : [];
+  let raw: ApiArtistContentItem[] = [];
+  try {
+    const res = await apiV1.get(`/artists/${encodeURIComponent(id)}/content`);
+    raw = Array.isArray(res.data?.content)
+      ? (res.data.content as any)
+      : Array.isArray(res.data?.items)
+        ? (res.data.items as any)
+        : [];
+  } catch {
+    // Fallback to legacy route if the newer one is not available.
+    const res = await apiV1.get(`/content/artist/${encodeURIComponent(id)}`);
+    raw = Array.isArray(res.data?.items) ? (res.data.items as any) : [];
+  }
 
   const items: ArtistMediaItem[] = [];
 
