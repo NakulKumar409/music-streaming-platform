@@ -188,7 +188,14 @@ export default function ArtistScreen({ navigation, route }: any) {
   };
 
   const artistIdParam = (route?.params?.artistId ?? '').toString();
-  const artistId = artistIdParam.includes(':') ? artistIdParam.split(':')[0] : artistIdParam;
+  const artistId = useMemo(() => {
+    const s = (artistIdParam ?? '').toString().trim();
+    if (!s) return '';
+    const base = s.includes(':') ? s.split(':')[0] : s;
+    const n = Number.parseInt(base, 10);
+    if (!Number.isFinite(n) || n <= 0) return base;
+    return String(n);
+  }, [artistIdParam]);
   const initialMediaId = (route?.params?.contentId ?? '').toString();
 
   useEffect(() => {

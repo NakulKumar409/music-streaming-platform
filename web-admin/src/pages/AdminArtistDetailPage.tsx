@@ -432,67 +432,11 @@ export default function AdminArtistDetailPage() {
     }
   };
 
-  const toggleStatusMutation = useMutation({
-    mutationFn: async () => {
-      if (!artistId) throw new Error("Missing artist id");
-      const res = await http.patch(`/api/v1/admin/artists/${artistId}/status`, {});
-      const status = (res.data?.status ?? "").toString();
-      return { status };
-    },
-    onMutate: async () => {
-      const current = (artist?.status ?? "ACTIVE").toString().toUpperCase();
-      const optimistic = current === "SUSPENDED" ? "ACTIVE" : "SUSPENDED";
-
-      setBusy(true);
-      setArtist((a) => (a ? { ...a, status: optimistic } : a));
-
-      const numericId = Number(artistId);
-      if (Number.isFinite(numericId)) {
-        queryClient.setQueriesData(
-          { queryKey: ["admin", "artists"], exact: false },
-          (old: any) => {
-            const items = old?.items;
-            if (!Array.isArray(items)) return old;
-            return {
-              ...old,
-              items: items.map((it: any) =>
-                Number(it?.id) === numericId ? { ...it, status: optimistic } : it
-              )
-            };
-          }
-        );
-      }
-
-      return { previousStatus: current };
-    },
-    onError: (
-      _err: unknown,
-      _vars: void,
-      ctx: { previousStatus: string } | undefined
-    ) => {
-      if (ctx?.previousStatus) {
-        setArtist((a) => (a ? { ...a, status: ctx.previousStatus } : a));
-      }
-    },
-    onSuccess: (data: { status: string }) => {
-      const next = (data?.status ?? "").toString();
-      if (next) setArtist((a) => (a ? { ...a, status: next } : a));
-    },
-    onSettled: () => {
-      setBusy(false);
-      queryClient.invalidateQueries({ queryKey: ["admin", "artists"], exact: false });
-    }
-  });
-
-  const status = (artist?.status ?? "ACTIVE").toUpperCase();
-  const isSuspended = status === "SUSPENDED";
-  const isDeleted = Boolean((artist as any)?.isDeleted);
-
   const submitSoftDelete = async () => {
     if (!artistId) return;
     const reason = softDeleteReason.trim();
     if (!reason) {
-      setSoftDeleteError("Deletion reason is required");
+      setSoftDeleteError("Reason is required");
       return;
     }
 
@@ -554,6 +498,11 @@ export default function AdminArtistDetailPage() {
       setSoftDeleteBusy(false);
     }
   };
+
+  const status = (artist?.status ?? "ACTIVE").toString().toUpperCase();
+  const isDeleted = Boolean((artist as any)?.isDeleted);
+  const isInactive = isDeleted || status === "SUSPENDED";
+  const statusLabel = isInactive ? "DEACTIVATED" : "ACTIVE";
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[#4b1927] text-white">
@@ -682,45 +631,13 @@ export default function AdminArtistDetailPage() {
                   <div className="mt-4 grid grid-cols-2 gap-3">
                     <button
                       type="button"
-                      disabled={busy || loading}
-                      onClick={() => {
-                        if (!isSuspended) toggleStatusMutation.mutate();
-                      }}
-                      className={`h-[42px] rounded-[6px] border text-[14px] font-light tracking-wide shadow-[0_10px_25px_rgba(0,0,0,0.35)] ${
-                        isSuspended
-                          ? "border-white/10 bg-[#141010]/35 text-[#a99792]"
-                          : "border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] text-[#e6d6d2]"
-                      }`}
-                    >
-                      Suspend
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={busy || loading}
-                      onClick={() => {
-                        if (isSuspended) toggleStatusMutation.mutate();
-                      }}
-                      className={`h-[42px] rounded-[6px] border text-[14px] font-light tracking-wide shadow-[0_10px_25px_rgba(0,0,0,0.35)] ${
-                        isSuspended
-                          ? "border-white/10 bg-gradient-to-b from-[#384038] to-[#202620] text-[#e6d6d2]"
-                          : "border-white/10 bg-[#141010]/35 text-[#a99792]"
-                      }`}
-                    >
-                      Activate
-                    </button>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      disabled={busy || loading || softDeleteBusy || isDeleted}
+                      disabled={busy || loading || softDeleteBusy || isInactive}
                       onClick={() => {
                         setSoftDeleteError(null);
                         setSoftDeleteOpen(true);
                       }}
                       className={`h-[42px] rounded-[6px] border text-[14px] font-light tracking-wide shadow-[0_10px_25px_rgba(0,0,0,0.35)] ${
-                        isDeleted
+                        isInactive
                           ? "border-white/10 bg-[#141010]/35 text-[#a99792]"
                           : "border-[#6e2c2c]/40 bg-gradient-to-b from-[#5d1f1f] to-[#2f1212] text-[#f0d2d2]"
                       }`}
@@ -730,10 +647,10 @@ export default function AdminArtistDetailPage() {
 
                     <button
                       type="button"
-                      disabled={busy || loading || softDeleteBusy || !isDeleted}
+                      disabled={busy || loading || softDeleteBusy || !isInactive}
                       onClick={() => reactivateArtist()}
                       className={`h-[42px] rounded-[6px] border text-[14px] font-light tracking-wide shadow-[0_10px_25px_rgba(0,0,0,0.35)] ${
-                        isDeleted
+                        isInactive
                           ? "border-white/10 bg-gradient-to-b from-[#384038] to-[#202620] text-[#e6d6d2]"
                           : "border-white/10 bg-[#141010]/35 text-[#a99792]"
                       }`}
@@ -743,19 +660,23 @@ export default function AdminArtistDetailPage() {
                   </div>
 
                   <div className="mt-4 text-[12px] text-[#8d7b77]">
-                    Current status: <span className="text-[#d8c7c3]">{status}</span>
+                    Current status: <span className="text-[#d8c7c3]">{statusLabel}</span>
                   </div>
 
-                  {isDeleted ? (
+                  {isInactive ? (
                     <div className="mt-3 rounded-[8px] border border-[#e3a1a1]/20 bg-[#3a1b1b]/40 px-4 py-3">
                       <div className="text-[12px] text-[#f0d2d2]">Account is inactive</div>
-                      <div className="mt-1 text-[12px] text-[#b8a6a1]">
-                        Deleted at: <span className="text-[#d8c7c3]">{formatDateTime((artist as any)?.deletedAt ?? null)}</span>
-                      </div>
-                      {(artist as any)?.deletionReason ? (
-                        <div className="mt-1 text-[12px] text-[#b8a6a1]">
-                          Reason: <span className="text-[#d8c7c3]">{String((artist as any)?.deletionReason)}</span>
-                        </div>
+                      {isDeleted ? (
+                        <>
+                          <div className="mt-1 text-[12px] text-[#b8a6a1]">
+                            Deleted at: <span className="text-[#d8c7c3]">{formatDateTime((artist as any)?.deletedAt ?? null)}</span>
+                          </div>
+                          {(artist as any)?.deletionReason ? (
+                            <div className="mt-1 text-[12px] text-[#b8a6a1]">
+                              Reason: <span className="text-[#d8c7c3]">{String((artist as any)?.deletionReason)}</span>
+                            </div>
+                          ) : null}
+                        </>
                       ) : null}
                     </div>
                   ) : null}

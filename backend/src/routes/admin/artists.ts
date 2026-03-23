@@ -282,9 +282,9 @@ router.get("/", requireAuth, requireAdmin, async (req, res) => {
 
   // Default behavior: only show active (non-deleted) artists unless explicitly filtering.
   if (filter === "inactive" || filter === "deleted") {
-    whereParts.push("COALESCE(is_deleted, false) = true");
+    whereParts.push("(COALESCE(is_deleted, false) = true OR UPPER(COALESCE(status, 'ACTIVE')) = 'SUSPENDED')");
   } else {
-    whereParts.push("COALESCE(is_deleted, false) = false");
+    whereParts.push("(COALESCE(is_deleted, false) = false AND UPPER(COALESCE(status, 'ACTIVE')) <> 'SUSPENDED')");
   }
 
   if (filter === "pending") {
@@ -525,6 +525,7 @@ router.patch("/:id/reactivate", requireAuth, requireAdmin, async (req, res) => {
        SET is_deleted = false,
            deleted_at = NULL,
            deletion_reason = NULL,
+           status = 'ACTIVE',
            updated_at = now()
        WHERE id = $1 AND UPPER(role) = 'ARTIST'
        RETURNING id, COALESCE(is_deleted, false) as is_deleted, deleted_at, deletion_reason`,
@@ -674,8 +675,8 @@ router.patch("/:id/status", requireAuth, requireAdmin, async (req, res) => {
     return res.status(400).json({ success: false, message: "Invalid id" });
   }
 
-  const rows = await safeQuery<{ status: string }>(
-    "SELECT COALESCE(status, 'ACTIVE') as status FROM users WHERE id = $1 AND UPPER(role) = 'ARTIST' LIMIT 1",
+  const rows = await safeQuery<{ status: string; is_deleted: boolean }>(
+    "SELECT COALESCE(status, 'ACTIVE') as status, COALESCE(is_deleted, false) as is_deleted FROM users WHERE id = $1 AND UPPER(role) = 'ARTIST' LIMIT 1",
     [id]
   );
 
@@ -684,18 +685,42 @@ router.patch("/:id/status", requireAuth, requireAdmin, async (req, res) => {
   }
 
   const current = (rows[0].status ?? "ACTIVE").toString().toUpperCase();
-  const next = current === "SUSPENDED" ? "ACTIVE" : "SUSPENDED";
+  const isDeleted = Boolean(rows[0].is_deleted);
+  const isInactive = isDeleted || current === "SUSPENDED";
 
   try {
-    await pool.query(
-      "UPDATE users SET status = $2 WHERE id = $1 AND UPPER(role) = 'ARTIST'",
-      [id, next]
-    );
+    if (isInactive) {
+      await pool.query(
+        `UPDATE users
+         SET status = 'ACTIVE',
+             is_deleted = false,
+             deleted_at = NULL,
+             deletion_reason = NULL,
+             updated_at = now()
+         WHERE id = $1 AND UPPER(role) = 'ARTIST'`,
+        [id]
+      );
+    } else {
+      await pool.query(
+        `UPDATE users
+         SET status = 'ACTIVE',
+             is_deleted = true,
+             deleted_at = now(),
+             deletion_reason = COALESCE(NULLIF(TRIM($2), ''), 'Deactivated by admin'),
+             updated_at = now()
+         WHERE id = $1 AND UPPER(role) = 'ARTIST'`,
+        [id, String(req.body?.reason ?? "")]
+      );
+    }
   } catch {
     return res.status(500).json({ success: false, message: "Failed to update status" });
   }
 
-  return res.json({ success: true, status: next });
+  return res.json({
+    success: true,
+    status: "ACTIVE",
+    isDeleted: !isInactive
+  });
 });
 
 router.patch("/:id/verified", requireAuth, requireAdmin, async (req, res) => {

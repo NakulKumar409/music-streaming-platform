@@ -59,8 +59,17 @@ export type ArtistDetail = {
   genre: string;
 };
 
+function normalizeArtistId(raw: string): string {
+  const s = (raw ?? '').toString().trim();
+  if (!s) return '';
+  const base = s.includes(':') ? s.split(':')[0] : s;
+  const n = Number.parseInt(base, 10);
+  if (!Number.isFinite(n) || n <= 0) return base;
+  return String(n);
+}
+
 export async function fetchArtistById(artistId: string): Promise<ArtistDetail | null> {
-  const id = (artistId || '').toString();
+  const id = normalizeArtistId((artistId || '').toString());
   if (!id) return null;
   const res = await apiV1.get(`/artists/${encodeURIComponent(id)}`);
   const a: ApiArtist | null = (res.data?.artist as any) ?? null;
@@ -125,21 +134,40 @@ function resolveMediaUrl(url: string) {
 }
 
 export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaItem[]> {
-  const id = (artistId || '').toString();
+  const id = normalizeArtistId((artistId || '').toString());
   if (!id) return [];
+  const normalizedArtistId = String(id);
 
   let raw: ApiArtistContentItem[] = [];
   try {
+    // Prefer the fan content endpoint because it returns stream-ready audio/video urls.
+    const res = await apiV1.get(`/content/artist/${encodeURIComponent(id)}`);
+    raw = Array.isArray(res.data?.items)
+      ? (res.data.items as any)
+      : Array.isArray(res.data?.content)
+        ? (res.data.content as any)
+        : [];
+  } catch {
+    // Fallback to artist profile content route if fan content route fails.
     const res = await apiV1.get(`/artists/${encodeURIComponent(id)}/content`);
     raw = Array.isArray(res.data?.content)
       ? (res.data.content as any)
       : Array.isArray(res.data?.items)
         ? (res.data.items as any)
         : [];
-  } catch {
-    // Fallback to legacy route if the newer one is not available.
-    const res = await apiV1.get(`/content/artist/${encodeURIComponent(id)}`);
-    raw = Array.isArray(res.data?.items) ? (res.data.items as any) : [];
+  }
+
+  if (!raw.length) {
+    try {
+      const res = await apiV1.get('/content');
+      const feedItems = Array.isArray(res.data?.items) ? (res.data.items as any[]) : [];
+      raw = feedItems.filter((it: any) => {
+        const aId = normalizeArtistId(String(it?.artistId ?? it?.artist_id ?? ''));
+        return aId === normalizedArtistId;
+      });
+    } catch {
+      // no-op: preserve empty list
+    }
   }
 
   const items: ArtistMediaItem[] = [];
@@ -158,7 +186,10 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
     const audioUrl = resolveMediaUrl((it.audioUrl || '').toString()) || '';
     const videoUrl = resolveMediaUrl((it.videoUrl || '').toString()) || '';
     const fallbackUrl = resolveMediaUrl((it.mediaUrl || it.fileUrl || '').toString()) || '';
-    const useStreamAccess = Boolean(it.useStreamAccess);
+    // Some endpoints (notably /artists/:id/content) may omit direct media urls for
+    // storage-backed uploads. In that case, force stream access so items still render
+    // and playback URL is requested on demand.
+    const useStreamAccess = Boolean(it.useStreamAccess) || (!audioUrl && !videoUrl && !fallbackUrl);
 
     const effectiveAudioUrl = audioUrl || (!isVideoOnly ? fallbackUrl : '');
     const effectiveVideoUrl = videoUrl || (isVideoOnly ? fallbackUrl : '');

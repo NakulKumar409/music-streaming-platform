@@ -323,8 +323,8 @@ export default function AdminArtistsPage() {
                 <div>
                   {items.map((a: ArtistListItem) => {
                     const status = (a.status || "ACTIVE").toUpperCase();
-                    const isSuspended = status === "SUSPENDED";
                     const isDeleted = Boolean((a as any).isDeleted);
+                    const isInactive = isDeleted || status === "SUSPENDED";
                     return (
                       <div
                         key={a.id}
@@ -355,13 +355,9 @@ export default function AdminArtistsPage() {
                         <div className="text-[#e6d6d2]">{formatPrice(a.subscriptionPrice)}</div>
 
                         <div>
-                          {isDeleted ? (
+                          {isInactive ? (
                             <span className="inline-flex items-center rounded-[4px] bg-[#3a1b1b]/55 border border-[#e3a1a1]/20 px-3 py-[3px] text-[12px] text-[#f0d2d2]">
                               Inactive
-                            </span>
-                          ) : isSuspended ? (
-                            <span className="inline-flex items-center rounded-[4px] bg-[#7a4b28]/45 border border-[#c9853b]/25 px-3 py-[3px] text-[12px] text-[#d8b58a]">
-                              Suspended
                             </span>
                           ) : (
                             <span className="inline-flex items-center rounded-[4px] bg-[#243225]/45 border border-[#9bd39b]/20 px-3 py-[3px] text-[12px] text-[#bfe6bf]">
