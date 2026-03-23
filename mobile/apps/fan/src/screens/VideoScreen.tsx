@@ -937,24 +937,11 @@ export default function VideoScreen() {
 
   const panResponder = useMemo(() => {
     return PanResponder.create({
-      onMoveShouldSetPanResponder: (_evt, gesture) => {
-        const dx = Math.abs(gesture.dx);
-        const dy = Math.abs(gesture.dy);
-        return dx > 12 && dx > dy;
-      },
-      onPanResponderRelease: (_evt, gesture) => {
-        const dx = gesture.dx;
-        const vx = gesture.vx;
-        if (dx < -60 || vx < -0.5) {
-          playNextPrev('next');
-          return;
-        }
-        if (dx > 60 || vx > 0.5) {
-          playNextPrev('prev');
-        }
-      },
+      // Swipe gestures no longer change video — double-tap left/right seeks ±10s instead.
+      onMoveShouldSetPanResponder: () => false,
+      onPanResponderRelease: () => {},
     });
-  }, [playNextPrev]);
+  }, []);
 
   useEffect(() => {
     if (!activePlaybackUrl) return;
@@ -986,25 +973,14 @@ export default function VideoScreen() {
     ).start();
   }, [shimmerX]);
 
-  useEffect(() => {
-    const deep = scrollYRef.current > HEADER_HEIGHT * 2.4;
-    const next = !isFullscreen && deep && Boolean(activePlaybackUrl) && isVideoPlaying;
-    setShowMini((prev) => (prev === next ? prev : next));
-  }, [activePlaybackUrl, isFullscreen, isVideoPlaying]);
 
   const onListScroll = useCallback(
     (e: any) => {
       const y = Math.max(0, e?.nativeEvent?.contentOffset?.y ?? 0);
       scrollYRef.current = y;
-
-      const deep = y > HEADER_HEIGHT * 2.4;
-      if (deepScrollRef.current === deep) return;
-      deepScrollRef.current = deep;
-
-      const next = !isFullscreen && deep && Boolean(activePlaybackUrl) && isVideoPlaying;
-      setShowMini((prev) => (prev === next ? prev : next));
+      // Player stays fixed at the top — no mini/PiP mode on scroll.
     },
-    [activePlaybackUrl, isFullscreen, isVideoPlaying]
+    []
   );
 
   useEffect(() => {
@@ -1546,20 +1522,6 @@ export default function VideoScreen() {
               style={[
                 styles.playerFrame,
                 isFullscreen ? [{ width: windowWidth, height: windowHeight } as any] : null,
-                showMini
-                  ? [
-                      styles.playerFrameMini,
-                      {
-                        position: 'absolute',
-                        width: 180,
-                        height: Math.round(180 / HEADER_ASPECT),
-                        right: 14,
-                        bottom: tabBarHeight + 16,
-                      },
-                    ]
-                  : null,
-                // Smooth transition between normal header and mini-player.
-                showMini ? { transform: [{ scale: miniAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1] }) } as any] } : null,
               ]}
               pointerEvents="box-none"
             >
@@ -1567,7 +1529,7 @@ export default function VideoScreen() {
               {activePlaybackUrl ? (
                 <Pressable
                   style={[StyleSheet.absoluteFill, styles.playerSurfacePressable]}
-                  pointerEvents={showControls ? 'none' : 'auto'}
+                  pointerEvents="auto"
                   onPress={onPressPlayerSurface}
                 >
                   <Video
