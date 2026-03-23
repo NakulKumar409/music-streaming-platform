@@ -243,7 +243,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const renderFeaturedArtist = ({ item }: { item: ArtistCard }) => (
     <Pressable style={styles.featuredCard} onPress={() => onPressArtist(item.id)}>
-      <Image source={{ uri: item.image }} style={styles.featuredImg} />
+      <Image source={{ uri: item.image }} style={styles.featuredImg} resizeMode="contain" />
       <LinearGradient
         colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.85)']}
         style={styles.featuredOverlay}
@@ -266,7 +266,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const renderTrendingArtist = ({ item }: { item: ArtistCard }) => (
     <Pressable style={styles.trendingCard} onPress={() => onPressArtist(item.id)}>
-      <Image source={{ uri: item.image }} style={styles.trendingImg} />
+      <Image source={{ uri: item.image }} style={styles.trendingImg} resizeMode="contain" />
       <View style={styles.trendingNameRow}>
         <Text style={styles.trendingName} numberOfLines={1}>
           {item.name}
@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.06)',
   },
 
-  featuredImg: { width: '100%', height: '100%' },
+  featuredImg: { width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.15)' },
 
   featuredOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -611,7 +611,7 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(0,0,0,0.2)',
   },
   trendingNameRow: {
     marginTop: 8,

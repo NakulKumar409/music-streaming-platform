@@ -294,7 +294,7 @@ export default function ArtistAccountPage() {
         <div className="mt-8 rounded-[10px] border border-white/10 bg-[#0e0a0a]/35 overflow-hidden">
           <div className="relative h-[220px] bg-[#0a0808]">
             {bannerSrc ? (
-              <img src={bannerSrc} alt="" className="h-full w-full object-cover" />
+              <img src={bannerSrc} alt="" className="h-full w-full object-contain" />
             ) : (
               <div className="h-full w-full bg-gradient-to-b from-[#241a1a] to-[#0a0808]" />
             )}
@@ -484,7 +484,7 @@ export default function ArtistAccountPage() {
                   <div className="mt-2 flex items-center gap-3">
                     <div className="h-[44px] w-[68px] rounded-[8px] overflow-hidden border border-white/10 bg-[#141010]">
                       {bannerSrc ? (
-                        <img src={bannerSrc} alt="" className="h-full w-full object-cover" />
+                        <img src={bannerSrc} alt="" className="h-full w-full object-contain" />
                       ) : (
                         <div className="h-full w-full bg-gradient-to-b from-[#241a1a] to-[#0a0808]" />
                       )}

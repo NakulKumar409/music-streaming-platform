@@ -91,7 +91,7 @@ export default function ArtistChannelPreviewPage() {
         <div className="mt-6 rounded-[10px] border border-white/10 bg-[#0e0a0a]/22 overflow-hidden">
           <div className="relative h-[220px]">
             {artist?.bannerImageUrl ? (
-              <img src={artist.bannerImageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              <img src={artist.bannerImageUrl} alt="" className="absolute inset-0 h-full w-full object-contain" />
             ) : (
               <div className="absolute inset-0 bg-gradient-to-r from-[#3a1b19] to-[#0e0a0a]" />
             )}
