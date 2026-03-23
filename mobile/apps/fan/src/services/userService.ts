@@ -57,7 +57,7 @@ export const userService: UserService = {
     const profile = res.data?.profile ?? {};
     const premium = res.data?.premium ?? {};
     return {
-      name: (profile.name ?? 'User').toString(),
+      name: (profile.name ?? '').toString(),
       isPremium: Boolean(premium.isPremium ?? false),
       subscriptionCount: Number(premium.subscriptionCount ?? 0),
     };

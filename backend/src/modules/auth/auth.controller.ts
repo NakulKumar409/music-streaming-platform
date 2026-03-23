@@ -7,7 +7,7 @@ const authService = new AuthService();
 export class AuthController {
   async register(req: Request, res: Response) {
     try {
-      const { email, password } = req.body;
+      const { email, password, name, fullName } = req.body;
 
       if (!email || !password) {
         return res.status(400).json({
@@ -16,7 +16,7 @@ export class AuthController {
         });
       }
 
-      const result = await authService.register(email, password);
+      const result = await authService.register(email, password, name || fullName);
 
       if (result.success) {
         return res.status(201).json(result);
@@ -81,26 +81,26 @@ export class AuthController {
       try {
         try {
           const userQuery =
-            "SELECT id, email, status, role, COALESCE(is_verified, verified, false) as is_verified FROM users WHERE id = $1";
+            "SELECT id, name, email, status, role, COALESCE(is_verified, verified, false) as is_verified FROM users WHERE id = $1";
           const userResult = await pool.query(userQuery, [tokenUser?.id]);
           dbUser = userResult.rows?.[0] || null;
         } catch (err2: any) {
           if (err2?.code !== "42703") throw err2;
           try {
             const userQuery =
-              "SELECT id, email, status, role, COALESCE(verified, false) as is_verified FROM users WHERE id = $1";
+              "SELECT id, name, email, status, role, COALESCE(verified, false) as is_verified FROM users WHERE id = $1";
             const userResult = await pool.query(userQuery, [tokenUser?.id]);
             dbUser = userResult.rows?.[0] || null;
           } catch (err3: any) {
             if (err3?.code !== "42703") throw err3;
-            const userQuery = "SELECT id, email, status, role FROM users WHERE id = $1";
+            const userQuery = "SELECT id, name, email, status, role FROM users WHERE id = $1";
             const userResult = await pool.query(userQuery, [tokenUser?.id]);
             dbUser = userResult.rows?.[0] || null;
           }
         }
       } catch (err: any) {
         if (err?.code === "42703") {
-          const userQuery = "SELECT id, email, role FROM users WHERE id = $1";
+          const userQuery = "SELECT id, name, email, role FROM users WHERE id = $1";
           const userResult = await pool.query(userQuery, [tokenUser?.id]);
           dbUser = userResult.rows?.[0] || null;
         } else {
@@ -113,6 +113,7 @@ export class AuthController {
         user: {
           ...(tokenUser || {}),
           ...(dbUser || {}),
+          name: dbUser?.name ?? (tokenUser as any)?.name ?? null,
           role: (dbUser?.role ?? (tokenUser as any)?.role ?? null) || null,
           isVerified: Boolean(dbUser?.is_verified ?? (tokenUser as any)?.isVerified ?? false),
           status: dbUser?.status ?? (tokenUser as any)?.status ?? "ACTIVE"

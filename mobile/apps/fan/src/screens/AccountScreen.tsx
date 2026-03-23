@@ -362,7 +362,7 @@ export default function AccountScreen() {
               <Text style={styles.userInfoLabel}>Email</Text>
               <Text style={styles.userInfoValue}>{user.email || 'Not available'}</Text>
               <Text style={styles.userInfoLabel}>Name</Text>
-              <Text style={styles.userInfoValue}>{user.name || 'Not set'}</Text>
+              <Text style={styles.userInfoValue}>{profileName || user.name || 'Not set'}</Text>
             </View>
           </View>
         )}

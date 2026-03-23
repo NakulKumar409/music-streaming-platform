@@ -153,7 +153,7 @@ export default function MyLibraryScreen({ navigation }: any) {
               {!loading ? (
                 <Pressable
                   style={styles.findArtistsBtn}
-                  onPress={() => navigation.getParent()?.getParent()?.navigate('HomeTab', { screen: 'HomeIndex' })}
+                  onPress={() => (navigation.getParent('fan-tabs') ?? navigation.getParent())?.navigate('HomeTab')}
                 >
                   <LinearGradient
                     colors={['rgba(255,122,24,0.22)', 'rgba(255,122,24,0.12)']}
@@ -223,7 +223,7 @@ export default function MyLibraryScreen({ navigation }: any) {
               <Text style={styles.emptySub}>Subscribe to artists you love to fill this space</Text>
               <Pressable
                 style={styles.browseBtn}
-                onPress={() => navigation.getParent()?.getParent()?.navigate('HomeTab', { screen: 'HomeIndex' })}
+                onPress={() => (navigation.getParent('fan-tabs') ?? navigation.getParent())?.navigate('HomeTab')}
               >
                 <Text style={styles.browseBtnText}>Browse Artists</Text>
               </Pressable>

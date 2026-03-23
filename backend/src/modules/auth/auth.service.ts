@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import { pool } from "../../common/db";
 
 export class AuthService {
-  async register(email: string, password: string) {
+  async register(email: string, password: string, name?: string) {
     try {
       const normalizedEmail = String(email || "")
         .trim()
@@ -17,9 +17,10 @@ export class AuthService {
       }
 
       const hashedPassword = await bcrypt.hash(password, 10);
+      const normalizedName = name ? String(name).trim() : null;
 
-      const insertUserQuery = "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id";
-      await pool.query(insertUserQuery, [normalizedEmail, hashedPassword]);
+      const insertUserQuery = "INSERT INTO users (email, password, name) VALUES ($1, $2, $3) RETURNING id";
+      await pool.query(insertUserQuery, [normalizedEmail, hashedPassword, normalizedName]);
 
       return { success: true, message: "User registered successfully" };
     } catch (error) {
