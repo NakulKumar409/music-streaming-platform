@@ -1080,7 +1080,9 @@ export default function AudioScreen({ navigation }: any) {
           )}
 
           {searchResults === null ? (
-            <Text style={[styles.sectionTitle, { marginTop: 20 }]}>All Audio</Text>
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionTitle}>All Audio</Text>
+            </View>
           ) : null}
 
           <View style={styles.listWrap}>

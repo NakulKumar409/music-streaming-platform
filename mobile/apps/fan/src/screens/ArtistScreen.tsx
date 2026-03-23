@@ -435,23 +435,7 @@ export default function ArtistScreen({ navigation, route }: any) {
             />
           </View>
         ) : null}
-        {/* Debug Toggle */}
-        {showDebugToggle && (
-          <View style={styles.debugToggle}>
-            <TouchableOpacity
-              style={[
-                styles.debugButton,
-                !isSubscriptionActive && styles.debugButtonActive
-              ]}
-              onPress={() => setIsSubscriptionActive(!isSubscriptionActive)}
-            >
-              <Settings size={16} color="#fff" />
-              <Text style={styles.debugButtonText}>
-                Subscription: {isSubscriptionActive ? 'Active' : 'Expired'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
+
 
         {/* Subscription Expiry Guard Screen */}
         {!isSubscriptionActive && artist ? (
@@ -691,7 +675,7 @@ function ProfileHeaderSection({
             </View>
           ) : null}
         </View>
-        <Text style={styles.profileSubs}>{subscribersLabel}</Text>
+
 
         {bio ? (
           <Text style={styles.profileBio} numberOfLines={4}>
@@ -729,15 +713,6 @@ function ProfileHeaderSection({
             </View>
           </View>
         ) : null}
-
-        <View style={styles.actionsRow}>
-          <Pressable onPress={onSubscribe} style={styles.subscribeBtn}>
-            <Text style={styles.subscribeBtnText}>Subscribe</Text>
-          </Pressable>
-          <Pressable onPress={onJoin} style={styles.joinBtn}>
-            <Text style={styles.joinBtnText}>Join</Text>
-          </Pressable>
-        </View>
       </View>
     </View>
   );
@@ -784,16 +759,7 @@ function InlineArtistMetaSection({
               </View>
             ) : null}
           </View>
-          <Text style={styles.inlineSubs}>{subscribersLabel}</Text>
-        </View>
 
-        <View style={styles.inlineActionsRow}>
-          <Pressable onPress={onSubscribe} style={styles.inlineSubscribeBtn}>
-            <Text style={styles.inlineSubscribeText}>Subscribe</Text>
-          </Pressable>
-          <Pressable onPress={onJoin} style={styles.inlineJoinBtn}>
-            <Text style={styles.inlineJoinText}>Join</Text>
-          </Pressable>
         </View>
       </View>
     </View>
@@ -857,9 +823,8 @@ function MediaCard({
   isGrid: boolean;
   onPress: () => void;
 }) {
-  const viewsLabel = deriveViewsLabel(item.id);
   const timeAgoLabel = deriveTimeAgoLabel(item.id);
-  const metaLine = `${viewsLabel} • ${timeAgoLabel}`;
+  const metaLine = timeAgoLabel;
   const badgeText = item.mediaType === 'video' ? 'VIDEO' : 'AUDIO';
 
   return (

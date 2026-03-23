@@ -191,6 +191,25 @@ export default function HomeScreen({ navigation }: any) {
   };
 
   const onPressContent = async (item: ContentCard) => {
+    if (item.mediaType === 'video') {
+      navigation.navigate('VideoTab', {
+        screen: 'VideoIndex',
+        params: {
+          autoplayVideo: {
+            id: item.contentId ?? item.id,
+            title: item.title,
+            artistName: item.artist,
+            artistId: item.artistId,
+            artworkUrl: item.thumbnail,
+            mediaUrl: item.mediaUrl || '',
+            useStreamAccess: Boolean(item.useStreamAccess),
+            category: 'Recently Added',
+          },
+        },
+      });
+      return;
+    }
+
     const queue: MediaItem[] = recentlyAdded.map((x) => ({
       id: x.id,
       contentId: x.contentId ?? x.id,
