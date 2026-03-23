@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import {
   AlertTriangle,
@@ -262,6 +262,7 @@ function normalizeCategory(raw: unknown): string {
 
 export default function VideoScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const tabBarHeight = useBottomTabBarHeight();
   const {
     currentItem,
@@ -906,6 +907,16 @@ export default function VideoScreen() {
     },
     [pauseGlobalPlaybackIfNeeded, resolvePlaybackUrl]
   );
+
+  useEffect(() => {
+    if (route.params?.autoplayVideo) {
+      const vid = route.params.autoplayVideo;
+      if (activeVideoId !== String(vid.id)) {
+        onPressVideo(vid);
+        navigation.setParams({ autoplayVideo: undefined });
+      }
+    }
+  }, [route.params?.autoplayVideo, activeVideoId, navigation, onPressVideo]);
 
   const currentIndex = useMemo(() => {
     if (!activeVideoId) return -1;

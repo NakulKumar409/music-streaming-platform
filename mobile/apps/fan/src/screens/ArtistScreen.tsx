@@ -350,17 +350,36 @@ export default function ArtistScreen({ navigation, route }: any) {
 
   const useGrid = activeTab === 'Video';
 
-  // Disable audio playback when subscription is expired
   const handleSongPress = (song: Song) => {
     if (!artist) return;
     if (!isSubscriptionActive) {
       return; // Block all playback when subscription is expired
     }
     
+    if (song.mediaType === 'video') {
+      navigation.navigate('VideoTab', {
+        screen: 'VideoIndex',
+        params: {
+          autoplayVideo: {
+            id: song.contentId || song.id.replace(':video', ''),
+            title: song.title,
+            artistName: song.artist,
+            artistId: artist.id,
+            artworkUrl: song.thumbnail,
+            mediaUrl: song.mediaUrl || '',
+            useStreamAccess: song.useStreamAccess,
+            category: 'Artist Upload',
+          },
+        },
+      });
+      return;
+    }
+
     const queue = filteredSongs
       .filter((s) => Boolean(s.mediaUrl) || s.useStreamAccess)
       .map((s) => ({
         id: s.id,
+        contentId: s.contentId,
         title: s.title,
         artistName: s.artist,
         artistId: artist.id,
