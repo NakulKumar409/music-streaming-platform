@@ -101,7 +101,7 @@ export default function HomeScreen({ navigation }: any) {
         image: a.image,
         isVerified: Boolean(a.isVerified),
         isSubscriptionBased,
-        subText: isSubscriptionBased ? 'Subscription Based' : a.genre || 'Artist',
+        subText: '',
       };
     };
 
@@ -259,7 +259,7 @@ export default function HomeScreen({ navigation }: any) {
             </View>
           ) : null}
         </View>
-        <Text style={styles.featuredSubText}>{item.subText}</Text>
+
       </View>
     </Pressable>
   );
@@ -277,9 +277,7 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         ) : null}
       </View>
-      <Text style={styles.trendingSubText} numberOfLines={1}>
-        {item.subText}
-      </Text>
+
     </Pressable>
   );
 
@@ -342,7 +340,7 @@ export default function HomeScreen({ navigation }: any) {
                     image: a.image,
                     isVerified: Boolean(a.isVerified),
                     isSubscriptionBased,
-                    subText: isSubscriptionBased ? 'Subscription Based' : a.genre || 'Artist',
+                    subText: '',
                   };
                 };
 
@@ -389,7 +387,7 @@ export default function HomeScreen({ navigation }: any) {
                       image: a.image,
                       isVerified: Boolean(a.isVerified),
                       isSubscriptionBased,
-                      subText: isSubscriptionBased ? 'Subscription Based' : a.genre || 'Artist',
+                      subText: '',
                     };
                   };
 

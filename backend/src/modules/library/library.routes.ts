@@ -196,13 +196,14 @@ router.get("/recently-played", requireAuth, async (req: any, res) => {
     const items = (rows.rows ?? []).map((r: any) => {
       const type = (r.type ?? "").toString().toLowerCase();
       const mediaType = type === "video" ? "video" : "audio";
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
       return {
         id: r.content_id,
         title: (r.title ?? "Untitled").toString(),
         mediaType,
         artistId: r.artist_id ?? null,
         artistName: (r.artist_name ?? "Artist").toString(),
-        artworkUrl: toAbsoluteUrl(req, r.thumbnail_url),
+        artworkUrl: `${baseUrl}/api/v1/fan/stream/thumbnail/${r.content_id}`,
         mediaUrl: toAbsoluteUrl(req, r.media_url),
         playedAt: r.played_at,
         artistProfileImageUrl: toAbsoluteUrl(req, r.artist_profile_image_url),

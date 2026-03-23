@@ -140,6 +140,13 @@ router.get("/thumbnail/:contentId", async (req: any, res: any) => {
     });
     return read.stream.pipe(res);
   } catch (err: any) {
+    const isNotFound =
+      err?.message?.includes("No such object") ||
+      err?.message?.includes("Not Found") ||
+      err?.code === 404;
+    if (isNotFound) {
+      return res.status(404).json({ success: false, message: "Thumbnail not found in storage", correlationId });
+    }
     console.error("[stream/thumbnail] error", { contentId, correlationId }, err);
     return res.status(500).json({ success: false, message: "Failed to load thumbnail", correlationId });
   }
