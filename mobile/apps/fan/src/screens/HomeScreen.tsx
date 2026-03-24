@@ -297,7 +297,7 @@ export default function HomeScreen({ navigation }: any) {
   if (loading)
     return (
       <LinearGradient
-        colors={Colors.primaryGradient}
+        colors={['#000000', '#000000']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradientBackground}
@@ -311,7 +311,7 @@ export default function HomeScreen({ navigation }: any) {
 
   return (
     <LinearGradient
-      colors={Colors.primaryGradient}
+      colors={['#000000', '#000000']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.gradientBackground}
