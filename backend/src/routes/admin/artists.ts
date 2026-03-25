@@ -5,73 +5,6 @@ import { pool } from "../../common/db";
 
 const router = Router();
 
-const ensureArtistOnboardingSchema = async () => {
-  await pool.query(
-    "ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR NOT NULL DEFAULT 'ACTIVE'"
-  );
-  await pool
-    .query("ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_status VARCHAR(20) NOT NULL DEFAULT 'PENDING'")
-    .catch(() => undefined);
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_bio TEXT").catch(() => undefined);
-  await pool
-    .query("ALTER TABLE users ADD COLUMN IF NOT EXISTS portfolio_links TEXT[] NOT NULL DEFAULT '{}'")
-    .catch(() => undefined);
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ").catch(() => undefined);
-  await pool.query("ALTER TABLE users ALTER COLUMN artist_status SET DEFAULT 'PENDING'").catch(() => undefined);
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN");
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN");
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ");
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image_url TEXT");
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_image_url TEXT");
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT");
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30)");
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS genre VARCHAR(120)");
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS social_links JSONB");
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false").catch(() => undefined);
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ").catch(() => undefined);
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS deletion_reason TEXT").catch(() => undefined);
-  await pool.query("ALTER TABLE users ALTER COLUMN is_deleted SET DEFAULT false").catch(() => undefined);
-  await pool.query(
-    "ALTER TABLE users ADD COLUMN IF NOT EXISTS revenue_share_percentage NUMERIC NOT NULL DEFAULT 90"
-  );
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_remarks TEXT");
-  await pool.query(
-    "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_price NUMERIC NOT NULL DEFAULT 0"
-  );
-  await pool.query(
-    "ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()"
-  );
-  await pool.query(
-    "ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()"
-  );
-};
-
-const ensureArtistStatsSchema = async () => {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS artist_stats (
-      artist_id INT PRIMARY KEY,
-      total_plays INT NOT NULL DEFAULT 0,
-      total_subscribers INT NOT NULL DEFAULT 0,
-      total_earnings NUMERIC NOT NULL DEFAULT 0,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `);
-  await pool.query("ALTER TABLE artist_stats ADD COLUMN IF NOT EXISTS total_plays INT NOT NULL DEFAULT 0");
-  await pool.query(
-    "ALTER TABLE artist_stats ADD COLUMN IF NOT EXISTS total_subscribers INT NOT NULL DEFAULT 0"
-  );
-  await pool.query(
-    "ALTER TABLE artist_stats ADD COLUMN IF NOT EXISTS total_earnings NUMERIC NOT NULL DEFAULT 0"
-  );
-  await pool.query(
-    "ALTER TABLE artist_stats ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()"
-  );
-  await pool.query(
-    "ALTER TABLE artist_stats ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()"
-  );
-};
-
 const requireAdmin = (req: any, res: any, next: any) => {
   const role = (req.user?.role || "").toUpperCase();
   if (role !== "ADMIN") {
@@ -113,9 +46,6 @@ router.post("/create", requireAuth, requireAdmin, async (req, res) => {
   const correlationId = (req as any)?.correlationId || "-";
 
   try {
-    await ensureArtistOnboardingSchema();
-    await ensureArtistStatsSchema();
-
     const { name, email, temporaryPassword } = req.body as {
       name?: string | null;
       email?: string;
@@ -270,11 +200,7 @@ router.get("/", requireAuth, requireAdmin, async (req, res) => {
   const search = String(req.query.search ?? "").trim();
   const filter = String(req.query.filter ?? "").trim().toLowerCase();
 
-  try {
-    await ensureArtistOnboardingSchema();
-  } catch {
-    // ignore migration errors; select below will surface anything critical
-  }
+
 
   const offset = (page - 1) * limit;
   const whereParts: string[] = ["UPPER(role) = 'ARTIST'"];
@@ -353,8 +279,6 @@ router.get("/:id", requireAuth, requireAdmin, async (req, res) => {
   }
 
   try {
-    await ensureArtistOnboardingSchema();
-    await ensureArtistStatsSchema();
   } catch {
     // ignore
   }
@@ -469,7 +393,6 @@ router.patch("/:id/soft-delete", requireAuth, requireAdmin, async (req, res) => 
   }
 
   try {
-    await ensureArtistOnboardingSchema();
   } catch {
     // ignore
   }
@@ -514,7 +437,6 @@ router.patch("/:id/reactivate", requireAuth, requireAdmin, async (req, res) => {
   const correlationId = (req as any)?.correlationId || "-";
 
   try {
-    await ensureArtistOnboardingSchema();
   } catch {
     // ignore
   }
@@ -560,7 +482,6 @@ router.patch("/:id", requireAuth, requireAdmin, async (req, res) => {
   const correlationId = (req as any)?.correlationId || "-";
 
   try {
-    await ensureArtistOnboardingSchema();
 
     const {
       name,

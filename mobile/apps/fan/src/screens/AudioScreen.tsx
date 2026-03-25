@@ -522,7 +522,7 @@ export default function AudioScreen({ navigation }: any) {
         const mediaType = detectMediaType(it);
         if (mediaType !== 'audio') return null;
 
-        const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
+        const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'https://music-streaming-platform-cvad.onrender.com').replace(/\/+$/, '');
         const thumbStorageKey = (it.thumbnail_storage_key ?? it.thumbnailStorageKey ?? null) as any;
         const artworkFromStorageKey = thumbStorageKey
           ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(String(it.id))}`
@@ -743,7 +743,7 @@ export default function AudioScreen({ navigation }: any) {
             return 'audio';
           };
 
-          const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
+          const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'https://music-streaming-platform-cvad.onrender.com').replace(/\/+$/, '');
 
           const mapped: AudioCard[] = effectiveRaw
             .map((it) => {

@@ -31,12 +31,8 @@ import {
   Settings,
   X,
 } from 'lucide-react-native';
-import {
-  Audio,
-  ResizeMode,
-  Video,
-  type AVPlaybackStatus,
-} from 'expo-av';
+import { VideoView, useVideoPlayer, VideoPlayer } from 'expo-video';
+import { setAudioModeAsync } from 'expo-audio';
 import { BlurView } from 'expo-blur';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
@@ -333,7 +329,10 @@ export default function VideoScreen() {
 
   const listRef = useRef<FlatList<VideoCard> | null>(null);
 
-  const videoRef = useRef<Video>(null);
+  const videoPlayer = useVideoPlayer(activePlaybackUrl, (player) => {
+    player.loop = false;
+    player.play();
+  });
   const lastTapRef = useRef(0);
   const lastTapXRef = useRef(0);
   const playbackSessionRef = useRef(0);
@@ -393,37 +392,24 @@ export default function VideoScreen() {
         if (bgAudioOnlyMode) return;
 
         (async () => {
-          let wasPlaying = isVideoPlaying;
-          try {
-            const status = await videoRef.current?.getStatusAsync();
-            const s: any = status as any;
-            if (s?.isLoaded) {
-              wasPlaying = Boolean(s.isPlaying);
-            }
-          } catch {
-            // ignore
-          }
-
+          const wasPlaying = videoPlayer.playing;
           bgWasPlayingRef.current = wasPlaying;
           setBgAudioOnlyMode(true);
 
-          await Audio.setAudioModeAsync({
-            playsInSilentModeIOS: true,
-            allowsRecordingIOS: false,
-            interruptionModeIOS: IOS_INTERRUPTION_DO_NOT_MIX,
-            staysActiveInBackground: true,
-            shouldDuckAndroid: true,
-            interruptionModeAndroid: ANDROID_INTERRUPTION_DUCK_OTHERS,
+          await setAudioModeAsync({
+            playsInSilentMode: true,
+            shouldPlayInBackground: true,
+            interruptionMode: 'doNotMix',
           });
 
           // Keep volume at 1.0 and force resume during the transition.
           try {
-            await (videoRef.current as any)?.setVolumeAsync?.(1.0);
+            videoPlayer.volume = 1.0;
           } catch {
             // ignore
           }
           if (wasPlaying) {
-            videoRef.current?.playAsync().catch(() => undefined);
+            videoPlayer.play();
           }
         })().catch(() => undefined);
 
@@ -432,15 +418,15 @@ export default function VideoScreen() {
 
       if (next === 'active' && bgAudioOnlyMode) {
         setBgAudioOnlyMode(false);
-        const shouldPlay = Boolean(bgWasPlayingRef.current);
+        const shouldPlay = bgWasPlayingRef.current;
         (async () => {
           try {
-            await (videoRef.current as any)?.setVolumeAsync?.(1.0);
+            videoPlayer.volume = 1.0;
           } catch {
             // ignore
           }
           if (shouldPlay) {
-            videoRef.current?.playAsync().catch(() => undefined);
+            videoPlayer.play();
           }
         })().catch(() => undefined);
       }
@@ -449,7 +435,7 @@ export default function VideoScreen() {
     return () => {
       sub.remove();
     };
-  }, [activePlaybackUrl, activeVideoMeta?.id, bgAudioOnlyMode, isVideoPlaying]);
+  }, [activePlaybackUrl, activeVideoMeta?.id, bgAudioOnlyMode, videoPlayer]);
 
   const base64Decode = useCallback((input: string): string => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
@@ -510,15 +496,7 @@ export default function VideoScreen() {
       tokenRefreshTimerRef.current = setTimeout(() => {
         (async () => {
           if (!activeVideoMeta?.id) return;
-          const v = videoRef.current;
-          let pos = lastStatusPositionRef.current;
-          try {
-            const status = await v?.getStatusAsync();
-            const s: any = status as any;
-            if (s?.isLoaded) pos = Math.max(0, Math.round(Number(s.positionMillis ?? pos)));
-          } catch {
-            // ignore
-          }
+          const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
 
           try {
             const nextUrl = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video');
@@ -658,24 +636,8 @@ export default function VideoScreen() {
 
   const stopAndReset = useCallback(async () => {
     try {
-      const v = videoRef.current;
-      if (v) {
-        try {
-          await v.pauseAsync();
-        } catch {
-          // ignore
-        }
-        try {
-          await v.setPositionAsync(0);
-        } catch {
-          // ignore
-        }
-        try {
-          await v.unloadAsync();
-        } catch {
-          // ignore
-        }
-      }
+      videoPlayer.pause();
+      videoPlayer.seekBy(-videoPlayer.currentTime);
     } finally {
       setActiveVideoId(null);
       setActiveVideoMeta(null);
@@ -690,7 +652,7 @@ export default function VideoScreen() {
       playedOnceRef.current = false;
       setShowQualitySheet(false);
     }
-  }, []);
+  }, [videoPlayer]);
 
   const onSeekStart = useCallback(() => {
     setIsSeeking(true);
@@ -705,11 +667,11 @@ export default function VideoScreen() {
   const onSeekComplete = useCallback(async (value: number) => {
     setIsSeeking(false);
     try {
-      await videoRef.current?.setPositionAsync(Math.max(0, Math.round(value)));
+      videoPlayer.seekBy((value - videoPlayer.currentTime * 1000) / 1000);
     } catch {
       // ignore
     }
-  }, []);
+  }, [videoPlayer]);
 
   const load = useCallback(
     async (opts?: { refresh?: boolean }) => {
@@ -785,18 +747,31 @@ export default function VideoScreen() {
 
   const pauseInlineVideoIfNeeded = useCallback(async () => {
     try {
-      const v = videoRef.current;
-      if (!v) return;
-      const status = await v.getStatusAsync();
-      const loaded = Boolean((status as any)?.isLoaded);
-      const playing = Boolean((status as any)?.isPlaying);
-      if (loaded && playing) {
-        await v.pauseAsync();
+      if (videoPlayer.playing) {
+        videoPlayer.pause();
       }
     } catch {
       // ignore
     }
-  }, []);
+  }, [videoPlayer]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!isSeeking) {
+        setPositionMs(Math.round(videoPlayer.currentTime * 1000));
+      }
+      setDurationMs(Math.round(videoPlayer.duration * 1000));
+      setIsVideoPlaying(videoPlayer.playing);
+      setIsBuffering(videoPlayer.status === 'loading');
+      setIsVideoReady(videoPlayer.status === 'readyToPlay');
+
+      // Handle finished
+      if (videoPlayer.duration > 0 && videoPlayer.currentTime >= videoPlayer.duration - 0.2 && videoPlayer.playing === false && isVideoPlaying) {
+        // did finish logic can go here if needed
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [videoPlayer, isSeeking, isVideoPlaying]);
 
   useFocusEffect(
     useCallback(() => {
@@ -844,7 +819,7 @@ export default function VideoScreen() {
           upNextTimerRef.current = null;
         }
 
-        // Ensure a new selection always starts from 0:00 and does not inherit prior status updates.
+        // Ensure a new selection always starts from 0:00
         lastStatusPositionRef.current = 0;
         lastStatusDurationRef.current = 0;
         durationSetForUrlRef.current = null;
@@ -860,52 +835,32 @@ export default function VideoScreen() {
         playedOnceRef.current = false;
         setShowControls(true);
 
-        // Stop/unload any previous inline video so it can't block the next stream.
-        // Do not await: cleanup can happen in parallel with fetching the next URL.
-        videoRef.current?.unloadAsync().catch(() => undefined);
-        setActivePlaybackUrl(null);
-
-        await pauseGlobalPlaybackIfNeeded();
+        // Stop/unload any previous inline video
+        videoPlayer.pause();
 
         setLoadingPlaybackUrl(true);
         try {
-          const url = await resolvePlaybackUrl(video);
+          const playbackUrl = await resolvePlaybackUrl(video);
           if (sessionId !== playbackSessionRef.current) return;
-          if (!url) return;
-          setActivePlaybackUrl(url);
+
+          setActivePlaybackUrl(playbackUrl);
           setIsVideoReady(false);
-          setIsBuffering(true);
           setIsVideoPlaying(true);
 
-          // Critical for iOS lock screen: put app in playback category + allow background.
-          Audio.setAudioModeAsync({
-            playsInSilentModeIOS: true,
-            allowsRecordingIOS: false,
-            interruptionModeIOS: IOS_INTERRUPTION_DO_NOT_MIX,
-            staysActiveInBackground: true,
-            shouldDuckAndroid: true,
-            interruptionModeAndroid: ANDROID_INTERRUPTION_DUCK_OTHERS,
-          }).catch(() => undefined);
-
-          // Best-effort immediate autoplay even before the first status tick.
-          setTimeout(() => {
-            if (sessionId !== playbackSessionRef.current) return;
-            videoRef.current
-              ?.setPositionAsync(0)
-              .catch(() => undefined)
-              .finally(() => {
-                videoRef.current?.playAsync().catch(() => undefined);
-              });
-          }, 0);
-        } catch {
-          // keep placeholder
+          await setAudioModeAsync({
+            playsInSilentMode: true,
+            shouldPlayInBackground: true,
+            interruptionMode: 'doNotMix',
+          });
+        } catch (err) {
+          console.warn('[VideoPlayer] Playback error', err);
           setActivePlaybackUrl(null);
         } finally {
           setLoadingPlaybackUrl(false);
         }
       })().catch(() => undefined);
     },
-    [pauseGlobalPlaybackIfNeeded, resolvePlaybackUrl]
+    [pauseGlobalPlaybackIfNeeded, resolvePlaybackUrl, videoPlayer]
   );
 
   useEffect(() => {
@@ -939,7 +894,7 @@ export default function VideoScreen() {
     return PanResponder.create({
       // Swipe gestures no longer change video — double-tap left/right seeks ±10s instead.
       onMoveShouldSetPanResponder: () => false,
-      onPanResponderRelease: () => {},
+      onPanResponderRelease: () => { },
     });
   }, []);
 
@@ -1005,76 +960,11 @@ export default function VideoScreen() {
     }).start();
   }, [miniAnim, showMini]);
 
-  const onVideoStatusUpdate = useCallback(
-    (status: AVPlaybackStatus) => {
-      const s: any = status as any;
-      if (!s?.isLoaded) {
-        if (isVideoReady) setIsVideoReady(false);
-        return;
-      }
-
-      if (!isVideoReady && s.isLoaded) setIsVideoReady(true);
-
-      const buffering = Boolean(s.isBuffering);
-      setIsBuffering((prev) => (prev === buffering ? prev : buffering));
-
-      const nextPlaying = Boolean(s.isPlaying);
-      setIsVideoPlaying((prev) => (prev === nextPlaying ? prev : nextPlaying));
-
-      const nextPos = Math.max(0, Math.round(Number(s.positionMillis ?? 0)));
-      const nextDur = Math.max(0, Math.round(Number(s.durationMillis ?? 0)));
-
-      // Only set duration once per playback URL (metadata load), not on every tick.
-      if (activePlaybackUrl && durationSetForUrlRef.current !== activePlaybackUrl) {
-        durationSetForUrlRef.current = activePlaybackUrl;
-        lastStatusDurationRef.current = 0;
-      }
-
-      if (nextDur > 0 && lastStatusDurationRef.current === 0) {
-        lastStatusDurationRef.current = nextDur;
-        setDurationMs((prev) => (prev === nextDur ? prev : nextDur));
-      }
-
-      // Throttle position updates to avoid excessive render churn.
-      if (!isSeeking) {
-        const lastPos = lastStatusPositionRef.current;
-
-        // When switching videos, some platforms can briefly report a non-zero position
-        // before we get the chance to force seek to 0. Ignore that initial non-zero.
-        if (!playedOnceRef.current && lastPos === 0 && nextPos > 0) {
-          return;
-        }
-
-        const shouldUpdate = Math.abs(nextPos - lastPos) >= 500 || lastPos === 0;
-        if (shouldUpdate) {
-          lastStatusPositionRef.current = nextPos;
-          setPositionMs((prev) => (prev === nextPos ? prev : nextPos));
-        }
-      }
-
-      // Some devices/situations report loaded but do not auto-start.
-      // Ensure playback starts once after load if user selected a video.
-      // Always force position to 0 so switching videos never resumes.
-      if (!playedOnceRef.current && activePlaybackUrl) {
-        playedOnceRef.current = true;
-        const resumeAt = resumeAfterUrlChangeRef.current;
-        resumeAfterUrlChangeRef.current = null;
-        const target = typeof resumeAt === 'number' ? Math.max(0, Math.round(resumeAt)) : 0;
-        videoRef.current
-          ?.setPositionAsync(target)
-          .catch(() => undefined)
-          .finally(() => {
-            videoRef.current?.playAsync().catch(() => undefined);
-          });
-      }
-
-      if (s.didJustFinish) {
-        setIsVideoPlaying((prev) => (prev ? false : prev));
-        setShowUpNext(true);
-        setUpNextSeconds(5);
-      }
+  const onPlaybackStatusUpdate = useCallback(
+    (status: any) => {
+      void status;
     },
-    [activePlaybackUrl, isSeeking, isVideoReady]
+    []
   );
 
   useEffect(() => {
@@ -1150,7 +1040,7 @@ export default function VideoScreen() {
         setIsVideoPlaying(true);
 
         setTimeout(() => {
-          videoRef.current?.setPositionAsync(resumeAt).catch(() => undefined);
+          videoPlayer.currentTime = resumeAt / 1000;
         }, 250);
       } catch {
         // ignore
@@ -1164,16 +1054,13 @@ export default function VideoScreen() {
   const onDoubleTap = useCallback(
     async (dir: 'back' | 'forward') => {
       try {
-        const v = videoRef.current;
+        const v = videoPlayer;
         if (!v) return;
-        const status = await v.getStatusAsync();
-        const s: any = status as any;
-        if (!s?.isLoaded) return;
-        const current = Number(s.positionMillis ?? 0);
-        const dur = Number(s.durationMillis ?? 0);
+        const current = v.currentTime * 1000;
+        const dur = v.duration * 1000;
         const next = dir === 'back' ? current - SEEK_DELTA_MS : current + SEEK_DELTA_MS;
         const target = clamp(next, 0, dur || Number.MAX_SAFE_INTEGER);
-        await v.setPositionAsync(target);
+        v.currentTime = target / 1000;
       } catch {
         // ignore
       }
@@ -1221,22 +1108,19 @@ export default function VideoScreen() {
 
   const toggleInlinePlayPause = useCallback(async () => {
     try {
-      const v = videoRef.current;
+      const v = videoPlayer;
       if (!v) return;
-      const status = await v.getStatusAsync();
-      const s: any = status as any;
-      if (!s?.isLoaded) return;
-      if (s.isPlaying) {
-        await v.pauseAsync();
+      if (v.playing) {
+        await v.pause();
         setIsVideoPlaying(false);
       } else {
-        await v.playAsync();
+        await v.play();
         setIsVideoPlaying(true);
       }
     } catch {
       // ignore
     }
-  }, []);
+  }, [videoPlayer]);
 
   const showComingSoon = useCallback((feature: 'Sharing' | 'Offline Downloads') => {
     const message =
@@ -1526,142 +1410,145 @@ export default function VideoScreen() {
               pointerEvents="box-none"
             >
               <View style={styles.playerInner} pointerEvents="box-none" {...panResponder.panHandlers}>
-              {activePlaybackUrl ? (
-                <Pressable
-                  style={[StyleSheet.absoluteFill, styles.playerSurfacePressable]}
-                  pointerEvents="auto"
-                  onPress={onPressPlayerSurface}
-                >
-                  <Video
-                    key={activePlaybackUrl}
-                    ref={videoRef}
-                    style={bgAudioOnlyMode ? [styles.video, styles.videoOffscreen] : styles.video}
-                    source={{ uri: activePlaybackUrl }}
-                    resizeMode={isFullscreen || isLandscape ? ResizeMode.CONTAIN : ResizeMode.COVER}
-                    useNativeControls={false}
-                    progressUpdateIntervalMillis={200}
-                    onPlaybackStatusUpdate={onVideoStatusUpdate}
-                  />
-                </Pressable>
-              ) : (
-                <View style={StyleSheet.absoluteFill}>
-                  <View style={styles.playerBlank} />
-                  <View style={styles.heroOverlay}>
-                    {loadingPlaybackUrl ? <ActivityIndicator color="#fff" /> : null}
-                    <Text style={styles.selectText}>Select a video to play</Text>
-                  </View>
-                </View>
-              )}
-
-              {activePlaybackUrl && showControls ? (
-                <View style={[styles.playerTopLeft, isFullscreen ? { top: insets.top + 12 } : null]}>
+                {activePlaybackUrl ? (
                   <Pressable
-                    style={styles.iconBtn}
-                    onPress={() => {
-                      if (isFullscreen) {
-                        exitFullscreen();
-                      } else {
-                        stopAndReset().catch(() => undefined);
-                      }
-                    }}
+                    style={[StyleSheet.absoluteFill, styles.playerSurfacePressable]}
+                    pointerEvents="auto"
+                    onPress={onPressPlayerSurface}
                   >
-                    <ArrowLeft size={18} color="#fff" />
-                  </Pressable>
-                </View>
-              ) : null}
-
-              <View style={[styles.playerTopRight, isFullscreen ? { top: insets.top + 12 } : null]}>
-                {activePlaybackUrl && showControls ? (
-                  <Pressable style={styles.iconBtn} onPress={() => setShowQualitySheet((s) => !s)}>
-                    <Settings size={18} color="#fff" />
-                  </Pressable>
-                ) : null}
-                {activePlaybackUrl && showControls ? (
-                  <Pressable
-                    style={styles.iconBtn}
-                    onPress={() => {
-                      if (isFullscreen) {
-                        exitFullscreen();
-                      } else {
-                        enterFullscreen();
-                      }
-                    }}
-                  >
-                    {isFullscreen ? <X size={18} color="#fff" /> : <Maximize size={18} color="#fff" />}
-                  </Pressable>
-                ) : null}
-              </View>
-
-              {showQualitySheet && activePlaybackUrl && showControls ? (
-                <BlurView intensity={55} tint="dark" style={styles.qualitySheet}>
-                  {availableQualities.map((q) => {
-                    const active = q === selectedQuality;
-                    return (
-                      <Pressable
-                        key={q}
-                        style={[styles.qualityPill, active ? styles.qualityPillActive : null]}
-                        onPress={() => {
-                          applyQualitySelection(q).catch(() => undefined);
-                        }}
-                      >
-                        <Text style={[styles.qualityText, active ? styles.qualityTextActive : null]}>{q}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </BlurView>
-              ) : null}
-
-              {activePlaybackUrl && showControls ? (
-                <View style={styles.controlsOverlay} pointerEvents="box-none">
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.playPauseBtn,
-                      pressed ? styles.playPauseBtnPressed : null,
-                    ]}
-                    onPress={toggleInlinePlayPause}
-                  >
-                    <Image
-                      source={isVideoPlaying ? PlayButtonImg : PauseButtonImg}
-                      style={styles.playPauseImg}
-                      resizeMode="contain"
+                    <VideoView
+                      player={videoPlayer}
+                      style={[
+                        styles.video,
+                        {
+                          width: isFullscreen ? windowWidth : SCREEN_WIDTH,
+                          height: isFullscreen ? windowHeight : HEADER_HEIGHT,
+                        },
+                      ]}
+                      contentFit="contain"
+                      allowsFullscreen={false}
+                      nativeControls={false}
                     />
                   </Pressable>
-                </View>
-              ) : null}
-
-              {showUpNext ? (
-                <View style={styles.upNextOverlay}>
-                  <Text style={styles.upNextTitle}>Up Next</Text>
-                  <Text style={styles.upNextSub}>Playing next in {upNextSeconds}s</Text>
-                </View>
-              ) : null}
-
-              {activePlaybackUrl && showControls ? (
-                <View style={styles.seekWrap} pointerEvents="box-none">
-                  <View style={styles.seekTimesRow}>
-                    <Text style={styles.seekTime}>{formatTime(positionMs)}</Text>
-                    <Text style={styles.seekTime}>{formatTime(durationMs)}</Text>
+                ) : (
+                  <View style={StyleSheet.absoluteFill}>
+                    <View style={styles.playerBlank} />
+                    <View style={styles.heroOverlay}>
+                      {loadingPlaybackUrl ? <ActivityIndicator color="#fff" /> : null}
+                      <Text style={styles.selectText}>Select a video to play</Text>
+                    </View>
                   </View>
-                  <Slider
-                    style={styles.slider}
-                    minimumValue={0}
-                    maximumValue={Math.max(1, durationMs || 1)}
-                    value={Math.min(positionMs, durationMs || 1)}
-                    minimumTrackTintColor="#FFFFFF"
-                    maximumTrackTintColor="rgba(255,255,255,0.22)"
-                    thumbTintColor="#FFFFFF"
-                    onSlidingStart={onSeekStart}
-                    onValueChange={onSeekChange}
-                    onSlidingComplete={onSeekComplete}
-                  />
-                </View>
-              ) : null}
+                )}
 
-              {!activePlaybackUrl ? (
-                <View style={styles.heroHint}>
-                  <Text style={styles.heroHintText}>Tap a video below to start playing</Text>
+                {activePlaybackUrl && showControls ? (
+                  <View style={[styles.playerTopLeft, isFullscreen ? { top: insets.top + 12 } : null]}>
+                    <Pressable
+                      style={styles.iconBtn}
+                      onPress={() => {
+                        if (isFullscreen) {
+                          exitFullscreen();
+                        } else {
+                          stopAndReset().catch(() => undefined);
+                        }
+                      }}
+                    >
+                      <ArrowLeft size={18} color="#fff" />
+                    </Pressable>
+                  </View>
+                ) : null}
+
+                <View style={[styles.playerTopRight, isFullscreen ? { top: insets.top + 12 } : null]}>
+                  {activePlaybackUrl && showControls ? (
+                    <Pressable style={styles.iconBtn} onPress={() => setShowQualitySheet((s) => !s)}>
+                      <Settings size={18} color="#fff" />
+                    </Pressable>
+                  ) : null}
+                  {activePlaybackUrl && showControls ? (
+                    <Pressable
+                      style={styles.iconBtn}
+                      onPress={() => {
+                        if (isFullscreen) {
+                          exitFullscreen();
+                        } else {
+                          enterFullscreen();
+                        }
+                      }}
+                    >
+                      {isFullscreen ? <X size={18} color="#fff" /> : <Maximize size={18} color="#fff" />}
+                    </Pressable>
+                  ) : null}
                 </View>
-              ) : null}
+
+                {showQualitySheet && activePlaybackUrl && showControls ? (
+                  <BlurView intensity={55} tint="dark" style={styles.qualitySheet}>
+                    {availableQualities.map((q) => {
+                      const active = q === selectedQuality;
+                      return (
+                        <Pressable
+                          key={q}
+                          style={[styles.qualityPill, active ? styles.qualityPillActive : null]}
+                          onPress={() => {
+                            applyQualitySelection(q).catch(() => undefined);
+                          }}
+                        >
+                          <Text style={[styles.qualityText, active ? styles.qualityTextActive : null]}>{q}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </BlurView>
+                ) : null}
+
+                {activePlaybackUrl && showControls ? (
+                  <View style={styles.controlsOverlay} pointerEvents="box-none">
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.playPauseBtn,
+                        pressed ? styles.playPauseBtnPressed : null,
+                      ]}
+                      onPress={toggleInlinePlayPause}
+                    >
+                      <Image
+                        source={isVideoPlaying ? PlayButtonImg : PauseButtonImg}
+                        style={styles.playPauseImg}
+                        resizeMode="contain"
+                      />
+                    </Pressable>
+                  </View>
+                ) : null}
+
+                {showUpNext ? (
+                  <View style={styles.upNextOverlay}>
+                    <Text style={styles.upNextTitle}>Up Next</Text>
+                    <Text style={styles.upNextSub}>Playing next in {upNextSeconds}s</Text>
+                  </View>
+                ) : null}
+
+                {activePlaybackUrl && showControls ? (
+                  <View style={styles.seekWrap} pointerEvents="box-none">
+                    <View style={styles.seekTimesRow}>
+                      <Text style={styles.seekTime}>{formatTime(positionMs)}</Text>
+                      <Text style={styles.seekTime}>{formatTime(durationMs)}</Text>
+                    </View>
+                    <Slider
+                      style={styles.slider}
+                      minimumValue={0}
+                      maximumValue={Math.max(1, durationMs || 1)}
+                      value={Math.min(positionMs, durationMs || 1)}
+                      minimumTrackTintColor="#FFFFFF"
+                      maximumTrackTintColor="rgba(255,255,255,0.22)"
+                      thumbTintColor="#FFFFFF"
+                      onSlidingStart={onSeekStart}
+                      onValueChange={onSeekChange}
+                      onSlidingComplete={onSeekComplete}
+                    />
+                  </View>
+                ) : null}
+
+                {!activePlaybackUrl ? (
+                  <View style={styles.heroHint}>
+                    <Text style={styles.heroHintText}>Tap a video below to start playing</Text>
+                  </View>
+                ) : null}
               </View>
             </Animated.View>
 

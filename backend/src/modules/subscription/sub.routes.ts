@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../common/auth/requireAuth";
 import { confirmPayment, createOrder } from "../../controllers/paymentController";
+import { createSubscription, verifySubscription } from "../../controllers/subscriptionController";
 import { pool } from "../../common/db";
 
 const router = Router();
@@ -55,7 +56,7 @@ router.get("/me", requireAuth, (req, res) => {
 
     try {
       const row = await pool.query(
-        `SELECT user_id, artist_id, status, plan_type, start_date, end_date, auto_renew
+        `SELECT user_id, artist_id, status, plan_type, start_date, next_billing_date, auto_renew
          FROM subscriptions
          WHERE user_id = $1 AND artist_id = $2
          LIMIT 1`,
@@ -75,7 +76,7 @@ router.get("/me", requireAuth, (req, res) => {
           status: s.status,
           plan_type: s.plan_type,
           start_date: s.start_date,
-          end_date: s.end_date,
+          next_billing_date: s.next_billing_date,
           auto_renew: s.auto_renew,
         }
       });
@@ -94,12 +95,12 @@ router.get("/summary", requireAuth, (req: any, res: any) => {
 
     try {
       const row = await pool.query(
-        `SELECT user_id, artist_id, status, plan_type, start_date, end_date, auto_renew
+        `SELECT user_id, artist_id, status, plan_type, start_date, next_billing_date, auto_renew
          FROM subscriptions
          WHERE user_id = $1
            AND UPPER(COALESCE(status, '')) = 'ACTIVE'
-           AND (end_date IS NULL OR end_date > now())
-         ORDER BY end_date DESC NULLS LAST, updated_at DESC, created_at DESC
+           AND (next_billing_date IS NULL OR next_billing_date > now() - interval '2 days')
+         ORDER BY next_billing_date DESC NULLS LAST, updated_at DESC, created_at DESC
          LIMIT 1`,
         [userId]
       );
@@ -115,7 +116,7 @@ router.get("/summary", requireAuth, (req: any, res: any) => {
               status: s.status,
               plan_type: s.plan_type,
               start_date: s.start_date,
-              end_date: s.end_date,
+              next_billing_date: s.next_billing_date,
               auto_renew: s.auto_renew,
             }
           : null,
@@ -128,6 +129,10 @@ router.get("/summary", requireAuth, (req: any, res: any) => {
 
 router.post("/order", requireAuth, (req, res) => createOrder(req as any, res));
 router.post("/confirm", requireAuth, (req, res) => confirmPayment(req as any, res));
+
+// Razorpay Subscription Endpoints
+router.post("/create", requireAuth, (req, res) => createSubscription(req as any, res));
+router.post("/verify", requireAuth, (req, res) => verifySubscription(req as any, res));
 
 router.post("/mock-order", requireAuth, (req, res) => createOrder(req as any, res));
 router.post("/mock-verify", requireAuth, (req, res) => confirmPayment(req as any, res));

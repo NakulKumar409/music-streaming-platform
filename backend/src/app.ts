@@ -9,7 +9,14 @@ import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import { globalLimiter } from "./common/security/rateLimit";
 import { validateEnv } from "./config/env.validation";
-import { ensureContentMediaColumns, ensureUsersSchema } from "./config/ensure-schema";
+import {
+  ensureUsersSchema,
+  ensureContentSchema,
+  ensurePlaysSchema,
+  ensureReactionsSchema,
+  ensureSubscriptionsSchema,
+  ensureArtistStatsSchema
+} from "./config/ensure-schema";
 import fanRoutes from "./routes/fan";
 import artistRoutes from "./routes/artist";
 import adminRoutes from "./routes/admin";
@@ -212,7 +219,11 @@ const PORT = process.env.PORT || 8000;
   const storageConfig = validateEnv();
   getDeliveryStrategyForProvider(storageConfig.storageProvider);
   await ensureUsersSchema();
-  await ensureContentMediaColumns();
+  await ensureContentSchema();
+  await ensurePlaysSchema();
+  await ensureReactionsSchema();
+  await ensureSubscriptionsSchema();
+  await ensureArtistStatsSchema();
 
   app.listen(PORT, () => {
     console.log("--- Logger Initialized Successfully ---");

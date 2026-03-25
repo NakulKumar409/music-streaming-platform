@@ -21,7 +21,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { ArrowLeft, BadgeCheck, Settings } from 'lucide-react-native';
-import { ResizeMode, Video } from 'expo-av';
+import { VideoView } from 'expo-video';
 import { useIsFocused } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import SubscriptionExpiryScreen from './SubscriptionExpiryScreen';
@@ -150,8 +150,7 @@ export default function ArtistScreen({ navigation, route }: any) {
     playQueue,
     currentItem,
     state: playerState,
-    videoRef,
-    onVideoPlaybackStatusUpdate,
+    videoPlayer,
     togglePlayPause,
     seekTo,
     setExpanded,
@@ -422,11 +421,10 @@ export default function ArtistScreen({ navigation, route }: any) {
               mediaUrl={currentItem.mediaUrl}
               aspectRatio={inlineVideoAspectRatio}
               onAspectRatio={(r) => setInlineVideoAspectRatio(r)}
-              videoRef={videoRef}
+              videoPlayer={videoPlayer}
               shouldPlay={playerState.isPlaying}
               positionMs={playerState.positionMs}
               durationMs={playerState.durationMs}
-              onPlaybackStatusUpdate={onVideoPlaybackStatusUpdate}
               onTogglePlay={() => togglePlayPause().catch(() => undefined)}
               onSeek={(pos) => seekTo(pos).catch(() => undefined)}
               onToggleFullscreen={() => setExpanded(true)}
@@ -536,11 +534,10 @@ function InlineVideoPlayer({
   mediaUrl,
   aspectRatio,
   onAspectRatio,
-  videoRef,
+  videoPlayer,
   shouldPlay,
   positionMs,
   durationMs,
-  onPlaybackStatusUpdate,
   onTogglePlay,
   onSeek,
   onToggleFullscreen,
@@ -550,11 +547,10 @@ function InlineVideoPlayer({
   mediaUrl: string;
   aspectRatio: number;
   onAspectRatio: (r: number) => void;
-  videoRef: any;
+  videoPlayer: any;
   shouldPlay: boolean;
   positionMs: number;
   durationMs: number;
-  onPlaybackStatusUpdate: (st: any) => void;
   onTogglePlay: () => void;
   onSeek: (pos: number) => void;
   onToggleFullscreen: () => void;
@@ -563,27 +559,11 @@ function InlineVideoPlayer({
 }) {
   return (
     <View style={[styles.youtubeVideoWrap, { aspectRatio }]}>
-      <Video
-        key={`${mediaUrl}-${aspectRatio}`}
-        ref={videoRef}
+      <VideoView
+        player={videoPlayer}
         style={{ width: '100%', height: undefined, aspectRatio }}
-        source={{ uri: mediaUrl }}
-        shouldPlay={shouldPlay}
-        resizeMode={ResizeMode.CONTAIN}
-        useNativeControls={false}
-        progressUpdateIntervalMillis={100}
-        onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-        onReadyForDisplay={(e) => {
-          const size = (e as any)?.naturalSize;
-          const w = Number(size?.width ?? 0);
-          const h = Number(size?.height ?? 0);
-          if (w > 0 && h > 0) {
-            const ratio = w / h;
-            if (Number.isFinite(ratio) && ratio > 0) onAspectRatio(ratio);
-            return;
-          }
-          onAspectRatio(16 / 9);
-        }}
+        contentFit="contain"
+        nativeControls={false}
       />
 
       <YouTubeVideoControlsOverlay

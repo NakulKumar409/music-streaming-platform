@@ -51,3 +51,13 @@ declare module 'lucide-react-native' {
   export const X: LucideIcon;
   export const Check: LucideIcon;
 }
+
+declare module '*.png' {
+  const value: any;
+  export default value;
+}
+
+declare module '*.jpg' {
+  const value: any;
+  export default value;
+}

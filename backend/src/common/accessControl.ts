@@ -22,7 +22,7 @@ export const checkAccess = async (userId: number, artistId: number): Promise<boo
        WHERE user_id = $1
          AND artist_id = $2
          AND UPPER(COALESCE(status, '')) = 'ACTIVE'
-         AND (end_date IS NULL OR end_date > now())
+         AND (next_billing_date IS NULL OR next_billing_date > now() - interval '2 days')
        LIMIT 1`,
       [userId, artistId]
     );
@@ -43,7 +43,7 @@ export const checkAccess = async (userId: number, artistId: number): Promise<boo
 export const getSubscriptionDetails = async (userId: number, artistId: number) => {
   try {
     const result = await pool.query(
-      `SELECT id, status, plan_type, start_date, end_date, auto_renew, created_at, updated_at
+      `SELECT id, status, plan_type, start_date, next_billing_date, auto_renew, created_at, updated_at
        FROM subscriptions
        WHERE user_id = $1 AND artist_id = $2
        LIMIT 1`,
@@ -65,30 +65,48 @@ export const getSubscriptionDetails = async (userId: number, artistId: number) =
  * @returns Promise<{isLocked: boolean, subscriptionRequired: boolean}>
  */
 export const checkContentAccess = async (userId: number | null, contentId: number) => {
-  void userId;
-  void contentId;
-  return { isLocked: false, subscriptionRequired: false };
-
   try {
     // Get content details
-    const contentResult = await pool.query(
-      `SELECT artist_id, subscription_required
-       FROM content_items
-       WHERE id = $1
-       LIMIT 1`,
-      [contentId]
-    );
+    let contentResult: any;
+    try {
+      contentResult = await pool.query(
+        `SELECT artist_id, subscription_required
+         FROM content_items
+         WHERE id = $1
+         LIMIT 1`,
+        [contentId]
+      );
+    } catch (err: any) {
+      if (err?.code === '42703') {
+        contentResult = await pool.query(
+          `SELECT artist_id
+           FROM content_items
+           WHERE id = $1
+           LIMIT 1`,
+          [contentId]
+        );
+      } else {
+        throw err;
+      }
+    }
 
     if (!contentResult.rows?.length) {
       return { isLocked: true, subscriptionRequired: false };
     }
 
     const content = contentResult.rows[0];
-    const subscriptionRequired = true;
+    const subscriptionRequired = content.hasOwnProperty('subscription_required')
+      ? Boolean(content.subscription_required)
+      : true;
 
-    // If no user ID provided, content is locked
+    // If subscription is not required, it's never locked
+    if (!subscriptionRequired) {
+      return { isLocked: false, subscriptionRequired: false };
+    }
+
+    // If no user ID provided but subscription IS required, content is locked
     if (!userId) {
-      return { isLocked: true, subscriptionRequired };
+      return { isLocked: true, subscriptionRequired: true };
     }
 
     // Check if user has active subscription
@@ -96,7 +114,7 @@ export const checkContentAccess = async (userId: number | null, contentId: numbe
     
     return {
       isLocked: !hasAccess,
-      subscriptionRequired
+      subscriptionRequired: true
     };
   } catch (error) {
     console.error('[Access Control] Error checking content access:', error);
@@ -109,7 +127,7 @@ export type SubscriptionDetails = {
   status: string;
   plan_type: string;
   start_date: Date;
-  end_date: Date;
+  next_billing_date: Date;
   auto_renew: boolean;
   created_at: Date;
   updated_at: Date;

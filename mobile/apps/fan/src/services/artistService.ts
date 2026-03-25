@@ -34,7 +34,7 @@ export type ArtistListItem = {
 const FALLBACK_ARTIST_IMAGE =
   'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1000&q=80';
 
-const HOST_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+const HOST_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://music-streaming-platform-cvad.onrender.com';
 
 function resolveImageUrl(url: string) {
   const trimmed = (url || '').toString().trim();
@@ -140,8 +140,9 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
 
   let raw: ApiArtistContentItem[] = [];
   try {
-    // Prefer the fan content endpoint because it returns stream-ready audio/video urls.
-    const res = await apiV1.get(`/content/artist/${encodeURIComponent(id)}`);
+    const url = `/content/artist/${encodeURIComponent(id)}`;
+    console.log(`[DEBUG] fetchArtistMedia - hitting: ${apiV1.defaults.baseURL}${url}`);
+    const res = await apiV1.get(url);
     raw = Array.isArray(res.data?.items)
       ? (res.data.items as any)
       : Array.isArray(res.data?.content)

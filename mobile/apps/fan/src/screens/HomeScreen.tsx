@@ -126,7 +126,7 @@ export default function HomeScreen({ navigation }: any) {
           const apiItems: ApiContentItem[] = Array.isArray(contentRes.data?.items)
             ? contentRes.data.items
             : [];
-          const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000').replace(
+          const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'https://music-streaming-platform-cvad.onrender.com').replace(
             /\/+$/,
             ''
           );

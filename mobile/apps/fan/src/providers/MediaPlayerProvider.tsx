@@ -10,11 +10,8 @@ import React, {
 } from 'react';
 import { Alert, AppState, Platform } from 'react-native';
 
-import {
-  Audio,
-  type AVPlaybackStatus,
-  Video,
-} from 'expo-av';
+import { useAudioPlayer, useAudioPlayerStatus, AudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { useVideoPlayer, VideoView, VideoPlayer } from 'expo-video';
 
 import { navigationRef } from '../navigation/rootNavigation';
 
@@ -24,16 +21,7 @@ import { getPlaybackUrl, normalizePlaybackUrl } from '../services/streamService'
 
 import type { MediaItem, MediaType, PlayerState } from '../media.types';
 
-type SoundLike = {
-  unloadAsync: () => Promise<void>;
-  getStatusAsync: () => Promise<AVPlaybackStatus>;
-  pauseAsync: () => Promise<void>;
-  playAsync: () => Promise<void>;
-  setPositionAsync: (positionMillis: number) => Promise<void>;
-  setRateAsync: (rate: number, shouldCorrectPitch: boolean) => Promise<void>;
-  setVolumeAsync: (volume: number) => Promise<void>;
-  setProgressUpdateIntervalAsync: (progressUpdateIntervalMillis: number) => Promise<void>;
-};
+// Removed SoundLike type as it is no longer needed with expo-audio
 
 type MediaPlayerContextValue = {
   state: PlayerState;
@@ -62,9 +50,10 @@ type MediaPlayerContextValue = {
   inlineAudioHostActive: boolean;
   setInlineAudioHostActive: (active: boolean) => void;
 
-  onVideoPlaybackStatusUpdate: (status: AVPlaybackStatus) => void;
+  onVideoPlaybackStatusUpdate: (status: any) => void;
 
-  videoRef: React.RefObject<Video>;
+  videoPlayer: VideoPlayer | null;
+  audioPlayer: AudioPlayer | null;
 };
 
 const MediaPlayerContext = createContext<MediaPlayerContextValue | undefined>(undefined);
@@ -101,8 +90,12 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   const [inlineVideoHostActive, setInlineVideoHostActive] = useState(false);
   const [inlineAudioHostActive, setInlineAudioHostActive] = useState(false);
 
-  const soundRef = useRef<SoundLike | null>(null);
-  const videoRef = useRef<Video>(null);
+  const [audioSource, setAudioSource] = useState<string | null>(null);
+  const audioPlayer = useAudioPlayer(audioSource);
+  const audioStatus = useAudioPlayerStatus(audioPlayer);
+
+  const [videoSource, setVideoSource] = useState<string | null>(null);
+  const videoPlayer = useVideoPlayer(videoSource);
 
   const audioLoadTokenRef = useRef(0);
 
@@ -120,13 +113,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Ensure audio can continue in background (iOS playback category + silent mode + background).
-    Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      allowsRecordingIOS: false,
-      interruptionModeIOS: IOS_INTERRUPTION_DO_NOT_MIX,
-      staysActiveInBackground: true,
-      shouldDuckAndroid: true,
-      interruptionModeAndroid: ANDROID_INTERRUPTION_DUCK_OTHERS,
+    setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: true,
+      interruptionMode: 'doNotMix',
     }).catch(() => undefined);
   }, []);
 
@@ -141,24 +131,22 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           // Do NOT pause. Keep playback going, but mark UI as audio-only.
           videoRestorePositionMsRef.current = s.positionMs;
           setVideoAudioOnlyMode(true);
-          Audio.setAudioModeAsync({
-            playsInSilentModeIOS: true,
-            allowsRecordingIOS: false,
-            interruptionModeIOS: IOS_INTERRUPTION_DO_NOT_MIX,
-            staysActiveInBackground: true,
-            shouldDuckAndroid: true,
-            interruptionModeAndroid: ANDROID_INTERRUPTION_DUCK_OTHERS,
+          setAudioModeAsync({
+            playsInSilentMode: true,
+            shouldPlayInBackground: true,
+            interruptionMode: 'doNotMix',
           }).catch(() => undefined);
 
           // iOS can briefly pause the playback object during the transition; force resume.
           (async () => {
+            if (!videoPlayer) return;
             try {
-              await (videoRef.current as any)?.setVolumeAsync?.(1.0);
+              videoPlayer.volume = 1.0;
             } catch {
               // ignore
             }
             try {
-              await videoRef.current?.playAsync();
+              videoPlayer.play();
             } catch {
               // ignore
             }
@@ -175,13 +163,14 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         // Best-effort: keep volume at 1.0 and re-assert play if we were playing.
         if (s.isPlaying) {
           (async () => {
+            if (!videoPlayer) return;
             try {
-              await (videoRef.current as any)?.setVolumeAsync?.(1.0);
+              videoPlayer.volume = 1.0;
             } catch {
               // ignore
             }
             try {
-              await videoRef.current?.playAsync();
+              videoPlayer.play();
             } catch {
               // ignore
             }
@@ -244,7 +233,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
     // Video ref may not be mounted/loaded yet; best-effort seek after a tick.
     const t = setTimeout(() => {
-      videoRef.current?.setPositionAsync(0).catch(() => undefined);
+      videoPlayer?.seekBy(-videoPlayer.currentTime);
     }, 0);
 
     return () => {
@@ -258,35 +247,27 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     if (!item) return;
 
     if (item.mediaType === 'audio') {
-      const snd = soundRef.current;
-      if (!snd) return;
       try {
-        await snd.setRateAsync(s.playbackRate, true);
+        audioPlayer.playbackRate = s.playbackRate;
       } catch {
         // ignore
       }
       try {
-        await snd.setVolumeAsync(s.volume);
-      } catch {
-        // ignore
-      }
-      try {
-        await snd.setProgressUpdateIntervalAsync(500);
+        audioPlayer.volume = s.volume;
       } catch {
         // ignore
       }
       return;
     }
 
-    const v = videoRef.current;
-    if (!v) return;
+    if (!videoPlayer) return;
     try {
-      await v.setStatusAsync({ rate: s.playbackRate, shouldCorrectPitch: true });
+      videoPlayer.playbackRate = s.playbackRate;
     } catch {
       // ignore
     }
     try {
-      await v.setStatusAsync({ volume: s.volume });
+      videoPlayer.volume = s.volume;
     } catch {
       // ignore
     }
@@ -312,16 +293,13 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
     if (s.repeatMode === 'one') {
       try {
-        await (item.mediaType === 'audio'
-          ? soundRef.current?.setPositionAsync(0)
-          : videoRef.current?.setPositionAsync(0));
-      } catch {
-        // ignore
-      }
-      try {
-        await (item.mediaType === 'audio'
-          ? soundRef.current?.playAsync()
-          : videoRef.current?.playAsync());
+        if (item.mediaType === 'audio') {
+          audioPlayer.seekTo(0);
+          audioPlayer.play();
+        } else if (videoPlayer) {
+          videoPlayer.seekBy(-videoPlayer.currentTime);
+          videoPlayer.play();
+        }
       } catch {
         // ignore
       }
@@ -345,49 +323,20 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     await skipToIndex(nextIndex);
   }, []);
 
-  const updateProgressFromStatus = useCallback((status: AVPlaybackStatus) => {
-    if (!status.isLoaded) return;
-
-    setState((s) => ({
-      ...s,
-      isPlaying: Boolean(status.isPlaying),
-      positionMs: Math.max(0, Math.round(status.positionMillis ?? 0)),
-      durationMs: Math.max(0, Math.round(status.durationMillis ?? 0)),
-    }));
-
-    // Auto-next / repeat handling
-    if ((status as any).didJustFinish) {
-      handleDidJustFinish().catch(() => undefined);
-    }
-  }, [handleDidJustFinish]);
-
   const onVideoPlaybackStatusUpdate = useCallback(
-    (status: AVPlaybackStatus) => {
-      updateProgressFromStatus(status);
+    (status: any) => {
+      void status;
     },
-    [updateProgressFromStatus]
+    []
   );
 
   const unloadAudio = useCallback(async () => {
-    const snd = soundRef.current;
-    if (!snd) return;
-    soundRef.current = null;
-    try {
-      await snd.unloadAsync();
-    } catch {
-      // ignore
-    }
+    setAudioSource(null);
   }, []);
 
   const stopVideo = useCallback(async () => {
-    const v = videoRef.current;
-    if (!v) return;
-    try {
-      await v.stopAsync();
-    } catch {
-      // ignore
-    }
-  }, []);
+    videoPlayer?.pause();
+  }, [videoPlayer]);
 
   const loadAndPlayAudio = useCallback(
     async (item: MediaItem) => {
@@ -426,48 +375,17 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: true,
-        shouldDuckAndroid: true,
+      await setAudioModeAsync({
+        playsInSilentMode: true,
+        shouldPlayInBackground: true,
       });
 
       try {
         console.log('[MediaPlayer] Loading audio', { playbackUrl });
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: playbackUrl },
-          { shouldPlay: true },
-          updateProgressFromStatus
-        );
-
-        // If a newer load has started, immediately unload this sound to prevent overlap.
-        if (loadToken !== audioLoadTokenRef.current) {
-          try {
-            await sound.unloadAsync();
-          } catch {
-            // ignore
-          }
-          return;
-        }
-
-        soundRef.current = sound;
-
-        try {
-          await sound.setProgressUpdateIntervalAsync(500);
-        } catch {
-          // ignore
-        }
-        try {
-          await sound.setRateAsync(stateRef.current.playbackRate, true);
-        } catch {
-          // ignore
-        }
-        try {
-          await sound.setVolumeAsync(stateRef.current.volume);
-        } catch {
-          // ignore
-        }
-
+        setAudioSource(playbackUrl);
+        
+        // We set isPlaying to true, and we'll use an effect to trigger actual play 
+        // once the player is ready/synced with the new source.
         setState((s) => ({
           ...s,
           isPlaying: true,
@@ -480,7 +398,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         );
       }
     },
-    [stopVideo, unloadAudio, updateProgressFromStatus]
+    [stopVideo, audioPlayer]
   );
 
   const prepareVideo = useCallback(async () => {
@@ -543,30 +461,36 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     if (stateRef.current.queue.length === 0) return;
 
     if (item.mediaType === 'audio') {
-      const snd = soundRef.current;
-      if (!snd) return;
-      const status = await snd.getStatusAsync();
-      if (status.isLoaded && status.isPlaying) {
-        await snd.pauseAsync();
-        setState((s) => ({ ...s, isPlaying: false }));
-      } else {
-        await snd.playAsync();
-        setState((s) => ({ ...s, isPlaying: true }));
+      try {
+        if (!audioPlayer) return;
+        const isCurrentlyPlaying = stateRef.current.isPlaying;
+        if (isCurrentlyPlaying) {
+          audioPlayer.pause();
+          setState((s) => ({ ...s, isPlaying: false }));
+        } else {
+          audioPlayer.play();
+          setState((s) => ({ ...s, isPlaying: true }));
+        }
+      } catch (err) {
+        console.warn('[MediaPlayer] togglePlayPause audio failed', err);
       }
       return;
     }
 
-    const v = videoRef.current;
-    if (!v) return;
-    const status = await v.getStatusAsync();
-    if (status.isLoaded && status.isPlaying) {
-      await v.pauseAsync();
-      setState((s) => ({ ...s, isPlaying: false }));
-    } else {
-      await v.playAsync();
-      setState((s) => ({ ...s, isPlaying: true }));
+    if (!videoPlayer) return;
+    try {
+      const isCurrentlyPlaying = stateRef.current.isPlaying;
+      if (isCurrentlyPlaying) {
+        videoPlayer.pause();
+        setState((s) => ({ ...s, isPlaying: false }));
+      } else {
+        videoPlayer.play();
+        setState((s) => ({ ...s, isPlaying: true }));
+      }
+    } catch (err) {
+      console.warn('[MediaPlayer] togglePlayPause video failed', err);
     }
-  }, [currentItem]);
+  }, [currentItem, audioPlayer, videoPlayer]);
 
   const seekTo = useCallback(
     async (positionMs: number) => {
@@ -576,17 +500,22 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       const safe = Math.max(0, Math.round(positionMs));
 
       if (item.mediaType === 'audio') {
-        const snd = soundRef.current;
-        if (!snd) return;
-        await snd.setPositionAsync(safe);
+        try {
+          audioPlayer.seekTo(safe / 1000);
+        } catch (err) {
+          console.warn('[MediaPlayer] audio seekTo failed', err);
+        }
         return;
       }
 
-      const v = videoRef.current;
-      if (!v) return;
-      await v.setPositionAsync(safe);
+      if (!videoPlayer) return;
+      try {
+        videoPlayer.seekBy((safe - videoPlayer.currentTime * 1000) / 1000);
+      } catch (err) {
+        console.warn('[MediaPlayer] video seekTo failed', err);
+      }
     },
-    [currentItem]
+    [currentItem, audioPlayer, videoPlayer]
   );
 
   const skipToIndex = useCallback(
@@ -672,15 +601,15 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     const item = currentItemRef.current;
     if (!item) return;
     try {
-      if (item.mediaType === 'audio') {
-        await soundRef.current?.setRateAsync(safe, true);
-      } else {
-        await videoRef.current?.setStatusAsync({ rate: safe, shouldCorrectPitch: true });
-      }
+    if (item.mediaType === 'audio') {
+      audioPlayer.playbackRate = safe;
+    } else if (videoPlayer) {
+      videoPlayer.playbackRate = safe;
+    }
     } catch {
       // ignore
     }
-  }, []);
+  }, [audioPlayer, videoPlayer]);
 
   const setVolume = useCallback(async (volume: number) => {
     const safe = Math.max(0, Math.min(1, volume));
@@ -690,14 +619,14 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     if (!item) return;
     try {
       if (item.mediaType === 'audio') {
-        await soundRef.current?.setVolumeAsync(safe);
-      } else {
-        await videoRef.current?.setStatusAsync({ volume: safe });
+        audioPlayer.volume = safe;
+      } else if (videoPlayer) {
+        videoPlayer.volume = safe;
       }
     } catch {
       // ignore
     }
-  }, []);
+  }, [audioPlayer, videoPlayer]);
 
   const close = useCallback(async () => {
     await stopVideo();
@@ -710,11 +639,56 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!audioStatus) return;
+
+    setState((s) => {
+      const isPlaying = Boolean(audioStatus.playing);
+      const pos = Math.max(0, Math.round((audioPlayer.currentTime || 0) * 1000));
+      const dur = Math.max(0, Math.round((audioPlayer.duration || 0) * 1000));
+      
+      // Throttle updates: only update if playing state changed, or position changed by > 500ms, or duration changed
+      const posDiff = Math.abs(s.positionMs - pos);
+      const shouldUpdate = s.isPlaying !== isPlaying || posDiff > 800 || s.durationMs !== dur;
+      
+      if (!shouldUpdate) return s;
+      
+      return {
+        ...s,
+        isPlaying,
+        positionMs: pos,
+        durationMs: dur,
+      };
+    });
+
+    // Auto-next / repeat handling
+    try {
+      const isFinished = (audioPlayer.duration || 0) > 0 && (audioPlayer.currentTime || 0) >= (audioPlayer.duration || 0) - 0.1;
+      if (isFinished && !audioStatus.playing && stateRef.current.isPlaying) {
+         handleDidJustFinish().catch(() => undefined);
+      }
+    } catch {
+      // ignore native errors in status effect
+    }
+  }, [audioStatus, audioPlayer, handleDidJustFinish]);
+
+  // Effect to handle auto-play when source changes and isPlaying is true
+  useEffect(() => {
+    if (state.isPlaying && audioSource && audioPlayer) {
+      if (audioStatus?.playing) return; // already playing
+      if (!audioStatus?.isLoaded) return; // wait until loaded before calling play()
+      try {
+        audioPlayer.play();
+      } catch (err) {
+        // Silently fail if native object is not ready yet; the next render/status update will retry if needed
+        console.log('[MediaPlayer] Auto-play retry...');
+      }
+    }
+  }, [audioSource, state.isPlaying, audioPlayer, audioStatus]);
+
+  useEffect(() => {
     return () => {
-      (async () => {
-        await stopVideo();
-        await unloadAudio();
-      })();
+      stopVideo().catch(() => undefined);
+      unloadAudio().catch(() => undefined);
     };
   }, [stopVideo, unloadAudio]);
 
@@ -746,7 +720,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       inlineAudioHostActive,
       setInlineAudioHostActive,
       onVideoPlaybackStatusUpdate,
-      videoRef,
+      videoPlayer,
+      audioPlayer,
     }),
     [
       close,
@@ -771,6 +746,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       togglePlayPause,
       videoAudioOnlyMode,
       videoRestoreNonce,
+      videoPlayer,
+      audioPlayer,
     ]
   );
 
@@ -794,7 +771,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         inlineVideoHostActive={value.inlineVideoHostActive}
         inlineAudioHostActive={value.inlineAudioHostActive}
         onVideoPlaybackStatusUpdate={value.onVideoPlaybackStatusUpdate}
-        videoRef={value.videoRef}
+        videoPlayer={value.videoPlayer}
+        audioPlayer={value.audioPlayer}
       />
     </MediaPlayerContext.Provider>
   );

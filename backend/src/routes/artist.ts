@@ -54,37 +54,10 @@ const uploadImage = multer({
   }
 });
 
-const ensureArtistSchema = async () => {
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT");
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_image_url TEXT");
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS accent_color VARCHAR(20)");
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS social_links JSONB").catch(() => undefined);
-  await pool.query(
-    "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_price NUMERIC NOT NULL DEFAULT 0"
-  );
-
-  await pool
-    .query("ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_status VARCHAR(20) NOT NULL DEFAULT 'PENDING'")
-    .catch(() => undefined);
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_bio TEXT").catch(() => undefined);
-  await pool
-    .query("ALTER TABLE users ADD COLUMN IF NOT EXISTS portfolio_links TEXT[] NOT NULL DEFAULT '{}'")
-    .catch(() => undefined);
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ").catch(() => undefined);
-  await pool
-    .query("ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_appeal_message TEXT")
-    .catch(() => undefined);
-  await pool
-    .query("ALTER TABLE users ALTER COLUMN artist_status SET DEFAULT 'PENDING'")
-    .catch(() => undefined);
-};
-
 router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
   const correlationId = req?.correlationId || "-";
 
   try {
-    await ensureArtistSchema();
-
     const {
       email,
       password,
@@ -231,8 +204,6 @@ router.patch("/onboard", requireAuth, requireArtist, async (req: any, res: any) 
   const artistUserId = req.user?.id;
 
   try {
-    await ensureArtistSchema();
-
     const { artistName, bio, portfolioLinks, phone } = req.body as {
       artistName?: string;
       bio?: string;
@@ -292,8 +263,6 @@ router.patch("/appeal", requireAuth, requireArtist, async (req: any, res: any) =
   const artistUserId = req.user?.id;
 
   try {
-    await ensureArtistSchema();
-
     const { message } = req.body as { message?: string };
     const msg = (message ?? "").toString().trim();
     if (!msg) {
@@ -313,93 +282,6 @@ router.patch("/appeal", requireAuth, requireArtist, async (req: any, res: any) =
   }
 });
 
-const ensureContentSchema = async () => {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS content_items (
-      id SERIAL PRIMARY KEY,
-      title VARCHAR(255) NOT NULL,
-      type VARCHAR(20) NOT NULL,
-      artist_id INT NOT NULL,
-      thumbnail_url TEXT,
-      media_url TEXT,
-      genre VARCHAR(80),
-      lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'PUBLISHED',
-      is_approved BOOLEAN NOT NULL DEFAULT true,
-      rejection_reason TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `);
-
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS title VARCHAR(255)");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS type VARCHAR(20)");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS artist_id INT");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS thumbnail_url TEXT");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS media_url TEXT");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS genre VARCHAR(80)");
-  await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'PUBLISHED'"
-  );
-  await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT true"
-  );
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS rejection_reason TEXT");
-  await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()"
-  );
-
-  await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ"
-  );
-  await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS subscription_required BOOLEAN NOT NULL DEFAULT false"
-  );
-
-  await pool
-    .query("ALTER TABLE content_items ALTER COLUMN lifecycle_state SET DEFAULT 'PUBLISHED'")
-    .catch(() => undefined);
-  await pool
-    .query("ALTER TABLE content_items ALTER COLUMN is_approved SET DEFAULT true")
-    .catch(() => undefined);
-
-  // Idempotent: publish any legacy pending items.
-  await pool
-    .query(
-      `UPDATE content_items
-       SET is_approved = true,
-           lifecycle_state = 'PUBLISHED',
-           status = COALESCE(NULLIF(status, ''), 'PUBLISHED'),
-           published_at = COALESCE(published_at, now()),
-           rejection_reason = NULL
-       WHERE COALESCE(is_approved, false) = false
-         AND UPPER(COALESCE(lifecycle_state, 'DRAFT')) = 'DRAFT'`
-    )
-    .catch(() => undefined);
-};
-
-const ensurePlaysSchema = async () => {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS content_plays (
-      id SERIAL PRIMARY KEY,
-      content_id INT NOT NULL,
-      user_id INT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `);
-
-  await pool.query("ALTER TABLE content_plays ADD COLUMN IF NOT EXISTS content_id INT");
-  await pool.query("ALTER TABLE content_plays ADD COLUMN IF NOT EXISTS user_id INT");
-  await pool.query(
-    "ALTER TABLE content_plays ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()"
-  );
-
-  await pool.query(
-    "CREATE INDEX IF NOT EXISTS idx_content_plays_content_id ON content_plays(content_id)"
-  );
-  await pool.query(
-    "CREATE INDEX IF NOT EXISTS idx_content_plays_created_at ON content_plays(created_at)"
-  );
-};
-
 const safeScalarNumber = async (
   query: string,
   params: any[],
@@ -407,7 +289,7 @@ const safeScalarNumber = async (
 ): Promise<number> => {
   try {
     const r = await pool.query(query, params);
-    const v = r.rows?.[0]?.value;
+    const v = r.rows?.[0]?.value ?? r.rows?.[0]?.c ?? r.rows?.[0]?.count;
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
   } catch {
@@ -447,7 +329,6 @@ router.post(
     const correlationId = req?.correlationId || "-";
 
     try {
-      await ensureArtistSchema();
 
       const kindRaw = (req.body?.kind ?? "").toString().trim().toLowerCase();
       const kind = kindRaw === "banner" ? "banner" : kindRaw === "profile" ? "profile" : "";
@@ -507,7 +388,6 @@ router.get("/me", requireAuth, requireArtist, async (req: any, res: any) => {
   const artistUserId = req.user?.id;
 
   try {
-    await ensureArtistSchema();
 
     const rows = await safeRows<any>(
       `SELECT id, email, name,
@@ -573,8 +453,6 @@ router.patch("/me", requireAuth, requireArtist, async (req: any, res: any) => {
   const artistUserId = req.user?.id;
 
   try {
-    await ensureArtistSchema();
-
     const { name, bio, profileImageUrl, bannerImageUrl, accentColor, socialLinks } = req.body as {
       name?: string | null;
       bio?: string | null;
@@ -636,7 +514,6 @@ router.get("/pricing", requireAuth, requireArtist, async (req: any, res: any) =>
   const artistUserId = req.user?.id;
 
   try {
-    await ensureArtistSchema();
 
     const rows = await safeRows<any>(
       "SELECT COALESCE(subscription_price, 0) as subscription_price FROM users WHERE id = $1 AND UPPER(role) = 'ARTIST' LIMIT 1",
@@ -666,7 +543,6 @@ router.patch("/pricing", requireAuth, requireArtist, async (req: any, res: any) 
   const artistUserId = req.user?.id;
 
   try {
-    await ensureArtistSchema();
 
     const { subscriptionPrice } = req.body as { subscriptionPrice?: number | string };
     const next = Number(subscriptionPrice);
@@ -696,7 +572,6 @@ router.get("/dashboard/summary", requireAuth, requireArtist, async (req: any, re
   const artistUserId = req.user?.id;
 
   try {
-    await ensureArtistSchema();
 
     const subscribers = await (async () => {
       const n = await safeScalarNumber(
@@ -859,8 +734,6 @@ router.get(
     const days = Number.isFinite(daysRequested) ? Math.max(1, Math.min(365, Math.floor(daysRequested))) : 30;
 
     try {
-      await ensureContentSchema();
-      await ensurePlaysSchema();
 
       const start = new Date();
       start.setUTCDate(start.getUTCDate() - days);
@@ -926,8 +799,6 @@ router.get("/channel-preview", requireAuth, requireArtist, async (req: any, res:
   const artistUserId = req.user?.id;
 
   try {
-    await ensureArtistSchema();
-    await ensureContentSchema();
 
     const artistRows = await safeRows<any>(
       `SELECT id, email, name,

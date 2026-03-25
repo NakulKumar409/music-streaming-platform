@@ -37,146 +37,21 @@ const requireArtistOrAdmin = (req: any, res: any, next: any) => {
   return next();
 };
 
-const ensureContentSchema = async () => {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS content_items (
-      id SERIAL PRIMARY KEY,
-      title VARCHAR(255) NOT NULL,
-      type VARCHAR(20) NOT NULL,
-      artist_id INT NOT NULL,
-      thumbnail_url TEXT,
-      media_url TEXT,
-      audio_url TEXT,
-      video_url TEXT,
-      genre VARCHAR(80),
-      lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'PUBLISHED',
-      is_approved BOOLEAN NOT NULL DEFAULT true,
-      rejection_reason TEXT,
-      report_count INT NOT NULL DEFAULT 0,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `);
-
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS title VARCHAR(255)");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS type VARCHAR(20)");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS artist_id INT");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS thumbnail_url TEXT");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS media_url TEXT");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS audio_url TEXT");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS video_url TEXT");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS genre VARCHAR(80)");
-  await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'PUBLISHED'"
-  );
-  await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT true"
-  );
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS rejection_reason TEXT");
-  await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()"
-  );
-
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ");
-  await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS subscription_required BOOLEAN NOT NULL DEFAULT false"
-  );
-  await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS storage_provider VARCHAR(20) DEFAULT 'local'"
-  );
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS storage_key TEXT");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS thumbnail_storage_key TEXT");
-  await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS visibility VARCHAR(30) DEFAULT 'PROTECTED'"
-  );
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS status VARCHAR(20)");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS report_count INT NOT NULL DEFAULT 0");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS mime_type VARCHAR(100)");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS file_size_bytes INT");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS original_file_name VARCHAR(255)");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS uploaded_at TIMESTAMPTZ");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS video_storage_key TEXT");
-
-  // Ensure defaults match the current "auto-live" policy.
-  await pool
-    .query("ALTER TABLE content_items ALTER COLUMN lifecycle_state SET DEFAULT 'PUBLISHED'")
-    .catch(() => undefined);
-  await pool
-    .query("ALTER TABLE content_items ALTER COLUMN is_approved SET DEFAULT true")
-    .catch(() => undefined);
-
-  await pool
-    .query("ALTER TABLE content_items ALTER COLUMN status SET DEFAULT 'APPROVED'")
-    .catch(() => undefined);
-
-  await pool
-    .query("ALTER TABLE content_items ALTER COLUMN report_count SET DEFAULT 0")
-    .catch(() => undefined);
-
-  // One-time / idempotent migration: publish any legacy pending items.
-  await pool
-    .query(
-      `UPDATE content_items
-       SET is_approved = true,
-           lifecycle_state = 'PUBLISHED',
-           status = COALESCE(NULLIF(status, ''), 'APPROVED'),
-           published_at = COALESCE(published_at, now()),
-           rejection_reason = NULL
-       WHERE COALESCE(is_approved, false) = false
-         AND UPPER(COALESCE(lifecycle_state, 'DRAFT')) = 'DRAFT'`
-    )
-    .catch(() => undefined);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS reports (
-      id SERIAL PRIMARY KEY,
-      reason VARCHAR(80) NOT NULL,
-      content_id INT NOT NULL,
-      user_id INT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `);
-  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS reason VARCHAR(80)");
-  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS content_id INT");
-  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS user_id INT");
-  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()");
-
-  await pool.query(
-    "CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_unique_content_user ON reports(content_id, user_id)"
-  );
-  await pool.query("CREATE INDEX IF NOT EXISTS idx_reports_content_id ON reports(content_id)");
-  await pool.query("CREATE INDEX IF NOT EXISTS idx_reports_user_id ON reports(user_id)");
-};
-
-const ensurePlaysSchema = async () => {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS content_plays (
-      id SERIAL PRIMARY KEY,
-      content_id INT NOT NULL,
-      user_id INT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `);
-
-  await pool.query("ALTER TABLE content_plays ADD COLUMN IF NOT EXISTS content_id INT");
-  await pool.query("ALTER TABLE content_plays ADD COLUMN IF NOT EXISTS user_id INT");
-  await pool.query(
-    "ALTER TABLE content_plays ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()"
-  );
-
-  await pool.query(
-    "CREATE INDEX IF NOT EXISTS idx_content_plays_content_id ON content_plays(content_id)"
-  );
-  await pool.query(
-    "CREATE INDEX IF NOT EXISTS idx_content_plays_created_at ON content_plays(created_at)"
-  );
-};
-
 const ensureUploadsDir = () => {
   const dir = path.join(process.cwd(), "public", "uploads");
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
   return dir;
+};
+
+const toAbsoluteUrl = (req: any, value: any) => {
+  const raw = (value ?? "").toString().trim();
+  if (!raw) return null;
+  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  if (raw.startsWith("/")) return `${baseUrl}${raw}`;
+  return `${baseUrl}/${raw}`;
 };
 
 const REPORT_THRESHOLD = 5;
@@ -212,7 +87,6 @@ router.post(
     const mediaCfg = getMediaConfig();
 
     try {
-      await ensureContentSchema();
 
       const flaggedCount = await pool
         .query(
@@ -418,7 +292,6 @@ router.post("/report", requireAuth, async (req: any, res: any) => {
   }
 
   try {
-    await ensureContentSchema();
 
     const inserted = await pool.query(
       `INSERT INTO reports (reason, content_id, user_id)
@@ -476,12 +349,21 @@ router.get("/mine", requireAuth, requireArtist, async (req: any, res: any) => {
   const correlationId = req?.correlationId || "-";
 
   try {
-    await ensureContentSchema();
 
     const artistId = req.user?.id;
+    const mediaCfg = getMediaConfig();
+    const streamRoute = (mediaCfg.localPrivateStreamRoute || "media/stream").replace(/^\//, "");
+    const baseUrlFull = `${req.protocol}://${req.get("host")}`;
+
+    const issueStreamUrl = (contentId: number, kind: "audio" | "video") => {
+      const token = createPlaybackToken(contentId, artistId, mediaCfg.mediaUrlTtlSeconds);
+      return `${baseUrlFull}/${streamRoute}/${contentId}?token=${encodeURIComponent(token)}&kind=${encodeURIComponent(
+        kind
+      )}`;
+    };
 
     const rows = await pool.query(
-      `SELECT id, title, type, thumbnail_url, audio_url, video_url, media_url, lifecycle_state, is_approved, created_at
+      `SELECT id, title, type, thumbnail_url, audio_url, video_url, media_url, lifecycle_state, is_approved, created_at, storage_key, video_storage_key
        FROM content_items
        WHERE artist_id = $1
        ORDER BY created_at DESC
@@ -489,18 +371,37 @@ router.get("/mine", requireAuth, requireArtist, async (req: any, res: any) => {
       [artistId]
     );
 
-    const items = (rows.rows ?? []).map((r: any) => ({
-      id: r.id,
-      title: r.title,
-      type: r.type,
-      thumbnailUrl: r.thumbnail_url ?? null,
-      audioUrl: r.audio_url ?? null,
-      videoUrl: r.video_url ?? null,
-      mediaUrl: r.media_url ?? null,
-      lifecycleState: r.lifecycle_state,
-      isApproved: r.is_approved,
-      createdAt: r.created_at
-    }));
+    const items = (rows.rows ?? []).map((r: any) => {
+      const typeRaw = (r.type ?? "").toString().toLowerCase();
+      const hasAudio = Boolean(r.storage_key || r.audio_url || r.media_url);
+      const hasVideo = Boolean(r.video_storage_key || r.video_url);
+
+      const hasNewAudioStorage = Boolean(r.storage_key);
+      const hasNewVideoStorage = Boolean(r.video_storage_key || (typeRaw === "video" && r.storage_key));
+
+      const legacyAudioUrlRaw = r.audio_url ?? r.media_url;
+      const legacyVideoUrlRaw = r.video_url ?? r.media_url;
+
+      const streamAudioUrl = hasNewAudioStorage ? issueStreamUrl(r.id, "audio") : null;
+      const streamVideoUrl = hasNewVideoStorage ? issueStreamUrl(r.id, "video") : null;
+
+      const finalAudioUrl = hasAudio ? (streamAudioUrl || toAbsoluteUrl(req, legacyAudioUrlRaw)) : null;
+      const finalVideoUrl = hasVideo ? (streamVideoUrl || toAbsoluteUrl(req, legacyVideoUrlRaw)) : null;
+      const finalMediaUrl = typeRaw === "video" ? finalVideoUrl : finalAudioUrl;
+
+      return {
+        id: r.id,
+        title: r.title,
+        type: r.type,
+        thumbnailUrl: r.thumbnail_url ? toAbsoluteUrl(req, r.thumbnail_url) : null,
+        audioUrl: finalAudioUrl,
+        videoUrl: finalVideoUrl,
+        mediaUrl: finalMediaUrl,
+        lifecycleState: r.lifecycle_state,
+        isApproved: r.is_approved,
+        createdAt: r.created_at
+      };
+    });
 
     return res.json({ success: true, items, correlationId });
   } catch {
@@ -516,7 +417,6 @@ router.post("/upload-metadata", uploadLimiter, requireAuth, requireArtist, async
   const correlationId = req?.correlationId || "-";
 
   try {
-    await ensureContentSchema();
 
     const artistId = req.user?.id;
     const flaggedCount = await pool
@@ -586,8 +486,6 @@ router.get("/history", requireAuth, requireArtistOrAdmin, async (req: any, res: 
   const correlationId = req?.correlationId || "-";
 
   try {
-    await ensureContentSchema();
-    await ensurePlaysSchema();
 
     const mediaCfg = getMediaConfig();
     const streamRoute = (mediaCfg.localPrivateStreamRoute || "media/stream").replace(/^\//, "");
@@ -610,7 +508,93 @@ router.get("/history", requireAuth, requireArtistOrAdmin, async (req: any, res: 
         });
       }
 
-      const rows = await pool.query(
+      let rows: any;
+      try {
+        rows = await pool.query(
+          `SELECT 
+            c.id,
+            c.title,
+            c.type,
+            c.thumbnail_url,
+            c.media_url,
+            c.audio_url,
+            c.video_url,
+            c.storage_provider,
+            c.storage_key,
+            c.video_storage_key,
+            c.lifecycle_state,
+            c.is_approved,
+            c.rejection_reason,
+            c.created_at,
+            (SELECT COUNT(*)::int FROM content_plays p WHERE p.content_id = c.id) as total_plays
+           FROM content_items c
+           WHERE c.artist_id = $1
+           ORDER BY c.created_at DESC
+           LIMIT 500`,
+          [artistId]
+        );
+      } catch (err: any) {
+        // Fallback to minimal query if anything fails
+        rows = await pool.query(
+          `SELECT 
+            c.id,
+            c.title,
+            c.type,
+            c.thumbnail_url,
+            c.media_url,
+            c.audio_url,
+            c.video_url,
+            c.storage_provider,
+            c.storage_key,
+            c.video_storage_key,
+            c.lifecycle_state,
+            c.created_at
+           FROM content_items c
+           WHERE c.artist_id = $1
+           ORDER BY c.created_at DESC
+           LIMIT 500`,
+          [artistId]
+        );
+      }
+
+      const items = (rows.rows ?? []).map((r: any) => {
+        const lifecycle = (r.lifecycle_state ?? "DRAFT").toString();
+        const approved = Boolean(r.is_approved);
+        const status = lifecycle.toUpperCase() === "REJECTED" ? "REJECTED" : approved ? "PUBLISHED" : "PENDING";
+        const hasAudio = Boolean(r.audio_url || r.media_url || r.storage_key);
+        const hasVideo = Boolean(r.video_url || r.video_storage_key);
+
+        const audioUrl = hasAudio ? issueStreamUrl(r.id, req.user?.id, "audio") : null;
+        const videoUrl = hasVideo ? issueStreamUrl(r.id, req.user?.id, "video") : null;
+
+        const rawType = (r.type ?? "").toString().toUpperCase();
+        const type = rawType || (hasAudio && hasVideo ? "AUDIO_VIDEO" : hasVideo ? "VIDEO" : "AUDIO");
+        const finalMediaUrl = type.toLowerCase() === "video" ? videoUrl : audioUrl;
+
+        return {
+          id: r.id,
+          title: r.title,
+          type: type.toLowerCase(),
+          thumbnailUrl: r.thumbnail_url ? toAbsoluteUrl(req, r.thumbnail_url) : null,
+          mediaUrl: finalMediaUrl || r.media_url || null,
+          audioUrl,
+          videoUrl,
+          lifecycleState: lifecycle,
+          isApproved: r.is_approved,
+          status,
+          rejectionReason: r.rejection_reason ?? null,
+          totalPlays: Number(r.total_plays ?? 0),
+          createdAt: r.created_at
+        };
+      });
+
+      return res.json({ success: true, items, correlationId });
+    }
+
+    const artistId = req.user?.id;
+    let rows: any;
+    try {
+      rows = await pool.query(
         `SELECT 
           c.id,
           c.title,
@@ -633,63 +617,29 @@ router.get("/history", requireAuth, requireArtistOrAdmin, async (req: any, res: 
          LIMIT 500`,
         [artistId]
       );
-
-      const items = (rows.rows ?? []).map((r: any) => {
-        const lifecycle = (r.lifecycle_state ?? "DRAFT").toString();
-        const approved = Boolean(r.is_approved);
-        const status = lifecycle.toUpperCase() === "REJECTED" ? "REJECTED" : approved ? "PUBLISHED" : "PENDING";
-        const hasAudio = Boolean(r.audio_url || r.media_url || r.storage_key);
-        const hasVideo = Boolean(r.video_url || r.video_storage_key);
-
-        const audioUrl = hasAudio ? issueStreamUrl(r.id, req.user?.id, "audio") : null;
-        const videoUrl = hasVideo ? issueStreamUrl(r.id, req.user?.id, "video") : null;
-
-        const rawType = (r.type ?? "").toString().toUpperCase();
-        const type = rawType || (hasAudio && hasVideo ? "AUDIO_VIDEO" : hasVideo ? "VIDEO" : "AUDIO");
-        return {
-          id: r.id,
-          title: r.title,
-          type: type.toLowerCase(),
-          thumbnailUrl: r.thumbnail_url ?? null,
-          mediaUrl: r.media_url ?? null,
-          audioUrl,
-          videoUrl,
-          lifecycleState: lifecycle,
-          isApproved: r.is_approved,
-          status,
-          rejectionReason: r.rejection_reason ?? null,
-          totalPlays: Number(r.total_plays ?? 0),
-          createdAt: r.created_at
-        };
-      });
-
-      return res.json({ success: true, items, correlationId });
+    } catch (err: any) {
+      // Fallback to minimal query if anything fails
+      rows = await pool.query(
+        `SELECT 
+          c.id,
+          c.title,
+          c.type,
+          c.thumbnail_url,
+          c.media_url,
+          c.audio_url,
+          c.video_url,
+          c.storage_provider,
+          c.storage_key,
+          c.video_storage_key,
+          c.lifecycle_state,
+          c.created_at
+         FROM content_items c
+         WHERE c.artist_id = $1
+         ORDER BY c.created_at DESC
+         LIMIT 500`,
+        [artistId]
+      );
     }
-
-    const artistId = req.user?.id;
-    const rows = await pool.query(
-      `SELECT 
-        c.id,
-        c.title,
-        c.type,
-        c.thumbnail_url,
-        c.media_url,
-        c.audio_url,
-        c.video_url,
-        c.storage_provider,
-        c.storage_key,
-        c.video_storage_key,
-        c.lifecycle_state,
-        c.is_approved,
-        c.rejection_reason,
-        c.created_at,
-        (SELECT COUNT(*)::int FROM content_plays p WHERE p.content_id = c.id) as total_plays
-       FROM content_items c
-       WHERE c.artist_id = $1
-       ORDER BY c.created_at DESC
-       LIMIT 500`,
-      [artistId]
-    );
 
     const items = (rows.rows ?? []).map((r: any) => {
       const lifecycle = (r.lifecycle_state ?? "DRAFT").toString();
@@ -703,12 +653,14 @@ router.get("/history", requireAuth, requireArtistOrAdmin, async (req: any, res: 
 
       const rawType = (r.type ?? "").toString().toUpperCase();
       const type = rawType || (hasAudio && hasVideo ? "AUDIO_VIDEO" : hasVideo ? "VIDEO" : "AUDIO");
+      const finalMediaUrl = type.toLowerCase() === "video" ? videoUrl : audioUrl;
+
       return {
         id: r.id,
         title: r.title,
         type: type.toLowerCase(),
-        thumbnailUrl: r.thumbnail_url ?? null,
-        mediaUrl: r.media_url ?? null,
+        thumbnailUrl: r.thumbnail_url ? toAbsoluteUrl(req, r.thumbnail_url) : null,
+        mediaUrl: finalMediaUrl || r.media_url || null,
         audioUrl,
         videoUrl,
         lifecycleState: lifecycle,
@@ -752,7 +704,6 @@ router.delete("/:id", requireAuth, requireArtistOrAdmin, async (req: any, res: a
   );
 
   try {
-    await ensureContentSchema();
 
     const del =
       role === "ADMIN"

@@ -15,105 +15,8 @@ const requireAdmin = (req: any, res: any, next: any) => {
   return next();
 };
 
-const ensureContentSchema = async () => {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS content_items (
-      id SERIAL PRIMARY KEY,
-      title VARCHAR(255) NOT NULL,
-      type VARCHAR(20) NOT NULL,
-      artist_id INT NOT NULL,
-      thumbnail_url TEXT,
-      media_url TEXT,
-      audio_url TEXT,
-      video_url TEXT,
-      genre VARCHAR(80),
-      lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'PUBLISHED',
-      is_approved BOOLEAN NOT NULL DEFAULT true,
-      rejection_reason TEXT,
-      report_count INT NOT NULL DEFAULT 0,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `);
-
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS title VARCHAR(255)");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS type VARCHAR(20)");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS artist_id INT");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS thumbnail_url TEXT");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS media_url TEXT");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS audio_url TEXT");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS video_url TEXT");
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS genre VARCHAR(80)");
-  await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'PUBLISHED'"
-  );
-  await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT true"
-  );
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS rejection_reason TEXT");
-  await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()"
-  );
-
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ");
-  await pool.query(
-    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS subscription_required BOOLEAN NOT NULL DEFAULT false"
-  );
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS status VARCHAR(20)").catch(() => undefined);
-  await pool.query("ALTER TABLE content_items ADD COLUMN IF NOT EXISTS report_count INT NOT NULL DEFAULT 0").catch(() => undefined);
-
-  await pool
-    .query("ALTER TABLE content_items ALTER COLUMN lifecycle_state SET DEFAULT 'PUBLISHED'")
-    .catch(() => undefined);
-  await pool
-    .query("ALTER TABLE content_items ALTER COLUMN is_approved SET DEFAULT true")
-    .catch(() => undefined);
-
-  await pool
-    .query("ALTER TABLE content_items ALTER COLUMN status SET DEFAULT 'APPROVED'")
-    .catch(() => undefined);
-
-  await pool
-    .query("ALTER TABLE content_items ALTER COLUMN report_count SET DEFAULT 0")
-    .catch(() => undefined);
-
-  // Idempotent: publish any legacy pending items.
-  await pool
-    .query(
-      `UPDATE content_items
-       SET is_approved = true,
-           lifecycle_state = 'PUBLISHED',
-           status = COALESCE(NULLIF(status, ''), 'APPROVED'),
-           published_at = COALESCE(published_at, now()),
-           rejection_reason = NULL
-       WHERE COALESCE(is_approved, false) = false
-         AND UPPER(COALESCE(lifecycle_state, 'DRAFT')) = 'DRAFT'`
-    )
-    .catch(() => undefined);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS reports (
-      id SERIAL PRIMARY KEY,
-      reason VARCHAR(80) NOT NULL,
-      content_id INT NOT NULL,
-      user_id INT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `);
-  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS reason VARCHAR(80)").catch(() => undefined);
-  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS content_id INT").catch(() => undefined);
-  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS user_id INT").catch(() => undefined);
-  await pool.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()").catch(() => undefined);
-
-  await pool.query(
-    "CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_unique_content_user ON reports(content_id, user_id)"
-  ).catch(() => undefined);
-  await pool.query("CREATE INDEX IF NOT EXISTS idx_reports_content_id ON reports(content_id)").catch(() => undefined);
-  await pool.query("CREATE INDEX IF NOT EXISTS idx_reports_user_id ON reports(user_id)").catch(() => undefined);
-};
-
 router.get("/pending", requireAuth, requireAdmin, async (req: any, res: any) => {
   const correlationId = req?.correlationId || "-";
-  await ensureContentSchema();
   return res.status(404).json({
     success: false,
     message: "Content approval workflow has been removed",
@@ -125,7 +28,6 @@ router.get("/flagged", requireAuth, requireAdmin, async (req: any, res: any) => 
   const correlationId = req?.correlationId || "-";
 
   try {
-    await ensureContentSchema();
 
     const baseUrl = `${req.protocol}://${req.get("host")}`;
     const toAbsoluteUrl = (value: any) => {
@@ -212,7 +114,6 @@ router.post("/:id/restore", requireAuth, requireAdmin, async (req: any, res: any
   }
 
   try {
-    await ensureContentSchema();
 
     await pool.query("BEGIN");
     const updated = await pool.query(
@@ -249,7 +150,6 @@ router.post("/:id/delete-strike", requireAuth, requireAdmin, async (req: any, re
   }
 
   try {
-    await ensureContentSchema();
 
     await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS strike_count INT NOT NULL DEFAULT 0").catch(() => undefined);
     await pool.query("ALTER TABLE users ALTER COLUMN strike_count SET DEFAULT 0").catch(() => undefined);
@@ -321,7 +221,6 @@ router.post("/artists/:artistId/ban", requireAuth, requireAdmin, async (req: any
 
 router.patch("/:id/approve", requireAuth, requireAdmin, async (req: any, res: any) => {
   const correlationId = req?.correlationId || "-";
-  await ensureContentSchema();
   return res.status(404).json({
     success: false,
     message: "Content approval workflow has been removed",
@@ -331,7 +230,6 @@ router.patch("/:id/approve", requireAuth, requireAdmin, async (req: any, res: an
 
 router.patch("/:id/reject", requireAuth, requireAdmin, async (req: any, res: any) => {
   const correlationId = req?.correlationId || "-";
-  await ensureContentSchema();
   return res.status(404).json({
     success: false,
     message: "Content approval workflow has been removed",

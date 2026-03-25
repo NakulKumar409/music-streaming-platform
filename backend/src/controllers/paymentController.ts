@@ -227,51 +227,82 @@ export const razorpayWebhook = async (req: any, res: Response) => {
     const payload = JSON.parse(rawBody.toString("utf8") || "{}");
     const event = (payload?.event ?? "").toString();
 
-    if (event !== "payment.captured") {
-      return res.json({ success: true, received: true });
+    // Log the event concisely
+    console.log(`[Webhook] Received event: ${event}`);
+
+    switch (event) {
+      case "payment.captured": {
+        const paymentEntity = payload?.payload?.payment?.entity ?? null;
+        const orderId = (paymentEntity?.order_id ?? "").toString();
+        const paymentId = (paymentEntity?.id ?? "").toString();
+
+        if (orderId && paymentId) {
+          const client = getRazorpayClient();
+          const order = await client.orders.fetch(orderId).catch(() => null);
+          if (order) {
+            const notes = (order as any).notes || {};
+            const userIdFromNotes = Number(notes?.user_id);
+            const artistIdFromNotes = Number(notes?.artist_id);
+
+            if (userIdFromNotes > 0 && artistIdFromNotes > 0) {
+              const now = new Date();
+              const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+              await pool.query(
+                `UPDATE transactions
+                 SET status = 'SUCCESS', payment_confirmed_at = $2, razorpay_payment_id = $3
+                 WHERE razorpay_order_id = $1`,
+                [orderId, now, paymentId]
+              );
+            }
+          }
+        }
+        break;
+      }
+
+      case "subscription.activated":
+      case "subscription.charged": {
+        const subEntity = payload?.payload?.subscription?.entity;
+        if (!subEntity) break;
+        const subId = subEntity.id;
+        const nextBillingAt = subEntity.charge_at ? new Date(subEntity.charge_at * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        
+        await pool.query(
+          `UPDATE subscriptions 
+           SET status = 'ACTIVE', next_billing_date = $2, updated_at = now()
+           WHERE razorpay_subscription_id = $1`,
+          [subId, nextBillingAt]
+        );
+        console.log(`[SUCCESS] Subscription activated/charged: ${subId}`);
+        break;
+      }
+
+      case "payment.failed": {
+        const paymentEntity = payload?.payload?.payment?.entity;
+        const subId = paymentEntity?.subscription_id;
+        if (!subId) break;
+        await pool.query(
+          `UPDATE subscriptions SET status = 'PAST_DUE', updated_at = now() WHERE razorpay_subscription_id = $1`,
+          [subId]
+        );
+        console.log(`[ERROR] Payment failed for sub: ${subId}`);
+        break;
+      }
+
+      case "subscription.cancelled": {
+        const subEntity = payload?.payload?.subscription?.entity;
+        const subId = subEntity?.id;
+        if (!subId) break;
+        await pool.query(
+          `UPDATE subscriptions SET status = 'CANCELLED', auto_renew = false, updated_at = now() WHERE razorpay_subscription_id = $1`,
+          [subId]
+        );
+        console.log(`[INFO] Subscription cancelled: ${subId}`);
+        break;
+      }
     }
 
-    const paymentEntity = payload?.payload?.payment?.entity ?? null;
-    const orderId = (paymentEntity?.order_id ?? "").toString();
-    const paymentId = (paymentEntity?.id ?? "").toString();
-
-    if (!orderId || !paymentId) {
-      return res.status(400).json({ success: false, message: "Missing order_id/payment_id in webhook" });
-    }
-
-    const client = getRazorpayClient();
-    const order = await client.orders.fetch(orderId);
-    const notes: any = (order as any)?.notes ?? {};
-    const userIdFromNotes = Number(notes?.user_id);
-    const artistIdFromNotes = Number(notes?.artist_id);
-
-    if (!Number.isFinite(userIdFromNotes) || userIdFromNotes <= 0) {
-      return res.status(400).json({ success: false, message: "Missing user_id in Razorpay order notes" });
-    }
-
-    if (!Number.isFinite(artistIdFromNotes) || artistIdFromNotes <= 0) {
-      return res.status(400).json({ success: false, message: "Missing artist_id in Razorpay order notes" });
-    }
-
-    const now = new Date();
-    const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-    await pool.query(
-      `UPDATE transactions
-       SET status = 'SUCCESS', payment_confirmed_at = $2, razorpay_payment_id = $3
-       WHERE razorpay_order_id = $1`,
-      [orderId, now, paymentId]
-    );
-
-    await pool.query(
-      `INSERT INTO subscriptions (user_id, artist_id, status, plan_type, start_date, end_date, auto_renew)
-       VALUES ($1, $2, 'ACTIVE', 'MONTHLY', $3, $4, true)
-       ON CONFLICT (user_id, artist_id)
-       DO UPDATE SET status = 'ACTIVE', end_date = EXCLUDED.end_date, updated_at = now()`,
-      [userIdFromNotes, artistIdFromNotes, now, endDate]
-    );
-
-    return res.json({ success: true });
+    return res.json({ success: true, received: true });
   } catch (err: any) {
     return res.status(500).json({
       success: false,

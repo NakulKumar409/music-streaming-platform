@@ -90,7 +90,7 @@ export default function SearchScreen({ navigation }: any) {
           const id = String(c.id);
           const title = (c.title ?? '').toString();
           const artistName = (c.artistName ?? c.artist_name ?? '').toString();
-          const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000').replace(
+          const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'https://music-streaming-platform-cvad.onrender.com').replace(
             /\/+$/,
             ''
           );

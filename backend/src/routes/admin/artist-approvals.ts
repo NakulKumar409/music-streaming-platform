@@ -14,49 +14,6 @@ const requireAdmin = (req: any, res: any, next: any) => {
   }
   return next();
 };
-
-const ensureArtistOnboardingSchema = async () => {
-  await pool.query(
-    "ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR NOT NULL DEFAULT 'ACTIVE'"
-  );
-  await pool
-    .query("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'FAN'")
-    .catch(() => undefined);
-  await pool
-    .query("ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_status VARCHAR(20) NOT NULL DEFAULT 'PENDING'")
-    .catch(() => undefined);
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_bio TEXT").catch(() => undefined);
-  await pool
-    .query("ALTER TABLE users ADD COLUMN IF NOT EXISTS portfolio_links TEXT[] NOT NULL DEFAULT '{}'")
-    .catch(() => undefined);
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ").catch(() => undefined);
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_remarks TEXT").catch(() => undefined);
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS artist_appeal_message TEXT").catch(() => undefined);
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN").catch(() => undefined);
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN").catch(() => undefined);
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()"
-  ).catch(() => undefined);
-  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()"
-  ).catch(() => undefined);
-
-  await pool.query("ALTER TABLE users ALTER COLUMN artist_status SET DEFAULT 'PENDING'").catch(() => undefined);
-};
-
-const ensureArtistStatsSchema = async () => {
-  await pool
-    .query(
-      `CREATE TABLE IF NOT EXISTS artist_stats (
-        artist_id INT PRIMARY KEY,
-        total_plays INT NOT NULL DEFAULT 0,
-        total_subscribers INT NOT NULL DEFAULT 0,
-        total_earnings NUMERIC NOT NULL DEFAULT 0,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )`
-    )
-    .catch(() => undefined);
-};
-
 const safeQuery = async <T = any>(query: string, params: any[]): Promise<T[]> => {
   try {
     const r = await pool.query(query, params);
@@ -70,8 +27,6 @@ router.get("/pending-artists", requireAuth, requireAdmin, async (req: any, res: 
   const correlationId = req?.correlationId || "-";
 
   try {
-    await ensureArtistOnboardingSchema();
-
     const rows = await safeQuery<any>(
       `SELECT
          id,
@@ -153,8 +108,6 @@ router.patch("/resolve-artist/:id", requireAuth, requireAdmin, async (req: any, 
   }
 
   try {
-    await ensureArtistOnboardingSchema();
-    await ensureArtistStatsSchema();
 
     if (act === "APPROVE") {
       const r = await pool.query(

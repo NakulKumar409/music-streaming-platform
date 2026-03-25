@@ -13,12 +13,13 @@ import {
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Pause, Play, SkipForward, X } from 'lucide-react-native';
-import { Video, ResizeMode } from 'expo-av';
+import { VideoView, VideoPlayer } from 'expo-video';
+import { AudioPlayer } from 'expo-audio';
 import Slider from '@react-native-community/slider';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { AVPlaybackStatus } from 'expo-av';
+// Removed AVPlaybackStatus as it is no longer used
 import type { MediaItem, PlayerState } from '../media.types';
 import YouTubeVideoControlsOverlay from './YouTubeVideoControlsOverlay';
 import { Colors } from '../theme';
@@ -42,7 +43,8 @@ export default function MediaPlayerOverlay({
   inlineVideoHostActive,
   inlineAudioHostActive,
   onVideoPlaybackStatusUpdate,
-  videoRef,
+  videoPlayer,
+  audioPlayer,
 }: {
   bottomSafeAreaPadding?: number;
   state: PlayerState;
@@ -59,8 +61,9 @@ export default function MediaPlayerOverlay({
   setExpanded: (expanded: boolean) => void;
   inlineVideoHostActive: boolean;
   inlineAudioHostActive: boolean;
-  onVideoPlaybackStatusUpdate: (status: AVPlaybackStatus) => void;
-  videoRef: React.RefObject<Video>;
+  onVideoPlaybackStatusUpdate: (status: any) => void;
+  videoPlayer: VideoPlayer | null;
+  audioPlayer: AudioPlayer | null;
 }) {
   const insets = useSafeAreaInsets();
 
@@ -191,28 +194,15 @@ export default function MediaPlayerOverlay({
           </View>
 
           <View style={[styles.videoFrame, { aspectRatio: expandedVideoAspectRatio }]}>
-            <Video
-              key={`${currentItem.mediaUrl}-${expandedVideoAspectRatio}`}
-              ref={videoRef}
-              style={{ width: '100%', height: undefined, aspectRatio: expandedVideoAspectRatio }}
-              source={{ uri: currentItem.mediaUrl }}
-              shouldPlay={state.isPlaying}
-              resizeMode={ResizeMode.CONTAIN}
-              useNativeControls={false}
-              progressUpdateIntervalMillis={100}
-              onPlaybackStatusUpdate={onVideoPlaybackStatusUpdate}
-              onReadyForDisplay={(e) => {
-                const size = (e as any)?.naturalSize;
-                const w = Number(size?.width ?? 0);
-                const h = Number(size?.height ?? 0);
-                if (w > 0 && h > 0) {
-                  const ratio = w / h;
-                  if (Number.isFinite(ratio) && ratio > 0) setExpandedVideoAspectRatio(ratio);
-                  return;
-                }
-                setExpandedVideoAspectRatio(16 / 9);
-              }}
-            />
+            {videoPlayer && (
+              <VideoView
+                player={videoPlayer}
+                style={{ width: '100%', height: undefined, aspectRatio: expandedVideoAspectRatio }}
+                contentFit="contain"
+                allowsFullscreen={true}
+                allowsPictureInPicture={true}
+              />
+            )}
 
             <YouTubeVideoControlsOverlay
               isPlaying={state.isPlaying}
