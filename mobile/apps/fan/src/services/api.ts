@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios, { AxiosHeaders } from 'axios';
 
-const RAW_HOST_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://music-streaming-platform-cvad.onrender.com';
+const RAW_HOST_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
 const HOST_BASE_URL = RAW_HOST_BASE_URL.replace(/\/+$/, '');
 const API_BASE_URL = `${HOST_BASE_URL}/api/v1/fan`;
 export const JWT_STORAGE_KEY = 'jwt';
