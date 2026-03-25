@@ -67,10 +67,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  
+
   // Global account status with persistence
   const [userAccountStatus, setUserAccountStatusState] = useState<AccountStatus>('ACTIVE');
-  
+
   const isAccountSuspended = userAccountStatus === 'SUSPENDED';
 
   const isAuthenticated = Boolean(token && token.trim().length > 0);

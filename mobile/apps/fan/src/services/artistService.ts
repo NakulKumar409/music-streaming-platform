@@ -39,6 +39,16 @@ const HOST_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://music-streamin
 function resolveImageUrl(url: string) {
   const trimmed = (url || '').toString().trim();
   if (!trimmed) return '';
+  
+  // Replace hardcoded localhost database entries with the current base URL
+  if (trimmed.startsWith('http://localhost') || trimmed.startsWith('http://192.168.')) {
+    const pathIndex = trimmed.indexOf('/', 8);
+    if (pathIndex !== -1) {
+      const path = trimmed.substring(pathIndex);
+      return `${HOST_BASE_URL}${path}`;
+    }
+  }
+
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
   if (trimmed.startsWith('/')) return `${HOST_BASE_URL}${trimmed}`;
   return trimmed;
