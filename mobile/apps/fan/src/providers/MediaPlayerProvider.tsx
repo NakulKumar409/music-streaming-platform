@@ -358,10 +358,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       let playbackUrl = item.mediaUrl ? normalizePlaybackUrl(item.mediaUrl) : null;
 
-      // If we already have a signed stream URL, reuse it and avoid a network round-trip.
-      if (item.useStreamAccess && playbackUrl && isSignedStreamUrl(playbackUrl)) {
-        // keep existing playbackUrl
-      } else if (item.useStreamAccess) {
+      // Always fetch a fresh playback URL if stream access is required.
+      // Do not reuse the `mediaUrl` populated by the initial list fetch because the JWT token might have expired.
+      if (item.useStreamAccess) {
         try {
           playbackUrl = await getPlaybackUrl(item.contentId ?? item.id, 'audio');
         } catch (e) {
@@ -370,8 +369,23 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           return;
         }
       }
+
+      // Fallback: if still no URL but we have an item ID, try stream resolution anyway.
+      // This handles items (e.g. "Pizza Making") where useStreamAccess=false but mediaUrl is empty.
+      if (!playbackUrl && (item.contentId || item.id)) {
+        try {
+          const fallbackUrl = await getPlaybackUrl(item.contentId ?? item.id, 'audio');
+          if (fallbackUrl) {
+            playbackUrl = normalizePlaybackUrl(fallbackUrl);
+            console.log('[MediaPlayer] Used fallback stream URL for', item.title);
+          }
+        } catch {
+          // ignore – we'll surface the error below
+        }
+      }
+
       if (!playbackUrl) {
-        Alert.alert('Playback Error', 'No playback URL available.');
+        Alert.alert('Playback Error', 'No playback URL available for this track.');
         return;
       }
 
@@ -642,19 +656,26 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     if (!audioStatus) return;
 
     setState((s) => {
-      const isPlaying = Boolean(audioStatus.playing);
+      let nextIsPlaying = Boolean(audioStatus.playing);
       const pos = Math.max(0, Math.round((audioPlayer.currentTime || 0) * 1000));
       const dur = Math.max(0, Math.round((audioPlayer.duration || 0) * 1000));
       
+      // If we INTEND to play (s.isPlaying is true) but native is paused natively, 
+      // we must not prematurely set it back to false during the initial load phase
+      // where the auto-play effect is waiting to trigger `audioPlayer.play()`.
+      if (s.isPlaying && !nextIsPlaying && (!audioStatus.isLoaded || pos < 500)) {
+        nextIsPlaying = true;
+      }
+
       // Throttle updates: only update if playing state changed, or position changed by > 500ms, or duration changed
       const posDiff = Math.abs(s.positionMs - pos);
-      const shouldUpdate = s.isPlaying !== isPlaying || posDiff > 800 || s.durationMs !== dur;
+      const shouldUpdate = s.isPlaying !== nextIsPlaying || posDiff > 800 || s.durationMs !== dur;
       
       if (!shouldUpdate) return s;
       
       return {
         ...s,
-        isPlaying,
+        isPlaying: nextIsPlaying,
         positionMs: pos,
         durationMs: dur,
       };

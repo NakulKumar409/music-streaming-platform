@@ -48,7 +48,7 @@ type ContentCard = {
   thumbnail: string;
   isLocked: boolean;
   createdAt?: string | null;
-  mediaType?: 'audio' | 'video';
+  mediaType?: 'audio' | 'video' | 'audio_video';
   mediaUrl?: string | null;
   useStreamAccess?: boolean;
 };
@@ -90,6 +90,15 @@ export default function HomeScreen({ navigation }: any) {
   const [featuredArtists, setFeaturedArtists] = useState<ArtistCard[]>([]);
   const [trendingArtists, setTrendingArtists] = useState<ArtistCard[]>([]);
   const [recentlyAdded, setRecentlyAdded] = useState<ContentCard[]>([]);
+
+  // Derived filtered arrays — two separate rows, always BOTH rendered
+  // 'audio_video' items (backend type) appear in BOTH rows so they are discoverable
+  const recentAudios = recentlyAdded.filter(
+    (x) => x.mediaType === 'audio' || x.mediaType === 'audio_video'
+  );
+  const recentVideos = recentlyAdded.filter(
+    (x) => x.mediaType === 'video' || x.mediaType === 'audio_video'
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -133,8 +142,25 @@ export default function HomeScreen({ navigation }: any) {
 
           recentFromApi = apiItems
             .map((it) => {
-              const mediaTypeRaw = (it.mediaType || it.type || '').toString().toLowerCase();
-              const mediaType: ContentCard['mediaType'] = mediaTypeRaw === 'video' ? 'video' : 'audio';
+              // Preserve 'audio_video' as its own type.
+              // recentAudios filter catches: 'audio' | 'audio_video'
+              // recentVideos filter catches: 'video' | 'audio_video'
+              // This ensures items like "pizza making" that have type='audio_video'
+              // appear in BOTH rows simultaneously — never lost.
+              const rawMt = (it.mediaType || it.type || '').toString().toLowerCase();
+              const hasVideoUrl = Boolean((it as any).videoUrl);
+              let mediaType: ContentCard['mediaType'];
+              if (
+                rawMt === 'audio_video' ||
+                rawMt === 'audiovideo' ||
+                rawMt === 'audio+video'
+              ) {
+                mediaType = 'audio_video'; // show in BOTH rows
+              } else if (rawMt.includes('video') || hasVideoUrl) {
+                mediaType = 'video'; // pure video — video row only
+              } else {
+                mediaType = 'audio'; // pure audio — audio row only
+              }
               const thumb = (it.thumbnailUrl || it.artwork || '').toString();
               const thumbFallbackFromStorageKey = it.thumbnail_storage_key
                 ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(String(it.id))}`
@@ -190,49 +216,46 @@ export default function HomeScreen({ navigation }: any) {
     navigation.navigate('Artist', { artistId });
   };
 
-  const onPressContent = async (item: ContentCard) => {
-    if (item.mediaType === 'video') {
-      navigation.navigate('VideoTab', {
-        screen: 'VideoIndex',
-        params: {
-          autoplayVideo: {
-            id: item.contentId ?? item.id,
-            title: item.title,
-            artistName: item.artist,
-            artistId: item.artistId,
-            artworkUrl: item.thumbnail,
-            mediaUrl: item.mediaUrl || '',
-            useStreamAccess: Boolean(item.useStreamAccess),
-            category: 'Recently Added',
-          },
-        },
-      });
-      return;
-    }
-
-    const queue: MediaItem[] = recentlyAdded.map((x) => ({
+  // Tapping an item in the AUDIO row — always play as audio
+  const onPressAudioItem = async (item: ContentCard) => {
+    const audioQueue: MediaItem[] = recentAudios.map((x) => ({
       id: x.id,
       contentId: x.contentId ?? x.id,
       title: x.title,
       artistName: x.artist,
       artistId: x.artistId,
-      mediaType: x.mediaType === 'video' ? 'video' : 'audio',
+      mediaType: 'audio' as const,
       artworkUrl: x.thumbnail,
       mediaUrl: x.mediaUrl ?? null,
       useStreamAccess: Boolean(x.useStreamAccess),
       isLocked: false,
     }));
-
-    const idx = Math.max(
-      0,
-      queue.findIndex((q) => q.id === item.id)
-    );
-
+    const idx = Math.max(0, audioQueue.findIndex((q) => q.id === item.id));
     try {
-      await playQueue(queue, idx);
+      await playQueue(audioQueue, idx);
+      navigation.getParent()?.navigate('AudioTab');
     } catch (e) {
       console.warn('[HomeScreen] playQueue failed', e);
     }
+  };
+
+  // Tapping an item in the VIDEO row — always open in VideoTab
+  const onPressVideoItem = (item: ContentCard) => {
+    navigation.getParent()?.navigate('VideoTab', {
+      screen: 'VideoIndex',
+      params: {
+        autoplayVideo: {
+          id: item.contentId ?? item.id,
+          title: item.title,
+          artistName: item.artist,
+          artistId: item.artistId,
+          artworkUrl: item.thumbnail,
+          mediaUrl: item.mediaUrl || '',
+          useStreamAccess: Boolean(item.useStreamAccess),
+          category: 'Recently Added',
+        },
+      },
+    });
   };
 
   const onPressSeeAllTrending = () => {
@@ -281,15 +304,30 @@ export default function HomeScreen({ navigation }: any) {
     </Pressable>
   );
 
-  const renderRecentlyAdded = ({ item }: { item: ContentCard }) => (
-    <Pressable style={styles.recentCard} onPress={() => onPressContent(item)}>
-      <Image source={{ uri: item.thumbnail || FALLBACK_THUMBNAIL }} style={styles.recentImg} />
-      <View style={styles.mediaTypePill}>
-        {item.mediaType === 'video' ? (
-          <Play color="#fff" size={14} />
-        ) : (
-          <View style={styles.audioDot} />
-        )}
+  // Square thumbnail for audio — tapping plays as audio
+  const renderRecentAudio = ({ item }: { item: ContentCard }) => (
+    <Pressable style={styles.audioCard} onPress={() => onPressAudioItem(item)}>
+      <Image source={{ uri: item.thumbnail || FALLBACK_THUMBNAIL }} style={styles.audioImg} />
+      <View style={styles.audioBadge}>
+        <View style={styles.audioDot} />
+      </View>
+      <View style={styles.cardTextWrap}>
+        <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+        <Text style={styles.cardArtist} numberOfLines={1}>{item.artist}</Text>
+      </View>
+    </Pressable>
+  );
+
+  // 16:9 landscape thumbnail for video — tapping opens VideoTab
+  const renderRecentVideo = ({ item }: { item: ContentCard }) => (
+    <Pressable style={styles.videoCard} onPress={() => onPressVideoItem(item)}>
+      <Image source={{ uri: item.thumbnail || FALLBACK_THUMBNAIL }} style={styles.videoImg} />
+      <View style={styles.videoPlayOverlay}>
+        <Play color="#fff" size={22} fill="rgba(255,255,255,0.85)" />
+      </View>
+      <View style={styles.cardTextWrap}>
+        <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+        <Text style={styles.cardArtist} numberOfLines={1}>{item.artist}</Text>
       </View>
     </Pressable>
   );
@@ -451,17 +489,41 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         )}
 
-        {/* RECENTLY ADDED */}
-        <Text style={styles.sectionTitleTop}>Recently Added</Text>
-        <FlatList
-          data={recentlyAdded}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          nestedScrollEnabled
-          contentContainerStyle={{ paddingLeft: 18, paddingRight: 8 }}
-          renderItem={renderRecentlyAdded}
-          keyExtractor={(item) => item.id}
-        />
+        {/* RECENTLY ADDED AUDIO */}
+        <Text style={styles.sectionTitleTop}>Recently Added Audio</Text>
+        {recentAudios.length > 0 ? (
+          <FlatList
+            data={recentAudios}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            nestedScrollEnabled
+            contentContainerStyle={{ paddingLeft: 18, paddingRight: 8 }}
+            renderItem={renderRecentAudio}
+            keyExtractor={(item) => `audio-${item.id}`}
+          />
+        ) : (
+          <View style={styles.sectionEmptyWrap}>
+            <Text style={styles.sectionEmptyText}>No audio content yet.</Text>
+          </View>
+        )}
+
+        {/* RECENTLY ADDED VIDEOS */}
+        <Text style={styles.sectionTitleTop}>Recently Added Videos</Text>
+        {recentVideos.length > 0 ? (
+          <FlatList
+            data={recentVideos}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            nestedScrollEnabled
+            contentContainerStyle={{ paddingLeft: 18, paddingRight: 8 }}
+            renderItem={renderRecentVideo}
+            keyExtractor={(item) => `video-${item.id}`}
+          />
+        ) : (
+          <View style={styles.sectionEmptyWrap}>
+            <Text style={styles.sectionEmptyText}>No video content yet.</Text>
+          </View>
+        )}
       </ScrollView>
       </View>
       </SafeAreaView>
@@ -680,52 +742,76 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  recentCard: {
-    width: width * 0.48,
-    height: 110,
+  // ── Audio card (square album art) ──
+  audioCard: {
+    width: width * 0.38,
+    marginRight: 14,
+  },
+  audioImg: {
+    width: width * 0.38,
+    height: width * 0.38,
     borderRadius: 16,
-    overflow: 'hidden',
-    marginRight: 12,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
-  recentImg: {
-    width: '100%',
-    height: '100%',
-  },
-  lockPill: {
+  audioBadge: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 28,
-    height: 28,
-    borderRadius: 10,
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-  },
-
-  mediaTypePill: {
-    position: 'absolute',
-    bottom: 10,
-    left: 10,
-    width: 28,
-    height: 28,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
   },
   audioDot: {
-    width: 10,
-    height: 10,
+    width: 9,
+    height: 9,
     borderRadius: 5,
     backgroundColor: '#fff',
     opacity: 0.9,
+  },
+
+  // ── Video card (16:9 landscape) ──
+  videoCard: {
+    width: width * 0.58,
+    marginRight: 14,
+  },
+  videoImg: {
+    width: width * 0.58,
+    height: Math.round((width * 0.58) * (9 / 16)),
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  videoPlayOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: width * 0.58,
+    height: Math.round((width * 0.58) * (9 / 16)),
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    borderRadius: 12,
+  },
+
+  // ── Shared card text ──
+  cardTextWrap: {
+    marginTop: 7,
+    paddingHorizontal: 2,
+  },
+  cardTitle: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+  },
+  cardArtist: {
+    color: 'rgba(255,255,255,0.48)',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
   },
 });

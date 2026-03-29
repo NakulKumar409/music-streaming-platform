@@ -223,6 +223,8 @@ export default function AudioScreen({ navigation }: any) {
   useEffect(() => {
     if (!hasActiveAudio) return;
     setShowNowPlayingSection(true);
+    // Auto-open the controls when arriving from a navigation (e.g. Home tap)
+    setShowNowPlayingOptions(true);
   }, [hasActiveAudio, currentItem?.contentId, currentItem?.id]);
 
   useEffect(() => {
@@ -267,8 +269,25 @@ export default function AudioScreen({ navigation }: any) {
     if (currentItem?.mediaType !== 'audio') return null;
     const key = String(currentItem.contentId ?? currentItem.id ?? '');
     if (!key) return null;
-    return items.find((x) => x.id === key || x.contentId === key) ?? null;
-  }, [currentItem?.contentId, currentItem?.id, currentItem?.mediaType, items]);
+    
+    const fromList = items.find((x) => x.id === key || x.contentId === key);
+    if (fromList) return fromList;
+    
+    // Fallback if not found locally (e.g., jumping from Home playQueue with mixed content types)
+    return {
+      id: key,
+      contentId: key,
+      title: currentItem.title ?? 'Unknown',
+      artistName: currentItem.artistName ?? 'Unknown',
+      artistId: currentItem.artistId,
+      artworkUrl: currentItem.artworkUrl ?? FALLBACK_ARTWORK,
+      mediaUrl: currentItem.mediaUrl ?? '',
+      useStreamAccess: Boolean(currentItem.useStreamAccess),
+      viewCount: null,
+      likeCount: null,
+      dislikeCount: null,
+    } as AudioCard;
+  }, [currentItem, items]);
 
   const submitReport = useCallback(
     async (reason: 'Spam' | 'Inappropriate' | 'Copyright') => {
