@@ -218,16 +218,11 @@ const PORT = process.env.PORT || 8000;
   createStorageProvider();
   const storageConfig = validateEnv();
   getDeliveryStrategyForProvider(storageConfig.storageProvider);
-  await ensureUsersSchema();
-  await ensureContentSchema();
-  await ensurePlaysSchema();
-  await ensureReactionsSchema();
-  await ensureSubscriptionsSchema();
-  await ensureArtistStatsSchema();
 
+  // Start the server first so Render health checks pass
   app.listen(PORT, () => {
     console.log("--- Logger Initialized Successfully ---");
-    console.log(`Server running on port ${PORT}`);
+    console.log(`[Startup] Server running on port ${PORT}`);
     console.log(`[Startup] STORAGE_PROVIDER=${storageConfig.storageProvider}`);
 
     try {
@@ -256,6 +251,20 @@ const PORT = process.env.PORT || 8000;
       console.warn("Failed to list routes", e);
     }
   });
+
+  // Run schema migrations after server is up (non-fatal on transient DB issues)
+  try {
+    await ensureUsersSchema();
+    await ensureContentSchema();
+    await ensurePlaysSchema();
+    await ensureReactionsSchema();
+    await ensureSubscriptionsSchema();
+    await ensureArtistStatsSchema();
+    console.log("[Startup] Database schema ensured ✅");
+  } catch (err) {
+    console.error("[Startup] WARNING: DB schema migration failed — check DATABASE_URL:", (err as any)?.message ?? err);
+    console.error("[Startup] The server is still running but some features may not work until the DB is reachable.");
+  }
 })().catch((err) => {
   console.error("[Startup] Fatal:", err);
   process.exit(1);
