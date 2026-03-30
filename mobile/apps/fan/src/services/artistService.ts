@@ -126,6 +126,8 @@ export type ApiArtistContentItem = {
   locked?: boolean;
   isLocked?: boolean;
   useStreamAccess?: boolean;
+  createdAt?: string | null;
+  created_at?: string | null;
 };
 
 export type ArtistMediaItem = {
@@ -137,6 +139,7 @@ export type ArtistMediaItem = {
   mediaUrl: string;
   locked: boolean;
   useStreamAccess?: boolean;
+  createdAt?: string | null;
 };
 
 function resolveMediaUrl(url: string) {
@@ -205,6 +208,8 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
     const effectiveAudioUrl = audioUrl || (!isVideoOnly ? fallbackUrl : '');
     const effectiveVideoUrl = videoUrl || (isVideoOnly ? fallbackUrl : '');
 
+    const createdAt = (it.createdAt || it.created_at || null) as string | null;
+
     if (isAudioVideo) {
       if (effectiveAudioUrl || useStreamAccess) {
         items.push({
@@ -216,6 +221,7 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
           mediaUrl: effectiveAudioUrl,
           locked: false,
           useStreamAccess,
+          createdAt,
         });
       }
       if (effectiveVideoUrl || useStreamAccess) {
@@ -228,6 +234,7 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
           mediaUrl: effectiveVideoUrl,
           locked: false,
           useStreamAccess,
+          createdAt,
         });
       }
       continue;
@@ -246,6 +253,7 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
       mediaUrl,
       locked: false,
       useStreamAccess,
+      createdAt,
     });
   }
 

@@ -115,6 +115,7 @@ type Song = {
   mediaType: 'audio' | 'video';
   mediaUrl: string;
   useStreamAccess?: boolean;
+  createdAt?: string | null;
 };
 
 type Artist = {
@@ -251,6 +252,7 @@ export default function ArtistScreen({ navigation, route }: any) {
           mediaType: it.mediaType,
           mediaUrl: it.mediaUrl,
           useStreamAccess: it.useStreamAccess,
+          createdAt: it.createdAt ?? null,
         });
 
         setArtist(normalizedArtist);
@@ -347,7 +349,7 @@ export default function ArtistScreen({ navigation, route }: any) {
     return filteredSongs;
   }, [activeChannelTab, filteredSongs]);
 
-  const useGrid = activeTab === 'Video';
+  const useGrid = false; // Always use single-column list layout
 
   const handleSongPress = (song: Song) => {
     if (!artist) return;
@@ -451,8 +453,8 @@ export default function ArtistScreen({ navigation, route }: any) {
         ) : (
           <>
             <FlatList
-              key={useGrid ? 'grid' : 'list'}
-              numColumns={useGrid ? 2 : 1}
+              key="list"
+              numColumns={1}
               data={channelContent}
               keyExtractor={(item) => item.id}
               ListHeaderComponent={
@@ -500,12 +502,11 @@ export default function ArtistScreen({ navigation, route }: any) {
                 paddingTop: isVideoPlaying ? 220 : 0,
                 paddingBottom: tabBarHeight + 140,
               }}
-              columnWrapperStyle={useGrid ? styles.gridRow : undefined}
               renderItem={({ item, index }) => (
                 <MediaCard
                   item={item}
                   index={index}
-                  isGrid={useGrid}
+                  isGrid={false}
                   onPress={() => handleSongPress(item)}
                 />
               )}
@@ -792,6 +793,27 @@ function MediaFilterPills({ active, onChange }: { active: TabKey; onChange: (k: 
   );
 }
 
+function formatDateLabel(raw?: string | null): string {
+  if (!raw) return '';
+  const d = new Date(raw);
+  if (!Number.isFinite(d.getTime())) return '';
+  const now = Date.now();
+  const diff = Math.max(0, now - d.getTime());
+  const day = 24 * 60 * 60 * 1000;
+  const days = Math.floor(diff / day);
+  if (days <= 0) return 'Today';
+  if (days === 1) return '1 day ago';
+  if (days < 7) return `${days} days ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks === 1) return '1 week ago';
+  if (weeks < 5) return `${weeks} weeks ago`;
+  const months = Math.floor(days / 30);
+  if (months === 1) return '1 month ago';
+  if (months < 12) return `${months} months ago`;
+  const years = Math.floor(days / 365);
+  return years <= 1 ? '1 year ago' : `${years} years ago`;
+}
+
 function MediaCard({
   item,
   index,
@@ -803,8 +825,7 @@ function MediaCard({
   isGrid: boolean;
   onPress: () => void;
 }) {
-  const timeAgoLabel = deriveTimeAgoLabel(item.id);
-  const metaLine = timeAgoLabel;
+  const dateLabel = formatDateLabel(item.createdAt);
   const badgeText = item.mediaType === 'video' ? 'VIDEO' : 'AUDIO';
 
   return (
@@ -812,8 +833,7 @@ function MediaCard({
       onPress={onPress}
       style={[
         styles.cardPressable,
-        isGrid ? styles.cardPressableGrid : styles.cardPressableList,
-        isGrid && index % 2 === 0 ? styles.cardGridRightGutter : null,
+        styles.cardPressableList,
       ]}
     >
       <View style={styles.card}>
@@ -830,7 +850,7 @@ function MediaCard({
           {item.title}
         </Text>
         <Text style={styles.cardMeta} numberOfLines={1}>
-          {metaLine}
+          {dateLabel || item.artist}
         </Text>
       </View>
     </Pressable>
@@ -861,19 +881,6 @@ function deriveSubscribersLabel(seed: string | number) {
   const key = String(seed || '');
   const n = (stableHash(`subs:${key}`) % 9_000_000) + 120_000;
   return `${compactNumber(n)} subscribers`;
-}
-
-function deriveViewsLabel(seed: string) {
-  const n = (stableHash(`views:${seed}`) % 40_000_000) + 1_200;
-  return `${compactNumber(n)} views`;
-}
-
-function deriveTimeAgoLabel(seed: string) {
-  const days = (stableHash(`ago:${seed}`) % 400) + 1;
-  if (days < 7) return `${days} days ago`;
-  if (days < 30) return `${Math.max(1, Math.round(days / 7))} weeks ago`;
-  if (days < 365) return `${Math.max(1, Math.round(days / 30))} months ago`;
-  return `${Math.max(1, Math.round(days / 365))} years ago`;
 }
 
 const styles = StyleSheet.create({
