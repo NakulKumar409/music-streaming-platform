@@ -20,8 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
-import { AlertTriangle, ArrowLeft, Play, Search as SearchIcon } from 'lucide-react-native';
-import Slider from '@react-native-community/slider';
+import { AlertTriangle, Play, Search as SearchIcon } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -31,8 +30,6 @@ import { getPlaybackUrl, normalizePlaybackUrl } from '../services/streamService'
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import type { MediaItem } from '../media.types';
-import PauseButtonImg from '../pausebuttton.png';
-import PlayButtonImg from '../playbutton.png';
 
 const REPORTED_CONTENT_STORAGE_KEY = 'reportedContentIds';
 
@@ -209,23 +206,11 @@ export default function AudioScreen({ navigation }: any) {
     Record<string, { reaction: 'like' | 'dislike' | null; likeDelta: number; dislikeDelta: number }>
   >({});
 
-  const [showNowPlayingSection, setShowNowPlayingSection] = useState(true);
-  const [showNowPlayingOptions, setShowNowPlayingOptions] = useState(false);
-  const [isSeeking, setIsSeeking] = useState(false);
-  const seekValueRef = useRef(0);
-
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [reportedContentIds, setReportedContentIds] = useState<Record<string, boolean>>({});
 
   const hasActiveAudio = Boolean(currentItem?.mediaType === 'audio');
-
-  useEffect(() => {
-    if (!hasActiveAudio) return;
-    setShowNowPlayingSection(true);
-    // Auto-open the controls when arriving from a navigation (e.g. Home tap)
-    setShowNowPlayingOptions(true);
-  }, [hasActiveAudio, currentItem?.contentId, currentItem?.id]);
 
   useEffect(() => {
     (async () => {
@@ -329,32 +314,6 @@ export default function AudioScreen({ navigation }: any) {
         setInlineAudioHostActive(false);
       };
     }, [setInlineAudioHostActive])
-  );
-
-  const positionForUi = isSeeking ? seekValueRef.current : playerState.positionMs;
-
-  const formatTime = useCallback((ms: number) => {
-    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-    const mm = Math.floor(totalSeconds / 60);
-    const ss = totalSeconds % 60;
-    return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
-  }, []);
-
-  const onSeekStart = useCallback(() => {
-    setIsSeeking(true);
-    seekValueRef.current = playerState.positionMs;
-  }, [playerState.positionMs]);
-
-  const onSeekChange = useCallback((value: number) => {
-    seekValueRef.current = value;
-  }, []);
-
-  const onSeekComplete = useCallback(
-    (value: number) => {
-      setIsSeeking(false);
-      seekTo(value).catch(() => undefined);
-    },
-    [seekTo]
   );
 
   const toCount = useCallback((v: any): number | null => {
@@ -669,6 +628,43 @@ export default function AudioScreen({ navigation }: any) {
       .slice(0, 10);
   }, [items]);
 
+  // Build navigation params for FullPlayerScreen — must be after filtered & searchResults
+  const buildFullPlayerParams = useCallback(
+    (song: AudioCard) => {
+      const list = searchResults !== null ? searchResults : filtered;
+      const queue: MediaItem[] = list
+        .filter((x) => Boolean(x.mediaUrl) || x.useStreamAccess)
+        .map((x) => ({
+          id: x.id,
+          contentId: x.contentId,
+          title: x.title,
+          artistName: x.artistName,
+          artistId: x.artistId,
+          mediaType: 'audio' as const,
+          artworkUrl: x.artworkUrl,
+          mediaUrl:
+            playbackUrlCacheRef.current.get(x.contentId ?? x.id)?.url ??
+            (x.mediaUrl ? normalizePlaybackUrl(x.mediaUrl) : ''),
+          isLocked: false,
+          useStreamAccess: x.useStreamAccess,
+        }));
+      const queueIndex = Math.max(
+        0,
+        queue.findIndex((q) => q.id === song.id || q.contentId === song.id)
+      );
+      return {
+        songId: song.id,
+        title: song.title,
+        artist: song.artistName,
+        imageUrl: song.artworkUrl || '',
+        audioUrl: song.mediaUrl || '',
+        queueIndex,
+        queue,
+      };
+    },
+    [filtered, searchResults]
+  );
+
   const normalizeForSearch = useCallback((s: string) => {
     return (s ?? '')
       .toString()
@@ -863,18 +859,12 @@ export default function AudioScreen({ navigation }: any) {
 
   const onPressSong = useCallback(
     (song: AudioCard) => {
-      const currentKey = currentItem?.mediaType === 'audio' ? String(currentItem.contentId ?? currentItem.id ?? '') : '';
-      const tappedKey = String(song.contentId ?? song.id ?? '');
-
-      // If user taps the same song repeatedly, just toggle play/pause.
-      if (currentKey && tappedKey && currentKey === tappedKey) {
-        togglePlayPause().catch(() => undefined);
-        return;
-      }
-
-      startPlayback(song.id).catch(() => undefined);
+      const params = buildFullPlayerParams(song);
+      // Navigate to FullPlayer — it will auto-play on mount.
+      // If the same song is already playing, the FullPlayer detects it and won't restart.
+      navigation.navigate('FullPlayer', params);
     },
-    [currentItem?.contentId, currentItem?.id, currentItem?.mediaType, startPlayback, togglePlayPause]
+    [buildFullPlayerParams, navigation]
   );
 
   return (
@@ -882,7 +872,7 @@ export default function AudioScreen({ navigation }: any) {
       <SafeAreaView style={styles.container}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: tabBarHeight + 140 }}
+          contentContainerStyle={{ paddingBottom: tabBarHeight + (hasActiveAudio ? 90 : 20) }}
           refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
         >
           <View style={styles.headerRow}>
@@ -901,164 +891,6 @@ export default function AudioScreen({ navigation }: any) {
               />
             </BlurView>
           </View>
-
-          {hasActiveAudio && activeAudioMeta && !showNowPlayingSection ? (
-            <View style={styles.nowPlayingCollapsedWrap}>
-              <Pressable
-                style={styles.nowPlayingShowPill}
-                onPress={() => setShowNowPlayingSection(true)}
-                hitSlop={8}
-              >
-                <Text style={styles.nowPlayingShowText}>Show Player</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
-          {hasActiveAudio && activeAudioMeta && showNowPlayingSection ? (
-            <View style={styles.nowPlayingWrap}>
-              <Pressable
-                style={styles.nowPlayingHeader}
-                onPress={() => setShowNowPlayingOptions((s) => !s)}
-                hitSlop={8}
-              >
-                <View style={styles.nowPlayingHeaderText}>
-                  <Text style={styles.nowPlayingTitle} numberOfLines={1}>
-                    {activeAudioMeta.title}
-                  </Text>
-                  <Text style={styles.nowPlayingSub} numberOfLines={1}>
-                    {`${activeAudioMeta.artistName}  ·  ${formatCompactViews(activeAudioMeta.viewCount ?? 0)} views  ·  ${formatDateLabel(activeAudioMeta.createdAt)}`}
-                  </Text>
-                </View>
-                <View style={styles.nowPlayingRightActions}>
-                  <Pressable
-                    onPress={() => setShowNowPlayingSection(false)}
-                    hitSlop={8}
-                    style={styles.nowPlayingHidePill}
-                  >
-                    <Text style={styles.nowPlayingHideText}>Hide</Text>
-                  </Pressable>
-                  <Text style={styles.nowPlayingToggle}>{showNowPlayingOptions ? 'Options' : 'Options'}</Text>
-                </View>
-              </Pressable>
-
-              {showNowPlayingOptions
-                ? (() => {
-                    const id = activeAudioMeta.id;
-                    const state = reactionStateById[id] ?? { reaction: null, likeDelta: 0, dislikeDelta: 0 };
-                    const reaction = state.reaction;
-                    const likeBase = typeof activeAudioMeta.likeCount === 'number' ? activeAudioMeta.likeCount : null;
-                    const dislikeBase = typeof activeAudioMeta.dislikeCount === 'number' ? activeAudioMeta.dislikeCount : null;
-                    const likeCount = typeof likeBase === 'number' ? Math.max(0, likeBase + state.likeDelta) : null;
-                    const dislikeCount = typeof dislikeBase === 'number' ? Math.max(0, dislikeBase + state.dislikeDelta) : null;
-
-                    const likeActive = reaction === 'like';
-                    const dislikeActive = reaction === 'dislike';
-
-                    return (
-                      <>
-                        <View style={styles.inlinePlayerWrap}>
-                          <View style={styles.inlinePlayerTimes}>
-                            <Text style={styles.inlineTime}>{formatTime(positionForUi)}</Text>
-                            <Text style={styles.inlineTime}>{formatTime(playerState.durationMs)}</Text>
-                          </View>
-                          <Slider
-                            style={styles.inlineSlider}
-                            minimumValue={0}
-                            maximumValue={Math.max(1, playerState.durationMs || 1)}
-                            value={Math.min(positionForUi, playerState.durationMs || 1)}
-                            minimumTrackTintColor="#FFFFFF"
-                            maximumTrackTintColor="rgba(255,255,255,0.22)"
-                            thumbTintColor="#FFFFFF"
-                            onSlidingStart={onSeekStart}
-                            onValueChange={onSeekChange}
-                            onSlidingComplete={onSeekComplete}
-                          />
-                          <View style={styles.inlineControls}>
-                            <Pressable style={styles.inlineBtn} onPress={() => skipPrev().catch(() => undefined)}>
-                              <ArrowLeft size={18} color="#fff" />
-                            </Pressable>
-                            <Pressable style={styles.inlineBtn} onPress={() => togglePlayPause().catch(() => undefined)}>
-                              <Image
-                                source={playerState.isPlaying ? PauseButtonImg : PlayButtonImg}
-                                style={styles.inlinePlayImg}
-                                resizeMode="contain"
-                              />
-                            </Pressable>
-                            <Pressable style={styles.inlineBtn} onPress={() => skipNext().catch(() => undefined)}>
-                              <View style={{ transform: [{ rotate: '180deg' }] }}>
-                                <ArrowLeft size={18} color="#fff" />
-                              </View>
-                            </Pressable>
-                          </View>
-                        </View>
-
-                        <View style={styles.engagementRow}>
-                          <Pressable
-                            style={[styles.engagementBtn, likeActive ? styles.engagementBtnActive : null]}
-                            onPress={() => onPressLike(id)}
-                            hitSlop={8}
-                          >
-                            <EngagementIcon name="like" size={16} color={likeActive ? Colors.accent : '#fff'} />
-                            <Text style={[styles.engagementCount, likeActive ? styles.engagementCountActive : null]}>
-                              {typeof likeCount === 'number' ? formatCompactViews(likeCount) : '—'}
-                            </Text>
-                          </Pressable>
-
-                          <Pressable
-                            style={[styles.engagementBtn, dislikeActive ? styles.engagementBtnActive : null]}
-                            onPress={() => onPressDislike(id)}
-                            hitSlop={8}
-                          >
-                            <EngagementIcon name="dislike" size={16} color={dislikeActive ? Colors.accent : '#fff'} />
-                            <Text style={[styles.engagementCount, dislikeActive ? styles.engagementCountActive : null]}>
-                              {typeof dislikeCount === 'number' ? formatCompactViews(dislikeCount) : '—'}
-                            </Text>
-                          </Pressable>
-
-                          <Pressable style={styles.engagementBtn} onPress={onPressShare} hitSlop={8}>
-                            <EngagementIcon name="share" size={16} color="#fff" />
-                          </Pressable>
-                          <Pressable style={styles.engagementBtn} onPress={onPressDownload} hitSlop={8}>
-                            <EngagementIcon name="download" size={16} color="#fff" />
-                          </Pressable>
-
-                          <Pressable
-                            style={[
-                              styles.engagementBtn,
-                              reportedContentIds[String(activeAudioMeta.contentId ?? activeAudioMeta.id)] ? styles.reportBtnDisabled : null,
-                            ]}
-                            onPress={() => {
-                              const key = String(activeAudioMeta.contentId ?? activeAudioMeta.id);
-                              if (!key) return;
-                              if (reportedContentIds[key]) return;
-                              setReportModalOpen(true);
-                            }}
-                            hitSlop={8}
-                          >
-                            <AlertTriangle
-                              size={16}
-                              color={
-                                reportedContentIds[String(activeAudioMeta.contentId ?? activeAudioMeta.id)]
-                                  ? 'rgba(255,255,255,0.35)'
-                                  : '#fff'
-                              }
-                            />
-                            <Text
-                              style={[
-                                styles.engagementCount,
-                                reportedContentIds[String(activeAudioMeta.contentId ?? activeAudioMeta.id)] ? styles.reportTextDisabled : null,
-                              ]}
-                            >
-                              Report
-                            </Text>
-                          </Pressable>
-                        </View>
-                      </>
-                    );
-                  })()
-                : null}
-            </View>
-          ) : null}
 
           {searchResults !== null ? (
             <View style={styles.sectionRow}>
@@ -1129,6 +961,38 @@ export default function AudioScreen({ navigation }: any) {
             ) : null}
           </View>
         </ScrollView>
+
+        {/* ── Mini Player ── */}
+        {hasActiveAudio && activeAudioMeta ? (
+          <Pressable
+            style={[styles.miniPlayer, { bottom: tabBarHeight + 8 }]}
+            onPress={() => navigation.navigate('FullPlayer', buildFullPlayerParams(activeAudioMeta as any))}
+          >
+            <Image
+              source={{ uri: activeAudioMeta.artworkUrl || 'https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=400&q=80' }}
+              style={styles.miniArt}
+            />
+            <View style={styles.miniMeta}>
+              <Text style={styles.miniTitle} numberOfLines={1}>{activeAudioMeta.title}</Text>
+              <Text style={styles.miniArtist} numberOfLines={1}>{activeAudioMeta.artistName}</Text>
+            </View>
+            <Pressable
+              style={styles.miniPlayBtn}
+              onPress={() => togglePlayPause().catch(() => undefined)}
+              hitSlop={8}
+            >
+              {playerState.isPlaying ? (
+                <View style={styles.miniPauseIcon}>
+                  <View style={styles.miniPauseBar} />
+                  <View style={styles.miniPauseBar} />
+                </View>
+              ) : (
+                <Play size={16} color="#000" />
+              )}
+            </Pressable>
+          </Pressable>
+        ) : null}
+
       </SafeAreaView>
 
       <Modal
@@ -1187,6 +1051,67 @@ export default function AudioScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   gradient: { flex: 1 },
   container: { flex: 1, backgroundColor: 'transparent' },
+
+  // ── Mini Player ──
+  miniPlayer: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    height: 68,
+    borderRadius: 18,
+    backgroundColor: 'rgba(28,28,28,0.97)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.40,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  miniArt: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#333',
+  },
+  miniMeta: {
+    flex: 1,
+    minWidth: 0,
+  },
+  miniTitle: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  miniArtist: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  miniPlayBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniPauseIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  miniPauseBar: {
+    width: 3,
+    height: 14,
+    borderRadius: 2,
+    backgroundColor: '#000',
+  },
 
   headerRow: {
     paddingHorizontal: 20,

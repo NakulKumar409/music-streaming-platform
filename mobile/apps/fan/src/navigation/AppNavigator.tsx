@@ -1,13 +1,16 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
+import { Platform } from 'react-native';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
 import SplashScreen from '../screens/SplashScreen';
 import MainTabsNavigator from './MainTabsNavigator';
 import { useAuth } from '../store/authStore';
 import { navigationRef } from './rootNavigation';
+import { useMediaPlayer } from '../providers/MediaPlayerProvider';
+import MediaPlayerOverlay from '../ui/MediaPlayerOverlay';
 
 import type { RootStackParamList } from './types';
 
@@ -15,7 +18,9 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {
   const { isAuthenticated, bootstrapAuth } = useAuth();
+  const player = useMediaPlayer();
   const [isSplashVisible, setIsSplashVisible] = React.useState(true);
+  const [currentRouteName, setCurrentRouteName] = useState<string | null>(null);
 
   React.useEffect(() => {
     let mounted = true;
@@ -42,6 +47,7 @@ export default function AppNavigator() {
     return <SplashScreen />;
   }
 
+
   return (
     <NavigationContainer ref={navigationRef}>
       <Stack.Navigator id="fan-root">
@@ -66,6 +72,26 @@ export default function AppNavigator() {
           </>
         )}
       </Stack.Navigator>
+      <MediaPlayerOverlay
+        bottomSafeAreaPadding={Platform.OS === 'web' ? 12 : 0}
+        state={player.state}
+        currentItem={player.currentItem}
+        togglePlayPause={player.togglePlayPause}
+        skipNext={player.skipNext}
+        skipPrev={player.skipPrev}
+        seekTo={player.seekTo}
+        toggleShuffle={player.toggleShuffle}
+        cycleRepeatMode={player.cycleRepeatMode}
+        setPlaybackRate={player.setPlaybackRate}
+        setVolume={player.setVolume}
+        close={player.close}
+        setExpanded={player.setExpanded}
+        inlineVideoHostActive={player.inlineVideoHostActive}
+        inlineAudioHostActive={player.inlineAudioHostActive}
+        onVideoPlaybackStatusUpdate={player.onVideoPlaybackStatusUpdate}
+        videoPlayer={player.videoPlayer}
+        audioPlayer={player.audioPlayer}
+      />
     </NavigationContainer>
   );
 }

@@ -50,6 +50,11 @@ declare module 'lucide-react-native' {
 
   export const X: LucideIcon;
   export const Check: LucideIcon;
+
+  export const Heart: LucideIcon;
+  export const Share2: LucideIcon;
+  export const Volume2: LucideIcon;
+  export const VolumeX: LucideIcon;
 }
 
 declare module '*.png' {

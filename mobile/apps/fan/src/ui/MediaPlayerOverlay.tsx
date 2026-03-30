@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -12,6 +12,7 @@ import {
 
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import { navigationRef } from '../navigation/rootNavigation';
 import { ArrowLeft, Pause, Play, SkipForward, X } from 'lucide-react-native';
 import { VideoView, VideoPlayer } from 'expo-video';
 import { AudioPlayer } from 'expo-audio';
@@ -68,8 +69,23 @@ export default function MediaPlayerOverlay({
   const insets = useSafeAreaInsets();
 
   const [expandedVideoAspectRatio, setExpandedVideoAspectRatio] = useState(16 / 9);
+  const [currentRouteName, setCurrentRouteName] = useState<string | null>(null);
 
-  const isVisible = Boolean(currentItem);
+  useEffect(() => {
+    const checkRoute = () => {
+      const route = navigationRef.getCurrentRoute();
+      if (route?.name) setCurrentRouteName(route.name);
+    };
+
+    // Initial check
+    checkRoute();
+
+    // Listen for state changes
+    const unsub = navigationRef.addListener('state', checkRoute);
+    return unsub;
+  }, []);
+
+  const isVisible = Boolean(currentItem) && currentRouteName !== 'FullPlayer';
 
   const bottomOffset = useMemo(() => {
     const extra = bottomSafeAreaPadding ?? 0;

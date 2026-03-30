@@ -5,7 +5,7 @@ import { createBottomTabNavigator, type BottomTabNavigationOptions } from '@reac
 import { BlurView } from 'expo-blur';
 import { Home as HomeIcon, Music, PlayCircle, Search, User } from 'lucide-react-native';
 
-import SearchScreen from '../screens/SearchScreen';
+import SearchStackNavigator from './SearchStackNavigator';
 import AccountStackNavigator from './AccountStackNavigator';
 import AudioStackNavigator from './AudioStackNavigator';
 import HomeStackNavigator from './HomeStackNavigator';
@@ -47,7 +47,7 @@ export default function MainTabsNavigator() {
       })}
     >
       <Tab.Screen name="HomeTab" component={HomeStackNavigator} options={{ title: 'Home' }} />
-      <Tab.Screen name="SearchTab" component={SearchScreen} options={{ title: 'Search' }} />
+      <Tab.Screen name="SearchTab" component={SearchStackNavigator} options={{ title: 'Search' }} />
       <Tab.Screen name="AudioTab" component={AudioStackNavigator} options={{ title: 'Audio' }} />
       <Tab.Screen name="VideoTab" component={VideoStackNavigator} options={{ title: 'Video' }} />
       <Tab.Screen name="AccountTab" component={AccountStackNavigator} options={{ title: 'Account' }} />

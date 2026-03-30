@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -81,7 +81,9 @@ type ApiContentItem = {
 
 export default function HomeScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
-  const { playQueue } = useMediaPlayer();
+  const { currentItem, state: playerState, togglePlayPause, playQueue } = useMediaPlayer();
+  const activeAudioMeta = currentItem?.mediaType === 'audio' ? currentItem : null;
+  const hasActiveAudio = !!activeAudioMeta;
 
   const [loading, setLoading] = useState(true);
   const [artistsLoading, setArtistsLoading] = useState(true);
@@ -92,13 +94,42 @@ export default function HomeScreen({ navigation }: any) {
   const [recentlyAdded, setRecentlyAdded] = useState<ContentCard[]>([]);
 
   // Derived filtered arrays — two separate rows, always BOTH rendered
-  // 'audio_video' items (backend type) appear in BOTH rows so they are discoverable
   const recentAudios = recentlyAdded.filter(
     (x) => x.mediaType === 'audio' || x.mediaType === 'audio_video'
   );
   const recentVideos = recentlyAdded.filter(
     (x) => x.mediaType === 'video' || x.mediaType === 'audio_video'
   );
+
+  // Build navigation params for FullPlayerScreen
+  const buildFullPlayerParams = useCallback(
+    (item: ContentCard) => {
+      const queue: MediaItem[] = recentAudios.map((x) => ({
+        id: x.id,
+        contentId: x.contentId ?? x.id,
+        title: x.title,
+        artistName: x.artist,
+        artistId: x.artistId,
+        mediaType: 'audio' as const,
+        artworkUrl: x.thumbnail,
+        mediaUrl: x.mediaUrl ?? null,
+        useStreamAccess: Boolean(x.useStreamAccess),
+        isLocked: false,
+      }));
+      const idx = Math.max(0, queue.findIndex((q) => q.id === item.id));
+      return {
+        songId: item.id,
+        title: item.title,
+        artist: item.artist,
+        imageUrl: item.thumbnail,
+        audioUrl: item.mediaUrl || '',
+        queueIndex: idx,
+        queue,
+      };
+    },
+    [recentAudios]
+  );
+
 
   useEffect(() => {
     let mounted = true;
@@ -218,25 +249,8 @@ export default function HomeScreen({ navigation }: any) {
 
   // Tapping an item in the AUDIO row — always play as audio
   const onPressAudioItem = async (item: ContentCard) => {
-    const audioQueue: MediaItem[] = recentAudios.map((x) => ({
-      id: x.id,
-      contentId: x.contentId ?? x.id,
-      title: x.title,
-      artistName: x.artist,
-      artistId: x.artistId,
-      mediaType: 'audio' as const,
-      artworkUrl: x.thumbnail,
-      mediaUrl: x.mediaUrl ?? null,
-      useStreamAccess: Boolean(x.useStreamAccess),
-      isLocked: false,
-    }));
-    const idx = Math.max(0, audioQueue.findIndex((q) => q.id === item.id));
-    try {
-      await playQueue(audioQueue, idx);
-      navigation.getParent()?.navigate('AudioTab');
-    } catch (e) {
-      console.warn('[HomeScreen] playQueue failed', e);
-    }
+    const params = buildFullPlayerParams(item);
+    navigation.navigate('FullPlayer', params);
   };
 
   // Tapping an item in the VIDEO row — always open in VideoTab
@@ -359,7 +373,7 @@ export default function HomeScreen({ navigation }: any) {
         <View style={styles.pageWrap}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: tabBarHeight + 220 }}
+        contentContainerStyle={{ paddingBottom: tabBarHeight + (hasActiveAudio ? 90 : 20) }}
         refreshControl={
           <RefreshControl
             tintColor={Colors.accent}
@@ -525,6 +539,49 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         )}
       </ScrollView>
+
+        {/* ── Mini Player ── */}
+        {hasActiveAudio && activeAudioMeta ? (
+          <Pressable
+            style={[styles.miniPlayer, { bottom: tabBarHeight + 8 }]}
+            onPress={() => {
+              const itemToNav: ContentCard = {
+                id: activeAudioMeta.id || activeAudioMeta.contentId || '',
+                title: activeAudioMeta.title || '',
+                artist: activeAudioMeta.artistName || '',
+                thumbnail: activeAudioMeta.artworkUrl || '',
+                mediaUrl: activeAudioMeta.mediaUrl || '',
+                description: '',
+                isLocked: false,
+                contentId: activeAudioMeta.contentId || activeAudioMeta.id,
+              };
+              navigation.navigate('FullPlayer', buildFullPlayerParams(itemToNav));
+            }}
+          >
+            <Image
+              source={{ uri: activeAudioMeta.artworkUrl || FALLBACK_THUMBNAIL }}
+              style={styles.miniArt}
+            />
+            <View style={styles.miniMeta}>
+              <Text style={styles.miniTitle} numberOfLines={1}>{activeAudioMeta.title}</Text>
+              <Text style={styles.miniArtist} numberOfLines={1}>{activeAudioMeta.artistName}</Text>
+            </View>
+            <Pressable
+              style={styles.miniPlayBtn}
+              onPress={() => togglePlayPause().catch(() => undefined)}
+              hitSlop={8}
+            >
+              {playerState.isPlaying ? (
+                <View style={styles.miniPauseIcon}>
+                  <View style={styles.miniPauseBar} />
+                  <View style={styles.miniPauseBar} />
+                </View>
+              ) : (
+                <Play size={16} color="#000" />
+              )}
+            </Pressable>
+          </Pressable>
+        ) : null}
       </View>
       </SafeAreaView>
     </LinearGradient>
@@ -546,6 +603,67 @@ const styles = StyleSheet.create({
   pageWrap: {
     flex: 1,
     minHeight: '100%',
+  },
+
+  // ── Mini Player ──
+  miniPlayer: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    height: 68,
+    borderRadius: 18,
+    backgroundColor: 'rgba(28,28,28,0.97)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.40,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  miniArt: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#333',
+  },
+  miniMeta: {
+    flex: 1,
+    minWidth: 0,
+  },
+  miniTitle: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  miniArtist: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  miniPlayBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniPauseIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  miniPauseBar: {
+    width: 3,
+    height: 14,
+    borderRadius: 2,
+    backgroundColor: '#000',
   },
 
   loading: {

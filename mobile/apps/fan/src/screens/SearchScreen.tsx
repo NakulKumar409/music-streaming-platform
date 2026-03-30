@@ -13,7 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search as SearchIcon, X } from 'lucide-react-native';
+import { Play as PlayIcon, Search as SearchIcon, X } from 'lucide-react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 
 import { Colors } from '../theme';
@@ -57,6 +57,38 @@ export default function SearchScreen({ navigation }: any) {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<SearchHistoryItem[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const { currentItem, state: playerState, togglePlayPause } = useMediaPlayer();
+  const activeAudioMeta = currentItem?.mediaType === 'audio' ? currentItem : null;
+  const hasActiveAudio = !!activeAudioMeta;
+
+  // Build navigation params for FullPlayerScreen
+  const buildFullPlayerParams = useCallback(
+    (item: SearchResult) => {
+      const songs = allContent.filter((x) => x.type === 'SONG');
+      const queue: MediaItem[] = songs.map((x) => ({
+        id: x.id,
+        contentId: x.contentId ?? x.id,
+        title: x.title,
+        artistName: x.artistName,
+        mediaType: x.mediaType === 'video' ? 'video' : 'audio',
+        artworkUrl: x.artwork,
+        mediaUrl: x.mediaUrl ?? null,
+        useStreamAccess: Boolean(x.useStreamAccess),
+        isLocked: false,
+      }));
+      const idx = Math.max(0, queue.findIndex((q) => q.id === item.id));
+      return {
+        songId: item.id,
+        title: item.title,
+        artist: item.artistName,
+        imageUrl: item.artwork,
+        audioUrl: item.mediaUrl || '',
+        queueIndex: idx,
+        queue,
+      };
+    },
+    [allContent]
+  );
 
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -302,29 +334,26 @@ export default function SearchScreen({ navigation }: any) {
       return;
     }
 
-    const songs = allContent.filter((x) => x.type === 'SONG');
-    const queue: MediaItem[] = songs.map((x) => ({
-      id: x.id,
-      contentId: x.contentId ?? x.id,
-      title: x.title,
-      artistName: x.artistName,
-      mediaType: x.mediaType === 'video' ? 'video' : 'audio',
-      artworkUrl: x.artwork,
-      mediaUrl: x.mediaUrl ?? null,
-      useStreamAccess: Boolean(x.useStreamAccess),
-      isLocked: false,
-    }));
-
-    const idx = Math.max(
-      0,
-      queue.findIndex((q) => q.id === item.id)
-    );
-
-    try {
-      await playQueue(queue, idx);
-    } catch (e) {
-      console.warn('[SearchScreen] playQueue failed', e);
+    if (item.mediaType === 'video') {
+        navigation.navigate('VideoTab', {
+            screen: 'VideoIndex',
+            params: {
+              autoplayVideo: {
+                id: item.contentId ?? item.id,
+                title: item.title,
+                artistName: item.artistName,
+                artworkUrl: item.artwork,
+                mediaUrl: item.mediaUrl || '',
+                useStreamAccess: Boolean(item.useStreamAccess),
+                category: 'Search Result',
+              },
+            },
+          });
+          return;
     }
+
+    const params = buildFullPlayerParams(item);
+    navigation.navigate('FullPlayer', params);
   };
 
   const onClearSearch = () => {
@@ -407,7 +436,7 @@ export default function SearchScreen({ navigation }: any) {
               style={styles.list}
               contentContainerStyle={{
                 paddingHorizontal: 16,
-                paddingBottom: tabBarHeight + 44,
+                paddingBottom: tabBarHeight + (hasActiveAudio ? 96 : 44),
               }}
               renderItem={({ item }) => {
                 if (showRecent) {
@@ -479,6 +508,48 @@ export default function SearchScreen({ navigation }: any) {
             />
           );
         })()}
+        {/* ── Mini Player ── */}
+        {hasActiveAudio && activeAudioMeta ? (
+          <Pressable
+            style={[styles.miniPlayer, { bottom: tabBarHeight + 8 }]}
+            onPress={() => {
+              const itemToNav: SearchResult = {
+                id: activeAudioMeta.id || activeAudioMeta.contentId || '',
+                title: activeAudioMeta.title || '',
+                artistName: activeAudioMeta.artistName || '',
+                artwork: activeAudioMeta.artworkUrl || '',
+                mediaUrl: activeAudioMeta.mediaUrl || '',
+                isLocked: false,
+                contentId: activeAudioMeta.contentId || activeAudioMeta.id,
+                type: 'SONG',
+              };
+              navigation.navigate('FullPlayer', buildFullPlayerParams(itemToNav));
+            }}
+          >
+            <Image
+              source={{ uri: activeAudioMeta.artworkUrl || '' }}
+              style={styles.miniArt}
+            />
+            <View style={styles.miniMeta}>
+              <Text style={styles.miniTitle} numberOfLines={1}>{activeAudioMeta.title}</Text>
+              <Text style={styles.miniArtist} numberOfLines={1}>{activeAudioMeta.artistName}</Text>
+            </View>
+            <Pressable
+              style={styles.miniPlayBtn}
+              onPress={() => togglePlayPause().catch(() => undefined)}
+              hitSlop={8}
+            >
+              {playerState.isPlaying ? (
+                <View style={styles.miniPauseIcon}>
+                  <View style={styles.miniPauseBar} />
+                  <View style={styles.miniPauseBar} />
+                </View>
+              ) : (
+                <PlayIcon size={16} color="#000" />
+              )}
+            </Pressable>
+          </Pressable>
+        ) : null}
       </SafeAreaView>
     </LinearGradient>
   );
@@ -502,6 +573,67 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.50)',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.10)',
+  },
+
+  // ── Mini Player ──
+  miniPlayer: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    height: 68,
+    borderRadius: 18,
+    backgroundColor: 'rgba(28,28,28,0.97)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.40,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  miniArt: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#333',
+  },
+  miniMeta: {
+    flex: 1,
+    minWidth: 0,
+  },
+  miniTitle: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  miniArtist: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  miniPlayBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniPauseIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  miniPauseBar: {
+    width: 3,
+    height: 14,
+    borderRadius: 2,
+    backgroundColor: '#000',
   },
   searchPill: {
     flexDirection: 'row',

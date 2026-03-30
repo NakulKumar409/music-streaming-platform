@@ -10,6 +10,8 @@ import SeeAllTrendingScreen from '../screens/SeeAllTrendingScreen';
 import SubscriptionFlowScreen from '../screens/SubscriptionFlowScreen';
 import SeeAllSongsScreen from '../screens/SeeAllSongsScreen';
 
+import type { MediaItem } from '../media.types';
+
 export type HomeStackParamList = {
   HomeIndex: undefined;
   SeeAllSongs: undefined;
@@ -41,9 +43,20 @@ export type HomeStackParamList = {
     };
     coverImage?: string;
   };
+  FullPlayer: {
+    songId: string;
+    title: string;
+    artist: string;
+    imageUrl: string;
+    audioUrl: string;
+    queueIndex: number;
+    queue: MediaItem[];
+  };
 };
 
 const Stack = createNativeStackNavigator<HomeStackParamList>();
+
+import FullPlayerScreen from '../screens/FullPlayerScreen';
 
 export default function HomeStackNavigator() {
   return (
@@ -67,6 +80,11 @@ export default function HomeStackNavigator() {
       <Stack.Screen name="ArtistSubscription" component={ArtistSubscriptionScreen} />
       <Stack.Screen name="ContentPlayer" component={ContentPlayerScreen} />
       <Stack.Screen name="SubscriptionFlow" component={SubscriptionFlowScreen} />
+      <Stack.Screen
+        name="FullPlayer"
+        component={FullPlayerScreen}
+        options={{ animation: 'slide_from_bottom', gestureEnabled: true }}
+      />
     </Stack.Navigator>
   );
 }

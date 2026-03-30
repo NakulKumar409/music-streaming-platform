@@ -775,26 +775,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   return (
     <MediaPlayerContext.Provider value={value}>
       {children}
-      <MediaPlayerOverlay
-        bottomSafeAreaPadding={Platform.OS === 'web' ? 12 : 0}
-        state={value.state}
-        currentItem={value.currentItem}
-        togglePlayPause={value.togglePlayPause}
-        skipNext={value.skipNext}
-        skipPrev={value.skipPrev}
-        seekTo={value.seekTo}
-        toggleShuffle={value.toggleShuffle}
-        cycleRepeatMode={value.cycleRepeatMode}
-        setPlaybackRate={value.setPlaybackRate}
-        setVolume={value.setVolume}
-        close={value.close}
-        setExpanded={value.setExpanded}
-        inlineVideoHostActive={value.inlineVideoHostActive}
-        inlineAudioHostActive={value.inlineAudioHostActive}
-        onVideoPlaybackStatusUpdate={value.onVideoPlaybackStatusUpdate}
-        videoPlayer={value.videoPlayer}
-        audioPlayer={value.audioPlayer}
-      />
     </MediaPlayerContext.Provider>
   );
 }
