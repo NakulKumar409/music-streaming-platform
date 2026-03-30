@@ -7,6 +7,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  LayoutAnimation,
   LayoutChangeEvent,
   Modal,
   PanResponder,
@@ -97,7 +98,7 @@ function toCount(v: unknown): number | null {
   return null;
 }
 
-function EngagementIcon({ name, size = 18, color = '#fff' }: { name: 'like' | 'dislike' | 'share' | 'download'; size?: number; color?: string }) {
+function EngagementIcon({ name, size = 18, color = '#fff' }: { name: 'like' | 'dislike' | 'report'; size?: number; color?: string }) {
   const s = size;
   const strokeWidth = 1.9;
 
@@ -120,34 +121,6 @@ function EngagementIcon({ name, size = 18, color = '#fff' }: { name: 'like' | 'd
       <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
         <Path
           d="M7 13V3H4v10h3Zm0 0 2.3 3.5A2.6 2.6 0 0 0 14 14.4V18h4.3a2 2 0 0 0 2-2.4l-1.2-7a2 2 0 0 0-2-1.6H7Z"
-          stroke={color}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </Svg>
-    );
-  }
-
-  if (name === 'share') {
-    return (
-      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-        <Path
-          d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"
-          stroke={color}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <Path
-          d="M16 6l-4-4-4 4"
-          stroke={color}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <Path
-          d="M12 2v14"
           stroke={color}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
@@ -354,18 +327,11 @@ export default function VideoScreen() {
     const h = Math.max(0, Math.round(e.nativeEvent.layout.height));
     if (h <= 0) return;
 
-    // FlatList uses measuredHeaderHeight for paddingTop.
-    // Updating paddingTop can cause another layout pass of the header, which can feedback-loop.
-    // We only need an initial measurement; keep it stable afterwards.
-    if (hasMeasuredHeaderRef.current) return;
-
     const prev = headerHeightRef.current;
-    // Avoid feedback loops: paddingTop changes can cause tiny layout jitter.
-    // Only update when the height changes meaningfully.
+    // Allow height changes but avoid tiny sub-pixel feedback loops.
     if (Math.abs(prev - h) < 8) return;
 
     headerHeightRef.current = h;
-    hasMeasuredHeaderRef.current = true;
     setMeasuredHeaderHeight(h);
   }, []);
 
@@ -521,7 +487,7 @@ export default function VideoScreen() {
     };
   }, [activePlaybackUrl, scheduleTokenRefresh]);
 
-  const hasPlaybackStarted = Boolean(activePlaybackUrl && isVideoPlaying);
+  const hasPlaybackStarted = Boolean(activePlaybackUrl);
 
   const fetchAll = useCallback(async () => {
     const res = await apiV1.get('/content', { params: { mediaType: 'video' } });
@@ -809,6 +775,7 @@ export default function VideoScreen() {
 
   const onPressVideo = useCallback(
     (video: VideoCard) => {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       (async () => {
         const sessionId = (playbackSessionRef.current += 1);
 
@@ -904,9 +871,6 @@ export default function VideoScreen() {
       clearTimeout(controlsHideTimerRef.current);
       controlsHideTimerRef.current = null;
     }
-    controlsHideTimerRef.current = setTimeout(() => {
-      setShowControls(false);
-    }, 2200);
   }, [activePlaybackUrl]);
 
   useEffect(() => {
@@ -1085,7 +1049,6 @@ export default function VideoScreen() {
           clearTimeout(controlsHideTimerRef.current);
           controlsHideTimerRef.current = null;
         }
-        controlsHideTimerRef.current = setTimeout(() => setShowControls(false), 1800);
         return;
       }
 
@@ -1095,9 +1058,7 @@ export default function VideoScreen() {
           clearTimeout(controlsHideTimerRef.current);
           controlsHideTimerRef.current = null;
         }
-        if (next) {
-          controlsHideTimerRef.current = setTimeout(() => setShowControls(false), 2400);
-        } else {
+        if (!next) {
           setShowQualitySheet(false);
         }
         return next;
@@ -1122,24 +1083,6 @@ export default function VideoScreen() {
     }
   }, [videoPlayer]);
 
-  const showComingSoon = useCallback((feature: 'Sharing' | 'Offline Downloads') => {
-    const message =
-      'Feature Coming Soon: We are working hard to bring Sharing/Offline Downloads to you in the next update!';
-    if (Platform.OS === 'android') {
-      const ToastAndroid = require('react-native').ToastAndroid as typeof import('react-native').ToastAndroid;
-      ToastAndroid.show(message, ToastAndroid.LONG);
-      return;
-    }
-    Alert.alert(feature, message);
-  }, []);
-
-  const onPressShare = useCallback(() => {
-    showComingSoon('Sharing');
-  }, [showComingSoon]);
-
-  const onPressDownload = useCallback(() => {
-    showComingSoon('Offline Downloads');
-  }, [showComingSoon]);
 
   const showThankYou = useCallback(() => {
     const message = 'Thank you for reporting.';
@@ -1300,7 +1243,7 @@ export default function VideoScreen() {
               {item.artistName}
             </Text>
             <Text style={styles.rowSub} numberOfLines={1}>
-              {`${formatCompactViews(item.viewCount)}${formatDateLabel(item.createdAt) ? `  ·  ${formatDateLabel(item.createdAt)}` : ''}`}
+              {formatDateLabel(item.createdAt) || ''}
             </Text>
           </View>
         </Pressable>
@@ -1402,13 +1345,14 @@ export default function VideoScreen() {
               </View>
             ) : null}
 
-            <Animated.View
-              style={[
-                styles.playerFrame,
-                isFullscreen ? [{ width: windowWidth, height: windowHeight } as any] : null,
-              ]}
-              pointerEvents="box-none"
-            >
+            {activeVideoId || loadingPlaybackUrl ? (
+              <Animated.View
+                style={[
+                  styles.playerFrame,
+                  isFullscreen ? [{ width: windowWidth, height: windowHeight } as any] : null,
+                ]}
+                pointerEvents="box-none"
+              >
               <View style={styles.playerInner} pointerEvents="box-none" {...panResponder.panHandlers}>
                 {activePlaybackUrl ? (
                   <Pressable
@@ -1551,25 +1495,28 @@ export default function VideoScreen() {
                 ) : null}
               </View>
             </Animated.View>
+            ) : null}
 
-            <View style={styles.metaBlock}>
-              {hasPlaybackStarted && activeVideoMeta ? (
-                <>
+            {activeVideoId ? (
+              <View style={styles.metaBlock}>
+                {hasPlaybackStarted && activeVideoMeta ? (
+                  <>
                   <Text style={styles.nowTitle} numberOfLines={1}>
                     {activeVideoMeta.title}
                   </Text>
-
-                  <Pressable style={styles.artistRow} onPress={onPressArtist}>
-                    <Image source={{ uri: activeVideoMeta.artworkUrl || FALLBACK_ARTWORK }} style={styles.artistAvatar} />
-                    <View style={styles.artistMeta}>
-                      <Text style={styles.artistRowName} numberOfLines={1}>
-                        {activeVideoMeta.artistName}
-                      </Text>
-                      <Text style={styles.artistStats} numberOfLines={1}>
-                        {`${formatCompactViews(activeVideoMeta.viewCount ?? 0)}  ·  ${formatDateLabel(activeVideoMeta.createdAt)}`}
-                      </Text>
-                    </View>
-                  </Pressable>
+                  
+                  <View style={styles.artistRowContainer}>
+                    <Pressable style={styles.artistRow} onPress={onPressArtist}>
+                      <Image source={{ uri: activeVideoMeta.artworkUrl || FALLBACK_ARTWORK }} style={styles.artistAvatar} />
+                      <View style={styles.artistNameCol}>
+                        <Text style={styles.artistRowName} numberOfLines={1}>
+                          {activeVideoMeta.artistName}
+                        </Text>
+                        <Text style={styles.artistRowSub} numberOfLines={1}>
+                          {formatDateLabel(activeVideoMeta.createdAt)}
+                        </Text>
+                      </View>
+                    </Pressable>
 
                   {(() => {
                     const id = activeVideoMeta.id;
@@ -1609,12 +1556,6 @@ export default function VideoScreen() {
                             </Text>
                           ) : null}
                         </Pressable>
-                        <Pressable style={styles.engagementIconBtn} onPress={onPressShare} hitSlop={8}>
-                          <EngagementIcon name="share" />
-                        </Pressable>
-                        <Pressable style={styles.engagementIconBtn} onPress={onPressDownload} hitSlop={8}>
-                          <EngagementIcon name="download" />
-                        </Pressable>
                         <Pressable
                           style={[
                             styles.engagementIconBtn,
@@ -1647,10 +1588,12 @@ export default function VideoScreen() {
                       </View>
                     );
                   })()}
+                  </View>
 
                 </>
               ) : null}
             </View>
+          ) : null}
 
             <View style={styles.searchWrap}>
               <BlurView intensity={24} tint="dark" style={styles.searchBlur}>
@@ -1748,7 +1691,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingBottom: 10,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: '#000',
+    zIndex: 100,
+    elevation: 20,
   },
   stickyHeaderFullscreen: {
     bottom: 0,
@@ -1927,28 +1872,35 @@ const styles = StyleSheet.create({
 
   metaBlock: {
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingTop: 8,
+    paddingBottom: 10,
     backgroundColor: 'rgba(0,0,0,0.20)',
   },
-  nowTitle: { color: '#fff', fontSize: 15, fontWeight: '900' },
-  nowSub: { marginTop: 4, color: 'rgba(255,255,255,0.62)', fontSize: 12, fontWeight: '800' },
-
+  nowTitle: { color: '#fff', fontSize: 16, fontWeight: '900' },
+  
+  artistRowContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 8,
+  },
   artistRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    flex: 1,
-    minWidth: 160,
+    gap: 8,
+    flexShrink: 1,
+    marginRight: 10,
   },
-  artistMeta: {
-    flex: 1,
-    minWidth: 120,
+  artistNameCol: {
+    flexDirection: 'column',
+    justifyContent: 'center',
+    flexShrink: 1,
   },
   artistAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.10)',
@@ -1958,30 +1910,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '900',
   },
-
-  artistStats: {
-    marginTop: 2,
+  artistRowSub: {
     color: 'rgba(255,255,255,0.60)',
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
+    marginTop: 2,
   },
+
   engagementIconsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 14,
-    paddingVertical: 10,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'flex-end',
+    gap: 8,
   },
   engagementIconBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
