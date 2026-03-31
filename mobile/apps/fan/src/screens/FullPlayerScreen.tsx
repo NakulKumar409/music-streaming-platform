@@ -19,12 +19,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Slider from '@react-native-community/slider';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, X } from 'lucide-react-native';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import { Colors } from '../theme';
 import type { MediaItem } from '../media.types';
+import { navigationRef } from '../navigation/rootNavigation';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const DISC_SIZE = Math.min(SCREEN_W - 72, 270);
@@ -109,6 +110,7 @@ export default function FullPlayerScreen({ navigation, route }: any) {
     skipPrev,
     seekTo,
     setVolume,
+    close,
   } = useMediaPlayer();
 
   // ── Local UI state ─────────────────────────────────────────────────────────
@@ -245,6 +247,17 @@ export default function FullPlayerScreen({ navigation, route }: any) {
     [seekTo]
   );
 
+  const stopAndGoToAudio = useCallback(async () => {
+    await close();
+    if (!navigationRef.isReady()) return;
+    (navigationRef as any).navigate('MainTabs', {
+      screen: 'AudioTab',
+      params: {
+        screen: 'AudioIndex',
+      },
+    });
+  }, [close]);
+
 
   // ── Glow opacity ──────────────────────────────────────────────────────────
   const glowOpacity = pulseAnim.interpolate({
@@ -285,17 +298,26 @@ export default function FullPlayerScreen({ navigation, route }: any) {
             <Text style={styles.topTitle} numberOfLines={1}>{displayTitle}</Text>
           </View>
 
-          <Pressable
-            style={styles.topIconBtn}
-            onPress={() => setIsHearted((v) => !v)}
-            hitSlop={10}
-          >
-            <HeartIcon
-              size={22}
-              filled={isHearted}
-              color={isHearted ? Colors.accent : '#fff'}
-            />
-          </Pressable>
+          <View style={styles.topRight}>
+            <Pressable
+              style={styles.topIconBtn}
+              onPress={() => setIsHearted((v) => !v)}
+              hitSlop={10}
+            >
+              <HeartIcon
+                size={22}
+                filled={isHearted}
+                color={isHearted ? Colors.accent : '#fff'}
+              />
+            </Pressable>
+            <Pressable
+              style={styles.topIconBtn}
+              onPress={() => stopAndGoToAudio().catch(() => undefined)}
+              hitSlop={10}
+            >
+              <X size={22} color="#fff" />
+            </Pressable>
+          </View>
         </View>
 
         {/* ── Disc / Artwork ── */}
@@ -404,6 +426,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingHorizontal: 8,
+  },
+  topRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   topLabel: {
     color: 'rgba(255,255,255,0.55)',

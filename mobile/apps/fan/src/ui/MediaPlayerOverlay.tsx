@@ -272,7 +272,32 @@ export default function MediaPlayerOverlay({
       >
         <Pressable
           style={styles.miniPlayer}
-          onPress={() => setExpanded(currentItem.mediaType === 'video')}
+          onPress={() => {
+            if (currentItem.mediaType === 'video') {
+              setExpanded(true);
+              return;
+            }
+
+            if (!navigationRef.isReady()) return;
+
+            const songId = String(currentItem.contentId ?? currentItem.id ?? '');
+
+            (navigationRef as any).navigate('MainTabs', {
+              screen: 'AudioTab',
+              params: {
+                screen: 'FullPlayer',
+                params: {
+                  songId,
+                  title: currentItem.title,
+                  artist: currentItem.artistName ?? 'Artist',
+                  imageUrl: currentItem.artworkUrl ?? '',
+                  audioUrl: currentItem.mediaUrl ?? '',
+                  queueIndex: state.currentIndex,
+                  queue: state.queue,
+                },
+              },
+            });
+          }}
         >
           <Image
             source={{ uri: currentItem.artworkUrl || 'https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=400&q=80' }}
