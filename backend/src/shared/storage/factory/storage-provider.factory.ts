@@ -10,6 +10,7 @@ import { StorageProviderNotConfiguredException } from "../../exceptions/storage.
 import { LocalStorageProvider } from "../providers/local-storage.provider";
 import { FirebaseStorageProvider } from "../providers/firebase-storage.provider";
 import { S3StorageProvider } from "../providers/s3-storage.provider";
+import { CloudinaryStorageProvider } from "../providers/cloudinary-storage.provider";
 
 let instance: IStorageProvider | null = null;
 
@@ -49,6 +50,11 @@ export function createStorageProvider(): IStorageProvider {
       bucket: config.s3.bucket
     });
     console.log("[Storage] Provider: s3");
+    return instance;
+  }
+
+  if (provider === "cloudinary") {
+    instance = new CloudinaryStorageProvider();
     return instance;
   }
 

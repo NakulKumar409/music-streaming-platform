@@ -4,7 +4,7 @@
 
 import { Readable } from "stream";
 
-export type StorageProviderName = "local" | "firebase" | "s3";
+export type StorageProviderName = "local" | "firebase" | "s3" | "cloudinary";
 
 export interface UploadObjectParams {
   storageKey: string;
