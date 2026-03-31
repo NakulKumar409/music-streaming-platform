@@ -590,6 +590,7 @@ function InlineVideoPlayer({
         style={{ width: '100%', height: undefined, aspectRatio }}
         contentFit="contain"
         nativeControls={false}
+        allowsVideoFrameAnalysis={false}
       />
 
       <YouTubeVideoControlsOverlay

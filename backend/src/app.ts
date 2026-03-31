@@ -23,10 +23,12 @@ import adminRoutes from "./routes/admin";
 import authRoutes from "./routes/auth";
 import contentRoutes from "./routes/content";
 import searchRoutes from "./routes/search";
+import mediaRoutes from "./routes/media";
 import { razorpayWebhook } from "./controllers/paymentController";
 import mediaStreamRoutes from "./modules/media/media-stream.routes";
 import { createStorageProvider } from "./shared/storage/factory/storage-provider.factory";
 import { getDeliveryStrategyForProvider } from "./shared/delivery/services/media-delivery.service";
+import { MediaProviderFactory } from "./services/providers/MediaProviderFactory";
 
 
 
@@ -184,6 +186,7 @@ app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/content", contentRoutes);
 app.use("/api/v1/search", searchRoutes);
+app.use("/api/v1/media", mediaRoutes);
 
 app.use((req: any, res: any, next: any) => {
   const err: any = new Error(`Route not found: ${req.method} ${req.originalUrl || req.url}`);
@@ -218,6 +221,9 @@ const PORT = process.env.PORT || 8000;
   createStorageProvider();
   const storageConfig = validateEnv();
   getDeliveryStrategyForProvider(storageConfig.storageProvider);
+  
+  // Initialize and fail-fast for the new configurable media provider
+  MediaProviderFactory.initialize();
 
   // Start the server first so Render health checks pass
   app.listen(PORT, () => {

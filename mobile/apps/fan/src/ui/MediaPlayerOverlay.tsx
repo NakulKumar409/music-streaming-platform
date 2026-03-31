@@ -221,6 +221,7 @@ export default function MediaPlayerOverlay({
                 contentFit="contain"
                 allowsFullscreen={true}
                 allowsPictureInPicture={true}
+                allowsVideoFrameAnalysis={false}
               />
             )}
 

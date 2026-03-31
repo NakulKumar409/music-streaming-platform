@@ -14,6 +14,7 @@ import {
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -33,6 +34,7 @@ import {
   X,
 } from 'lucide-react-native';
 import { VideoView, useVideoPlayer, VideoPlayer } from 'expo-video';
+import { useEventListener } from 'expo';
 import { setAudioModeAsync } from 'expo-audio';
 import { BlurView } from 'expo-blur';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -281,6 +283,9 @@ export default function VideoScreen() {
 
   const [showQualitySheet, setShowQualitySheet] = useState(false);
   const [selectedQuality, setSelectedQuality] = useState<string>('Auto');
+  const [isHD, setIsHD] = useState(false);
+  // Flag to distinguish quality-only URL changes from full video switches
+  const isQualitySwitchRef = useRef(false);
 
   const [showMini, setShowMini] = useState(false);
   const scrollYRef = useRef(0);
@@ -317,6 +322,7 @@ export default function VideoScreen() {
   const ANDROID_INTERRUPTION_DUCK_OTHERS = 1;
 
   const resumeAfterUrlChangeRef = useRef<number | null>(null);
+  const qualityResumePositionRef = useRef<number | null>(null);
   const tokenRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const shimmerX = useRef(new Animated.Value(0)).current;
@@ -341,7 +347,15 @@ export default function VideoScreen() {
     lastStatusDurationRef.current = 0;
     durationSetForUrlRef.current = activePlaybackUrl ?? null;
 
-    // Always reset UI to 0:00 when switching sources.
+    // For quality switches, do NOT reset position — we want to resume.
+    // isQualitySwitchRef is set to true by applyQualitySelection before URL change.
+    if (isQualitySwitchRef.current) {
+      // Leave positionMs / durationMs as-is so the slider doesn't flash to 0.
+      isQualitySwitchRef.current = false;
+      return;
+    }
+
+    // Full video switch: reset to 0:00.
     setPositionMs(0);
     setDurationMs(0);
     seekValueRef.current = 0;
@@ -721,6 +735,27 @@ export default function VideoScreen() {
     }
   }, [videoPlayer]);
 
+  // ─── Native event: status change ───────────────────────────────────────────
+  // This fires as soon as the player's native layer transitions state.
+  // We use it for the quality-switch seek so it is truly atomic — no setTimeout.
+  useEventListener(videoPlayer, 'statusChange', ({ status }: { status: string }) => {
+    const isReady = status === 'readyToPlay';
+    setIsVideoReady(isReady);
+    setIsBuffering(status === 'loading');
+
+    if (isReady && qualityResumePositionRef.current !== null) {
+      const targetSeconds = qualityResumePositionRef.current;
+      qualityResumePositionRef.current = null;
+      try {
+        videoPlayer.currentTime = targetSeconds;
+        videoPlayer.play();
+      } catch {
+        // Player may have been released — safe to ignore
+      }
+    }
+  });
+
+  // ─── 500ms polling for position / duration / playing state ─────────────────
   useEffect(() => {
     const interval = setInterval(() => {
       if (!isSeeking) {
@@ -974,45 +1009,60 @@ export default function VideoScreen() {
     return hashColor(key);
   }, [activeVideoMeta?.artworkUrl, activeVideoMeta?.id]);
 
+  // Full quality ladder — ascending order, Auto sits at the bottom.
+  // These match the HLS renditions triggered in the backend eager transforms.
+  const QUALITY_LADDER = ['144p', '240p', '360p', '480p', '720p', '1080p', 'Auto'] as const;
+
   const availableQualities = useMemo(() => {
-    const key = (activeVideoMeta?.storageKey ?? '')?.toString() || '';
-    const list: string[] = ['Auto'];
-    if (/1080/i.test(key)) list.push('1080p');
-    if (/720/i.test(key)) list.push('720p');
-    if (/360/i.test(key)) list.push('360p');
-    // If key doesn't contain quality hints, still offer the menu as requested.
-    list.push('360p');
-    list.push('720p');
-    list.push('1080p');
-    return Array.from(new Set(list));
-  }, [activeVideoMeta?.storageKey]);
+    // Always expose the full ladder so users can always see options.
+    // The HLS adaptive stream handles serving the closest available rendition.
+    return [...QUALITY_LADDER];
+  }, []);
 
   const applyQualitySelection = useCallback(
     async (q: string) => {
       setSelectedQuality(q);
       setShowQualitySheet(false);
+      // Update HD badge state
+      setIsHD(q === '720p' || q === '1080p');
       if (!activeVideoMeta) return;
 
-      // Backend currently issues a single secure playback URL; re-request on selection to satisfy
-      // the "use streamService.getPlaybackUrl" requirement for all variants.
-      const resumeAt = 0;
+      // ── Step 1: Pause immediately & capture exact position ──────────────────
+      try { videoPlayer.pause(); } catch { /* ignore */ }
+      let savedPositionSeconds = 0;
       try {
-        setLoadingPlaybackUrl(true);
-        const url = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video');
-        setActivePlaybackUrl(url);
-        playedOnceRef.current = false;
-        setIsVideoPlaying(true);
+        const t = videoPlayer.currentTime;
+        if (Number.isFinite(t) && t > 0) savedPositionSeconds = t;
+      } catch { /* player not ready — resume from 0 */ }
 
-        setTimeout(() => {
-          videoPlayer.currentTime = resumeAt / 1000;
-        }, 250);
+      // ── Step 2: Store resume target for useEventListener to pick up ─────────
+      qualityResumePositionRef.current = savedPositionSeconds;
+
+      // ── Step 3: Flag as quality-only switch so the URL-change effect
+      //           does NOT reset positionMs to 0 ──────────────────────────────
+      isQualitySwitchRef.current = true;
+
+      // ── Step 4: Show spinner while fetching the new signed URL ──────────────
+      setLoadingPlaybackUrl(true);
+      setIsVideoReady(false);
+      setIsBuffering(true);
+
+      try {
+        const url = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video');
+        // Setting the URL causes useVideoPlayer to reload the source.
+        // useEventListener('statusChange') above will fire seek+play atomically
+        // as soon as status === 'readyToPlay' — no setTimeout needed.
+        setActivePlaybackUrl(url);
+        setIsVideoPlaying(true);
       } catch {
-        // ignore
+        // Clear the pending seek on error so we don't seek into a stale state.
+        qualityResumePositionRef.current = null;
+        isQualitySwitchRef.current = false;
       } finally {
         setLoadingPlaybackUrl(false);
       }
     },
-    [activeVideoMeta]
+    [activeVideoMeta, videoPlayer]
   );
 
   const onDoubleTap = useCallback(
@@ -1372,6 +1422,7 @@ export default function VideoScreen() {
                       contentFit="contain"
                       allowsFullscreen={false}
                       nativeControls={false}
+                      allowsVideoFrameAnalysis={false}
                     />
                   </Pressable>
                 ) : (
@@ -1404,7 +1455,14 @@ export default function VideoScreen() {
                 <View style={[styles.playerTopRight, isFullscreen ? { top: insets.top + 12 } : null]}>
                   {activePlaybackUrl && showControls ? (
                     <Pressable style={styles.iconBtn} onPress={() => setShowQualitySheet((s) => !s)}>
-                      <Settings size={18} color="#fff" />
+                      <View style={styles.qualityIconWrap}>
+                        <Settings size={18} color="#fff" />
+                        {isHD ? (
+                          <View style={styles.hdBadge}>
+                            <Text style={styles.hdBadgeText}>HD</Text>
+                          </View>
+                        ) : null}
+                      </View>
                     </Pressable>
                   ) : null}
                   {activePlaybackUrl && showControls ? (
@@ -1424,21 +1482,40 @@ export default function VideoScreen() {
                 </View>
 
                 {showQualitySheet && activePlaybackUrl && showControls ? (
-                  <BlurView intensity={55} tint="dark" style={styles.qualitySheet}>
-                    {availableQualities.map((q) => {
-                      const active = q === selectedQuality;
-                      return (
-                        <Pressable
-                          key={q}
-                          style={[styles.qualityPill, active ? styles.qualityPillActive : null]}
-                          onPress={() => {
-                            applyQualitySelection(q).catch(() => undefined);
-                          }}
-                        >
-                          <Text style={[styles.qualityText, active ? styles.qualityTextActive : null]}>{q}</Text>
-                        </Pressable>
-                      );
-                    })}
+                  <BlurView intensity={70} tint="dark" style={styles.qualitySheet}>
+                    <Text style={styles.qualitySheetTitle}>Quality</Text>
+                    <ScrollView
+                      bounces={false}
+                      showsVerticalScrollIndicator={false}
+                      style={styles.qualityScrollView}
+                      contentContainerStyle={styles.qualityScrollContent}
+                    >
+                      {availableQualities.map((q) => {
+                        const active = q === selectedQuality;
+                        const isHdOption = q === '720p' || q === '1080p';
+                        return (
+                          <Pressable
+                            key={q}
+                            style={[styles.qualityPill, active ? styles.qualityPillActive : null]}
+                            onPress={() => {
+                              applyQualitySelection(q).catch(() => undefined);
+                            }}
+                          >
+                            <Text style={[styles.qualityText, active ? styles.qualityTextActive : null]}>
+                              {q}
+                            </Text>
+                            {isHdOption ? (
+                              <View style={styles.qualityHdTag}>
+                                <Text style={styles.qualityHdTagText}>HD</Text>
+                              </View>
+                            ) : null}
+                            {active ? (
+                              <View style={styles.qualityActiveDot} />
+                            ) : null}
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
                   </BlurView>
                 ) : null}
 
@@ -2022,33 +2099,80 @@ const styles = StyleSheet.create({
 
   qualitySheet: {
     position: 'absolute',
+    // Anchor to bottom-right — grows upward, never out of player bounds.
     right: 12,
-    top: 56,
-    zIndex: 50,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 14,
+    bottom: 48,          // sits just above the seek bar
+    zIndex: 999,         // above everything (controls are z:30)
+    elevation: 999,
+    paddingHorizontal: 0,
+    paddingTop: 10,
+    paddingBottom: 8,
+    borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: 'rgba(0,0,0,0.72)',
+    backgroundColor: 'rgba(0,0,0,0.88)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-    flexDirection: 'column',
-    gap: 8,
+    borderColor: 'rgba(255,255,255,0.18)',
+    minWidth: 160,
+    maxWidth: 200,
+  },
+  qualityScrollView: {
+    maxHeight: HEADER_HEIGHT - 80, // never taller than the player area
+  },
+  qualityScrollContent: {
+    paddingHorizontal: 10,
+    paddingBottom: 4,
+    gap: 6,
+  },
+  qualitySheetTitle: {
+    color: 'rgba(255,255,255,0.50)',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    paddingHorizontal: 4,
+    paddingBottom: 2,
   },
   qualityPill: {
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(255,255,255,0.10)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   qualityPillActive: {
-    borderColor: 'rgba(255,106,0,0.60)',
-    backgroundColor: 'rgba(255,106,0,0.16)',
+    borderColor: 'rgba(255,106,0,0.70)',
+    backgroundColor: 'rgba(255,106,0,0.18)',
   },
-  qualityText: { color: 'rgba(255,255,255,0.86)', fontSize: 12, fontWeight: '900' },
+  qualityText: {
+    color: 'rgba(255,255,255,0.86)',
+    fontSize: 13,
+    fontWeight: '800',
+    flex: 1,
+  },
   qualityTextActive: { color: Colors.accent },
+  qualityHdTag: {
+    backgroundColor: '#FF0000',
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  qualityHdTagText: {
+    color: '#fff',
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  qualityActiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.accent,
+  },
 
   searchWrap: {
     paddingHorizontal: 20,
@@ -2184,5 +2308,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
+  },
+
+  // Quality settings icon + HD badge wrapper
+  qualityIconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hdBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    backgroundColor: '#FF0000',
+    borderRadius: 4,
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+    minWidth: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 4,
+  },
+  hdBadgeText: {
+    color: '#fff',
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
 });

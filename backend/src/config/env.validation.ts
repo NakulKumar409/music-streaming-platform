@@ -3,7 +3,7 @@
  * Section 5 & 26: STORAGE_PROVIDER, provider-specific vars, media/upload limits.
  */
 
-const STORAGE_PROVIDERS = ["local", "firebase", "s3"] as const;
+const STORAGE_PROVIDERS = ["local", "firebase", "s3", "cloudinary"] as const;
 export type StorageProviderType = (typeof STORAGE_PROVIDERS)[number];
 
 function envStr(key: string, defaultValue?: string): string {

@@ -131,6 +131,14 @@ model content_items {
   original_file_name    String?   @map("original_file_name") @db.VarChar(255)
   video_storage_key     String?   @map("video_storage_key") @db.Text
   uploaded_at           DateTime? @map("uploaded_at") @db.Timestamptz(6)
+  
+  // Storage & Streaming configuration additions
+  providerAssetId       String?   @unique @map("provider_asset_id") @db.VarChar(255)
+  fileKey               String?   @map("file_key") @db.Text
+  metadata              Json?
+  technicalStatus       String?   @default("READY") @map("technical_status") @db.VarChar(20)
+  businessStatus        String?   @default("PUBLISHED") @map("business_status") @db.VarChar(20)
+
   playback_history      playback_history[]
   reports               reports[]
 }
