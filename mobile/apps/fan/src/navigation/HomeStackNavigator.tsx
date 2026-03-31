@@ -70,7 +70,9 @@ export default function HomeStackNavigator() {
       <Stack.Screen
         name="SeeAllTrending"
         component={SeeAllTrendingScreen}
-        options={{ headerShown: true, title: 'Trending Artists' }}
+        options={{
+          headerShown: false,
+        }}
       />
       <Stack.Screen
         name="Artist"
