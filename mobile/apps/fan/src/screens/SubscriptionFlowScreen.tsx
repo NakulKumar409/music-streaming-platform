@@ -296,29 +296,6 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
             </View>
           ) : null}
 
-          {paymentStep !== 'PROCESSING' ? (
-            <View style={[styles.miniPlayer, { bottom: tabBarHeight + 12 }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.miniTitle} numberOfLines={1}>
-                  Secret Melody
-                </Text>
-                <Text style={styles.miniSub} numberOfLines={1}>
-                  {artistName}
-                </Text>
-                <View style={styles.progressTrack}>
-                  <View style={[styles.progressFill, { width: `${miniProgress * 100}%` }]} />
-                </View>
-              </View>
-
-              <Pressable style={styles.miniControl} onPress={() => setMiniIsPlaying((v) => !v)}>
-                {miniIsPlaying ? (
-                  <Pause color="#fff" size={22} />
-                ) : (
-                  <Play color="#fff" size={22} />
-                )}
-              </Pressable>
-            </View>
-          ) : null}
         </ImageBackground>
       </SafeAreaView>
     </ErrorBoundary>
@@ -601,47 +578,4 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  miniPlayer: {
-    position: 'absolute',
-    left: 15,
-    right: 15,
-    height: 70,
-    backgroundColor: 'rgba(18,18,18,0.78)',
-    borderRadius: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  miniTitle: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  miniSub: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 3,
-  },
-  progressTrack: {
-    marginTop: 8,
-    height: 2,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#fff',
-  },
-  miniControl: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 10,
-  },
 });

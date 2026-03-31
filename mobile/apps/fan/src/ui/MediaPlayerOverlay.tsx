@@ -92,58 +92,62 @@ export default function MediaPlayerOverlay({
     return Math.max(insets.bottom, 0) + 84 + extra;
   }, [bottomSafeAreaPadding, insets.bottom]);
 
-  const audioDragY = useRef(new Animated.Value(0)).current;
-  const audioDragOffsetRef = useRef(0);
-
-  const clampAudioDragY = useCallback(
-    (raw: number) => {
-      // Allow dragging up, but prevent moving off-screen.
-      // Negative values move the mini player up.
-      const MIN_TOP_PADDING = Math.max(12, insets.top + 12);
-      const ESTIMATED_PLAYER_HEIGHT = 210;
-      const maxUp = -Math.max(0, Dimensions.get('window').height - bottomOffset - MIN_TOP_PADDING - ESTIMATED_PLAYER_HEIGHT);
-      return Math.min(0, Math.max(maxUp, raw));
-    },
-    [bottomOffset, insets.top]
-  );
+  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
 
   const audioPanResponder = useMemo(() => {
     return PanResponder.create({
       onStartShouldSetPanResponder: () => currentItem?.mediaType === 'audio',
       onMoveShouldSetPanResponder: (_evt, gesture) => {
         if (currentItem?.mediaType !== 'audio') return false;
-        return Math.abs(gesture.dy) > 6;
+        return Math.abs(gesture.dx) > 6 || Math.abs(gesture.dy) > 6;
       },
       onPanResponderGrant: () => {
-        // Stop any in-flight animation and start from the current offset.
-        audioDragY.stopAnimation((value) => {
-          audioDragOffsetRef.current = typeof value === 'number' ? value : 0;
+        pan.setOffset({
+          x: (pan.x as any)._value,
+          y: (pan.y as any)._value,
         });
+        pan.setValue({ x: 0, y: 0 });
       },
-      onPanResponderMove: (_evt, gesture) => {
-        const next = clampAudioDragY(audioDragOffsetRef.current + gesture.dy);
-        audioDragY.setValue(next);
-      },
-      onPanResponderRelease: (_evt, gesture) => {
-        const next = clampAudioDragY(audioDragOffsetRef.current + gesture.dy);
-        audioDragOffsetRef.current = next;
-        Animated.spring(audioDragY, {
-          toValue: next,
-          useNativeDriver: true,
+      onPanResponderMove: Animated.event(
+        [
+          null,
+          { dx: pan.x, dy: pan.y }
+        ],
+        { useNativeDriver: false }
+      ),
+      onPanResponderRelease: () => {
+        pan.flattenOffset();
+        const currentX = (pan.x as any)._value;
+        const currentY = (pan.y as any)._value;
+        
+        const MIN_TOP_PADDING = Math.max(12, insets.top + 12);
+        const ESTIMATED_PLAYER_HEIGHT = 68;
+        const maxUp = -Math.max(0, Dimensions.get('window').height - bottomOffset - MIN_TOP_PADDING - ESTIMATED_PLAYER_HEIGHT);
+        const minTop = maxUp; 
+        const maxDown = 0; 
+        
+        const maxLeft = -14; 
+        const maxRight = 14; 
+
+        let nextX = Math.min(Math.max(maxLeft, currentX), maxRight);
+        let nextY = Math.min(Math.max(minTop, currentY), maxDown);
+
+        Animated.spring(pan, {
+          toValue: { x: nextX, y: nextY },
+          useNativeDriver: false,
           tension: 120,
           friction: 14,
         }).start();
       },
       onPanResponderTerminate: () => {
-        Animated.spring(audioDragY, {
-          toValue: audioDragOffsetRef.current,
-          useNativeDriver: true,
-          tension: 120,
-          friction: 14,
+        pan.flattenOffset();
+        Animated.spring(pan, {
+          toValue: { x: 0, y: 0 },
+          useNativeDriver: false,
         }).start();
       },
     });
-  }, [audioDragY, clampAudioDragY, currentItem?.mediaType]);
+  }, [pan, currentItem?.mediaType, bottomOffset, insets.top]);
 
   const [isSeeking, setIsSeeking] = useState(false);
   const seekValueRef = useRef<number>(0);
@@ -263,107 +267,36 @@ export default function MediaPlayerOverlay({
   return (
     <View pointerEvents="box-none" style={styles.root}>
       <Animated.View
-        style={[styles.miniWrap, { bottom: bottomOffset, transform: [{ translateY: audioDragY }] }]}
+        style={[styles.miniWrap, { bottom: bottomOffset, transform: pan.getTranslateTransform() }]}
         {...(currentItem.mediaType === 'audio' ? audioPanResponder.panHandlers : {})}
       >
-        <BlurView intensity={26} tint="dark" style={styles.miniPlayer}>
-          <Pressable onPress={() => setExpanded(currentItem.mediaType === 'video')}>
-            <Image
-              source={{ uri: currentItem.artworkUrl || undefined }}
-              style={styles.miniThumb}
-            />
-          </Pressable>
-
+        <Pressable
+          style={styles.miniPlayer}
+          onPress={() => setExpanded(currentItem.mediaType === 'video')}
+        >
+          <Image
+            source={{ uri: currentItem.artworkUrl || 'https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=400&q=80' }}
+            style={styles.miniArt}
+          />
+          <View style={styles.miniMeta}>
+            <Text style={styles.miniTitle} numberOfLines={1}>{currentItem.title}</Text>
+            <Text style={styles.miniArtist} numberOfLines={1}>{currentItem.artistName ?? 'Artist'}</Text>
+          </View>
           <Pressable
-            style={styles.miniMeta}
-            onPress={() => setExpanded(currentItem.mediaType === 'video')}
+            style={styles.miniPlayBtn}
+            onPress={() => togglePlayPause().catch(() => undefined)}
+            hitSlop={8}
           >
-            <Text style={styles.miniTitle} numberOfLines={1}>
-              {currentItem.title}
-            </Text>
-            <Text style={styles.miniArtist} numberOfLines={1}>
-              {currentItem.artistName ?? 'Artist'}
-            </Text>
-            <View style={styles.progressRow}>
-              <Text style={styles.timeText}>{formatTime(positionForUi)}</Text>
-              <Text style={styles.timeText}>{formatTime(state.durationMs)}</Text>
-            </View>
-
-            <View style={styles.sliderRow}>
-              <Slider
-                style={styles.slider}
-                minimumValue={0}
-                maximumValue={Math.max(1, state.durationMs || 1)}
-                value={Math.min(positionForUi, state.durationMs || 1)}
-                minimumTrackTintColor="#FFFFFF"
-                maximumTrackTintColor="rgba(255,255,255,0.18)"
-                thumbTintColor="#FFFFFF"
-                onSlidingStart={onSeekStart}
-                onValueChange={onSeekChange}
-                onSlidingComplete={onSeekComplete}
-              />
-            </View>
-
-            <View style={styles.controlRow}>
-              <Pressable
-                onPress={toggleShuffle}
-                style={[styles.pillBtn, state.isShuffle && styles.pillBtnActive]}
-              >
-                <Text style={[styles.pillText, state.isShuffle && styles.pillTextActive]}>Shuffle</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={cycleRepeatMode}
-                style={[styles.pillBtn, state.repeatMode !== 'off' && styles.pillBtnActive]}
-              >
-                <Text
-                  style={[styles.pillText, state.repeatMode !== 'off' && styles.pillTextActive]}
-                >
-                  {state.repeatMode === 'one' ? 'Repeat 1' : state.repeatMode === 'all' ? 'Repeat' : 'Repeat'}
-                </Text>
-              </Pressable>
-
-              <Pressable onPress={cycleSpeed} style={styles.pillBtn}>
-                <Text style={styles.pillText}>{state.playbackRate.toFixed(1)}x</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.volumeRow}>
-              <Text style={styles.volumeLabel}>Vol</Text>
-              <Slider
-                style={styles.volumeSlider}
-                minimumValue={0}
-                maximumValue={1}
-                value={state.volume}
-                step={0.01}
-                minimumTrackTintColor="rgba(255,255,255,0.9)"
-                maximumTrackTintColor="rgba(255,255,255,0.18)"
-                thumbTintColor="rgba(255,255,255,0.9)"
-                onValueChange={(v) => setVolume(v).catch(() => undefined)}
-              />
-            </View>
-          </Pressable>
-
-          <Pressable onPress={skipPrev} style={styles.miniBtn}>
-            <ArrowLeft color="#fff" size={20} />
-          </Pressable>
-
-          <Pressable onPress={togglePlayPause} style={styles.miniBtn}>
             {state.isPlaying ? (
-              <Pause color="#fff" fill="#fff" size={22} />
+              <View style={styles.miniPauseIcon}>
+                <View style={styles.miniPauseBar} />
+                <View style={styles.miniPauseBar} />
+              </View>
             ) : (
-              <Play color="#fff" fill="#fff" size={22} />
+              <Play size={16} color="#000" />
             )}
           </Pressable>
-
-          <Pressable onPress={skipNext} style={styles.miniBtn}>
-            <SkipForward color="#fff" size={20} />
-          </Pressable>
-
-          <Pressable onPress={close} style={styles.miniBtn}>
-            <X color="#fff" size={18} />
-          </Pressable>
-        </BlurView>
+        </Pressable>
       </Animated.View>
     </View>
   );
@@ -392,7 +325,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'flex-end',
-    zIndex: 9000,
+    zIndex: 9999,
   },
 
   videoContainer: {
@@ -460,110 +393,63 @@ const styles = StyleSheet.create({
 
   miniWrap: {
     position: 'absolute',
-    left: 12,
-    right: 12,
+    left: 14,
+    right: 14,
   },
   miniPlayer: {
+    height: 68,
     borderRadius: 18,
-    overflow: 'hidden',
+    backgroundColor: 'rgba(28,28,28,0.97)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    backgroundColor: 'rgba(10,10,10,0.35)',
+    paddingHorizontal: 12,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.40,
+    shadowRadius: 12,
+    elevation: 10,
   },
-  miniThumb: {
+  miniArt: {
     width: 44,
     height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 10,
+    backgroundColor: '#333',
   },
   miniMeta: {
     flex: 1,
-    marginLeft: 10,
-    marginRight: 8,
+    minWidth: 0,
   },
   miniTitle: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
   },
   miniArtist: {
-    marginTop: 2,
     color: 'rgba(255,255,255,0.55)',
     fontSize: 12,
     fontWeight: '600',
+    marginTop: 2,
   },
-  progressRow: {
-    marginTop: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  timeText: {
-    color: 'rgba(255,255,255,0.65)',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  sliderRow: {
-    marginTop: 6,
-  },
-  slider: {
-    width: '100%',
-    height: 18,
-  },
-  controlRow: {
-    marginTop: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  pillBtn: {
-    height: 28,
-    paddingHorizontal: 10,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+  miniPlayBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 6,
   },
-  pillBtnActive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: 'rgba(255,255,255,0.0)',
-  },
-  pillText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  pillTextActive: {
-    color: '#000',
-  },
-  volumeRow: {
-    marginTop: 8,
+  miniPauseIcon: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
   },
-  volumeLabel: {
-    width: 30,
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  volumeSlider: {
-    flex: 1,
-    height: 18,
-  },
-  miniBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+  miniPauseBar: {
+    width: 3,
+    height: 14,
+    borderRadius: 2,
+    backgroundColor: '#000',
   },
 });

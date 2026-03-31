@@ -187,29 +187,6 @@ export default function SubscriptionDetail({ navigation, route }: any) {
         </View>
       </Modal>
 
-      <View style={[styles.miniPlayerWrap, { bottom: tabBarHeight + 12 }]}>
-        <BlurView intensity={26} tint="dark" style={styles.miniPlayer}>
-          <Image source={{ uri: mini.artwork }} style={styles.miniThumb} />
-          <View style={styles.miniMeta}>
-            <Text style={styles.miniTitle} numberOfLines={1}>
-              {mini.title}
-            </Text>
-            <Text style={styles.miniArtist} numberOfLines={1}>
-              {mini.artistName}
-            </Text>
-            <View style={styles.miniProgress}>
-              <View style={styles.miniProgressFill} />
-            </View>
-          </View>
-          <Pressable onPress={() => setIsPlaying((p) => !p)} style={styles.miniBtn}>
-            {isPlaying ? (
-              <Pause color="#fff" fill="#fff" size={22} />
-            ) : (
-              <Play color="#fff" fill="#fff" size={22} />
-            )}
-          </Pressable>
-        </BlurView>
-      </View>
       </SafeAreaView>
     </ErrorBoundary>
   );
@@ -425,58 +402,4 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
 
-  miniPlayerWrap: {
-    position: 'absolute',
-    left: 15,
-    right: 15,
-  },
-  miniPlayer: {
-    height: 70,
-    borderRadius: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(18,18,18,0.78)',
-  },
-  miniThumb: {
-    width: 50,
-    height: 50,
-    borderRadius: 10,
-  },
-  miniMeta: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  miniTitle: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  miniArtist: {
-    marginTop: 3,
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  miniProgress: {
-    marginTop: 8,
-    height: 2,
-    borderRadius: 2,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
-  miniProgressFill: {
-    width: '40%',
-    height: '100%',
-    backgroundColor: '#fff',
-  },
-  miniBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 });

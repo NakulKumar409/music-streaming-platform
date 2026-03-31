@@ -452,29 +452,6 @@ export default function ContentPlayerScreen({ navigation, route }: any) {
           </View>
         </Animated.View>
 
-        <View style={[styles.miniWrap, { bottom: tabBarHeight + 12 }]}>
-          <View style={styles.miniPlayer}>
-            <Image source={{ uri: mini.thumbnail }} style={styles.miniThumb} />
-            <View style={styles.miniMeta}>
-              <Text style={styles.miniTitle} numberOfLines={1}>
-                {mini.title}
-              </Text>
-              <Text style={styles.miniArtist} numberOfLines={1}>
-                {mini.artist}
-              </Text>
-              <View style={styles.miniProgress}>
-                <View style={[styles.miniProgressFill, { width: `${progress * 100}%` }]} />
-              </View>
-            </View>
-            <Pressable onPress={handlePlayPress} style={styles.miniBtn}>
-              {isPlaying ? (
-                <Pause color="#fff" fill="#fff" size={22} />
-              ) : (
-                <Play color="#fff" fill="#fff" size={22} />
-              )}
-            </Pressable>
-          </View>
-        </View>
       </View>
       </SafeAreaView>
     </ErrorBoundary>
@@ -602,61 +579,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#FF7A18',
     marginLeft: -6,
-  },
-
-  miniWrap: {
-    position: 'absolute',
-    left: 14,
-    right: 14,
-  },
-  miniPlayer: {
-    height: 70,
-    borderRadius: 18,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(14,14,14,0.55)',
-  },
-  miniThumb: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-  },
-  miniMeta: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  miniTitle: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  miniArtist: {
-    color: 'rgba(255,255,255,0.45)',
-    fontSize: 12,
-    fontWeight: '500',
-    marginTop: 3,
-  },
-  miniProgress: {
-    marginTop: 10,
-    height: 2,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    overflow: 'hidden',
-  },
-  miniProgressFill: {
-    width: '40%',
-    height: '100%',
-    backgroundColor: '#fff',
-  },
-  miniBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 
   // Debug styles

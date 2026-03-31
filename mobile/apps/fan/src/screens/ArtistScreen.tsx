@@ -549,52 +549,7 @@ export default function ArtistScreen({ navigation, route }: any) {
             />
           </>
         )}
-        {/* ── Mini Player ── */}
-        {hasActiveAudio && activeAudioMeta ? (
-          <Pressable
-            style={[styles.miniPlayer, { bottom: tabBarHeight + 8 }]}
-            onPress={() => {
-              const itemToNav: Song = {
-                id: activeAudioMeta.id || activeAudioMeta.contentId || '',
-                title: activeAudioMeta.title || '',
-                artist: activeAudioMeta.artistName || '',
-                thumbnail: activeAudioMeta.artworkUrl || '',
-                mediaUrl: activeAudioMeta.mediaUrl || '',
-                locked: false,
-                mediaType: 'audio',
-                contentId: activeAudioMeta.contentId || activeAudioMeta.id,
-                duration: 'Audio',
-              };
-              const params = buildFullPlayerParams(itemToNav);
-              if (params) navigation.navigate('FullPlayer', params);
-            }}
-          >
-            <Image
-              source={{ uri: activeAudioMeta.artworkUrl || '' }}
-              style={styles.miniArt}
-            />
-            <View style={styles.miniMeta}>
-              <Text style={styles.miniTitle} numberOfLines={1}>{activeAudioMeta.title}</Text>
-              <Text style={styles.miniArtist} numberOfLines={1}>{activeAudioMeta.artistName}</Text>
-            </View>
-            <Pressable
-              style={styles.miniPlayBtn}
-              onPress={() => togglePlayPause().catch(() => undefined)}
-              hitSlop={8}
-            >
-              {playerState.isPlaying ? (
-                <View style={styles.miniPauseIcon}>
-                  <View style={styles.miniPauseBar} />
-                  <View style={styles.miniPauseBar} />
-                </View>
-              ) : (
-                <Svg width="16" height="16" viewBox="0 0 24 24" fill="#000">
-                  <Path d="M8 5v14l11-7z" />
-                </Svg>
-              )}
-            </Pressable>
-          </Pressable>
-        ) : null}
+
       </View>
     </SafeAreaView>
     </LinearGradient>
@@ -1442,64 +1397,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // ── Mini Player ──
-  miniPlayer: {
-    position: 'absolute',
-    left: 14,
-    right: 14,
-    height: 68,
-    borderRadius: 18,
-    backgroundColor: 'rgba(28,28,28,0.97)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.40,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  miniArt: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: '#333',
-  },
-  miniMeta: {
-    flex: 1,
-    minWidth: 0,
-  },
-  miniTitle: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  miniArtist: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  miniPlayBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  miniPauseIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  miniPauseBar: {
-    width: 3,
-    height: 14,
-    borderRadius: 2,
-    backgroundColor: '#000',
-  },
 });

@@ -107,20 +107,7 @@ export default function ArtistSubscriptionScreen({ navigation, route }: any) {
         </View>
       </View>
 
-      {/* Persistent Mini Player */}
-      <View style={[styles.miniWrap, { bottom: tabBarHeight + 12 }]}>
-        <BlurView intensity={30} tint="dark" style={styles.miniPlayer}>
-          <Image source={{ uri: songData.thumbnail }} style={styles.miniThumb} />
-          <View style={styles.miniMeta}>
-            <Text style={styles.miniTitle} numberOfLines={1}>Midnight Dreams</Text>
-            <Text style={styles.miniArtist} numberOfLines={1}>Luna Ray</Text>
-            <View style={styles.miniProgress}><View style={styles.miniProgressFill} /></View>
-          </View>
-          <Pressable onPress={() => setIsPlaying((p) => !p)} style={styles.miniBtn}>
-            {isPlaying ? <Pause color="#fff" fill="#fff" size={22} /> : <Play color="#fff" fill="#fff" size={22} />}
-          </Pressable>
-        </BlurView>
-      </View>
+
       </SafeAreaView>
     </ErrorBoundary>
   );
@@ -222,22 +209,4 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  miniWrap: { position: 'absolute', left: 14, right: 14, zIndex: 100 },
-  miniPlayer: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: 'rgba(15,15,15,0.8)',
-  },
-  miniThumb: { width: 48, height: 48, borderRadius: 12 },
-  miniMeta: { flex: 1, marginLeft: 15 },
-  miniTitle: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  miniArtist: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '500' },
-  miniProgress: { marginTop: 10, height: 2, backgroundColor: 'rgba(255,255,255,0.1)', overflow: 'hidden' },
-  miniProgressFill: { width: '40%', height: '100%', backgroundColor: '#fff' },
-  miniBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 });
