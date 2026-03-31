@@ -9,6 +9,7 @@ import { verifyPlaybackToken } from "../../shared/security/signed-media-token.se
 import { getContentForAccess } from "../../shared/security/media-authz.service";
 import { getStorageService } from "../../shared/storage/services/storage.service";
 import { getStorageConfig } from "../../config/storage.config";
+import { generatePlaybackAccess } from "../../shared/delivery/services/media-delivery.service";
 import { MediaInvalidTokenException } from "../../shared/exceptions/media.exception";
 import { MediaNotFoundException } from "../../shared/exceptions/media.exception";
 
@@ -70,7 +71,36 @@ router.get("/:mediaId", async (req: Request, res: Response) => {
     return res.status(404).json({ success: false, message: "Media not available for stream" });
   }
 
-  if (storageProvider !== "local") {
+  // For Cloudinary, generate a signed URL and redirect
+  // Only use Cloudinary if the row explicitly has storage_provider='cloudinary'
+  // Old content with storage_provider='local' or NULL will use streaming below
+  if (storageProvider === "cloudinary") {
+    try {
+      const accessResult = await generatePlaybackAccess({
+        mediaId,
+        storageProvider: "cloudinary",
+        storageKey,
+        contentType: content.mime_type || undefined,
+        contentLength: content.file_size_bytes || undefined,
+        visibility: (content.visibility || "PROTECTED") as any,
+        userId: payload.userId,
+        expiresInSeconds: 300,
+        token
+      });
+      
+      if (accessResult?.playbackUrl) {
+        return res.redirect(302, accessResult.playbackUrl);
+      }
+    } catch (err: any) {
+      console.error("[media/stream] Cloudinary playback error", { mediaId, error: err?.message });
+      // Fallback to local stream if Cloudinary fails (for hybrid scenarios)
+      // Continue to local stream logic below
+    }
+  }
+
+  // For local storage (old content), stream directly
+  // This ensures backward compatibility with old local files
+  if (storageProvider !== "local" && storageProvider !== "cloudinary") {
     return res.status(400).json({
       success: false,
       message: "This endpoint is for local stream only; use the playback URL from /stream/access"

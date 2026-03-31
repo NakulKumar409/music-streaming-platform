@@ -7,6 +7,7 @@ import { pool } from "../../common/db";
 import { requestPlaybackAccess } from "../../modules/media/media-access.service";
 import { getStorageService } from "../../shared/storage/services/storage.service";
 import { getMediaConfig } from "../../config/media.config";
+import { getStorageConfig } from "../../config/storage.config";
 import {
   MediaNotFoundException,
   MediaNotReadyException,
@@ -102,7 +103,7 @@ router.get("/thumbnail/:contentId", async (req: any, res: any) => {
 
   try {
     const result = await pool.query(
-      `SELECT thumbnail_storage_key
+      `SELECT thumbnail_storage_key, storage_provider
        FROM content_items
        WHERE id = $1
        LIMIT 1`,
@@ -110,11 +111,36 @@ router.get("/thumbnail/:contentId", async (req: any, res: any) => {
     );
     const row = result.rows?.[0];
     const storageKey = (row?.thumbnail_storage_key as string | null) ?? null;
+    const storageProvider = (row?.storage_provider as string | null) ?? "local";
 
     if (!storageKey) {
       return res.status(404).json({ success: false, message: "Thumbnail not found", correlationId });
     }
 
+    // For Cloudinary or if storageKey is a full URL, redirect directly
+    const isFullUrl = storageKey.startsWith("http://") || storageKey.startsWith("https://");
+    
+    // Only use Cloudinary if the row explicitly has storage_provider='cloudinary'
+    // Old content with storage_provider='local' or NULL will use streaming below
+    if (isFullUrl || storageProvider === "cloudinary") {
+      // If it's already a full URL, redirect to it
+      // Otherwise construct Cloudinary URL from the storage key
+      let thumbnailUrl = storageKey;
+      if (!isFullUrl && storageProvider === "cloudinary") {
+        // Construct Cloudinary URL - thumbnails are public 'upload' type
+        const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+        if (cloudName) {
+          thumbnailUrl = `https://res.cloudinary.com/${cloudName}/image/upload/${storageKey}`;
+        }
+      }
+      
+      if (thumbnailUrl.startsWith("http")) {
+        return res.redirect(302, thumbnailUrl);
+      }
+    }
+
+    // For local/firebase/s3 storage (or old content), stream the content
+    // This ensures backward compatibility with old local files
     const storage = getStorageService();
     const meta = await storage.getObjectMetadata(storageKey);
     const read = await storage.openReadStream({ storageKey });
