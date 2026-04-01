@@ -4,11 +4,13 @@
 
 import { Router } from "express";
 import { pool } from "../../common/db";
-import { requestPlaybackAccess } from "../../modules/media/media-access.service";
-import { getStorageService } from "../../shared/storage/services/storage.service";
 import { getStorageProviderByName } from "../../shared/storage/factory/storage-provider.factory";
+import { getStorageService } from "../../shared/storage/services/storage.service";
+import { v2 as cloudinary } from "cloudinary";
+import { requestPlaybackAccess } from "../../modules/media/media-access.service";
 import { getMediaConfig } from "../../config/media.config";
 import { getStorageConfig } from "../../config/storage.config";
+import { normalizePublicId, isValidPublicId, logPublicIdNormalization } from "../../shared/utils/cloudinary.utils";
 import {
   MediaNotFoundException,
   MediaNotReadyException,
@@ -124,59 +126,102 @@ router.get("/thumbnail/:contentId", async (req: any, res: any) => {
     // For Cloudinary or if storageKey is a full URL, redirect directly
     const isFullUrl = storageKey.startsWith("http://") || storageKey.startsWith("https://");
     
-    console.log(`[stream/thumbnail] isFullUrl=${isFullUrl}, willRedirect=${isFullUrl || storageProvider === "cloudinary"}`);
+    console.log(`[stream/thumbnail] isFullUrl=${isFullUrl}, storageProvider=${storageProvider}`);
     
     // Only use Cloudinary if the row explicitly has storage_provider='cloudinary'
     // Old content with storage_provider='local' or NULL will use streaming below
-    if (isFullUrl || storageProvider === "cloudinary") {
-      // If it's already a full URL, redirect to it
-      // Otherwise construct Cloudinary URL from the storage key
-      let thumbnailUrl = storageKey;
-      if (!isFullUrl && storageProvider === "cloudinary") {
-        // Construct Cloudinary URL - thumbnails are public 'upload' type
-        const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-        if (cloudName) {
-          // Strip file extension from storageKey - Cloudinary public_id doesn't include it
-          const publicId = storageKey.replace(/\.[^/.]+$/, "");
-          thumbnailUrl = `https://res.cloudinary.com/${cloudName}/image/upload/${publicId}`;
-        }
+    if (isFullUrl) {
+      // If it's already a full URL, redirect to it directly
+      console.log(`[stream/thumbnail] Redirecting to full URL: ${storageKey.substring(0, 80)}...`);
+      return res.redirect(302, storageKey);
+    }
+    
+    if (storageProvider === "cloudinary") {
+      // CRITICAL FIX: Normalize storage key to valid public_id
+      // Must remove file extension (.webp, .jpg, etc.) and version prefix
+      let publicId: string;
+      try {
+        publicId = normalizePublicId(storageKey);
+        logPublicIdNormalization(storageKey, publicId, "stream/thumbnail");
+      } catch (normError) {
+        console.error(`[stream/thumbnail] Failed to normalize public_id:`, normError);
+        return res.status(400).json({ 
+          success: false, 
+          message: "Invalid thumbnail storage key", 
+          correlationId 
+        });
+      }
+
+      // Validate the normalized public_id
+      if (!isValidPublicId(publicId)) {
+        console.error(`[stream/thumbnail] Invalid public_id after normalization: ${publicId}`);
+        return res.status(400).json({ 
+          success: false, 
+          message: "Invalid public_id format", 
+          correlationId 
+        });
       }
       
-      if (thumbnailUrl.startsWith("http")) {
-        return res.redirect(302, thumbnailUrl);
+      // For Cloudinary thumbnails, generate URL using SDK
+      // CRITICAL: Manually construct URL to ensure NO version (/v1/) in path
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+      if (!cloudName) {
+        return res.status(500).json({ 
+          success: false, 
+          message: "Cloudinary not configured", 
+          correlationId 
+        });
       }
+      
+      // Manually construct URL: https://res.cloudinary.com/{cloud}/image/upload/{public_id}
+      // This guarantees NO version segment (/v1/) in the URL
+      const thumbnailUrl = `https://res.cloudinary.com/${cloudName}/image/upload/${publicId}`;
+      
+      console.log(`[stream/thumbnail] Generated Cloudinary URL: ${thumbnailUrl.substring(0, 80)}...`);
+      return res.redirect(302, thumbnailUrl);
     }
 
     // For local/firebase/s3 storage (or old content), stream the content
     // This ensures backward compatibility with old local files
     // Use the per-row provider, not the global one
     console.log(`[stream/thumbnail] Using provider ${storageProvider} for streaming`);
-    const storage = storageProvider === "cloudinary" 
-      ? getStorageService() 
-      : getStorageProviderByName(storageProvider as any);
-    const meta = await storage.getObjectMetadata(storageKey);
-    const read = await storage.openReadStream({ storageKey });
+    
+    try {
+      const storage = storageProvider === "cloudinary" 
+        ? getStorageService() 
+        : getStorageProviderByName(storageProvider as any);
+      const meta = await storage.getObjectMetadata(storageKey);
+      const read = await storage.openReadStream({ storageKey });
 
-    if (meta?.contentType) {
-      res.setHeader("Content-Type", meta.contentType);
-    } else if (read?.contentType) {
-      res.setHeader("Content-Type", read.contentType);
-    }
-    if (meta?.contentLength !== undefined) {
-      res.setHeader("Content-Length", String(meta.contentLength));
-    } else if (read?.contentLength !== undefined) {
-      res.setHeader("Content-Length", String(read.contentLength));
-    }
-
-    res.setHeader("Cache-Control", "public, max-age=300");
-    read.stream.on("error", () => {
-      try {
-        res.end();
-      } catch {
-        // ignore
+      if (meta?.contentType) {
+        res.setHeader("Content-Type", meta.contentType);
+      } else if (read?.contentType) {
+        res.setHeader("Content-Type", read.contentType);
       }
-    });
-    return read.stream.pipe(res);
+      if (meta?.contentLength !== undefined) {
+        res.setHeader("Content-Length", String(meta.contentLength));
+      } else if (read?.contentLength !== undefined) {
+        res.setHeader("Content-Length", String(read.contentLength));
+      }
+
+      res.setHeader("Cache-Control", "public, max-age=300");
+      read.stream.on("error", () => {
+        try {
+          res.end();
+        } catch {
+          // ignore
+        }
+      });
+      return read.stream.pipe(res);
+    } catch (streamErr: any) {
+      console.error(`[stream/thumbnail] Streaming failed for ${storageProvider}:`, streamErr.message);
+      // Return 404 for non-Cloudinary providers that fail (e.g., Firebase PEM errors)
+      return res.status(404).json({ 
+        success: false, 
+        message: `Thumbnail not available from ${storageProvider} storage`, 
+        correlationId 
+      });
+    }
   } catch (err: any) {
     const isNotFound =
       err?.message?.includes("No such object") ||

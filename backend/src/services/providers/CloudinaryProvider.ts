@@ -1,13 +1,26 @@
 import { v2 as cloudinary } from 'cloudinary';
 import { MediaProvider, PlayerUrlResult, UploadResult } from './interfaces/MediaProvider';
+import { normalizePublicId, isValidPublicId, logPublicIdNormalization } from '../../shared/utils/cloudinary.utils';
+
+// Validate Cloudinary configuration on startup
+function validateCloudinaryConfig(): void {
+  const required = ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'];
+  const missing = required.filter(key => !process.env[key]);
+  if (missing.length > 0) {
+    throw new Error(`Cloudinary configuration incomplete. Missing: ${missing.join(', ')}`);
+  }
+}
 
 // Initialize cloudinary once from environment
+validateCloudinaryConfig();
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
   secure: true
 });
+
+console.log('[CloudinaryProvider] Configuration loaded successfully');
 
 export class CloudinaryProvider implements MediaProvider {
   /**
@@ -87,11 +100,33 @@ export class CloudinaryProvider implements MediaProvider {
 
   /**
    * Generates a signed, short-lived URL for authenticated delivery.
+   * @param providerAssetId - The Cloudinary public_id (NOT a full URL)
+   * @param fileType - 'audio' or 'video'
    */
   async generateSignedPlaybackUrl(
     providerAssetId: string,
     fileType: "audio" | "video"
   ): Promise<PlayerUrlResult> {
+    
+    // CRITICAL: Normalize providerAssetId to valid public_id
+    // This removes file extensions (.mp3, .mp4) and version prefixes (v123/)
+    let publicId: string;
+    try {
+      publicId = normalizePublicId(providerAssetId);
+      logPublicIdNormalization(providerAssetId, publicId, "CloudinaryProvider");
+    } catch (normError: any) {
+      console.error(`[CloudinaryProvider] Failed to normalize public_id:`, normError.message);
+      throw new Error(`Invalid public_id: ${providerAssetId.substring(0, 50)}. ${normError.message}`);
+    }
+
+    // Validate the normalized public_id
+    if (!isValidPublicId(publicId)) {
+      console.error(`[CloudinaryProvider] Invalid public_id after normalization: ${publicId}`);
+      throw new Error(`Invalid public_id format after normalization: ${publicId}`);
+    }
+    
+    console.log(`[CloudinaryProvider] Generating signed URL for public_id=${publicId}, type=${fileType}`);
+    
     // Determine the resource format needed
     const isVideo = fileType === "video";
     
@@ -125,21 +160,28 @@ export class CloudinaryProvider implements MediaProvider {
       urlOptions.format = "mp3";
     }
 
-    const url = cloudinary.url(providerAssetId, urlOptions);
-    
-    // Append format extension to URL for proper content type detection
-    let finalUrl = url;
-    if (!isVideo && !url.endsWith('.mp3')) {
-      finalUrl = `${url}.mp3`;
-    } else if (isVideo && !url.endsWith('.m3u8')) {
-      finalUrl = `${url}.m3u8`;
+    try {
+      const url = cloudinary.url(publicId, urlOptions);
+      
+      // Append format extension to URL for proper content type detection
+      let finalUrl = url;
+      if (!isVideo && !url.endsWith('.mp3')) {
+        finalUrl = `${url}.mp3`;
+      } else if (isVideo && !url.endsWith('.m3u8')) {
+        finalUrl = `${url}.m3u8`;
+      }
+      
+      console.log(`[CloudinaryProvider] Generated signed URL for ${publicId}: ${finalUrl.substring(0, 80)}...`);
+      
+      return {
+        playbackUrl: finalUrl,
+        expiryTime: expiresAt,
+        mediaType: fileType
+      };
+    } catch (error) {
+      console.error(`[CloudinaryProvider] Failed to generate signed URL:`, error);
+      throw new Error(`Cloudinary signed URL generation failed: ${error instanceof Error ? error.message : String(error)}`);
     }
-    
-    return {
-      playbackUrl: finalUrl,
-      expiryTime: expiresAt,
-      mediaType: fileType
-    };
   }
 
   /**

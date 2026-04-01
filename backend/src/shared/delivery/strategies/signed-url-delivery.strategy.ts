@@ -5,20 +5,20 @@
 
 import type { IMediaDeliveryStrategy } from "../interfaces/media-delivery-strategy.interface";
 import type { GeneratePlaybackAccessParams, PlaybackAccessResult } from "../interfaces/media-delivery-strategy.interface";
-import { getStorageConfig } from "../../../config/storage.config";
 import { getStorageProvider } from "../../storage/factory/storage-provider.factory";
+import { getStorageConfig } from "../../../config/storage.config";
 import { DeliveryFailedException } from "../../exceptions/delivery.exception";
 
 export class SignedUrlDeliveryStrategy implements IMediaDeliveryStrategy {
   async generatePlaybackAccess(params: GeneratePlaybackAccessParams): Promise<PlaybackAccessResult> {
-    const { storageKey, contentType, contentLength, expiresInSeconds } = params;
-    const config = getStorageConfig();
+    const { storageKey, contentType, contentLength, expiresInSeconds, storageProvider } = params;
 
-    if (config.provider === "s3") {
+    // Use the per-row storage provider, not the global config
+    if (storageProvider === "s3") {
       return this.generateS3SignedUrl(storageKey, contentType, contentLength, expiresInSeconds);
     }
 
-    if (config.provider === "firebase") {
+    if (storageProvider === "firebase") {
       return this.generateFirebaseSignedUrl(storageKey, contentType, expiresInSeconds);
     }
 

@@ -20,23 +20,13 @@ export function createStorageProvider(): IStorageProvider {
   const provider = config.provider;
 
   if (provider === "local") {
-    instance = new LocalStorageProvider(config.local.root);
-    console.log("[Storage] Provider: local");
-    return instance;
+    console.error("[Storage] ERROR: Local provider is deprecated. Please use Cloudinary.");
+    throw new StorageProviderNotConfiguredException("local - use cloudinary instead");
   }
 
   if (provider === "firebase") {
-    if (!config.firebase.storageBucket) {
-      throw new StorageProviderNotConfiguredException("firebase");
-    }
-    instance = new FirebaseStorageProvider({
-      projectId: config.firebase.projectId,
-      clientEmail: config.firebase.clientEmail,
-      privateKey: config.firebase.privateKey,
-      storageBucket: config.firebase.storageBucket
-    });
-    console.log("[Storage] Provider: firebase");
-    return instance;
+    console.error("[Storage] ERROR: Firebase provider is deprecated. Please use Cloudinary.");
+    throw new StorageProviderNotConfiguredException("firebase - use cloudinary instead");
   }
 
   if (provider === "s3") {
@@ -73,19 +63,13 @@ export function getStorageProviderByName(provider: StorageProviderName): IStorag
   const config = getStorageConfig();
   
   if (provider === "local") {
-    return new LocalStorageProvider(config.local.root);
+    console.error(`[Storage] ERROR: Local provider is disabled for ${provider}. Using Cloudinary fallback.`);
+    return new CloudinaryStorageProvider();
   }
   
   if (provider === "firebase") {
-    if (!config.firebase.storageBucket) {
-      throw new StorageProviderNotConfiguredException("firebase");
-    }
-    return new FirebaseStorageProvider({
-      projectId: config.firebase.projectId,
-      clientEmail: config.firebase.clientEmail,
-      privateKey: config.firebase.privateKey,
-      storageBucket: config.firebase.storageBucket
-    });
+    console.error(`[Storage] ERROR: Firebase provider is disabled for ${provider}. Using Cloudinary fallback.`);
+    return new CloudinaryStorageProvider();
   }
   
   if (provider === "s3") {

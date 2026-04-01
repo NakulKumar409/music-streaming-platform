@@ -56,6 +56,7 @@ type ApiContentItem = {
   isLocked?: boolean;
   locked?: boolean;
   genre?: string | null;
+  storage_provider?: string | null;
 };
 
 type AudioCard = {

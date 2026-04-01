@@ -73,6 +73,7 @@ type ApiContentItem = {
   likeCount?: number | null;
   dislikeCount?: number | null;
   storageKey?: string | null;
+  storage_provider?: string | null;
 };
 
 type VideoCard = {
@@ -523,7 +524,7 @@ export default function VideoScreen() {
           artistId: artistIdValue,
           artworkUrl,
           mediaUrl: (it.mediaUrl ?? it.fileUrl ?? '').toString(),
-          useStreamAccess: true,
+          useStreamAccess: Boolean(it.useStreamAccess ?? (it.storage_provider === 'cloudinary')),
           storageKey: (it.storageKey ?? null) as any,
           category: normalizeCategory(it.genre),
           createdAt: (it.createdAt ?? null) as any,

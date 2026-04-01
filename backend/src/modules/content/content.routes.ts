@@ -48,6 +48,7 @@ router.get("/", (req, res) => {
              c.storage_key,
              c.video_storage_key,
              c.thumbnail_storage_key,
+             c.storage_provider,
              c.created_at,
              c.artist_id,
              c.subscription_required,
@@ -76,6 +77,7 @@ router.get("/", (req, res) => {
              c.storage_key,
              c.video_storage_key,
              c.thumbnail_storage_key,
+             c.storage_provider,
              c.created_at,
              c.artist_id,
              c.subscription_required,
@@ -166,6 +168,7 @@ router.get("/", (req, res) => {
           audioUrl: finalAudioUrl,
           videoUrl: finalVideoUrl,
           storageKey: r.storage_key ?? null,
+          storage_provider: r.storage_provider ?? 'local',
           useStreamAccess,
           createdAt: r.created_at,
           artistName: r.artist_name ?? null,
@@ -181,8 +184,9 @@ router.get("/", (req, res) => {
       const meta = items.reduce(
         (acc: any, it: any) => {
           acc.total += 1;
-          if (it?.mediaType === 'video') acc.video += 1;
-          else if (it?.mediaType === 'audio') acc.audio += 1;
+          const mt = it?.mediaType;
+          if (mt === 'video' || mt === 'audio_video') acc.video += 1;
+          if (mt === 'audio' || mt === 'audio_video') acc.audio += 1;
           return acc;
         },
         { total: 0, audio: 0, video: 0 }
@@ -232,6 +236,7 @@ router.get("/artist/:artistId", (req, res) => {
                   c.storage_key,
                   c.video_storage_key,
                   c.thumbnail_storage_key,
+                  c.storage_provider,
                   c.created_at,
                   c.subscription_required,
                   c.status,
@@ -264,6 +269,7 @@ router.get("/artist/:artistId", (req, res) => {
                   c.storage_key,
                   c.video_storage_key,
                   c.thumbnail_storage_key,
+                  c.storage_provider,
                   c.created_at,
                   c.subscription_required
            FROM content_items c
@@ -355,6 +361,7 @@ router.get("/artist/:artistId", (req, res) => {
             fileUrl: finalMediaUrl,
             audioUrl: finalAudioUrl,
             videoUrl: finalVideoUrl,
+            storage_provider: r.storage_provider ?? 'local',
             // We return direct stream URLs, so client does not need POST /stream/access
             useStreamAccess,
             subscriptionRequired: Boolean(r.subscription_required),
@@ -371,8 +378,9 @@ router.get("/artist/:artistId", (req, res) => {
         const meta = items.reduce(
           (acc: any, it: any) => {
             acc.total += 1;
-            if (it?.mediaType === 'video') acc.video += 1;
-            else if (it?.mediaType === 'audio') acc.audio += 1;
+            const mt = it?.mediaType;
+            if (mt === 'video' || mt === 'audio_video') acc.video += 1;
+            if (mt === 'audio' || mt === 'audio_video') acc.audio += 1;
             return acc;
           },
           { total: 0, audio: 0, video: 0 }
@@ -412,6 +420,7 @@ router.get("/:id", (req, res) => {
              c.storage_key,
              c.video_storage_key,
              c.thumbnail_storage_key,
+             c.storage_provider,
              c.subscription_required,
              c.artist_id,
              COALESCE(NULLIF(u.name, ''), NULLIF(u.full_name, ''), NULLIF(u.username, ''), NULLIF(split_part(u.email, '@', 1), ''), u.email) as artist_name
@@ -437,6 +446,7 @@ router.get("/:id", (req, res) => {
                c.storage_key,
                c.video_storage_key,
                c.thumbnail_storage_key,
+               c.storage_provider,
                c.subscription_required,
                c.artist_id,
                COALESCE(NULLIF(u.name, ''), NULLIF(split_part(u.email, '@', 1), ''), u.email) as artist_name
@@ -518,6 +528,7 @@ router.get("/:id", (req, res) => {
           fileUrl: finalMediaUrl,
           audioUrl: finalAudioUrl,
           videoUrl: finalVideoUrl,
+          storage_provider: r.storage_provider ?? 'local',
           useStreamAccess,
         }
       });
