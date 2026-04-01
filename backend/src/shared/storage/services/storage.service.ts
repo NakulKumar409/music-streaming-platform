@@ -3,7 +3,8 @@
  * Controllers and business logic use this, never provider SDKs directly.
  */
 
-import { getStorageProvider } from "../factory/storage-provider.factory";
+import { getStorageProvider, getStorageProviderByName } from "../factory/storage-provider.factory";
+import type { StorageProviderName } from "../interfaces/storage-types.interface";
 import type { IStorageProvider } from "../interfaces/storage-provider.interface";
 import type {
   UploadObjectParams,

@@ -106,6 +106,8 @@ export async function ensureContentSchema(): Promise<void> {
     "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS original_file_name VARCHAR(255)",
     "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS uploaded_at TIMESTAMPTZ",
     "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS video_storage_key TEXT",
+    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS file_key TEXT",
+    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS provider_asset_id TEXT",
     "ALTER TABLE content_items ALTER COLUMN lifecycle_state SET DEFAULT 'PUBLISHED'",
     "ALTER TABLE content_items ALTER COLUMN is_approved SET DEFAULT true",
     "ALTER TABLE content_items ALTER COLUMN status SET DEFAULT 'APPROVED'",

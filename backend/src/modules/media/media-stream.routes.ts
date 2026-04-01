@@ -8,6 +8,7 @@ import { Router, Request, Response } from "express";
 import { verifyPlaybackToken } from "../../shared/security/signed-media-token.service";
 import { getContentForAccess } from "../../shared/security/media-authz.service";
 import { getStorageService } from "../../shared/storage/services/storage.service";
+import { getStorageProviderByName } from "../../shared/storage/factory/storage-provider.factory";
 import { getStorageConfig } from "../../config/storage.config";
 import { generatePlaybackAccess } from "../../shared/delivery/services/media-delivery.service";
 import { MediaInvalidTokenException } from "../../shared/exceptions/media.exception";
@@ -107,7 +108,10 @@ router.get("/:mediaId", async (req: Request, res: Response) => {
     });
   }
 
-  const storage = getStorageService();
+  // Use the per-row provider for local storage, not the global one
+  const storage = storageProvider === "local"
+    ? getStorageProviderByName("local")
+    : getStorageService();
   let totalLength: number;
   let contentType: string;
 

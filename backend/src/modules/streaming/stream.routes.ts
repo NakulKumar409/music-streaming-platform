@@ -6,6 +6,7 @@ import { Router } from "express";
 import { pool } from "../../common/db";
 import { requestPlaybackAccess } from "../../modules/media/media-access.service";
 import { getStorageService } from "../../shared/storage/services/storage.service";
+import { getStorageProviderByName } from "../../shared/storage/factory/storage-provider.factory";
 import { getMediaConfig } from "../../config/media.config";
 import { getStorageConfig } from "../../config/storage.config";
 import {
@@ -146,7 +147,11 @@ router.get("/thumbnail/:contentId", async (req: any, res: any) => {
 
     // For local/firebase/s3 storage (or old content), stream the content
     // This ensures backward compatibility with old local files
-    const storage = getStorageService();
+    // Use the per-row provider, not the global one
+    console.log(`[stream/thumbnail] Using provider ${storageProvider} for streaming`);
+    const storage = storageProvider === "cloudinary" 
+      ? getStorageService() 
+      : getStorageProviderByName(storageProvider as any);
     const meta = await storage.getObjectMetadata(storageKey);
     const read = await storage.openReadStream({ storageKey });
 

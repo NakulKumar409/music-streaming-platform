@@ -64,3 +64,45 @@ export function createStorageProvider(): IStorageProvider {
 export function getStorageProvider(): IStorageProvider {
   return createStorageProvider();
 }
+
+/**
+ * Get a storage provider by name for per-row storage handling.
+ * This allows reading content from different providers based on row's storage_provider column.
+ */
+export function getStorageProviderByName(provider: StorageProviderName): IStorageProvider {
+  const config = getStorageConfig();
+  
+  if (provider === "local") {
+    return new LocalStorageProvider(config.local.root);
+  }
+  
+  if (provider === "firebase") {
+    if (!config.firebase.storageBucket) {
+      throw new StorageProviderNotConfiguredException("firebase");
+    }
+    return new FirebaseStorageProvider({
+      projectId: config.firebase.projectId,
+      clientEmail: config.firebase.clientEmail,
+      privateKey: config.firebase.privateKey,
+      storageBucket: config.firebase.storageBucket
+    });
+  }
+  
+  if (provider === "s3") {
+    if (!config.s3.bucket || !config.s3.region) {
+      throw new StorageProviderNotConfiguredException("s3");
+    }
+    return new S3StorageProvider({
+      accessKeyId: config.s3.accessKeyId,
+      secretAccessKey: config.s3.secretAccessKey,
+      region: config.s3.region,
+      bucket: config.s3.bucket
+    });
+  }
+  
+  if (provider === "cloudinary") {
+    return new CloudinaryStorageProvider();
+  }
+  
+  throw new StorageProviderNotConfiguredException(provider);
+}
