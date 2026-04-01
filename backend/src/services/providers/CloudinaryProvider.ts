@@ -112,23 +112,31 @@ export class CloudinaryProvider implements MediaProvider {
       resource_type: "video", // Cloudinary uses resource_type video for both audio and video
       type: "authenticated",
       sign_url: true,
-      // For video, we want the generated streaming profile output
-      // so we append the HLS profile transform if needed, though for an eager transform 
-      // it might require specific URL formatting:
-      format: format,
     };
     
     if (isVideo) {
-      // Point to eager sp_auto transformation
+      // For video, request HLS format with streaming profile
+      urlOptions.format = "m3u8";
       urlOptions.transformation = [
         { streaming_profile: "sp_auto" }
       ];
+    } else {
+      // For audio, specify mp3 format for compatibility
+      urlOptions.format = "mp3";
     }
 
     const url = cloudinary.url(providerAssetId, urlOptions);
     
+    // Append format extension to URL for proper content type detection
+    let finalUrl = url;
+    if (!isVideo && !url.endsWith('.mp3')) {
+      finalUrl = `${url}.mp3`;
+    } else if (isVideo && !url.endsWith('.m3u8')) {
+      finalUrl = `${url}.m3u8`;
+    }
+    
     return {
-      playbackUrl: url,
+      playbackUrl: finalUrl,
       expiryTime: expiresAt,
       mediaType: fileType
     };
