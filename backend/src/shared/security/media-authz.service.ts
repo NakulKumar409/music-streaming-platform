@@ -63,6 +63,8 @@ export async function getContentForAccess(contentId: number): Promise<{
   audio_url?: string | null;
   video_url?: string | null;
   type?: string;
+  file_key?: string | null;
+  thumbnail_url?: string | null;
 } | null> {
   try {
     const result = await pool.query(
@@ -74,7 +76,8 @@ export async function getContentForAccess(contentId: number): Promise<{
           COALESCE(is_approved, false) as is_approved,
           COALESCE(subscription_required, true) as subscription_required,
           mime_type, file_size_bytes,
-          media_url, audio_url, video_url, type
+          media_url, audio_url, video_url, type,
+          file_key, thumbnail_url
        FROM content_items
        WHERE id = $1
        LIMIT 1`,
@@ -91,7 +94,8 @@ export async function getContentForAccess(contentId: number): Promise<{
             storage_key, video_storage_key, thumbnail_storage_key,
             COALESCE(visibility, 'PROTECTED') as visibility,
             mime_type, file_size_bytes,
-            media_url, audio_url, video_url, type
+            media_url, audio_url, video_url, type,
+            file_key, thumbnail_url
          FROM content_items
          WHERE id = $1
          LIMIT 1`,

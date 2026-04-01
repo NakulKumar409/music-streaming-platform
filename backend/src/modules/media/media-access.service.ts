@@ -58,9 +58,17 @@ export async function requestPlaybackAccess(input: RequestPlaybackInput): Promis
   const kind = (input.kind || "").toString().toLowerCase();
   const requestedKind: "audio" | "video" | null = kind === "video" ? "video" : kind === "audio" ? "audio" : null;
 
-  let storageKey = requestedKind === "video" ? (content.video_storage_key ?? null) : content.storage_key;
+  let storageKey = requestedKind === "video" 
+    ? (content.video_storage_key ?? content.storage_key ?? null) 
+    : (content.storage_key ?? null);
+  
+  // For Cloudinary content, if storage_key is not set but file_key is available, use file_key
   const hasExplicitProvider = Boolean(content.storage_provider);
   const storageProvider = (content.storage_provider || "local").toString().toLowerCase();
+  
+  if (!storageKey && storageProvider === "cloudinary" && content.file_key) {
+    storageKey = content.file_key;
+  }
 
   const type = (content.type || "").toString().toLowerCase();
   const isVideo = requestedKind === "video" || type === "video" || !!content.video_storage_key || !!content.video_url;

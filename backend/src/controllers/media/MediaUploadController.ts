@@ -55,17 +55,26 @@ export const handleMediaUpload = async (req: Request | any, res: Response) => {
       const thumbResult = await provider.uploadFile(thumbTempPath, artistId, mediaId, "thumbnail");
 
       // 4. Update Database with Provider References
+      // Store both the legacy URL fields and the new storage key fields
       await pool.query(
         `UPDATE content_items SET 
           provider_asset_id = $1, 
           file_key = $2, 
           thumbnail_url = $3,
-          metadata = $4
-        WHERE id = $5`,
+          thumbnail_storage_key = $4,
+          storage_key = $5,
+          storage_provider = $6,
+          video_storage_key = $7,
+          metadata = $8
+        WHERE id = $9`,
         [
           uploadResult.providerAssetId,
           uploadResult.fileKey,
-          thumbResult.fileKey, // Thumb is public so URL works
+          thumbResult.fileKey, // Full URL for legacy
+          thumbResult.providerAssetId, // Storage key for new routing
+          uploadResult.providerAssetId, // Storage key for media
+          'cloudinary',
+          mediaType === 'video' ? uploadResult.providerAssetId : null,
           uploadResult.metadata ? JSON.stringify(uploadResult.metadata) : null,
           mediaId
         ]

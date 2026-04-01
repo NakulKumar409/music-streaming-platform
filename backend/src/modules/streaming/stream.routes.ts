@@ -103,14 +103,15 @@ router.get("/thumbnail/:contentId", async (req: any, res: any) => {
 
   try {
     const result = await pool.query(
-      `SELECT thumbnail_storage_key, storage_provider
+      `SELECT thumbnail_storage_key, thumbnail_url, storage_provider
        FROM content_items
        WHERE id = $1
        LIMIT 1`,
       [contentId]
     );
     const row = result.rows?.[0];
-    const storageKey = (row?.thumbnail_storage_key as string | null) ?? null;
+    // Use thumbnail_storage_key if available (new content), otherwise fallback to thumbnail_url (old content)
+    const storageKey = (row?.thumbnail_storage_key as string | null) ?? (row?.thumbnail_url as string | null) ?? null;
     const storageProvider = (row?.storage_provider as string | null) ?? "local";
 
     if (!storageKey) {
