@@ -53,32 +53,76 @@ export const handleMediaUpload = async (req: Request | any, res: Response) => {
       // 3. Upload to Provider (Cloudinary)
       const uploadResult = await provider.uploadFile(mediaTempPath, artistId, mediaId, mediaType);
       const thumbResult = await provider.uploadFile(thumbTempPath, artistId, mediaId, "thumbnail");
+      const providerName = (process.env.STORAGE_PROVIDER || "local").toString().toLowerCase();
+      const internalAudioKey = mediaType === "audio" ? `assetref:${uploadResult.providerAssetId}` : null;
+      const internalVideoKey = mediaType === "video" ? `assetref:${uploadResult.providerAssetId}` : null;
+      const internalThumbKey = `assetref:${thumbResult.providerAssetId}`;
 
       // 4. Update Database with Provider References
       // Store both the legacy URL fields and the new storage key fields
       await pool.query(
         `UPDATE content_items SET 
           provider_asset_id = $1, 
-          file_key = $2, 
-          thumbnail_url = $3,
-          thumbnail_storage_key = $4,
-          storage_key = $5,
-          storage_provider = $6,
-          video_storage_key = $7,
-          metadata = $8
-        WHERE id = $9`,
+          audio_provider_asset_id = $2,
+          video_provider_asset_id = $3,
+          thumbnail_provider_asset_id = $4,
+          file_key = $5, 
+          thumbnail_url = $6,
+          thumbnail_storage_key = $7,
+          storage_key = $8,
+          storage_provider = $9,
+          video_storage_key = $10,
+          audio_url = $11,
+          video_url = $12,
+          metadata = $13
+        WHERE id = $14`,
         [
           uploadResult.providerAssetId,
+          mediaType === "audio" ? uploadResult.providerAssetId : null,
+          mediaType === "video" ? uploadResult.providerAssetId : null,
+          thumbResult.providerAssetId,
           uploadResult.fileKey,
-          thumbResult.fileKey, // Full URL for legacy
-          thumbResult.providerAssetId, // Storage key for new routing
-          uploadResult.providerAssetId, // Storage key for media
-          'cloudinary',
-          mediaType === 'video' ? uploadResult.providerAssetId : null,
+          thumbResult.fileKey, // public URL for legacy clients
+          internalThumbKey,
+          internalAudioKey,
+          providerName,
+          internalVideoKey,
+          mediaType === "audio" ? uploadResult.fileKey : null,
+          mediaType === "video" ? uploadResult.fileKey : null,
           uploadResult.metadata ? JSON.stringify(uploadResult.metadata) : null,
           mediaId
         ]
-      );
+      ).catch(async (err: any) => {
+        if (err?.code !== "42703") throw err;
+        // Backward-compatible fallback for DBs not yet migrated with provider-asset columns.
+        return pool.query(
+          `UPDATE content_items SET 
+            provider_asset_id = $1, 
+            file_key = $2, 
+            thumbnail_url = $3,
+            thumbnail_storage_key = $4,
+            storage_key = $5,
+            storage_provider = $6,
+            video_storage_key = $7,
+            audio_url = $8,
+            video_url = $9,
+            metadata = $10
+          WHERE id = $11`,
+          [
+            uploadResult.providerAssetId,
+            uploadResult.fileKey,
+            thumbResult.fileKey,
+            internalThumbKey,
+            internalAudioKey,
+            providerName,
+            internalVideoKey,
+            mediaType === "audio" ? uploadResult.fileKey : null,
+            mediaType === "video" ? uploadResult.fileKey : null,
+            uploadResult.metadata ? JSON.stringify(uploadResult.metadata) : null,
+            mediaId
+          ]
+        );
+      });
 
       return res.json({
         success: true,

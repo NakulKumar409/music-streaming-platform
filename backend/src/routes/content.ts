@@ -187,17 +187,17 @@ router.post(
       const audioKey = generateStorageKey(artistId, "audio", extAudio);
       const videoKey = generateStorageKey(artistId, "video", extVideo);
 
-      await storage.upload({
+      const uploadedThumbnail = await storage.upload({
         storageKey: thumbnailKey,
         body: thumb.buffer,
         contentType: thumbMime
       });
-      await storage.upload({
+      const uploadedAudio = await storage.upload({
         storageKey: audioKey,
         body: audio.buffer,
         contentType: audioMime
       });
-      await storage.upload({
+      const uploadedVideo = await storage.upload({
         storageKey: videoKey,
         body: video.buffer,
         contentType: videoMime
@@ -211,10 +211,11 @@ router.post(
         `INSERT INTO content_items (
           title, type, artist_id, genre, lifecycle_state, is_approved,
           storage_provider, storage_key, thumbnail_storage_key, video_storage_key, visibility, status,
+          provider_asset_id, audio_provider_asset_id, video_provider_asset_id, thumbnail_provider_asset_id,
           published_at,
           mime_type, file_size_bytes, original_file_name, uploaded_at,
-          thumbnail_url, audio_url, video_url
-        ) VALUES ($1, $2, $3, $4, 'PUBLISHED', true, $5, $6, $7, $8, 'PROTECTED', 'APPROVED', now(), $9, $10, $11, $12, $13, $14, $15)
+          thumbnail_url, audio_url, video_url, file_key
+        ) VALUES ($1, $2, $3, $4, 'PUBLISHED', true, $5, $6, $7, $8, 'PROTECTED', 'APPROVED', $9, $10, $11, $12, now(), $13, $14, $15, $16, $17, $18, $19, $20)
         RETURNING id, title, type, artist_id, storage_key, thumbnail_storage_key, storage_provider, visibility, status, created_at`,
         [
           trimmedTitle,
@@ -225,15 +226,51 @@ router.post(
           audioKey,
           thumbnailKey,
           videoKey,
+          uploadedAudio.providerAssetId ?? uploadedVideo.providerAssetId ?? null,
+          uploadedAudio.providerAssetId ?? null,
+          uploadedVideo.providerAssetId ?? null,
+          uploadedThumbnail.providerAssetId ?? null,
           audioMime,
           audio.size ?? null,
           audio.originalname || null,
           now,
+          uploadedThumbnail.providerUrl ?? null,
           null,
           null,
-          null
+          uploadedAudio.providerUrl ?? null
         ]
-      );
+      ).catch(async (dbErr: any) => {
+        if (dbErr?.code !== "42703") throw dbErr;
+        // Backward-compatible fallback for DBs that have not yet added provider-asset columns.
+        return pool.query(
+          `INSERT INTO content_items (
+            title, type, artist_id, genre, lifecycle_state, is_approved,
+            storage_provider, storage_key, thumbnail_storage_key, video_storage_key, visibility, status,
+            published_at,
+            mime_type, file_size_bytes, original_file_name, uploaded_at,
+            thumbnail_url, audio_url, video_url, file_key
+          ) VALUES ($1, $2, $3, $4, 'PUBLISHED', true, $5, $6, $7, $8, 'PROTECTED', 'APPROVED', now(), $9, $10, $11, $12, $13, $14, $15, $16)
+          RETURNING id, title, type, artist_id, storage_key, thumbnail_storage_key, storage_provider, visibility, status, created_at`,
+          [
+            trimmedTitle,
+            normalizedType,
+            artistId,
+            trimmedGenre || null,
+            config.provider,
+            audioKey,
+            thumbnailKey,
+            videoKey,
+            audioMime,
+            audio.size ?? null,
+            audio.originalname || null,
+            now,
+            uploadedThumbnail.providerUrl ?? null,
+            null,
+            null,
+            uploadedAudio.providerUrl ?? null
+          ]
+        );
+      });
       } catch (dbErr: any) {
         try {
           await storage.delete(thumbnailKey);

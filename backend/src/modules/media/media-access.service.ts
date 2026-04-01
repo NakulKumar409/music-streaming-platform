@@ -8,6 +8,9 @@ import { createPlaybackToken } from "../../shared/security/signed-media-token.se
 import { generatePlaybackAccess } from "../../shared/delivery/services/media-delivery.service";
 import { isContentEligibleForPlayback, normalizeVisibilityForPlayback } from "./media-policy.service";
 import { getMediaConfig } from "../../config/media.config";
+import { resolveMediaIdentity } from "../../shared/media/media-asset-locator";
+import { DeliveryFailedException } from "../../shared/exceptions/delivery.exception";
+import { ensureValidPlaybackUrl } from "./playback-url.guard";
 import {
   MediaNotFoundException,
   MediaNotReadyException,
@@ -36,7 +39,7 @@ export async function requestPlaybackAccess(input: RequestPlaybackInput): Promis
   const status = (content.status || "DRAFT").toString().toUpperCase();
   const isApproved = Boolean(content.is_approved);
 
-  const isEligibleForPlayback = true || isContentEligibleForPlayback(status, isApproved);
+  const isEligibleForPlayback = isContentEligibleForPlayback(status, isApproved);
   if (!isEligibleForPlayback) {
     throw new MediaNotReadyException(contentId, status);
   }
@@ -57,59 +60,14 @@ export async function requestPlaybackAccess(input: RequestPlaybackInput): Promis
 
   const kind = (input.kind || "").toString().toLowerCase();
   const requestedKind: "audio" | "video" | null = kind === "video" ? "video" : kind === "audio" ? "audio" : null;
-
-  // Helper function to extract public_id from a Cloudinary URL
-  function extractPublicIdFromUrl(url: string): string | null {
-    if (!url || !url.startsWith('http')) return null;
-    const match = url.match(/\/upload\/(?:v\d+\/)?(.+?)(?:\.[^/.]+)?$/);
-    return match?.[1] || null;
-  }
-
-  // Helper function to validate storageKey
-  function isValidStorageKey(key: string, provider: string): { valid: boolean; key: string } {
-    if (!key) return { valid: false, key };
-    
-    // For Cloudinary, storage_key should be a public_id, not a URL
-    if (provider === 'cloudinary') {
-      if (key.startsWith('http://') || key.startsWith('https://')) {
-        console.warn(`[media-access] storage_key contains URL instead of public_id: ${key.substring(0, 50)}...`);
-        // Try to extract public_id
-        const extracted = extractPublicIdFromUrl(key);
-        if (extracted) {
-          console.log(`[media-access] Extracted public_id from URL: ${extracted}`);
-          return { valid: true, key: extracted };
-        }
-        return { valid: false, key };
-      }
-    }
-    return { valid: true, key };
-  }
-
-  let storageKey = requestedKind === "video" 
-    ? (content.video_storage_key ?? content.storage_key ?? null) 
-    : (content.storage_key ?? null);
   
   const hasExplicitProvider = Boolean(content.storage_provider);
   const storageProvider = (content.storage_provider || "local").toString().toLowerCase();
-  
-  // Validate storageKey - DO NOT fall back to file_key for Cloudinary
-  // file_key contains full URL which breaks signed URL generation
-  if (storageKey && storageProvider === 'cloudinary') {
-    const validation = isValidStorageKey(storageKey, storageProvider);
-    if (!validation.valid) {
-      console.error(`[media-access] Invalid storage_key for Cloudinary content ${contentId}: not a valid public_id`);
-      storageKey = null;
-    } else {
-      storageKey = validation.key;
-    }
-  }
-  
-  // REMOVED: Do NOT fall back to file_key for Cloudinary
-  // file_key contains full secure_url which breaks signed URL generation
-  // The correct fix is to ensure storage_key is properly set during upload
-  if (!storageKey && storageProvider === "cloudinary") {
-    console.error(`[media-access] Missing storage_key for Cloudinary content ${contentId}. Cannot use file_key as it contains URL.`);
-  }
+  const resolvedKind: "audio" | "video" =
+    requestedKind || ((content.type || "").toString().toLowerCase().includes("video") ? "video" : "audio");
+  const identity = resolveMediaIdentity(content as any, resolvedKind);
+  let storageKey = identity.internalStorageKey;
+  const providerAssetId = identity.providerAssetId;
 
   const type = (content.type || "").toString().toLowerCase();
   const isVideo = requestedKind === "video" || type === "video" || !!content.video_storage_key || !!content.video_url;
@@ -161,7 +119,14 @@ export async function requestPlaybackAccess(input: RequestPlaybackInput): Promis
     };
   }
 
-  if (!storageKey) {
+  if (storageProvider === "cloudinary" && !providerAssetId) {
+    throw new MediaNotReadyException(
+      contentId,
+      `missing ${resolvedKind} provider asset identity (cloudinary). Repair mapping for this row`
+    );
+  }
+
+  if (!storageKey && storageProvider !== "cloudinary") {
     throw new MediaNotReadyException(contentId, "no storage key");
   }
 
@@ -173,17 +138,28 @@ export async function requestPlaybackAccess(input: RequestPlaybackInput): Promis
   const result = await generatePlaybackAccess({
     mediaId: contentId,
     storageProvider,
-    storageKey: storageKey as string,
+    storageKey: storageKey ?? "",
+    providerAssetId: providerAssetId ?? undefined,
     contentType: content.mime_type ?? undefined,
     contentLength: content.file_size_bytes ?? undefined,
     visibility,
     userId: userId ?? 0,
     expiresInSeconds,
     token,
-    ...(requestedKind ? { kind: requestedKind } : null)
+    kind: resolvedKind
   });
 
-  console.log(`[media-access] contentId=${contentId}, provider=${storageProvider}, playbackUrl=${result.playbackUrl?.substring(0, 100)}...`);
+  if (!result?.playbackUrl) {
+    throw new DeliveryFailedException("Playback URL was not generated");
+  }
+
+  ensureValidPlaybackUrl({
+    playbackUrl: result.playbackUrl,
+    storageProvider,
+    providerAssetId
+  });
+
+  console.log(`[media-access] contentId=${contentId}, provider=${storageProvider}, urlGenerated=true`);
 
   return {
     mediaId: contentId,

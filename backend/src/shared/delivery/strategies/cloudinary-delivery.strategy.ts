@@ -10,27 +10,34 @@
 import type { IMediaDeliveryStrategy } from "../interfaces/media-delivery-strategy.interface";
 import type { GeneratePlaybackAccessParams, PlaybackAccessResult } from "../interfaces/media-delivery-strategy.interface";
 import { DeliveryFailedException } from "../../exceptions/delivery.exception";
-import { MediaProviderFactory } from "../../../services/providers/MediaProviderFactory";
 import { normalizePublicId, isValidPublicId, logPublicIdNormalization } from "../../utils/cloudinary.utils";
 
+interface CloudinaryPlaybackSigner {
+  generateSignedPlaybackUrl(providerAssetId: string, fileType: "audio" | "video"): Promise<{ playbackUrl: string }>;
+}
+
 export class CloudinaryDeliveryStrategy implements IMediaDeliveryStrategy {
+  constructor(
+    private readonly provider?: CloudinaryPlaybackSigner
+  ) {}
+
   async generatePlaybackAccess(params: GeneratePlaybackAccessParams): Promise<PlaybackAccessResult> {
-    const { storageKey, contentType, contentLength, expiresInSeconds } = params;
+    const { providerAssetId, contentType, contentLength, expiresInSeconds, kind } = params;
 
     try {
-      if (!storageKey) {
-        throw new DeliveryFailedException("Storage key is required");
+      if (!providerAssetId) {
+        throw new DeliveryFailedException("Cloudinary providerAssetId is required");
       }
 
-      // CRITICAL: Normalize storageKey to valid public_id
+      // CRITICAL: Normalize providerAssetId to valid public_id
       // This removes file extensions (.mp3, .mp4, .webp) and version prefixes (v123/)
       let publicId: string;
       try {
-        publicId = normalizePublicId(storageKey);
-        logPublicIdNormalization(storageKey, publicId, "cloudinary-delivery");
+        publicId = normalizePublicId(providerAssetId);
+        logPublicIdNormalization(providerAssetId, publicId, "cloudinary-delivery");
       } catch (normError: any) {
         console.error(`[cloudinary-delivery] Failed to normalize public_id:`, normError.message);
-        throw new DeliveryFailedException(`Invalid storage key: ${normError.message}`);
+        throw new DeliveryFailedException(`Invalid provider asset identity: ${normError.message}`);
       }
 
       // Validate the normalized public_id
@@ -39,18 +46,21 @@ export class CloudinaryDeliveryStrategy implements IMediaDeliveryStrategy {
         throw new DeliveryFailedException("Invalid public_id format after normalization");
       }
       
-      // Get the Cloudinary provider from the MediaProviderFactory
-      const provider = MediaProviderFactory.getProvider();
-      
       // Determine file type from contentType
-      const fileType: "audio" | "video" = contentType?.startsWith("audio/") ? "audio" : "video";
+      const fileType: "audio" | "video" = kind || (contentType?.startsWith("audio/") ? "audio" : "video");
       
       console.log(`[cloudinary-delivery] Using publicId=${publicId}, fileType=${fileType}`);
+
+      let signer = this.provider;
+      if (!signer) {
+        const cloudinaryModule = await import("../../../services/providers/CloudinaryProvider");
+        signer = new cloudinaryModule.CloudinaryProvider();
+      }
       
       // Generate signed playback URL using the normalized publicId
-      const result = await provider.generateSignedPlaybackUrl(publicId, fileType);
+      const result = await signer.generateSignedPlaybackUrl(publicId, fileType);
       
-      console.log(`[cloudinary-delivery] Generated playbackUrl=${result.playbackUrl.substring(0, 80)}...`);
+      console.log(`[cloudinary-delivery] URL generated for publicId=${publicId}`);
       
       return {
         playbackUrl: result.playbackUrl,

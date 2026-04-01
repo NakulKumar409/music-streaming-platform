@@ -50,7 +50,8 @@ export class CloudinaryProvider implements MediaProvider {
 
     // If it's a video, trigger HLS eager transformations for the full quality
     // ladder: 144p → 240p → 360p → 480p → 720p → 1080p.
-    // sp_auto only generates ~360p–1080p; we need explicit transforms to cover
+    // auto profile may prioritize higher renditions; we still generate lower
+    // ladders explicitly to avoid quality option gaps.
     // 144p and 240p so those quality menu options don't 404.
     if (fileType === "video") {
       uploadOptions.eager = [
@@ -66,8 +67,8 @@ export class CloudinaryProvider implements MediaProvider {
         { width: 1280, height: 720,  crop: "scale", bit_rate: "1500k", format: "m3u8" },
         // 1080p Full HD — ~3000 kbps
         { width: 1920, height: 1080, crop: "scale", bit_rate: "3000k", format: "m3u8" },
-        // Auto (adaptive ABR master playlist via sp_auto streaming profile)
-        { streaming_profile: "sp_auto", format: "m3u8" },
+        // Auto adaptive ABR master playlist
+        { streaming_profile: "auto", format: "m3u8" },
       ];
       uploadOptions.eager_async = true;
 
@@ -130,9 +131,6 @@ export class CloudinaryProvider implements MediaProvider {
     // Determine the resource format needed
     const isVideo = fileType === "video";
     
-    // For video HLS, we request an .m3u8 extension
-    const format = isVideo ? "m3u8" : undefined;
-    
     // We construct the options for the signed URL
     // Signed URLs expire shortly. Cloudinary URL generation uses 'sign_url: true' 
     // and requires type="authenticated".
@@ -153,7 +151,7 @@ export class CloudinaryProvider implements MediaProvider {
       // For video, request HLS format with streaming profile
       urlOptions.format = "m3u8";
       urlOptions.transformation = [
-        { streaming_profile: "sp_auto" }
+        { streaming_profile: "auto" }
       ];
     } else {
       // For audio, specify mp3 format for compatibility
@@ -161,17 +159,11 @@ export class CloudinaryProvider implements MediaProvider {
     }
 
     try {
-      const url = cloudinary.url(publicId, urlOptions);
+      // cloudinary.url already includes format in the signed path.
+      // Appending extensions manually can corrupt signed query params.
+      const finalUrl = cloudinary.url(publicId, urlOptions);
       
-      // Append format extension to URL for proper content type detection
-      let finalUrl = url;
-      if (!isVideo && !url.endsWith('.mp3')) {
-        finalUrl = `${url}.mp3`;
-      } else if (isVideo && !url.endsWith('.m3u8')) {
-        finalUrl = `${url}.m3u8`;
-      }
-      
-      console.log(`[CloudinaryProvider] Generated signed URL for ${publicId}: ${finalUrl.substring(0, 80)}...`);
+      console.log(`[CloudinaryProvider] Generated signed URL for public_id=${publicId}`);
       
       return {
         playbackUrl: finalUrl,
@@ -182,6 +174,21 @@ export class CloudinaryProvider implements MediaProvider {
       console.error(`[CloudinaryProvider] Failed to generate signed URL:`, error);
       throw new Error(`Cloudinary signed URL generation failed: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  generatePublicAssetUrl(
+    providerAssetId: string,
+    fileType: "thumbnail"
+  ): string {
+    const publicId = normalizePublicId(providerAssetId);
+    if (!isValidPublicId(publicId)) {
+      throw new Error(`Invalid public_id format for public asset: ${providerAssetId}`);
+    }
+    return cloudinary.url(publicId, {
+      resource_type: "image",
+      type: "upload",
+      secure: true
+    });
   }
 
   /**

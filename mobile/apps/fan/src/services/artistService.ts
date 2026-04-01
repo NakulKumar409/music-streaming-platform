@@ -1,4 +1,5 @@
 import { apiV1 } from './api';
+import { API_HOST_BASE_URL } from '../config/env';
 
 export type ApiArtist = {
   id: string | number;
@@ -34,8 +35,6 @@ export type ArtistListItem = {
 const FALLBACK_ARTIST_IMAGE =
   'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1000&q=80';
 
-const HOST_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://music-streaming-platform-cvad.onrender.com';
-
 function resolveImageUrl(url: string) {
   const trimmed = (url || '').toString().trim();
   if (!trimmed) return '';
@@ -45,12 +44,12 @@ function resolveImageUrl(url: string) {
     const pathIndex = trimmed.indexOf('/', 8);
     if (pathIndex !== -1) {
       const path = trimmed.substring(pathIndex);
-      return `${HOST_BASE_URL}${path}`;
+      return `${API_HOST_BASE_URL}${path}`;
     }
   }
 
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
-  if (trimmed.startsWith('/')) return `${HOST_BASE_URL}${trimmed}`;
+  if (trimmed.startsWith('/')) return `${API_HOST_BASE_URL}${trimmed}`;
   return trimmed;
 }
 

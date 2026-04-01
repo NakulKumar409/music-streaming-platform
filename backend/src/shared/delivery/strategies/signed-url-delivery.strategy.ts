@@ -90,7 +90,11 @@ export class SignedUrlDeliveryStrategy implements IMediaDeliveryStrategy {
         contentType
       };
     } catch (err: any) {
-      throw new DeliveryFailedException(err?.message || "Firebase signed URL generation failed");
+      const msg = (err?.message || "").toString();
+      if (/Invalid PEM formatted message/i.test(msg)) {
+        throw new DeliveryFailedException("Firebase provider misconfigured: invalid private key format");
+      }
+      throw new DeliveryFailedException("Firebase signed URL generation failed");
     }
   }
 }

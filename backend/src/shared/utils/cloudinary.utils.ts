@@ -23,7 +23,9 @@ export function normalizePublicId(input: string): string {
 
   // If URL → extract path after /upload/
   if (publicId.startsWith('http://') || publicId.startsWith('https://')) {
-    const uploadMatch = publicId.match(/\/upload\/(?:v\d+\/)?(.+?)(?:\.[^/.]+)?$/);
+    const uploadMatch = publicId.match(
+      /\/(?:upload|authenticated)\/(?:s--[^/]+--\/)?(?:v\d+\/)?(.+?)(?:\.[^/.?]+)?(?:\?.*)?$/
+    );
     if (uploadMatch && uploadMatch[1]) {
       publicId = uploadMatch[1];
     } else {
@@ -74,7 +76,11 @@ export function extractPublicIdFromUrl(url: string): string | null {
   if (!url || !url.startsWith('http')) return null;
   
   // Pattern: https://res.cloudinary.com/{cloud}/(image|video)/upload/(v{version}/)?{public_id}.{ext}
-  const match = url.match(/\/upload\/(?:v\d+\/)?(.+?)(?:\.[^/.]+)?$/);
+  // Also supports authenticated delivery URLs:
+  // https://res.cloudinary.com/{cloud}/video/authenticated/s--sig--/v1/{public_id}.mp3
+  const match = url.match(
+    /\/(?:upload|authenticated)\/(?:s--[^/]+--\/)?(?:v\d+\/)?(.+?)(?:\.[^/.?]+)?(?:\?.*)?$/
+  );
   if (match && match[1]) {
     // Remove extension from extracted public_id
     return match[1].replace(/\.[^/.]+$/, '');

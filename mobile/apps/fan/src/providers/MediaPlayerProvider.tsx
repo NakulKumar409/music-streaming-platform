@@ -17,7 +17,7 @@ import { navigationRef } from '../navigation/rootNavigation';
 
 import MediaPlayerOverlay from '../ui/MediaPlayerOverlay';
 import { recordPlayback } from '../services/libraryService';
-import { getPlaybackUrl, normalizePlaybackUrl } from '../services/streamService';
+import { getPlaybackUrl, normalizePlaybackUrl, validatePlaybackUrl } from '../services/streamService';
 
 import type { MediaItem, MediaType, PlayerState } from '../media.types';
 
@@ -388,6 +388,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         Alert.alert('Playback Error', 'No playback URL available for this track.');
         return;
       }
+      if (!validatePlaybackUrl(playbackUrl, 'audio')) {
+        Alert.alert('Playback Error', 'Received an invalid audio source URL.');
+        return;
+      }
 
       await setAudioModeAsync({
         playsInSilentMode: true,
@@ -440,6 +444,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       if (item.mediaType === 'video' && item.useStreamAccess) {
         try {
           const url = await getPlaybackUrl(item.contentId ?? item.id, 'video');
+          if (!validatePlaybackUrl(url, 'video')) {
+            Alert.alert('Playback Error', 'Received an invalid video source URL.');
+            return;
+          }
           item = { ...item, mediaUrl: url };
           nextState.queue[nextState.currentIndex] = item;
         } catch (e) {

@@ -6,7 +6,8 @@
 import { PLAYABLE_STATUSES } from "./media.constants";
 
 export function isStatusPlayable(status: string): boolean {
-  return PLAYABLE_STATUSES.has(status);
+  const normalized = (status || "").toString().trim().toUpperCase();
+  return PLAYABLE_STATUSES.has(normalized);
 }
 
 export function isContentEligibleForPlayback(

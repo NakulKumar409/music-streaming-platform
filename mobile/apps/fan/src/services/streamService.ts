@@ -14,6 +14,7 @@ export type StreamAccessResponse = {
   contentType?: string;
   contentLength?: number;
   message?: string;
+  code?: string;
 };
 
 function getDevHost(): string | null {
@@ -45,6 +46,42 @@ export function normalizePlaybackUrl(url: string): string {
   });
 }
 
+export function validatePlaybackUrl(url: string, kind?: "audio" | "video"): boolean {
+  if (!url) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+
+  const lowerPath = parsed.pathname.toLowerCase();
+  const search = parsed.search.toLowerCase();
+  const isTokenizedPrivateStream = lowerPath.includes("/media/stream/") && search.includes("token=");
+  if (isTokenizedPrivateStream) {
+    if (!kind) return true;
+    // Enforce stream kind when caller knows expected media type.
+    return search.includes(`kind=${kind}`);
+  }
+
+  if (kind === "video") {
+    return lowerPath.endsWith(".m3u8") || lowerPath.endsWith(".mp4") || lowerPath.includes("/video/");
+  }
+
+  if (kind === "audio") {
+    return (
+      lowerPath.endsWith(".mp3") ||
+      lowerPath.endsWith(".m4a") ||
+      lowerPath.endsWith(".wav") ||
+      lowerPath.includes("/video/")
+    );
+  }
+
+  return true;
+}
+
 export async function getPlaybackUrl(contentId: string, kind?: 'audio' | 'video'): Promise<string> {
   const res = await apiV1.post<StreamAccessResponse>('/stream/access', {
     contentId: Number(contentId),
@@ -54,5 +91,9 @@ export async function getPlaybackUrl(contentId: string, kind?: 'audio' | 'video'
   if (!data?.success || !data?.playbackUrl) {
     throw new Error(data?.message || 'Failed to get playback URL');
   }
-  return normalizePlaybackUrl(data.playbackUrl);
+  const normalized = normalizePlaybackUrl(data.playbackUrl);
+  if (!validatePlaybackUrl(normalized, kind)) {
+    throw new Error(data?.message || "Received invalid playback URL");
+  }
+  return normalized;
 }

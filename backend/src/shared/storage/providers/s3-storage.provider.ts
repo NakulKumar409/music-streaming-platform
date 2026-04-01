@@ -60,6 +60,7 @@ export class S3StorageProvider implements IStorageProvider {
       const result = await client.send(cmd);
       return {
         storageKey,
+        providerAssetId: storageKey,
         etag: result.ETag,
         sizeBytes: buffer.length
       };

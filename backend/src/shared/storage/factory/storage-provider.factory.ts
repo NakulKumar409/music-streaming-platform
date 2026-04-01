@@ -63,13 +63,24 @@ export function getStorageProviderByName(provider: StorageProviderName): IStorag
   const config = getStorageConfig();
   
   if (provider === "local") {
-    console.error(`[Storage] ERROR: Local provider is disabled for ${provider}. Using Cloudinary fallback.`);
-    return new CloudinaryStorageProvider();
+    return new LocalStorageProvider(config.local.root);
   }
   
   if (provider === "firebase") {
-    console.error(`[Storage] ERROR: Firebase provider is disabled for ${provider}. Using Cloudinary fallback.`);
-    return new CloudinaryStorageProvider();
+    if (
+      !config.firebase.projectId ||
+      !config.firebase.clientEmail ||
+      !config.firebase.privateKey ||
+      !config.firebase.storageBucket
+    ) {
+      throw new StorageProviderNotConfiguredException("firebase");
+    }
+    return new FirebaseStorageProvider({
+      projectId: config.firebase.projectId,
+      clientEmail: config.firebase.clientEmail,
+      privateKey: config.firebase.privateKey,
+      storageBucket: config.firebase.storageBucket
+    });
   }
   
   if (provider === "s3") {

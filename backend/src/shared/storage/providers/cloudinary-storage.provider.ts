@@ -12,9 +12,11 @@ import type {
   ObjectMetadata,
   OpenReadStreamParams,
   OpenReadStreamResult,
+  GetPublicObjectUrlParams,
 } from "../interfaces/storage-types.interface";
 import { CloudinaryProvider } from "../../../services/providers/CloudinaryProvider";
 import { StorageProviderNotConfiguredException } from "../../exceptions/storage.exception";
+import { normalizePublicId, isValidPublicId } from "../../utils/cloudinary.utils";
 
 export class CloudinaryStorageProvider implements IStorageProvider {
   private provider: CloudinaryProvider;
@@ -51,10 +53,11 @@ export class CloudinaryStorageProvider implements IStorageProvider {
 
     try {
       const fileType = this.inferFileType(contentType, storageKey);
-      // Extract artistId and mediaId from storageKey (format: artists/{artistId}/media/{mediaId})
+      // Extract artistId from storageKey (format: artists/{artistId}/{category}/{yyyy}/{mm}/{segment}.{ext})
       const parts = storageKey.split("/");
       const artistId = parts[1] || "unknown";
-      const mediaId = parts[3] || storageKey;
+      const basename = parts[parts.length - 1] || storageKey;
+      const mediaId = basename.replace(/\.[^/.]+$/, "");
       
       const result = await this.provider.uploadFile(tempFile, artistId, mediaId, fileType);
       
@@ -62,7 +65,9 @@ export class CloudinaryStorageProvider implements IStorageProvider {
       fs.unlinkSync(tempFile);
       
       return {
-        storageKey: result.fileKey,
+        storageKey,
+        providerAssetId: result.providerAssetId,
+        providerUrl: result.fileKey,
         etag: result.providerAssetId,
         sizeBytes: result.metadata?.bytes,
       };
@@ -108,6 +113,15 @@ export class CloudinaryStorageProvider implements IStorageProvider {
 
   async openReadStream?(params: OpenReadStreamParams): Promise<OpenReadStreamResult> {
     throw new Error("openReadStream not supported for Cloudinary - use signed URLs instead");
+  }
+
+  async getPublicObjectUrl?(params: GetPublicObjectUrlParams): Promise<string | null> {
+    if (params.mediaType !== "thumbnail" || !params.providerAssetId) {
+      return null;
+    }
+    const publicId = normalizePublicId(params.providerAssetId);
+    if (!isValidPublicId(publicId)) return null;
+    return this.provider.generatePublicAssetUrl(publicId, "thumbnail");
   }
 
   private inferFileType(

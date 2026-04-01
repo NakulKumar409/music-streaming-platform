@@ -1,9 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios, { AxiosHeaders } from 'axios';
+import { API_HOST_BASE_URL } from '../config/env';
 
-const RAW_HOST_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
-const HOST_BASE_URL = RAW_HOST_BASE_URL.replace(/\/+$/, '');
-const API_BASE_URL = `${HOST_BASE_URL}/api/v1/fan`;
+const API_BASE_URL = `${API_HOST_BASE_URL}/api/v1/fan`;
 export const JWT_STORAGE_KEY = 'jwt';
 export const USER_TOKEN_STORAGE_KEY = 'userToken';
 
@@ -18,7 +17,7 @@ export const api = axios.create({
 });
 
 export const apiV1 = axios.create({
-  baseURL: `${HOST_BASE_URL}/api/v1/fan`,
+  baseURL: `${API_HOST_BASE_URL}/api/v1/fan`,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -26,7 +25,7 @@ export const apiV1 = axios.create({
 });
 
 export const contentApi = axios.create({
-  baseURL: `${HOST_BASE_URL}/api/v1/content`,
+  baseURL: `${API_HOST_BASE_URL}/api/v1/content`,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -34,7 +33,7 @@ export const contentApi = axios.create({
 });
 
 export const searchApi = axios.create({
-  baseURL: `${HOST_BASE_URL}/api/v1/search`,
+  baseURL: `${API_HOST_BASE_URL}/api/v1/search`,
   headers: {
     'Content-Type': 'application/json',
   },

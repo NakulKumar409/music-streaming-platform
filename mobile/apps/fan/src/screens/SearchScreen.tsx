@@ -19,6 +19,7 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Colors } from '../theme';
 import { api, searchApi } from '../services/api';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
+import { API_HOST_BASE_URL } from '../config/env';
 import type { MediaItem } from '../media.types';
 
 type SearchResult = {
@@ -122,10 +123,7 @@ export default function SearchScreen({ navigation }: any) {
           const id = String(c.id);
           const title = (c.title ?? '').toString();
           const artistName = (c.artistName ?? c.artist_name ?? '').toString();
-          const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'https://music-streaming-platform-cvad.onrender.com').replace(
-            /\/+$/,
-            ''
-          );
+          const baseUrl = API_HOST_BASE_URL;
           const artworkRaw = (c.artwork ?? c.thumbnailUrl ?? c.thumbnail_url ?? '').toString();
           const artworkFromStorageKey = c.thumbnail_storage_key
             ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(String(c.id))}`

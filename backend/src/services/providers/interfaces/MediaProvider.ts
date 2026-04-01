@@ -36,6 +36,11 @@ export interface MediaProvider {
     fileType: "audio" | "video"
   ): Promise<PlayerUrlResult>;
 
+  generatePublicAssetUrl?(
+    providerAssetId: string,
+    fileType: "thumbnail"
+  ): string;
+
   /**
    * Perform deletion on the provider.
    */

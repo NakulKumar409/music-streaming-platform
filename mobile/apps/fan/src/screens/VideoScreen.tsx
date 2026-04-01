@@ -47,6 +47,7 @@ import { contentApi } from '../services/api';
 import * as streamService from '../services/streamService';
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
+import { formatDurationLabel, hasFiniteDuration, toFiniteDurationMs } from '../utils/mediaTime';
 import PauseButtonImg from '../pausebuttton.png';
 import PlayButtonImg from '../playbutton.png';
 
@@ -175,13 +176,6 @@ function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
 }
 
-function formatTime(ms: number) {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const mm = Math.floor(totalSeconds / 60);
-  const ss = totalSeconds % 60;
-  return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
-}
-
 function hashColor(input: string): string {
   let h = 0;
   for (let i = 0; i < input.length; i += 1) {
@@ -285,6 +279,7 @@ export default function VideoScreen() {
   const [showQualitySheet, setShowQualitySheet] = useState(false);
   const [selectedQuality, setSelectedQuality] = useState<string>('Auto');
   const [isHD, setIsHD] = useState(false);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
   // Flag to distinguish quality-only URL changes from full video switches
   const isQualitySwitchRef = useRef(false);
 
@@ -308,9 +303,28 @@ export default function VideoScreen() {
 
   const listRef = useRef<FlatList<VideoCard> | null>(null);
 
+  const safePlay = useCallback((target: { play: () => any }, tag: string) => {
+    try {
+      const maybePromise = target.play();
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        maybePromise.catch((err: any) => {
+          const name = (err?.name || '').toString();
+          const msg = (err?.message || '').toString();
+          if (name === 'AbortError' || /interrupted by a call to pause\(\)/i.test(msg)) return;
+          console.warn(`[VideoPlayer] ${tag} play() failed`, err);
+        });
+      }
+    } catch (err: any) {
+      const name = (err?.name || '').toString();
+      const msg = (err?.message || '').toString();
+      if (name === 'AbortError' || /interrupted by a call to pause\(\)/i.test(msg)) return;
+      console.warn(`[VideoPlayer] ${tag} play() failed`, err);
+    }
+  }, []);
+
   const videoPlayer = useVideoPlayer(activePlaybackUrl, (player) => {
     player.loop = false;
-    player.play();
+    safePlay(player as any, 'init');
   });
   const lastTapRef = useRef(0);
   const lastTapXRef = useRef(0);
@@ -390,7 +404,7 @@ export default function VideoScreen() {
             // ignore
           }
           if (wasPlaying) {
-            videoPlayer.play();
+            safePlay(videoPlayer as any, 'appstate-background');
           }
         })().catch(() => undefined);
 
@@ -407,7 +421,7 @@ export default function VideoScreen() {
             // ignore
           }
           if (shouldPlay) {
-            videoPlayer.play();
+            safePlay(videoPlayer as any, 'appstate-active');
           }
         })().catch(() => undefined);
       }
@@ -416,7 +430,7 @@ export default function VideoScreen() {
     return () => {
       sub.remove();
     };
-  }, [activePlaybackUrl, activeVideoMeta?.id, bgAudioOnlyMode, videoPlayer]);
+  }, [activePlaybackUrl, activeVideoMeta?.id, bgAudioOnlyMode, safePlay, videoPlayer]);
 
   const base64Decode = useCallback((input: string): string => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
@@ -749,7 +763,7 @@ export default function VideoScreen() {
       qualityResumePositionRef.current = null;
       try {
         videoPlayer.currentTime = targetSeconds;
-        videoPlayer.play();
+        safePlay(videoPlayer as any, 'status-ready');
       } catch {
         // Player may have been released — safe to ignore
       }
@@ -760,9 +774,9 @@ export default function VideoScreen() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (!isSeeking) {
-        setPositionMs(Math.round(videoPlayer.currentTime * 1000));
+        setPositionMs(toFiniteDurationMs(videoPlayer.currentTime * 1000));
       }
-      setDurationMs(Math.round(videoPlayer.duration * 1000));
+      setDurationMs(toFiniteDurationMs(videoPlayer.duration * 1000));
       setIsVideoPlaying(videoPlayer.playing);
       setIsBuffering(videoPlayer.status === 'loading');
       setIsVideoReady(videoPlayer.status === 'readyToPlay');
@@ -805,7 +819,9 @@ export default function VideoScreen() {
     try {
       return await streamService.getPlaybackUrl(video.id, 'video');
     } catch {
-      return video.mediaUrl ? streamService.normalizePlaybackUrl(video.mediaUrl) : '';
+      const fallback = video.mediaUrl ? streamService.normalizePlaybackUrl(video.mediaUrl) : '';
+      if (!fallback) return '';
+      return streamService.validatePlaybackUrl(fallback, 'video') ? fallback : '';
     }
   }, []);
 
@@ -837,14 +853,21 @@ export default function VideoScreen() {
 
         playedOnceRef.current = false;
         setShowControls(true);
+        setPlaybackError(null);
 
         // Stop/unload any previous inline video
+        await pauseGlobalPlaybackIfNeeded();
         videoPlayer.pause();
 
         setLoadingPlaybackUrl(true);
         try {
           const playbackUrl = await resolvePlaybackUrl(video);
           if (sessionId !== playbackSessionRef.current) return;
+          if (!streamService.validatePlaybackUrl(playbackUrl, 'video')) {
+            setPlaybackError('Invalid playback source');
+            setActivePlaybackUrl(null);
+            return;
+          }
 
           setActivePlaybackUrl(playbackUrl);
           setIsVideoReady(false);
@@ -857,6 +880,7 @@ export default function VideoScreen() {
           });
         } catch (err) {
           console.warn('[VideoPlayer] Playback error', err);
+          setPlaybackError('Could not load playback URL');
           setActivePlaybackUrl(null);
         } finally {
           setLoadingPlaybackUrl(false);
@@ -1071,10 +1095,10 @@ export default function VideoScreen() {
       try {
         const v = videoPlayer;
         if (!v) return;
-        const current = v.currentTime * 1000;
-        const dur = v.duration * 1000;
+        const current = toFiniteDurationMs(v.currentTime * 1000);
+        const dur = toFiniteDurationMs(v.duration * 1000);
         const next = dir === 'back' ? current - SEEK_DELTA_MS : current + SEEK_DELTA_MS;
-        const target = clamp(next, 0, dur || Number.MAX_SAFE_INTEGER);
+        const target = clamp(next, 0, dur > 0 ? dur : Number.MAX_SAFE_INTEGER);
         v.currentTime = target / 1000;
       } catch {
         // ignore
@@ -1548,14 +1572,15 @@ export default function VideoScreen() {
                 {activePlaybackUrl && showControls ? (
                   <View style={styles.seekWrap} pointerEvents="box-none">
                     <View style={styles.seekTimesRow}>
-                      <Text style={styles.seekTime}>{formatTime(positionMs)}</Text>
-                      <Text style={styles.seekTime}>{formatTime(durationMs)}</Text>
+                      <Text style={styles.seekTime}>{formatDurationLabel(positionMs, '00:00')}</Text>
+                      <Text style={styles.seekTime}>{formatDurationLabel(durationMs, '--:--')}</Text>
                     </View>
                     <Slider
                       style={styles.slider}
                       minimumValue={0}
                       maximumValue={Math.max(1, durationMs || 1)}
                       value={Math.min(positionMs, durationMs || 1)}
+                      disabled={!hasFiniteDuration(durationMs)}
                       minimumTrackTintColor="#FFFFFF"
                       maximumTrackTintColor="rgba(255,255,255,0.22)"
                       thumbTintColor="#FFFFFF"
@@ -1565,6 +1590,8 @@ export default function VideoScreen() {
                     />
                   </View>
                 ) : null}
+
+                {playbackError ? <Text style={styles.heroHintText}>{playbackError}</Text> : null}
 
                 {!activePlaybackUrl ? (
                   <View style={styles.heroHint}>

@@ -58,6 +58,7 @@ export class FirebaseStorageProvider implements IStorageProvider {
       const [metadata] = await file.getMetadata();
       return {
         storageKey,
+        providerAssetId: storageKey,
         etag: metadata?.etag,
         sizeBytes: buffer.length
       };

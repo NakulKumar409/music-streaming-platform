@@ -8,7 +8,8 @@ import type {
   UploadObjectResult,
   ObjectMetadata,
   OpenReadStreamParams,
-  OpenReadStreamResult
+  OpenReadStreamResult,
+  GetPublicObjectUrlParams
 } from "./storage-types.interface";
 
 export interface IStorageProvider {
@@ -17,4 +18,5 @@ export interface IStorageProvider {
   exists(storageKey: string): Promise<boolean>;
   getObjectMetadata(storageKey: string): Promise<ObjectMetadata | null>;
   openReadStream?(params: OpenReadStreamParams): Promise<OpenReadStreamResult>;
+  getPublicObjectUrl?(params: GetPublicObjectUrlParams): Promise<string | null>;
 }

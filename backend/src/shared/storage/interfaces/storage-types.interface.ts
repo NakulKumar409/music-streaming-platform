@@ -15,6 +15,8 @@ export interface UploadObjectParams {
 
 export interface UploadObjectResult {
   storageKey: string;
+  providerAssetId?: string;
+  providerUrl?: string;
   etag?: string;
   sizeBytes?: number;
 }
@@ -38,4 +40,9 @@ export interface OpenReadStreamResult {
   contentType?: string;
   contentLength?: number;
   acceptRanges?: boolean;
+}
+
+export interface GetPublicObjectUrlParams {
+  providerAssetId: string;
+  mediaType: "thumbnail";
 }

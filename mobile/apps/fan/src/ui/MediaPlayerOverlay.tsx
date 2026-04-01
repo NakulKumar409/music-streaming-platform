@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { MediaItem, PlayerState } from '../media.types';
 import YouTubeVideoControlsOverlay from './YouTubeVideoControlsOverlay';
 import { Colors } from '../theme';
+import { formatDurationLabel } from '../utils/mediaTime';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -334,12 +335,7 @@ function progressWidth(positionMs: number, durationMs: number) {
 }
 
 function formatTime(ms: number) {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const mm = Math.floor(totalSeconds / 60);
-  const ss = totalSeconds % 60;
-  const m = mm < 10 ? `0${mm}` : `${mm}`;
-  const s = ss < 10 ? `0${ss}` : `${ss}`;
-  return `${m}:${s}`;
+  return formatDurationLabel(ms, '--:--');
 }
 
 const styles = StyleSheet.create({

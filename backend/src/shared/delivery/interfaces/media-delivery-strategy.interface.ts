@@ -9,6 +9,8 @@ export interface GeneratePlaybackAccessParams {
   mediaId: number;
   storageProvider: string;
   storageKey: string;
+  providerAssetId?: string;
+  kind?: "audio" | "video";
   contentType?: string;
   contentLength?: number;
   visibility: VisibilityType;

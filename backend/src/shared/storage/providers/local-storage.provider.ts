@@ -61,7 +61,7 @@ export class LocalStorageProvider implements IStorageProvider {
       } catch {
         // ignore meta write failures
       }
-      return { storageKey, sizeBytes: buffer.length };
+      return { storageKey, providerAssetId: storageKey, sizeBytes: buffer.length };
     } catch (err: any) {
       throw new StorageUploadFailedException(
         err?.message || "Local upload failed",

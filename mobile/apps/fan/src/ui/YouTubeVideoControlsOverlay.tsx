@@ -10,8 +10,10 @@ import {
 
 import Slider from '@react-native-community/slider';
 import { Maximize, Minimize, Pause, Play, SkipBack, SkipForward } from 'lucide-react-native';
+import { hasFiniteDuration } from '../utils/mediaTime';
 
 function formatTime(ms: number) {
+  if (!Number.isFinite(ms) || ms < 0) return '--:--';
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const hh = Math.floor(totalSeconds / 3600);
   const mm = Math.floor((totalSeconds % 3600) / 60);
@@ -213,6 +215,7 @@ export default function YouTubeVideoControlsOverlay({
               minimumValue={0}
               maximumValue={safeDuration}
               value={Math.min(uiPositionMs, safeDuration)}
+              disabled={!hasFiniteDuration(durationMs)}
               minimumTrackTintColor="#FF0000"
               maximumTrackTintColor="rgba(255,255,255,0.25)"
               thumbTintColor={isSeeking ? '#FFFFFF' : 'rgba(255,255,255,0)'}

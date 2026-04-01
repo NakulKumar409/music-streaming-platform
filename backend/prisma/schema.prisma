@@ -134,6 +134,9 @@ model content_items {
   
   // Storage & Streaming configuration additions
   providerAssetId       String?   @unique @map("provider_asset_id") @db.VarChar(255)
+  audioProviderAssetId  String?   @map("audio_provider_asset_id") @db.VarChar(255)
+  videoProviderAssetId  String?   @map("video_provider_asset_id") @db.VarChar(255)
+  thumbnailProviderAssetId String? @map("thumbnail_provider_asset_id") @db.VarChar(255)
   fileKey               String?   @map("file_key") @db.Text
   metadata              Json?
   technicalStatus       String?   @default("READY") @map("technical_status") @db.VarChar(20)

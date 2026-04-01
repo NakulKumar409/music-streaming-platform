@@ -14,7 +14,12 @@ export const MEDIA_STATUS = {
   BLOCKED: "BLOCKED"
 } as const;
 
-export const PLAYABLE_STATUSES = new Set([MEDIA_STATUS.READY, "PUBLISHED"]);
+export const PLAYABLE_STATUSES = new Set([
+  MEDIA_STATUS.READY,
+  "PUBLISHED",
+  // Legacy lifecycle used by existing rows in this project.
+  "APPROVED"
+]);
 
 export const VISIBILITY = {
   PUBLIC: "PUBLIC",

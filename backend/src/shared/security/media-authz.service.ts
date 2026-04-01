@@ -53,6 +53,10 @@ export async function getContentForAccess(contentId: number): Promise<{
   storage_key: string | null;
   video_storage_key: string | null;
   thumbnail_storage_key: string | null;
+  provider_asset_id: string | null;
+  audio_provider_asset_id: string | null;
+  video_provider_asset_id: string | null;
+  thumbnail_provider_asset_id: string | null;
   visibility: string;
   status: string;
   is_approved: boolean;
@@ -71,6 +75,7 @@ export async function getContentForAccess(contentId: number): Promise<{
       `SELECT id, artist_id,
           COALESCE(storage_provider, 'local') as storage_provider,
           storage_key, video_storage_key, thumbnail_storage_key,
+          provider_asset_id, audio_provider_asset_id, video_provider_asset_id, thumbnail_provider_asset_id,
           COALESCE(visibility, 'PROTECTED') as visibility,
           COALESCE(status, lifecycle_state, 'DRAFT') as status,
           COALESCE(is_approved, false) as is_approved,
@@ -105,6 +110,10 @@ export async function getContentForAccess(contentId: number): Promise<{
       if (!row) return null;
       return {
         ...row,
+        provider_asset_id: null,
+        audio_provider_asset_id: null,
+        video_provider_asset_id: null,
+        thumbnail_provider_asset_id: null,
         status: (row as any).lifecycle_state || 'READY',
         is_approved: true,
         subscription_required: false

@@ -11,6 +11,7 @@ import { getStorageService } from "../../shared/storage/services/storage.service
 import { getStorageProviderByName } from "../../shared/storage/factory/storage-provider.factory";
 import { getStorageConfig } from "../../config/storage.config";
 import { generatePlaybackAccess } from "../../shared/delivery/services/media-delivery.service";
+import { resolveMediaIdentity } from "../../shared/media/media-asset-locator";
 import { MediaInvalidTokenException } from "../../shared/exceptions/media.exception";
 import { MediaNotFoundException } from "../../shared/exceptions/media.exception";
 
@@ -65,11 +66,20 @@ router.get("/:mediaId", async (req: Request, res: Response) => {
     return res.status(404).json({ success: false, message: "Media not found" });
   }
 
-  const storageKey = kind === "video" ? content.video_storage_key : content.storage_key;
+  const resolvedKind: "audio" | "video" = kind === "video" ? "video" : "audio";
+  const identity = resolveMediaIdentity(content as any, resolvedKind);
+  const storageKey = identity.internalStorageKey;
+  const providerAssetId = identity.providerAssetId;
   const storageProvider = (content.storage_provider || "local").toString().toLowerCase();
 
-  if (!storageKey) {
+  if (!storageKey && storageProvider !== "cloudinary") {
     return res.status(404).json({ success: false, message: "Media not available for stream" });
+  }
+  if (storageProvider === "cloudinary" && !providerAssetId) {
+    return res.status(409).json({
+      success: false,
+      message: "Cloudinary provider asset identity missing for media. Repair this content mapping."
+    });
   }
 
   // For Cloudinary, generate a signed URL and redirect
@@ -80,7 +90,9 @@ router.get("/:mediaId", async (req: Request, res: Response) => {
       const accessResult = await generatePlaybackAccess({
         mediaId,
         storageProvider: "cloudinary",
-        storageKey,
+        storageKey: "",
+        providerAssetId: providerAssetId || undefined,
+        kind: resolvedKind,
         contentType: content.mime_type || undefined,
         contentLength: content.file_size_bytes || undefined,
         visibility: (content.visibility || "PROTECTED") as any,
@@ -94,8 +106,10 @@ router.get("/:mediaId", async (req: Request, res: Response) => {
       }
     } catch (err: any) {
       console.error("[media/stream] Cloudinary playback error", { mediaId, error: err?.message });
-      // Fallback to local stream if Cloudinary fails (for hybrid scenarios)
-      // Continue to local stream logic below
+      return res.status(502).json({
+        success: false,
+        message: "Cloudinary playback URL generation failed"
+      });
     }
   }
 

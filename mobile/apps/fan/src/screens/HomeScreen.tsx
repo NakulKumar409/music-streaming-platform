@@ -20,6 +20,7 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { BadgeCheck, Play, Search } from 'lucide-react-native';
 import { apiV1 } from '../services/api';
 import { fetchVerifiedArtists, type ArtistListItem } from '../services/artistService';
+import { API_HOST_BASE_URL } from '../config/env';
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import type { MediaItem } from '../media.types';
@@ -166,10 +167,7 @@ export default function HomeScreen({ navigation }: any) {
           const apiItems: ApiContentItem[] = Array.isArray(contentRes.data?.items)
             ? contentRes.data.items
             : [];
-          const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'https://music-streaming-platform-cvad.onrender.com').replace(
-            /\/+$/,
-            ''
-          );
+          const baseUrl = API_HOST_BASE_URL;
 
           recentFromApi = apiItems
             .map((it) => {

@@ -24,6 +24,7 @@ import Svg, { Path, Rect, Circle } from 'react-native-svg';
 
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import { Colors } from '../theme';
+import { formatDurationLabel, hasFiniteDuration } from '../utils/mediaTime';
 import type { MediaItem } from '../media.types';
 import { navigationRef } from '../navigation/rootNavigation';
 
@@ -222,13 +223,6 @@ export default function FullPlayerScreen({ navigation, route }: any) {
 
   const positionForUi = isSeeking ? seekValueRef.current : playerState.positionMs;
 
-  const formatTime = useCallback((ms: number) => {
-    const totalSec = Math.max(0, Math.floor(ms / 1000));
-    const mm = Math.floor(totalSec / 60);
-    const ss = totalSec % 60;
-    return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
-  }, []);
-
   // ── Seek ───────────────────────────────────────────────────────────────────
   const onSeekStart = useCallback(() => {
     setIsSeeking(true);
@@ -349,14 +343,15 @@ export default function FullPlayerScreen({ navigation, route }: any) {
         {/* ── Seek Bar ── */}
         <View style={styles.seekSection}>
           <View style={styles.timesRow}>
-            <Text style={styles.timeText}>{formatTime(positionForUi)}</Text>
-            <Text style={styles.timeText}>{formatTime(playerState.durationMs)}</Text>
+            <Text style={styles.timeText}>{formatDurationLabel(positionForUi, '00:00')}</Text>
+            <Text style={styles.timeText}>{formatDurationLabel(playerState.durationMs, '--:--')}</Text>
           </View>
           <Slider
             style={styles.seekSlider}
             minimumValue={0}
             maximumValue={Math.max(1, playerState.durationMs || 1)}
             value={Math.min(positionForUi, playerState.durationMs || 1)}
+            disabled={!hasFiniteDuration(playerState.durationMs)}
             minimumTrackTintColor={Colors.accent}
             maximumTrackTintColor="rgba(255,255,255,0.20)"
             thumbTintColor={Colors.accent}
