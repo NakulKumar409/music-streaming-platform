@@ -136,7 +136,9 @@ router.get("/thumbnail/:contentId", async (req: any, res: any) => {
         // Construct Cloudinary URL - thumbnails are public 'upload' type
         const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
         if (cloudName) {
-          thumbnailUrl = `https://res.cloudinary.com/${cloudName}/image/upload/${storageKey}`;
+          // Strip file extension from storageKey - Cloudinary public_id doesn't include it
+          const publicId = storageKey.replace(/\.[^/.]+$/, "");
+          thumbnailUrl = `https://res.cloudinary.com/${cloudName}/image/upload/${publicId}`;
         }
       }
       

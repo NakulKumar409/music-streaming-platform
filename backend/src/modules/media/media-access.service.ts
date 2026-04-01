@@ -142,6 +142,8 @@ export async function requestPlaybackAccess(input: RequestPlaybackInput): Promis
     ...(requestedKind ? { kind: requestedKind } : null)
   });
 
+  console.log(`[media-access] contentId=${contentId}, provider=${storageProvider}, playbackUrl=${result.playbackUrl?.substring(0, 100)}...`);
+
   return {
     mediaId: contentId,
     playbackUrl: result.playbackUrl,
