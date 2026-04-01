@@ -114,12 +114,16 @@ router.get("/thumbnail/:contentId", async (req: any, res: any) => {
     const storageKey = (row?.thumbnail_storage_key as string | null) ?? (row?.thumbnail_url as string | null) ?? null;
     const storageProvider = (row?.storage_provider as string | null) ?? "local";
 
+    console.log(`[stream/thumbnail] contentId=${contentId}, storageProvider=${storageProvider}, storageKey=${storageKey?.substring(0, 50)}...`);
+
     if (!storageKey) {
       return res.status(404).json({ success: false, message: "Thumbnail not found", correlationId });
     }
 
     // For Cloudinary or if storageKey is a full URL, redirect directly
     const isFullUrl = storageKey.startsWith("http://") || storageKey.startsWith("https://");
+    
+    console.log(`[stream/thumbnail] isFullUrl=${isFullUrl}, willRedirect=${isFullUrl || storageProvider === "cloudinary"}`);
     
     // Only use Cloudinary if the row explicitly has storage_provider='cloudinary'
     // Old content with storage_provider='local' or NULL will use streaming below
