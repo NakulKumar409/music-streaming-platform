@@ -378,6 +378,9 @@ export default function VideoScreen() {
   }, [activePlaybackUrl]);
 
   useEffect(() => {
+    if (Platform.OS === 'web') {
+      return;
+    }
     const sub = AppState.addEventListener('change', (next) => {
       console.log('App state changed to:', next);
       if (!activePlaybackUrl) return;
@@ -806,14 +809,15 @@ export default function VideoScreen() {
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
-      if (s !== 'active') {
+      // Avoid fighting with the background audio-only handler for active video sessions.
+      if (s !== 'active' && !activePlaybackUrl) {
         pauseInlineVideoIfNeeded().catch(() => undefined);
       }
     });
     return () => {
       sub.remove();
     };
-  }, [pauseInlineVideoIfNeeded]);
+  }, [activePlaybackUrl, pauseInlineVideoIfNeeded]);
 
   const resolvePlaybackUrl = useCallback(async (video: VideoCard) => {
     try {
