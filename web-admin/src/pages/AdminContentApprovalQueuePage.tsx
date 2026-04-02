@@ -290,7 +290,7 @@ export default function AdminContentApprovalQueuePage() {
         <div className="mt-8 text-[34px] font-light tracking-wide text-[#e6d6d2]">Moderation Queue</div>
 
         <div className="mt-6 rounded-[10px] border border-white/10 bg-[#141010]/35 backdrop-blur shadow-[0_30px_80px_rgba(0,0,0,0.55)]">
-          <div className="px-6 py-4 border-b border-white/10">
+          <div className="px-6 py-4 border-b border-white/10 hidden md:block">
             <div className="grid grid-cols-[1fr_220px_120px_260px] gap-4 text-[12px] uppercase tracking-widest text-[#b8a6a1]">
               <div>Content</div>
               <div>Reports</div>
@@ -301,50 +301,50 @@ export default function AdminContentApprovalQueuePage() {
 
           <div className="divide-y divide-white/10">
             {pendingQuery.isLoading ? (
-              <div className="px-6 py-6 space-y-4">
-                <div className="grid grid-cols-[1fr_220px_120px_260px] gap-4 items-center">
-                  <div className="flex items-center gap-4 min-w-0">
+              <div className="px-6 py-6 space-y-6 md:space-y-4">
+                <div className="flex flex-col md:grid md:grid-cols-[1fr_220px_120px_260px] gap-4 items-start md:items-center pb-6 md:pb-0 border-b md:border-none border-white/10 last:border-none">
+                  <div className="flex items-center gap-4 min-w-0 w-full md:w-auto">
                     <Skeleton className="h-[66px] w-[66px] rounded-[10px]" />
-                    <div className="min-w-0 space-y-2">
-                      <Skeleton className="h-[14px] w-[220px]" />
-                      <Skeleton className="h-[12px] w-[140px]" />
+                    <div className="min-w-0 space-y-2 flex-1">
+                      <Skeleton className="h-[14px] w-3/4 md:w-[220px]" />
+                      <Skeleton className="h-[12px] w-1/2 md:w-[140px]" />
                     </div>
                   </div>
-                  <Skeleton className="h-[22px] w-[140px]" />
-                  <Skeleton className="h-[14px] w-[80px]" />
-                  <div className="flex items-center justify-end gap-3">
+                  <Skeleton className="h-[22px] w-[140px] hidden md:block" />
+                  <Skeleton className="h-[14px] w-[80px] hidden md:block" />
+                  <div className="flex items-center justify-start md:justify-end gap-3 w-full md:w-auto mt-2 md:mt-0">
                     <Skeleton className="h-[34px] w-[42px]" />
                     <Skeleton className="h-[34px] w-[92px]" />
                     <Skeleton className="h-[34px] w-[92px]" />
                   </div>
                 </div>
-                <div className="grid grid-cols-[1fr_220px_120px_260px] gap-4 items-center">
-                  <div className="flex items-center gap-4 min-w-0">
+                <div className="flex flex-col md:grid md:grid-cols-[1fr_220px_120px_260px] gap-4 items-start md:items-center pb-6 md:pb-0 border-b md:border-none border-white/10 last:border-none">
+                  <div className="flex items-center gap-4 min-w-0 w-full md:w-auto">
                     <Skeleton className="h-[66px] w-[66px] rounded-[10px]" />
-                    <div className="min-w-0 space-y-2">
-                      <Skeleton className="h-[14px] w-[200px]" />
-                      <Skeleton className="h-[12px] w-[120px]" />
+                    <div className="min-w-0 space-y-2 flex-1">
+                      <Skeleton className="h-[14px] w-3/4 md:w-[200px]" />
+                      <Skeleton className="h-[12px] w-1/2 md:w-[120px]" />
                     </div>
                   </div>
-                  <Skeleton className="h-[22px] w-[140px]" />
-                  <Skeleton className="h-[14px] w-[80px]" />
-                  <div className="flex items-center justify-end gap-3">
+                  <Skeleton className="h-[22px] w-[140px] hidden md:block" />
+                  <Skeleton className="h-[14px] w-[80px] hidden md:block" />
+                  <div className="flex items-center justify-start md:justify-end gap-3 w-full md:w-auto mt-2 md:mt-0">
                     <Skeleton className="h-[34px] w-[42px]" />
                     <Skeleton className="h-[34px] w-[92px]" />
                     <Skeleton className="h-[34px] w-[92px]" />
                   </div>
                 </div>
-                <div className="grid grid-cols-[1fr_220px_120px_260px] gap-4 items-center">
-                  <div className="flex items-center gap-4 min-w-0">
+                <div className="flex flex-col md:grid md:grid-cols-[1fr_220px_120px_260px] gap-4 items-start md:items-center pb-6 md:pb-0 border-b md:border-none border-white/10 last:border-none">
+                  <div className="flex items-center gap-4 min-w-0 w-full md:w-auto">
                     <Skeleton className="h-[66px] w-[66px] rounded-[10px]" />
-                    <div className="min-w-0 space-y-2">
-                      <Skeleton className="h-[14px] w-[240px]" />
-                      <Skeleton className="h-[12px] w-[160px]" />
+                    <div className="min-w-0 space-y-2 flex-1">
+                      <Skeleton className="h-[14px] w-3/4 md:w-[240px]" />
+                      <Skeleton className="h-[12px] w-1/2 md:w-[160px]" />
                     </div>
                   </div>
-                  <Skeleton className="h-[22px] w-[140px]" />
-                  <Skeleton className="h-[14px] w-[80px]" />
-                  <div className="flex items-center justify-end gap-3">
+                  <Skeleton className="h-[22px] w-[140px] hidden md:block" />
+                  <Skeleton className="h-[14px] w-[80px] hidden md:block" />
+                  <div className="flex items-center justify-start md:justify-end gap-3 w-full md:w-auto mt-2 md:mt-0">
                     <Skeleton className="h-[34px] w-[42px]" />
                     <Skeleton className="h-[34px] w-[92px]" />
                     <Skeleton className="h-[34px] w-[92px]" />
@@ -363,24 +363,25 @@ export default function AdminContentApprovalQueuePage() {
                 const reasons = Array.isArray(item.reasons) ? item.reasons : [];
                 return (
                   <div key={item.id} className="px-6 py-4">
-                    <div className="grid grid-cols-[1fr_220px_120px_260px] gap-4 items-center">
-                      <div className="flex items-center gap-4 min-w-0">
-                        <div className="h-[66px] w-[66px] rounded-[10px] bg-[#0e0a0a]/50 border border-white/10 overflow-hidden flex items-center justify-center">
+                    <div className="flex flex-col md:grid md:grid-cols-[1fr_220px_120px_260px] gap-4 items-start md:items-center">
+                      <div className="flex items-center gap-4 min-w-0 w-full md:w-auto">
+                        <div className="h-[66px] w-[66px] shrink-0 rounded-[10px] bg-[#0e0a0a]/50 border border-white/10 overflow-hidden flex items-center justify-center">
                           {item.thumbnailUrl ? (
                             <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover" />
                           ) : (
                             <div className="h-full w-full bg-gradient-to-b from-[#2a1a17] to-[#0e0a0a]" />
                           )}
                         </div>
-                        <div className="min-w-0">
-                          <div className="text-[14px] text-[#e6d6d2] truncate">{item.title}</div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[14px] text-[#e6d6d2] truncate font-medium md:font-normal">{item.title}</div>
                           <div className="text-[12px] text-[#a99792] truncate">{artistName}</div>
                         </div>
                       </div>
 
-                      <div>
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between md:justify-start w-full md:w-auto pt-2 md:pt-0 border-t border-white/5 md:border-0 -mx-2 px-2 md:mx-0 md:px-0">
+                        <span className="md:hidden text-[12px] text-[#b8a6a1]">Reports</span>
+                        <div className="space-y-1 md:space-y-2 text-right md:text-left">
+                          <div className="flex items-center justify-end md:justify-start gap-2">
                             <FlaggedBadge />
                             <div className="text-[12px] text-[#a99792]">{reportCount} reports</div>
                           </div>
@@ -397,13 +398,16 @@ export default function AdminContentApprovalQueuePage() {
                         </div>
                       </div>
 
-                      <div className="text-[13px] text-[#cdbdb8]">{typeLabel}</div>
+                      <div className="flex items-center justify-between md:justify-start w-full md:w-auto -mx-2 px-2 md:mx-0 md:px-0 py-1 md:py-0">
+                        <span className="md:hidden text-[12px] text-[#b8a6a1]">Type</span>
+                        <div className="text-[13px] text-[#cdbdb8]">{typeLabel}</div>
+                      </div>
 
-                      <div className="flex items-center justify-end gap-3">
+                      <div className="flex items-center justify-start md:justify-end gap-2 md:gap-3 w-full md:w-auto flex-wrap pt-3 md:pt-0 mt-1 md:mt-0 border-t md:border-t-0 border-white/5">
                         <button
                           type="button"
                           onClick={() => setPreviewItem(item)}
-                          className="h-[34px] w-[40px] rounded-[6px] border border-white/10 bg-white/5 text-[#e6d6d2] hover:bg-white/10 flex items-center justify-center"
+                          className="h-[34px] w-[40px] shrink-0 rounded-[6px] border border-white/10 bg-white/5 text-[#e6d6d2] hover:bg-white/10 flex items-center justify-center"
                           title="Preview"
                         >
                           <EyeIcon className="h-[18px] w-[18px]" />
@@ -413,7 +417,7 @@ export default function AdminContentApprovalQueuePage() {
                           type="button"
                           disabled={busyId === item.id}
                           onClick={() => restoreMutation.mutate(item.id)}
-                          className="h-[34px] px-5 rounded-[6px] border border-[#2b5a3b]/45 bg-gradient-to-b from-[#2d5639] to-[#1a2f23] text-[13px] font-light text-[#d9eadf] shadow-[0_10px_25px_rgba(0,0,0,0.35)] disabled:opacity-60"
+                          className="h-[34px] flex-1 md:flex-none px-4 md:px-5 rounded-[6px] border border-[#2b5a3b]/45 bg-gradient-to-b from-[#2d5639] to-[#1a2f23] text-[13px] font-light text-[#d9eadf] shadow-[0_10px_25px_rgba(0,0,0,0.35)] disabled:opacity-60"
                         >
                           Restore
                         </button>
@@ -422,7 +426,7 @@ export default function AdminContentApprovalQueuePage() {
                           type="button"
                           disabled={busyId === item.id}
                           onClick={() => deleteStrikeMutation.mutate(item.id)}
-                          className="h-[34px] px-5 rounded-[6px] border border-[#6e2c2c]/40 bg-gradient-to-b from-[#5d1f1f] to-[#2f1212] text-[13px] font-light text-[#f0d2d2] shadow-[0_10px_25px_rgba(0,0,0,0.35)] disabled:opacity-60"
+                          className="h-[34px] flex-1 md:flex-none px-4 md:px-5 rounded-[6px] border border-[#6e2c2c]/40 bg-gradient-to-b from-[#5d1f1f] to-[#2f1212] text-[13px] font-light text-[#f0d2d2] shadow-[0_10px_25px_rgba(0,0,0,0.35)] disabled:opacity-60"
                         >
                           Delete & Strike
                         </button>

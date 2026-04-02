@@ -265,8 +265,8 @@ export default function AdminFeaturedArtistsPage() {
                 <p className="text-sm text-white/50 mt-1 ml-7">Remove some featured artists below or create a new one manually.</p>
               </div>
             ) : (
-              <div className="flex gap-4 items-end">
-                <div className="flex-1">
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
+                <div className="flex-1 w-full">
                   <label className="block text-sm text-white/60 mb-2">Select Artist</label>
                   <select
                     value={selectedArtistId}
@@ -285,9 +285,9 @@ export default function AdminFeaturedArtistsPage() {
                 <button
                   onClick={handleAddFeatured}
                   disabled={!selectedArtistId || isAdding}
-                  className="px-6 py-3 bg-gradient-to-r from-amber-500 to-pink-500 text-white font-medium rounded-lg 
+                  className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-amber-500 to-pink-500 text-white font-medium rounded-lg 
                            hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all
-                           flex items-center gap-2"
+                           flex items-center justify-center gap-2"
                 >
                   {isAdding ? (
                     <>
@@ -391,55 +391,61 @@ export default function AdminFeaturedArtistsPage() {
               {featured.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center gap-4 p-4 bg-gray-900/50 rounded-xl border border-gray-700 hover:border-gray-600 transition-colors"
+                  className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-gray-900/50 rounded-xl border border-gray-700 hover:border-gray-600 transition-colors"
                 >
-                  {/* Avatar */}
-                  <div className="w-14 h-14 rounded-full bg-gray-700 overflow-hidden flex-shrink-0">
-                    {item.avatar ? (
-                      <img
-                        src={item.avatar}
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-500">
-                        <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                      </div>
-                    )}
+                  {/* Left Side: Avatar and Info */}
+                  <div className="flex items-center gap-4 w-full sm:w-auto flex-1">
+                    {/* Avatar */}
+                    <div className="w-14 h-14 rounded-full bg-gray-700 overflow-hidden flex-shrink-0">
+                      {item.avatar ? (
+                        <img
+                          src={item.avatar}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-500">
+                          <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-white truncate">{item.name}</h3>
+                      <p className="text-sm text-white/50">
+                        Added {new Date(item.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
                   </div>
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-white truncate">{item.name}</h3>
-                    <p className="text-sm text-white/50">
-                      Added {new Date(item.createdAt).toLocaleDateString()}
-                    </p>
+                  {/* Right Side: Actions */}
+                  <div className="flex items-center justify-end w-full sm:w-auto gap-3 pt-2 sm:pt-0 border-t border-gray-700 sm:border-0">
+                    {/* Status Toggle */}
+                    <button
+                      onClick={() => handleToggleActive(item.id, item.isActive)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex-1 sm:flex-none ${
+                        item.isActive
+                          ? "bg-green-500/20 text-green-400 border border-green-500/30"
+                          : "bg-gray-700 text-white/60 border border-gray-600"
+                      }`}
+                    >
+                      {item.isActive ? "Active" : "Inactive"}
+                    </button>
+
+                    {/* Remove Button */}
+                    <button
+                      onClick={() => handleRemove(item.id)}
+                      className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors flex-shrink-0"
+                      title="Remove from featured"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
                   </div>
-
-                  {/* Status Toggle */}
-                  <button
-                    onClick={() => handleToggleActive(item.id, item.isActive)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                      item.isActive
-                        ? "bg-green-500/20 text-green-400 border border-green-500/30"
-                        : "bg-gray-700 text-white/60 border border-gray-600"
-                    }`}
-                  >
-                    {item.isActive ? "Active" : "Inactive"}
-                  </button>
-
-                  {/* Remove Button */}
-                  <button
-                    onClick={() => handleRemove(item.id)}
-                    className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                    title="Remove from featured"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
                 </div>
               ))}
             </div>

@@ -207,12 +207,12 @@ export default function AdminArtistsPage() {
             <PremiumPlayLogo />
           </div>
 
-          <div className="mt-10 flex items-end justify-between">
+          <div className="mt-10 flex flex-col items-start gap-4 md:flex-row md:items-end md:justify-between">
             <div className="text-[40px] leading-[44px] font-light tracking-wide text-[#e0c7c0]">
               Artists
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full md:w-auto">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -237,7 +237,7 @@ export default function AdminArtistsPage() {
                   Inactive
                 </button>
               </div>
-              <div className="relative w-full max-w-[260px]">
+              <div className="relative w-full sm:max-w-[260px]">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6e5c59]">
                   <svg
                     width="16"
@@ -278,7 +278,7 @@ export default function AdminArtistsPage() {
           <div className="mt-6 relative overflow-hidden rounded-[6px] border border-white/10 bg-[#1a1414]/45 shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
             <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent" />
             <div className="relative">
-              <div className="grid grid-cols-[1.6fr_0.7fr_1fr_0.9fr_0.8fr] gap-4 px-6 py-4 text-[12px] tracking-wide text-[#a99792] border-b border-white/10">
+              <div className="hidden md:grid grid-cols-[1.6fr_0.7fr_1fr_0.9fr_0.8fr] gap-4 px-6 py-4 text-[12px] tracking-wide text-[#a99792] border-b border-white/10">
                 <div>Name</div>
                 <div>Verified</div>
                 <div>Subscription Price</div>
@@ -287,36 +287,36 @@ export default function AdminArtistsPage() {
               </div>
 
               {loading ? (
-                <div className="px-6 py-6 space-y-4">
-                  <div className="grid grid-cols-[1.6fr_0.7fr_1fr_0.9fr_0.8fr] gap-4 items-center">
-                    <div className="space-y-2">
-                      <Skeleton className="h-[14px] w-[180px]" />
-                      <Skeleton className="h-[12px] w-[140px]" />
+                <div className="px-6 py-6 space-y-6 md:space-y-4">
+                  <div className="flex flex-col md:grid md:grid-cols-[1.6fr_0.7fr_1fr_0.9fr_0.8fr] gap-2 md:gap-4 items-start md:items-center pb-4 md:pb-0 border-b md:border-b-0 border-white/5 last:border-b-0">
+                    <div className="space-y-2 w-full md:w-auto">
+                      <Skeleton className="h-[14px] w-3/4 md:w-[180px]" />
+                      <Skeleton className="h-[12px] w-1/2 md:w-[140px]" />
                     </div>
-                    <Skeleton className="h-[22px] w-[22px] rounded-full" />
-                    <Skeleton className="h-[14px] w-[90px]" />
-                    <Skeleton className="h-[22px] w-[96px]" />
-                    <Skeleton className="h-[14px] w-[90px]" />
+                    <Skeleton className="h-[22px] w-[22px] rounded-full hidden md:block" />
+                    <Skeleton className="h-[14px] w-[90px] hidden md:block" />
+                    <Skeleton className="h-[22px] w-[96px] hidden md:block" />
+                    <Skeleton className="h-[14px] w-[90px] mt-2 md:mt-0" />
                   </div>
-                  <div className="grid grid-cols-[1.6fr_0.7fr_1fr_0.9fr_0.8fr] gap-4 items-center">
-                    <div className="space-y-2">
-                      <Skeleton className="h-[14px] w-[160px]" />
-                      <Skeleton className="h-[12px] w-[120px]" />
+                  <div className="flex flex-col md:grid md:grid-cols-[1.6fr_0.7fr_1fr_0.9fr_0.8fr] gap-2 md:gap-4 items-start md:items-center pb-4 md:pb-0 border-b md:border-b-0 border-white/5 last:border-b-0">
+                    <div className="space-y-2 w-full md:w-auto">
+                      <Skeleton className="h-[14px] w-3/4 md:w-[160px]" />
+                      <Skeleton className="h-[12px] w-1/2 md:w-[120px]" />
                     </div>
-                    <Skeleton className="h-[22px] w-[22px] rounded-full" />
-                    <Skeleton className="h-[14px] w-[90px]" />
-                    <Skeleton className="h-[22px] w-[96px]" />
-                    <Skeleton className="h-[14px] w-[90px]" />
+                    <Skeleton className="h-[22px] w-[22px] rounded-full hidden md:block" />
+                    <Skeleton className="h-[14px] w-[90px] hidden md:block" />
+                    <Skeleton className="h-[22px] w-[96px] hidden md:block" />
+                    <Skeleton className="h-[14px] w-[90px] mt-2 md:mt-0" />
                   </div>
-                  <div className="grid grid-cols-[1.6fr_0.7fr_1fr_0.9fr_0.8fr] gap-4 items-center">
-                    <div className="space-y-2">
-                      <Skeleton className="h-[14px] w-[200px]" />
-                      <Skeleton className="h-[12px] w-[150px]" />
+                  <div className="flex flex-col md:grid md:grid-cols-[1.6fr_0.7fr_1fr_0.9fr_0.8fr] gap-2 md:gap-4 items-start md:items-center pb-4 md:pb-0 border-b md:border-b-0 border-white/5 last:border-b-0">
+                    <div className="space-y-2 w-full md:w-auto">
+                      <Skeleton className="h-[14px] w-3/4 md:w-[200px]" />
+                      <Skeleton className="h-[12px] w-1/2 md:w-[150px]" />
                     </div>
-                    <Skeleton className="h-[22px] w-[22px] rounded-full" />
-                    <Skeleton className="h-[14px] w-[90px]" />
-                    <Skeleton className="h-[22px] w-[96px]" />
-                    <Skeleton className="h-[14px] w-[90px]" />
+                    <Skeleton className="h-[22px] w-[22px] rounded-full hidden md:block" />
+                    <Skeleton className="h-[14px] w-[90px] hidden md:block" />
+                    <Skeleton className="h-[22px] w-[96px] hidden md:block" />
+                    <Skeleton className="h-[14px] w-[90px] mt-2 md:mt-0" />
                   </div>
                 </div>
               ) : (
@@ -328,10 +328,10 @@ export default function AdminArtistsPage() {
                     return (
                       <div
                         key={a.id}
-                        className="grid grid-cols-[1.6fr_0.7fr_1fr_0.9fr_0.8fr] gap-4 px-6 py-4 text-[13px] text-[#d8c7c3] border-b border-white/5 last:border-b-0"
+                        className="flex flex-col md:grid md:grid-cols-[1.6fr_0.7fr_1fr_0.9fr_0.8fr] gap-3 md:gap-4 px-6 py-4 md:py-4 text-[13px] text-[#d8c7c3] border-b border-white/5 last:border-b-0"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="h-[34px] w-[34px] rounded-full bg-[#2a1c1c] border border-white/10 overflow-hidden">
+                        <div className="flex items-center gap-3 w-full pb-2 md:pb-0">
+                          <div className="h-[40px] w-[40px] md:h-[34px] md:w-[34px] rounded-full bg-[#2a1c1c] border border-white/10 overflow-hidden shrink-0">
                             {a.profileImage ? (
                               <img
                                 src={a.profileImage}
@@ -340,36 +340,43 @@ export default function AdminArtistsPage() {
                               />
                             ) : null}
                           </div>
-                          <div>
-                            <div className="text-[#e6d6d2]">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[#e6d6d2] font-medium md:font-normal truncate">
                               {a.name ?? "(No name)"}
                             </div>
-                            <div className="text-[12px] text-[#8d7b77]">{a.email}</div>
+                            <div className="text-[12px] text-[#8d7b77] truncate">{a.email}</div>
                           </div>
                         </div>
 
-                        <div className="flex items-center">
+                        <div className="flex items-center justify-between md:justify-start pt-2 md:pt-0 border-t border-white/5 md:border-0 hover:bg-white/5 md:hover:bg-transparent -mx-2 px-2 rounded-md md:rounded-none md:mx-0 md:px-0">
+                          <span className="md:hidden text-[12px] text-[#a99792]">Verified</span>
                           <CheckIcon ok={Boolean(a.isVerified)} />
                         </div>
 
-                        <div className="text-[#e6d6d2]">{formatPrice(a.subscriptionPrice)}</div>
-
-                        <div>
-                          {isInactive ? (
-                            <span className="inline-flex items-center rounded-[4px] bg-[#3a1b1b]/55 border border-[#e3a1a1]/20 px-3 py-[3px] text-[12px] text-[#f0d2d2]">
-                              Inactive
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center rounded-[4px] bg-[#243225]/45 border border-[#9bd39b]/20 px-3 py-[3px] text-[12px] text-[#bfe6bf]">
-                              Active
-                            </span>
-                          )}
+                        <div className="flex items-center justify-between md:justify-start py-1 md:py-0 hover:bg-white/5 md:hover:bg-transparent -mx-2 px-2 rounded-md md:rounded-none md:mx-0 md:px-0">
+                          <span className="md:hidden text-[12px] text-[#a99792]">Subscription</span>
+                          <span className="text-[#e6d6d2]">{formatPrice(a.subscriptionPrice)}</span>
                         </div>
 
-                        <div className="flex items-center justify-end">
+                        <div className="flex items-center justify-between md:justify-start py-1 md:py-0 hover:bg-white/5 md:hover:bg-transparent -mx-2 px-2 rounded-md md:rounded-none md:mx-0 md:px-0">
+                          <span className="md:hidden text-[12px] text-[#a99792]">Status</span>
+                          <div>
+                            {isInactive ? (
+                              <span className="inline-flex items-center rounded-[4px] bg-[#3a1b1b]/55 border border-[#e3a1a1]/20 px-3 py-[3px] text-[12px] text-[#f0d2d2]">
+                                Inactive
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center rounded-[4px] bg-[#243225]/45 border border-[#9bd39b]/20 px-3 py-[3px] text-[12px] text-[#bfe6bf]">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-end md:justify-end pt-3 md:pt-0 mt-1 md:mt-0 border-t md:border-t-0 border-white/5">
                           <Link
                             to={`/admin/artists/${a.id}`}
-                            className="text-[13px] text-[#cdbdb8] hover:text-white"
+                            className="w-full text-center md:w-auto h-[34px] md:h-auto flex items-center justify-center md:inline rounded-[6px] md:rounded-none bg-white/5 md:bg-transparent text-[13px] text-[#cdbdb8] hover:text-white hover:bg-white/10 md:hover:bg-transparent transition-colors"
                           >
                             View details
                           </Link>
