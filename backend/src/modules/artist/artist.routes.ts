@@ -20,6 +20,91 @@ const restrictedMediaUrl = (req: any, mediaType: 'audio' | 'video') => {
   return toAbsoluteUrl(req, path);
 };
 
+/**
+ * GET /api/v1/fan/artists/featured
+ * Get admin-selected featured artists for fan app
+ * Supports both existing artists (with artist_id) and manual featured artists (artist_id IS NULL)
+ */
+router.get("/featured", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT fa.id, fa.artist_id, 
+        COALESCE(u.name, fa.name) as name,
+        COALESCE(u.profile_image_url, fa.avatar) as avatar_url
+       FROM featured_artists fa
+       LEFT JOIN users u ON u.id = fa.artist_id
+       WHERE fa.is_active = true
+         AND (fa.artist_id IS NULL OR (u.is_deleted = false OR u.is_deleted IS NULL))
+         AND (fa.artist_id IS NULL OR COALESCE(u.status, 'ACTIVE') = 'ACTIVE')
+       ORDER BY fa.created_at DESC
+       LIMIT 10`
+    );
+
+    const artists = (result.rows || []).map((row: any) => ({
+      id: row.artist_id || row.id,
+      name: row.name,
+      avatar: toAbsoluteUrl(req, row.avatar_url),
+    }));
+
+    return res.json({ success: true, artists });
+  } catch (err: any) {
+    // Gracefully handle missing table - return empty array
+    if (err.message?.includes('relation "featured_artists" does not exist')) {
+      console.log('[Featured Artists] Table not created yet, returning empty array');
+      return res.json({ success: true, artists: [] });
+    }
+    console.error("[Fan Featured Artists Error]", err.message);
+    return res.status(500).json({ success: false, message: "Failed to fetch featured artists" });
+  }
+});
+
+router.get("/search", async (req, res) => {
+  try {
+    const query = String(req.query.q || "").trim();
+
+    // Validation: require at least 2 characters
+    if (query.length < 2) {
+      return res.json({ success: true, artists: [] });
+    }
+
+    // Case-insensitive search with partial match
+    const searchPattern = `%${query}%`;
+
+    const result = await pool.query(
+      `SELECT id,
+        name,
+        COALESCE(is_verified, verified, false) as is_verified,
+        profile_image_url,
+        COALESCE(status, 'ACTIVE') as status,
+        COALESCE(subscription_price, 0) as subscription_price,
+        COALESCE(genre, '') as genre
+       FROM users
+       WHERE UPPER(role) = 'ARTIST'
+         AND COALESCE(is_deleted, false) = false
+         AND COALESCE(status, 'ACTIVE') = 'ACTIVE'
+         AND LOWER(name) LIKE LOWER($1)
+       ORDER BY name ASC
+       LIMIT 10`,
+      [searchPattern]
+    );
+
+    const artists = (result.rows || []).map((row: any) => ({
+      id: row.id,
+      name: row.name ?? null,
+      isVerified: Boolean(row.is_verified),
+      profileImageUrl: toAbsoluteUrl(req, row.profile_image_url),
+      status: (row.status ?? 'ACTIVE').toString(),
+      subscriptionPrice: Number(row.subscription_price ?? 0),
+      genre: (row.genre ?? '').toString(),
+    }));
+
+    return res.json({ success: true, artists });
+  } catch (err: any) {
+    console.error("[Artist Search Error]", err.message);
+    return res.status(500).json({ success: false, message: "Search failed" });
+  }
+});
+
 router.get("/", (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.setHeader('Pragma', 'no-cache');

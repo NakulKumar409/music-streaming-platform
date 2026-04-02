@@ -39,6 +39,7 @@ export default function AdminNavbar() {
         matchPrefix: "/admin/artist-applications"
       },
       { label: "Artists", to: "/admin/artists", matchPrefix: "/admin/artists" },
+      { label: "Featured Artists", to: "/admin/featured-artists" },
       { label: "Content Moderation", to: "/admin/moderation" },
       { label: "Analytics", to: "/admin/analytics" }
     ],

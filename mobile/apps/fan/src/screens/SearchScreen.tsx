@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Image,
   Pressable,
@@ -13,26 +14,21 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Play as PlayIcon, Search as SearchIcon, X } from 'lucide-react-native';
+import { Search as SearchIcon, X, User } from 'lucide-react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import type { AxiosRequestConfig } from 'axios';
 
 import { Colors } from '../theme';
-import { api, searchApi } from '../services/api';
+import { api } from '../services/api';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
-import { API_HOST_BASE_URL } from '../config/env';
-import type { MediaItem } from '../media.types';
 
-type SearchResult = {
-  id: string;
-  contentId?: string;
-  title: string;
-  artistName: string;
-  artwork: string;
-  type: 'ARTIST' | 'SONG';
-  isLocked: boolean;
-  mediaType?: 'audio' | 'video';
-  mediaUrl?: string | null;
-  useStreamAccess?: boolean;
+type Artist = {
+  id: number;
+  name: string;
+  profileImageUrl: string | null;
+  isVerified: boolean;
+  subscriptionPrice: number;
+  genre: string;
 };
 
 type SearchHistoryItem = {
@@ -42,129 +38,25 @@ type SearchHistoryItem = {
   created_at: string;
 };
 
-type SearchListItem = SearchResult | SearchHistoryItem;
-
 const RECENT_SEARCHES_STORAGE_KEY = 'recentSearches';
 
 export default function SearchScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
-  const { playQueue } = useMediaPlayer();
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [filteredResults, setFilteredResults] = useState<SearchResult[]>([]);
-  const [allContent, setAllContent] = useState<SearchResult[]>([]);
-
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [recentSearches, setRecentSearches] = useState<SearchHistoryItem[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const { currentItem, state: playerState, togglePlayPause } = useMediaPlayer();
+  const { currentItem } = useMediaPlayer();
   const activeAudioMeta = currentItem?.mediaType === 'audio' ? currentItem : null;
   const hasActiveAudio = !!activeAudioMeta;
 
-  // Build navigation params for FullPlayerScreen
-  const buildFullPlayerParams = useCallback(
-    (item: SearchResult) => {
-      const songs = allContent.filter((x) => x.type === 'SONG');
-      const queue: MediaItem[] = songs.map((x) => ({
-        id: x.id,
-        contentId: x.contentId ?? x.id,
-        title: x.title,
-        artistName: x.artistName,
-        mediaType: x.mediaType === 'video' ? 'video' : 'audio',
-        artworkUrl: x.artwork,
-        mediaUrl: x.mediaUrl ?? null,
-        useStreamAccess: Boolean(x.useStreamAccess),
-        isLocked: false,
-      }));
-      const idx = Math.max(0, queue.findIndex((q) => q.id === item.id));
-      return {
-        songId: item.id,
-        title: item.title,
-        artist: item.artistName,
-        imageUrl: item.artwork,
-        audioUrl: item.mediaUrl || '',
-        queueIndex: idx,
-        queue,
-      };
-    },
-    [allContent]
-  );
-
-  const [isSuggesting, setIsSuggesting] = useState(false);
-  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [artists, setArtists] = useState<Artist[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<SearchHistoryItem[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const inputRef = useRef<TextInput | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [artistsRes, contentRes] = await Promise.all([
-          api.get('/artists'),
-          api.get('/content'),
-        ]);
-
-        const artists = (artistsRes.data?.artists ?? []).map((a: any) => {
-          const id = String(a.id);
-          const title = (a.name ?? '').toString();
-          const artistName = 'Artist';
-          const artwork = (a.profileImageUrl ?? a.profile_image_url ?? '').toString();
-          return {
-            id,
-            title,
-            artistName,
-            artwork,
-            type: 'ARTIST' as const,
-            isLocked: false,
-          };
-        });
-
-        const content = (contentRes.data?.items ?? []).map((c: any) => {
-          const id = String(c.id);
-          const title = (c.title ?? '').toString();
-          const artistName = (c.artistName ?? c.artist_name ?? '').toString();
-          const baseUrl = API_HOST_BASE_URL;
-          const artworkRaw = (c.artwork ?? c.thumbnailUrl ?? c.thumbnail_url ?? '').toString();
-          const artworkFromStorageKey = c.thumbnail_storage_key
-            ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(String(c.id))}`
-            : '';
-          const artwork = artworkRaw || artworkFromStorageKey;
-
-          const mediaTypeRaw = (c.mediaType ?? c.type ?? '').toString().toLowerCase();
-          const mediaType: SearchResult['mediaType'] = mediaTypeRaw === 'video' ? 'video' : 'audio';
-
-          return {
-            id,
-            contentId: id,
-            title,
-            artistName,
-            artwork,
-            type: 'SONG' as const,
-            isLocked: false,
-            mediaType,
-            mediaUrl: (c.mediaUrl ?? c.fileUrl ?? null) as any,
-            useStreamAccess: Boolean(c.useStreamAccess),
-          };
-        });
-
-        const merged = [...artists, ...content].filter((x) => x.title.trim().length > 0);
-        setAllContent(merged);
-        setFilteredResults(merged);
-      } catch {
-        setAllContent([]);
-        setFilteredResults([]);
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    setHasSubmitted(false);
-    const handle = setTimeout(() => {
-      setDebouncedQuery(searchQuery);
-    }, 500);
-    return () => clearTimeout(handle);
-  }, [searchQuery]);
-
+  // Load recent searches from AsyncStorage
   useEffect(() => {
     (async () => {
       try {
@@ -188,6 +80,7 @@ export default function SearchScreen({ navigation }: any) {
     })();
   }, []);
 
+  // Persist recent searches to AsyncStorage
   const persistHistoryFallback = useCallback(async (items: SearchHistoryItem[]) => {
     try {
       const queries = items
@@ -200,10 +93,11 @@ export default function SearchScreen({ navigation }: any) {
     }
   }, []);
 
+  // Fetch search history from API
   const fetchHistory = useCallback(async () => {
     setIsLoadingHistory(true);
     try {
-      const res = await searchApi.get('/history');
+      const res = await api.get('/search/history');
       const items = (res.data?.items ?? []) as SearchHistoryItem[];
       setRecentSearches(items);
       await persistHistoryFallback(items);
@@ -214,18 +108,20 @@ export default function SearchScreen({ navigation }: any) {
     }
   }, [persistHistoryFallback]);
 
+  // Load history when search is focused and empty
   useEffect(() => {
     if (!isSearchFocused) return;
     if (searchQuery.trim().length > 0) return;
     fetchHistory().catch(() => undefined);
   }, [fetchHistory, isSearchFocused, searchQuery]);
 
+  // Save search query to history
   const saveHistory = useCallback(
     async (query: string) => {
       const q = query.trim();
       if (!q) return;
       try {
-        await searchApi.post('/history', { query: q });
+        await api.post('/search/history', { query: q });
         await fetchHistory();
       } catch {
         // ignore
@@ -234,6 +130,7 @@ export default function SearchScreen({ navigation }: any) {
     [fetchHistory]
   );
 
+  // Delete history item
   const deleteHistoryItem = useCallback(
     async (id: number) => {
       if (id < 0) {
@@ -243,7 +140,7 @@ export default function SearchScreen({ navigation }: any) {
         return;
       }
       try {
-        await searchApi.delete(`/history/${id}`);
+        await api.delete(`/search/history/${id}`);
       } catch {
         // ignore
       }
@@ -252,116 +149,154 @@ export default function SearchScreen({ navigation }: any) {
     [fetchHistory, persistHistoryFallback, recentSearches]
   );
 
-  const fuzzyResults = useMemo(() => {
-    const raw = debouncedQuery.trim();
-    if (!raw) return [] as SearchResult[];
+  // Search artists API with debounce and cancellation
+  const searchArtists = useCallback(async (query: string) => {
+    const trimmed = query.trim();
 
-    const q = raw.toLowerCase();
-    const songs = allContent.filter((x) => x.type === 'SONG');
+    // Clear results if query is too short
+    if (trimmed.length < 2) {
+      setArtists([]);
+      setIsLoading(false);
+      return;
+    }
 
-    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/gi, ' ').trim();
+    // Cancel previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
 
-    const levenshtein = (a: string, b: string) => {
-      const aa = normalize(a);
-      const bb = normalize(b);
-      if (!aa.length) return bb.length;
-      if (!bb.length) return aa.length;
-      const dp: number[] = Array(bb.length + 1)
-        .fill(0)
-        .map((_, i) => i);
-      for (let i = 1; i <= aa.length; i += 1) {
-        let prev = dp[0];
-        dp[0] = i;
-        for (let j = 1; j <= bb.length; j += 1) {
-          const tmp = dp[j];
-          const cost = aa[i - 1] === bb[j - 1] ? 0 : 1;
-          dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + cost);
-          prev = tmp;
-        }
+    // Create new abort controller
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    setIsLoading(true);
+
+    try {
+      const config: AxiosRequestConfig = {
+        signal: abortController.signal,
+      };
+
+      const res = await api.get(`/artists/search?q=${encodeURIComponent(trimmed)}`, config);
+
+      // Only update if this request wasn't aborted
+      if (!abortController.signal.aborted) {
+        const artistData = (res.data?.artists ?? []) as Artist[];
+        setArtists(artistData);
       }
-      return dp[bb.length];
-    };
+    } catch (err: any) {
+      // Ignore aborted requests
+      if (err.name === 'CanceledError' || err.name === 'AbortError') {
+        return;
+      }
+      console.error('[Artist Search Error]', err.message);
+      if (!abortController.signal.aborted) {
+        setArtists([]);
+      }
+    } finally {
+      if (!abortController.signal.aborted) {
+        setIsLoading(false);
+      }
+    }
+  }, []);
 
-    const scored = songs
-      .map((item) => {
-        const title = item.title ?? '';
-        const artist = item.artistName ?? '';
-        const hay = `${title} ${artist}`;
-        const hayNorm = normalize(hay);
-        const qNorm = normalize(q);
-
-        const includes = hayNorm.includes(qNorm);
-        const dist = levenshtein(qNorm, title);
-        const distArtist = levenshtein(qNorm, artist);
-        const bestDist = Math.min(dist, distArtist);
-
-        const score = (includes ? 1000 : 0) - bestDist;
-        return { item, score, includes, bestDist };
-      })
-      .filter((x) => x.includes || x.bestDist <= Math.max(2, Math.floor(normalize(q).length / 3)))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 50)
-      .map((x) => x.item);
-
-    return scored;
-  }, [allContent, debouncedQuery]);
-
+  // Debounce search query (300ms)
   useEffect(() => {
-    const q = debouncedQuery.trim();
-    if (!q) {
-      setIsSuggesting(false);
-      setFilteredResults([]);
-      return;
-    }
-    setIsSuggesting(true);
-    setFilteredResults(fuzzyResults);
-    setIsSuggesting(false);
-  }, [debouncedQuery, fuzzyResults]);
+    const delay = setTimeout(() => {
+      searchArtists(searchQuery);
+    }, 300);
 
-  const navigateHomeStack = (screen: string, params?: any) => {
-    navigation.navigate('HomeTab', {
-      screen: screen === 'Home' ? 'HomeIndex' : screen,
-      params,
-    });
-  };
+    return () => clearTimeout(delay);
+  }, [searchQuery, searchArtists]);
 
-  const onPressResult = async (item: SearchResult) => {
-    saveHistory(item.title).catch(() => undefined);
-    if (item.type === 'ARTIST') {
-      navigateHomeStack('Artist', { artistId: item.id });
-      return;
-    }
+  // Cleanup abort controller on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
-    if (item.mediaType === 'video') {
-        navigation.navigate('VideoTab', {
-            screen: 'VideoIndex',
-            params: {
-              autoplayVideo: {
-                id: item.contentId ?? item.id,
-                title: item.title,
-                artistName: item.artistName,
-                artworkUrl: item.artwork,
-                mediaUrl: item.mediaUrl || '',
-                useStreamAccess: Boolean(item.useStreamAccess),
-                category: 'Search Result',
-              },
-            },
-          });
-          return;
-    }
+  // Navigate to artist profile
+  const navigateToArtist = useCallback(
+    (artist: Artist) => {
+      saveHistory(artist.name).catch(() => undefined);
+      navigation.navigate('HomeTab', {
+        screen: 'Artist',
+        params: { artistId: artist.id },
+      });
+    },
+    [navigation, saveHistory]
+  );
 
-    const params = buildFullPlayerParams(item);
-    navigation.navigate('FullPlayer', params);
-  };
-
-  const onClearSearch = () => {
+  // Clear search input
+  const onClearSearch = useCallback(() => {
     setSearchQuery('');
-  };
+    setArtists([]);
+    inputRef.current?.focus();
+  }, []);
+
+  // Render artist item
+  const renderArtistItem = useCallback(
+    ({ item }: { item: Artist }) => (
+      <Pressable style={styles.artistRow} onPress={() => navigateToArtist(item)}>
+        <View style={styles.artistThumbWrap}>
+          {item.profileImageUrl ? (
+            <Image source={{ uri: item.profileImageUrl }} style={styles.artistThumb} />
+          ) : (
+            <View style={styles.artistThumbPlaceholder}>
+              <User color="rgba(255,255,255,0.5)" size={24} />
+            </View>
+          )}
+        </View>
+        <View style={styles.artistInfo}>
+          <Text style={styles.artistName} numberOfLines={1}>
+            {item.name}
+          </Text>
+          {item.genre ? (
+            <Text style={styles.artistGenre} numberOfLines={1}>
+              {item.genre}
+            </Text>
+          ) : null}
+        </View>
+      </Pressable>
+    ),
+    [navigateToArtist]
+  );
+
+  // Render history item
+  const renderHistoryItem = useCallback(
+    ({ item }: { item: SearchHistoryItem }) => (
+      <BlurView intensity={18} tint="dark" style={styles.historyRow}>
+        <Pressable
+          style={{ flex: 1 }}
+          onPress={() => {
+            setSearchQuery(item.query);
+            setIsSearchFocused(true);
+            saveHistory(item.query).catch(() => undefined);
+          }}
+        >
+          <Text style={styles.historyText} numberOfLines={1}>
+            {item.query}
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel="Delete recent search"
+          style={styles.historyDeleteBtn}
+          onPress={() => {
+            deleteHistoryItem(item.id).catch(() => undefined);
+          }}
+        >
+          <X color="#fff" size={16} />
+        </Pressable>
+      </BlurView>
+    ),
+    [deleteHistoryItem, saveHistory]
+  );
 
   const showRecent = isSearchFocused && searchQuery.trim().length === 0;
-
-  const showNoResults =
-    hasSubmitted && searchQuery.trim().length > 0 && filteredResults.length === 0;
+  const showResults = searchQuery.trim().length >= 2;
+  const showNoResults = showResults && !isLoading && artists.length === 0;
 
   return (
     <LinearGradient
@@ -371,6 +306,7 @@ export default function SearchScreen({ navigation }: any) {
       style={styles.gradientBackground}
     >
       <SafeAreaView style={styles.container}>
+        {/* Search Header */}
         <View>
           <BlurView intensity={20} tint="dark" style={styles.searchBar}>
             <View style={styles.searchPill}>
@@ -380,11 +316,8 @@ export default function SearchScreen({ navigation }: any) {
                   inputRef.current = r;
                 }}
                 value={searchQuery}
-                onChangeText={(t) => {
-                  setIsSuggesting(true);
-                  setSearchQuery(t);
-                }}
-                placeholder="Search artists or songs"
+                onChangeText={setSearchQuery}
+                placeholder="Search artists"
                 placeholderTextColor={Colors.textMuted}
                 style={styles.searchInput}
                 autoCorrect={false}
@@ -393,9 +326,6 @@ export default function SearchScreen({ navigation }: any) {
                 returnKeyType="search"
                 onFocus={() => setIsSearchFocused(true)}
                 onBlur={() => setIsSearchFocused(false)}
-                onSubmitEditing={() => {
-                  setHasSubmitted(true);
-                }}
               />
               {searchQuery.length > 0 ? (
                 <Pressable style={styles.clearBtn} onPress={onClearSearch}>
@@ -405,107 +335,70 @@ export default function SearchScreen({ navigation }: any) {
             </View>
           </BlurView>
 
-          {showRecent || searchQuery.trim().length > 0 ? (
+          {/* Section Title */}
+          {showRecent ? (
             <Text style={styles.sectionTitle}>
-              {showRecent
-                ? isLoadingHistory
-                  ? 'Recent Searches…'
-                  : 'Recent Searches'
-                : isSuggesting
-                  ? 'Suggesting…'
-                  : 'Results'}
+              {isLoadingHistory ? 'Recent Searches…' : 'Recent Searches'}
+            </Text>
+          ) : showResults ? (
+            <Text style={styles.sectionTitle}>
+              {isLoading ? 'Searching…' : `${artists.length} Artist${artists.length !== 1 ? 's' : ''}`}
             </Text>
           ) : null}
         </View>
 
-        {(() => {
-          const hasQuery = searchQuery.trim().length > 0;
-          const listData: SearchListItem[] = showRecent
-            ? recentSearches
-            : hasQuery
-              ? filteredResults
-              : [];
+        {/* Results List */}
+        {showRecent ? (
+          <FlatList
+            data={recentSearches}
+            keyExtractor={(item) => String(item.id)}
+            keyboardShouldPersistTaps="handled"
+            style={styles.list}
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              paddingBottom: tabBarHeight + (hasActiveAudio ? 96 : 44),
+            }}
+            renderItem={renderHistoryItem}
+            ListEmptyComponent={
+              <View style={styles.emptyWrap}>
+                <Text style={styles.emptySub}>No recent searches</Text>
+              </View>
+            }
+          />
+        ) : (
+          <FlatList
+            data={artists}
+            keyExtractor={(item) => String(item.id)}
+            keyboardShouldPersistTaps="handled"
+            style={styles.list}
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              paddingBottom: tabBarHeight + (hasActiveAudio ? 96 : 44),
+            }}
+            renderItem={renderArtistItem}
+            ListEmptyComponent={
+              showNoResults ? (
+                <View style={styles.emptyWrap}>
+                  <Text style={styles.emptyTitle}>No artist found</Text>
+                  <Text style={styles.emptySub}>Try a different spelling or search term.</Text>
+                </View>
+              ) : searchQuery.trim().length === 1 ? (
+                <View style={styles.emptyWrap}>
+                  <Text style={styles.emptySub}>Type at least 2 characters to search</Text>
+                </View>
+              ) : (
+                <View style={styles.emptySpacer} />
+              )
+            }
+          />
+        )}
 
-          return (
-            <FlatList
-              data={listData}
-              keyExtractor={(item) => String((item as any).id)}
-              keyboardShouldPersistTaps="handled"
-              style={styles.list}
-              contentContainerStyle={{
-                paddingHorizontal: 16,
-                paddingBottom: tabBarHeight + (hasActiveAudio ? 96 : 44),
-              }}
-              renderItem={({ item }) => {
-                if (showRecent) {
-                  const h = item as unknown as SearchHistoryItem;
-                  return (
-                    <BlurView intensity={18} tint="dark" style={styles.historyRow}>
-                      <Pressable
-                        style={{ flex: 1 }}
-                        onPress={() => {
-                          setSearchQuery(h.query);
-                          setIsSearchFocused(true);
-                          saveHistory(h.query).catch(() => undefined);
-                        }}
-                      >
-                        <Text style={styles.historyText} numberOfLines={1}>
-                          {h.query}
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        accessibilityLabel="Delete recent search"
-                        style={styles.historyDeleteBtn}
-                        onPress={() => {
-                          deleteHistoryItem(h.id).catch(() => undefined);
-                        }}
-                      >
-                        <X color="#fff" size={16} />
-                      </Pressable>
-                    </BlurView>
-                  );
-                }
-
-                const r = item as unknown as SearchResult;
-                return (
-                  <Pressable style={styles.row} onPress={() => onPressResult(r)}>
-                    <View style={styles.thumbWrap}>
-                      {r.artwork ? (
-                        <Image
-                          source={{ uri: r.artwork }}
-                          style={styles.songThumb}
-                        />
-                      ) : (
-                        <View style={styles.songThumb} />
-                      )}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.title} numberOfLines={1}>
-                        {r.title}
-                      </Text>
-                      <Text style={styles.sub} numberOfLines={1}>
-                        {r.artistName}
-                      </Text>
-                    </View>
-                    <Text style={styles.typeChip}>SONG</Text>
-                  </Pressable>
-                );
-              }}
-              ListEmptyComponent={
-                showNoResults ? (
-                  <View style={styles.emptyWrap}>
-                    <Text style={styles.emptyTitle}>No matches found</Text>
-                    <Text style={styles.emptySub}>
-                      Try a different spelling or search by artist name.
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={styles.emptySpacer} />
-                )
-              }
-            />
-          );
-        })()}
+        {/* Loading Overlay */}
+        {isLoading && !showRecent && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator color="#fff" size="large" />
+          </View>
+        )}
       </SafeAreaView>
     </LinearGradient>
   );
@@ -521,6 +414,7 @@ const styles = StyleSheet.create({
   },
   list: {
     backgroundColor: 'transparent',
+    flex: 1,
   },
   searchBar: {
     paddingHorizontal: 16,
@@ -530,7 +424,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.10)',
   },
-
   searchPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -563,12 +456,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     paddingHorizontal: 16,
-    marginBottom: 10,
+    paddingTop: 12,
+    paddingBottom: 10,
     textShadowColor: 'rgba(0,0,0,0.35)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-  row: {
+  artistRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.06)',
@@ -577,6 +471,38 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
+  },
+  artistThumbWrap: {
+    width: 56,
+    height: 56,
+    marginRight: 14,
+  },
+  artistThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  artistThumbPlaceholder: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  artistInfo: {
+    flex: 1,
+  },
+  artistName: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  artistGenre: {
+    color: Colors.textMuted,
+    marginTop: 4,
+    fontSize: 13,
   },
   historyRow: {
     flexDirection: 'row',
@@ -606,53 +532,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.14)',
     marginLeft: 10,
   },
-  thumbWrap: {
-    width: 52,
-    height: 52,
-    marginRight: 12,
-  },
-  artistThumb: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-  },
-  songThumb: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-  },
-  lockBadge: {
-    position: 'absolute',
-    right: -6,
-    bottom: -6,
-    width: 24,
-    height: 24,
-    borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  sub: {
-    color: Colors.textMuted,
-    marginTop: 4,
-    fontSize: 12,
-  },
-  typeChip: {
-    color: 'rgba(255,255,255,0.40)',
-    fontSize: 10,
-    fontWeight: '800',
-    marginLeft: 10,
-    letterSpacing: 0.4,
-  },
   emptyWrap: {
     paddingTop: 56,
     paddingHorizontal: 24,
@@ -670,22 +549,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-  emptyBtn: {
-    marginTop: 18,
-    height: 44,
-    paddingHorizontal: 18,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,122,24,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,122,24,0.35)',
-  },
-  emptyBtnText: {
-    color: '#FF7A18',
-    fontWeight: '800',
-  },
   emptySpacer: {
     height: 180,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 100,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
   },
 });

@@ -6,6 +6,7 @@ import AdminArtistsPage from "./pages/AdminArtistsPage";
 import AdminArtistDetailPage from "./pages/AdminArtistDetailPage";
 import AdminContentApprovalQueuePage from "./pages/AdminContentApprovalQueuePage";
 import AdminArtistApplicationsPage from "./pages/AdminArtistApplicationsPage";
+import AdminFeaturedArtistsPage from "./pages/AdminFeaturedArtistsPage";
 import AdminLayout from "./components/AdminLayout";
 
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/admin/artist-applications" element={<AdminArtistApplicationsPage />} />
         <Route path="/admin/artists/:id" element={<AdminArtistDetailPage />} />
         <Route path="/admin/moderation" element={<AdminContentApprovalQueuePage />} />
+        <Route path="/admin/featured-artists" element={<AdminFeaturedArtistsPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/admin/login" replace />} />

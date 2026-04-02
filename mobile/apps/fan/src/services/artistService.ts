@@ -1,6 +1,12 @@
 import { apiV1 } from './api';
 import { API_HOST_BASE_URL } from '../config/env';
 
+export type FeaturedArtist = {
+  id: string;
+  name: string;
+  avatar: string;
+};
+
 export type ApiArtist = {
   id: string | number;
   name?: string | null;
@@ -281,4 +287,23 @@ export async function fetchVerifiedArtists(): Promise<ArtistListItem[]> {
       genre: (a.genre ?? '').toString(),
     };
   });
+}
+
+/**
+ * Fetch admin-selected featured artists
+ * GET /api/v1/fan/artists/featured
+ */
+export async function fetchFeaturedArtists(): Promise<FeaturedArtist[]> {
+  const res = await apiV1.get('/artists/featured');
+
+  const raw: Array<{ id: string | number; name?: string | null; avatar?: string | null }> =
+    Array.isArray(res.data?.artists)
+      ? res.data.artists
+      : [];
+
+  return raw.map((a) => ({
+    id: String(a.id),
+    name: (a.name ?? 'Artist').toString(),
+    avatar: resolveImageUrl((a.avatar || '').toString()) || FALLBACK_ARTIST_IMAGE,
+  }));
 }
