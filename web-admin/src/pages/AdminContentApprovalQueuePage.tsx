@@ -66,7 +66,6 @@ function PreviewModal({
   onClose: () => void;
   baseUrl: string;
 }) {
-  const [mediaReady, setMediaReady] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
 
   const audioUrl = toAbsoluteUrl(item?.audioUrl ?? item?.mediaUrl ?? item?.fileUrl ?? null, baseUrl);
@@ -74,11 +73,10 @@ function PreviewModal({
 
   const hasAudio = Boolean(audioUrl);
   const hasVideo = Boolean(videoUrl);
-  const derivedType = hasAudio && hasVideo ? "COMBINED" : hasVideo ? "VIDEO" : "AUDIO";
+  const derivedType = item?.type === "AUDIO_VIDEO" ? "AUDIO / VIDEO" : (item?.type || (hasAudio && hasVideo ? "AUDIO / VIDEO" : hasVideo ? "VIDEO" : "AUDIO"));
 
   useEffect(() => {
     if (!open) return;
-    setMediaReady(false);
     setMediaError(null);
   }, [open, item?.id]);
 
@@ -120,12 +118,6 @@ function PreviewModal({
           ) : null}
 
           <div className="relative space-y-4">
-            {!mediaReady ? (
-              <div>
-                <Skeleton className="h-[220px] w-full rounded-[10px]" />
-              </div>
-            ) : null}
-
             {mediaError ? (
               <div className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-3 text-[13px] text-[#e6b0b0]">
                 Failed to load media. Please verify the backend is running and the file URL is reachable.
@@ -140,9 +132,8 @@ function PreviewModal({
                     src={audioUrl}
                     controls
                     preload="metadata"
-                    onCanPlay={() => setMediaReady(true)}
                     onError={() => setMediaError("FAILED")}
-                    className={`w-full ${mediaReady ? "" : "opacity-0 h-0"}`}
+                    className="w-full"
                   />
                 ) : (
                   <div className="text-[13px] text-[#b8a6a1]">Audio missing</div>
@@ -158,11 +149,8 @@ function PreviewModal({
                     src={videoUrl}
                     controls
                     preload="metadata"
-                    onCanPlay={() => setMediaReady(true)}
                     onError={() => setMediaError("FAILED")}
-                    className={`w-full rounded-[10px] border border-white/10 bg-black ${
-                      mediaReady ? "" : "opacity-0 h-0"
-                    }`}
+                    className="w-full rounded-[10px] border border-white/10 bg-black"
                   />
                 ) : (
                   <div className="text-[13px] text-[#b8a6a1]">Video missing</div>
@@ -358,7 +346,7 @@ export default function AdminContentApprovalQueuePage() {
                 const artistName = item.artist?.name || "Unknown artist";
                 const hasAudio = Boolean(item.audioUrl || item.mediaUrl || item.fileUrl);
                 const hasVideo = Boolean(item.videoUrl);
-                const typeLabel = hasAudio && hasVideo ? "COMBINED" : hasVideo ? "VIDEO" : "AUDIO";
+                const typeLabel = item.type === "AUDIO_VIDEO" ? "AUDIO / VIDEO" : (item.type || (hasAudio && hasVideo ? "AUDIO / VIDEO" : hasVideo ? "VIDEO" : "AUDIO"));
                 const reportCount = Number(item.reportCount ?? 0);
                 const reasons = Array.isArray(item.reasons) ? item.reasons : [];
                 return (
@@ -439,6 +427,13 @@ export default function AdminContentApprovalQueuePage() {
           </div>
         </div>
       </div>
+
+      <PreviewModal
+        open={Boolean(previewItem)}
+        item={previewItem}
+        onClose={() => setPreviewItem(null)}
+        baseUrl={baseUrl}
+      />
     </div>
   );
 }

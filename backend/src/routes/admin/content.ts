@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { requireAuth } from "../../common/auth/requireAuth";
 import { pool } from "../../common/db";
+import { createPlaybackToken } from "../../shared/security/signed-media-token.service";
+import { getMediaConfig } from "../../config/media.config";
 
 const router = Router();
 
@@ -38,6 +40,15 @@ router.get("/flagged", requireAuth, requireAdmin, async (req: any, res: any) => 
       return `${baseUrl}/${raw}`;
     };
 
+    const mediaCfg = getMediaConfig();
+    const streamRoute = (mediaCfg.localPrivateStreamRoute || "media/stream").replace(/^\//, "");
+    const baseUrlFull = `${req.protocol}://${req.get("host")}`;
+
+    const issueStreamUrl = (contentId: number, userId: number, kind: "audio" | "video") => {
+      const token = createPlaybackToken(contentId, userId, mediaCfg.mediaUrlTtlSeconds);
+      return `${baseUrlFull}/${streamRoute}/${contentId}?token=${encodeURIComponent(token)}&kind=${encodeURIComponent(kind)}`;
+    };
+
     const rows = await pool.query(
       `WITH reason_counts AS (
          SELECT content_id, reason, COUNT(*)::int as count
@@ -52,6 +63,8 @@ router.get("/flagged", requireAuth, requireAdmin, async (req: any, res: any) => 
          c.media_url,
          c.audio_url,
          c.video_url,
+         c.storage_key,
+         c.video_storage_key,
          c.lifecycle_state,
          c.is_approved,
          c.status,
@@ -67,33 +80,48 @@ router.get("/flagged", requireAuth, requireAdmin, async (req: any, res: any) => 
        FROM content_items c
        LEFT JOIN users u ON u.id = c.artist_id
        LEFT JOIN reason_counts rc ON rc.content_id = c.id
-       WHERE UPPER(COALESCE(c.status, '')) = 'FLAGGED'
+       WHERE (UPPER(COALESCE(c.status, '')) = 'FLAGGED' OR c.report_count > 0)
+         AND UPPER(COALESCE(c.status, '')) != 'DELETED'
        GROUP BY c.id, u.id
        ORDER BY c.created_at DESC
        LIMIT 200`,
       []
     );
 
-    const items = (rows.rows ?? []).map((r: any) => ({
-      id: r.id,
-      title: r.title,
-      type: (r.type ?? "").toString(),
-      thumbnailUrl: toAbsoluteUrl(r.thumbnail_url),
-      mediaUrl: toAbsoluteUrl(r.media_url),
-      fileUrl: toAbsoluteUrl(r.media_url),
-      audioUrl: toAbsoluteUrl(r.audio_url),
-      videoUrl: toAbsoluteUrl(r.video_url),
-      status: (r.status ?? "FLAGGED").toString(),
-      reportCount: Number(r.report_count ?? 0),
-      reasons: r.reasons ?? [],
-      artist: {
-        id: r.artist_id,
-        name: r.artist_name ?? null
-      },
-      createdAt: r.created_at,
-      lifecycleState: r.lifecycle_state,
-      isApproved: r.is_approved
-    }));
+    const items = (rows.rows ?? []).map((r: any) => {
+      const typeRaw = (r.type ?? "").toString().toUpperCase();
+      const hasAudio = Boolean(r.storage_key || r.audio_url || r.media_url);
+      const hasVideo = Boolean(r.video_storage_key || r.video_url);
+
+      const hasNewAudioStorage = Boolean(r.storage_key);
+      const hasNewVideoStorage = Boolean(r.video_storage_key || (typeRaw.toLowerCase() === "video" && r.storage_key));
+
+      const streamAudioUrl = hasNewAudioStorage ? issueStreamUrl(r.id, req.user?.id, "audio") : null;
+      const streamVideoUrl = hasNewVideoStorage ? issueStreamUrl(r.id, req.user?.id, "video") : null;
+
+      const finalAudioUrl = hasAudio ? (streamAudioUrl || toAbsoluteUrl(r.audio_url || r.media_url)) : null;
+      const finalVideoUrl = hasVideo ? (streamVideoUrl || toAbsoluteUrl(r.video_url || r.media_url)) : null;
+
+      return {
+        id: r.id,
+        title: r.title,
+        type: typeRaw || (hasAudio && hasVideo ? "AUDIO_VIDEO" : hasVideo ? "VIDEO" : "AUDIO"),
+        thumbnailUrl: toAbsoluteUrl(r.thumbnail_url),
+        mediaUrl: typeRaw.toLowerCase() === "video" ? finalVideoUrl : finalAudioUrl,
+        audioUrl: finalAudioUrl,
+        videoUrl: finalVideoUrl,
+        status: (r.status ?? "FLAGGED").toString(),
+        reportCount: Number(r.report_count ?? 0),
+        reasons: r.reasons ?? [],
+        artist: {
+          id: r.artist_id,
+          name: r.artist_name ?? null
+        },
+        createdAt: r.created_at,
+        lifecycleState: r.lifecycle_state,
+        isApproved: r.is_approved
+      };
+    });
 
     return res.json({ success: true, items, correlationId });
   } catch (err: any) {
