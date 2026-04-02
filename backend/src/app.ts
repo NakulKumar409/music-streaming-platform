@@ -7,6 +7,7 @@ import morgan from "morgan";
 import jwt from "jsonwebtoken";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
+import compression from "compression";
 import { globalLimiter } from "./common/security/rateLimit";
 import { validateEnv } from "./config/env.validation";
 import {
@@ -29,11 +30,34 @@ import mediaStreamRoutes from "./modules/media/media-stream.routes";
 import { createStorageProvider } from "./shared/storage/factory/storage-provider.factory";
 import { getDeliveryStrategyForProvider } from "./shared/delivery/services/media-delivery.service";
 import { MediaProviderFactory } from "./services/providers/MediaProviderFactory";
+import { redis } from "./common/redis";
 
 
 
 const app = express();
 app.set("trust proxy", 1);
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled Rejection:", err);
+});
+
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" });
+});
+
+app.get("/health/redis", async (req, res) => {
+  try {
+    await redis.ping();
+    res.json({ status: "redis ok" });
+  } catch {
+    res.status(500).json({ status: "redis down" });
+  }
+});
 
 if (process.env.NODE_ENV !== "production") {
   app.set("etag", false);
@@ -59,6 +83,7 @@ app.post(
   (req, res) => razorpayWebhook(req as any, res)
 );
 
+app.use(compression());
 app.use(express.json());
 
 app.use(globalLimiter);

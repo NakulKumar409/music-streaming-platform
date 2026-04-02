@@ -2,6 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcrypt";
 import { requireAuth } from "../../common/auth/requireAuth";
 import { pool } from "../../common/db";
+import { invalidateCachePattern } from "../../common/cache";
 
 const router = Router();
 
@@ -149,6 +150,8 @@ router.post("/create", requireAuth, requireAdmin, async (req, res) => {
         status: inserted?.status ?? "ACTIVE"
       })}`
     );
+
+    await invalidateCachePattern("artist_search:*");
 
     return res.status(201).json({
       success: true,
@@ -413,6 +416,8 @@ router.patch("/:id/soft-delete", requireAuth, requireAdmin, async (req, res) => 
       return res.status(404).json({ success: false, message: "Artist not found", correlationId });
     }
 
+    await invalidateCachePattern("artist_search:*");
+
     return res.json({
       success: true,
       artist: {
@@ -457,6 +462,8 @@ router.patch("/:id/reactivate", requireAuth, requireAdmin, async (req, res) => {
     if (!updated.rows?.length) {
       return res.status(404).json({ success: false, message: "Artist not found", correlationId });
     }
+
+    await invalidateCachePattern("artist_search:*");
 
     return res.json({
       success: true,
@@ -556,6 +563,8 @@ router.patch("/:id", requireAuth, requireAdmin, async (req, res) => {
       return res.status(404).json({ success: false, message: "Artist not found", correlationId });
     }
 
+    await invalidateCachePattern("artist_search:*");
+
     const u = updated.rows[0] as any;
 
     return res.json({
@@ -637,6 +646,8 @@ router.patch("/:id/status", requireAuth, requireAdmin, async (req, res) => {
     return res.status(500).json({ success: false, message: "Failed to update status" });
   }
 
+  await invalidateCachePattern("artist_search:*");
+
   return res.json({
     success: true,
     status: "ACTIVE",
@@ -694,6 +705,8 @@ router.patch("/:id/verified", requireAuth, requireAdmin, async (req, res) => {
       nextIsVerified: next
     })}`
   );
+
+  await invalidateCachePattern("artist_search:*");
 
   return res.json({ success: true, isVerified: next });
 });

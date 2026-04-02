@@ -12,6 +12,7 @@ import { generateStorageKey } from "../shared/storage/utils/storage-key.util";
 import { validateFileForUpload } from "../shared/storage/utils/file-validation.util";
 import { getExtensionFromMime } from "../shared/storage/utils/file-metadata.util";
 import { createPlaybackToken } from "../shared/security/signed-media-token.service";
+import { invalidateCache } from "../common/cache";
 
 const router = Router();
 
@@ -281,6 +282,9 @@ router.post(
         }
         throw dbErr;
       }
+      
+      await invalidateCache("home_content_feed_rows_dev");
+      await invalidateCache("home_content_feed_rows_prod");
 
       const row = insert.rows[0];
       return res.json({
@@ -495,6 +499,9 @@ router.post("/upload-metadata", uploadLimiter, requireAuth, requireArtist, async
        RETURNING id, title, type, artist_id, thumbnail_url, lifecycle_state, is_approved, created_at`,
       [trimmedTitle, normalizedType, artistId, thumbnailUrl ?? null]
     );
+
+    await invalidateCache("home_content_feed_rows_dev");
+    await invalidateCache("home_content_feed_rows_prod");
 
     return res.json({
       success: true,
@@ -772,6 +779,9 @@ router.delete("/:id", requireAuth, requireArtistOrAdmin, async (req: any, res: a
     console.log(
       `--------------------------------------------------\n[${eventLabel}] ${timestamp} correlationId=${correlationId} actorId=${actorId} contentId=${id} action=DELETED deletedArtistId=${deletedArtistId ?? "-"}`
     );
+
+    await invalidateCache("home_content_feed_rows_dev");
+    await invalidateCache("home_content_feed_rows_prod");
 
     return res.json({ success: true, correlationId });
   } catch {

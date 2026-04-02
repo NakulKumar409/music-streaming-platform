@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { pool } from "../../common/db";
+import { fetchWithCache } from "../../common/cache";
 import { checkContentAccess } from "../../common/accessControl";
 import { getMediaConfig } from "../../config/media.config";
 import { createPlaybackToken } from "../../shared/security/signed-media-token.service";
@@ -27,26 +28,31 @@ const restrictedMediaUrl = (req: any, mediaType: 'audio' | 'video') => {
  */
 router.get("/featured", async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT fa.id, fa.artist_id, 
-        COALESCE(u.name, fa.name) as name,
-        COALESCE(u.profile_image_url, fa.avatar) as avatar_url
-       FROM featured_artists fa
-       LEFT JOIN users u ON u.id = fa.artist_id
-       WHERE fa.is_active = true
-         AND (fa.artist_id IS NULL OR (u.is_deleted = false OR u.is_deleted IS NULL))
-         AND (fa.artist_id IS NULL OR COALESCE(u.status, 'ACTIVE') = 'ACTIVE')
-       ORDER BY fa.created_at DESC
-       LIMIT 10`
-    );
+    const cacheKey = "featured_artists";
+    const responseData = await fetchWithCache(cacheKey, async () => {
+      const result = await pool.query(
+        `SELECT fa.id, fa.artist_id, 
+          COALESCE(u.name, fa.name) as name,
+          COALESCE(u.profile_image_url, fa.avatar) as avatar_url
+         FROM featured_artists fa
+         LEFT JOIN users u ON u.id = fa.artist_id
+         WHERE fa.is_active = true
+           AND (fa.artist_id IS NULL OR (u.is_deleted = false OR u.is_deleted IS NULL))
+           AND (fa.artist_id IS NULL OR COALESCE(u.status, 'ACTIVE') = 'ACTIVE')
+         ORDER BY fa.created_at DESC
+         LIMIT 10`
+      );
 
-    const artists = (result.rows || []).map((row: any) => ({
-      id: row.artist_id || row.id,
-      name: row.name,
-      avatar: toAbsoluteUrl(req, row.avatar_url),
-    }));
+      const artists = (result.rows || []).map((row: any) => ({
+        id: row.artist_id || row.id,
+        name: row.name,
+        avatar: toAbsoluteUrl(req, row.avatar_url),
+      }));
 
-    return res.json({ success: true, artists });
+      return { success: true, artists };
+    }, 300);
+
+    return res.json(responseData);
   } catch (err: any) {
     // Gracefully handle missing table - return empty array
     if (err.message?.includes('relation "featured_artists" does not exist')) {
@@ -69,36 +75,41 @@ router.get("/search", async (req, res) => {
 
     // Case-insensitive search with partial match
     const searchPattern = `%${query}%`;
+    const cacheKey = `artist_search:${query.toLowerCase()}`;
 
-    const result = await pool.query(
-      `SELECT id,
-        name,
-        COALESCE(is_verified, verified, false) as is_verified,
-        profile_image_url,
-        COALESCE(status, 'ACTIVE') as status,
-        COALESCE(subscription_price, 0) as subscription_price,
-        COALESCE(genre, '') as genre
-       FROM users
-       WHERE UPPER(role) = 'ARTIST'
-         AND COALESCE(is_deleted, false) = false
-         AND COALESCE(status, 'ACTIVE') = 'ACTIVE'
-         AND LOWER(name) LIKE LOWER($1)
-       ORDER BY name ASC
-       LIMIT 10`,
-      [searchPattern]
-    );
+    const responseData = await fetchWithCache(cacheKey, async () => {
+      const result = await pool.query(
+        `SELECT id,
+          name,
+          COALESCE(is_verified, verified, false) as is_verified,
+          profile_image_url,
+          COALESCE(status, 'ACTIVE') as status,
+          COALESCE(subscription_price, 0) as subscription_price,
+          COALESCE(genre, '') as genre
+         FROM users
+         WHERE UPPER(role) = 'ARTIST'
+           AND COALESCE(is_deleted, false) = false
+           AND COALESCE(status, 'ACTIVE') = 'ACTIVE'
+           AND LOWER(name) LIKE LOWER($1)
+         ORDER BY name ASC
+         LIMIT 10`,
+        [searchPattern]
+      );
 
-    const artists = (result.rows || []).map((row: any) => ({
-      id: row.id,
-      name: row.name ?? null,
-      isVerified: Boolean(row.is_verified),
-      profileImageUrl: toAbsoluteUrl(req, row.profile_image_url),
-      status: (row.status ?? 'ACTIVE').toString(),
-      subscriptionPrice: Number(row.subscription_price ?? 0),
-      genre: (row.genre ?? '').toString(),
-    }));
+      const artists = (result.rows || []).map((row: any) => ({
+        id: row.id,
+        name: row.name ?? null,
+        isVerified: Boolean(row.is_verified),
+        profileImageUrl: toAbsoluteUrl(req, row.profile_image_url),
+        status: (row.status ?? 'ACTIVE').toString(),
+        subscriptionPrice: Number(row.subscription_price ?? 0),
+        genre: (row.genre ?? '').toString(),
+      }));
 
-    return res.json({ success: true, artists });
+      return { success: true, artists };
+    }, 120);
+
+    return res.json(responseData);
   } catch (err: any) {
     console.error("[Artist Search Error]", err.message);
     return res.status(500).json({ success: false, message: "Search failed" });
