@@ -30,7 +30,8 @@ import mediaStreamRoutes from "./modules/media/media-stream.routes";
 import { createStorageProvider } from "./shared/storage/factory/storage-provider.factory";
 import { getDeliveryStrategyForProvider } from "./shared/delivery/services/media-delivery.service";
 import { MediaProviderFactory } from "./services/providers/MediaProviderFactory";
-import { redis } from "./common/redis";
+import { redis, connectRedisWithRetry } from "./common/redis";
+import "./workers/upload.worker";
 
 
 
@@ -47,7 +48,12 @@ process.on("unhandledRejection", (err) => {
 });
 
 app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
+  res.json({
+    status: "ok",
+    pid: process.pid,
+    port: process.env.PORT || 8000,
+    workerId: process.env.NODE_APP_INSTANCE ?? "N/A",
+  });
 });
 
 app.get("/health/redis", async (req, res) => {
@@ -242,15 +248,21 @@ app.use((err: any, req: any, res: any, next: any) => {
 const PORT = process.env.PORT || 8000;
 
 (async () => {
+  console.log(`[Startup] ── Booting worker (pid=${process.pid} port=${PORT}) ──`);
+
   validateEnv();
   createStorageProvider();
   const storageConfig = validateEnv();
   getDeliveryStrategyForProvider(storageConfig.storageProvider);
-  
+
   // Initialize and fail-fast for the new configurable media provider
   MediaProviderFactory.initialize();
 
-  // Start the server first so Render health checks pass
+  // ── Wait for Redis before opening traffic ──────────────────────────────
+  // Retries up to 10 times with backoff. Never crashes — falls back to DB.
+  await connectRedisWithRetry(10);
+
+  // ── Start HTTP server ──────────────────────────────────────────────────
   app.listen(PORT, () => {
     console.log("--- Logger Initialized Successfully ---");
     console.log(`[Startup] Server running on port ${PORT}`);

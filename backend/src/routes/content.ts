@@ -13,6 +13,7 @@ import { validateFileForUpload } from "../shared/storage/utils/file-validation.u
 import { getExtensionFromMime } from "../shared/storage/utils/file-metadata.util";
 import { createPlaybackToken } from "../shared/security/signed-media-token.service";
 import { invalidateCache } from "../common/cache";
+import { uploadQueue } from "../common/queue";
 
 const router = Router();
 
@@ -62,9 +63,18 @@ const maxAudioBytes = () => mediaConfig().maxUploadAudioBytes;
 const maxVideoBytes = () => mediaConfig().maxUploadVideoBytes;
 const maxImageBytes = () => mediaConfig().maxUploadImageBytes;
 
-const memoryStorage = multer.memoryStorage();
+const diskStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, ensureUploadsDir());
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, file.fieldname + "-" + uniqueSuffix);
+  }
+});
+
 const upload = multer({
-  storage: memoryStorage,
+  storage: diskStorage,
   limits: {
     fileSize: Math.max(maxAudioBytes(), maxVideoBytes(), maxImageBytes(), 1024 * 1024 * 250)
   }
@@ -188,22 +198,6 @@ router.post(
       const audioKey = generateStorageKey(artistId, "audio", extAudio);
       const videoKey = generateStorageKey(artistId, "video", extVideo);
 
-      const uploadedThumbnail = await storage.upload({
-        storageKey: thumbnailKey,
-        body: thumb.buffer,
-        contentType: thumbMime
-      });
-      const uploadedAudio = await storage.upload({
-        storageKey: audioKey,
-        body: audio.buffer,
-        contentType: audioMime
-      });
-      const uploadedVideo = await storage.upload({
-        storageKey: videoKey,
-        body: video.buffer,
-        contentType: videoMime
-      });
-
       const normalizedType = "AUDIO_VIDEO";
       const now = new Date().toISOString();
       let insert;
@@ -212,11 +206,8 @@ router.post(
         `INSERT INTO content_items (
           title, type, artist_id, genre, lifecycle_state, is_approved,
           storage_provider, storage_key, thumbnail_storage_key, video_storage_key, visibility, status,
-          provider_asset_id, audio_provider_asset_id, video_provider_asset_id, thumbnail_provider_asset_id,
-          published_at,
-          mime_type, file_size_bytes, original_file_name, uploaded_at,
-          thumbnail_url, audio_url, video_url, file_key
-        ) VALUES ($1, $2, $3, $4, 'PUBLISHED', true, $5, $6, $7, $8, 'PROTECTED', 'APPROVED', $9, $10, $11, $12, now(), $13, $14, $15, $16, $17, $18, $19, $20)
+          mime_type, file_size_bytes, original_file_name, uploaded_at
+        ) VALUES ($1, $2, $3, $4, 'PUBLISHED', true, $5, $6, $7, $8, 'PROTECTED', 'PROCESSING', $9, $10, $11, $12)
         RETURNING id, title, type, artist_id, storage_key, thumbnail_storage_key, storage_provider, visibility, status, created_at`,
         [
           trimmedTitle,
@@ -227,66 +218,39 @@ router.post(
           audioKey,
           thumbnailKey,
           videoKey,
-          uploadedAudio.providerAssetId ?? uploadedVideo.providerAssetId ?? null,
-          uploadedAudio.providerAssetId ?? null,
-          uploadedVideo.providerAssetId ?? null,
-          uploadedThumbnail.providerAssetId ?? null,
           audioMime,
           audio.size ?? null,
           audio.originalname || null,
-          now,
-          uploadedThumbnail.providerUrl ?? null,
-          null,
-          null,
-          uploadedAudio.providerUrl ?? null
+          now
         ]
-      ).catch(async (dbErr: any) => {
-        if (dbErr?.code !== "42703") throw dbErr;
-        // Backward-compatible fallback for DBs that have not yet added provider-asset columns.
-        return pool.query(
-          `INSERT INTO content_items (
-            title, type, artist_id, genre, lifecycle_state, is_approved,
-            storage_provider, storage_key, thumbnail_storage_key, video_storage_key, visibility, status,
-            published_at,
-            mime_type, file_size_bytes, original_file_name, uploaded_at,
-            thumbnail_url, audio_url, video_url, file_key
-          ) VALUES ($1, $2, $3, $4, 'PUBLISHED', true, $5, $6, $7, $8, 'PROTECTED', 'APPROVED', now(), $9, $10, $11, $12, $13, $14, $15, $16)
-          RETURNING id, title, type, artist_id, storage_key, thumbnail_storage_key, storage_provider, visibility, status, created_at`,
-          [
-            trimmedTitle,
-            normalizedType,
-            artistId,
-            trimmedGenre || null,
-            config.provider,
-            audioKey,
-            thumbnailKey,
-            videoKey,
-            audioMime,
-            audio.size ?? null,
-            audio.originalname || null,
-            now,
-            uploadedThumbnail.providerUrl ?? null,
-            null,
-            null,
-            uploadedAudio.providerUrl ?? null
-          ]
         );
-      });
       } catch (dbErr: any) {
-        try {
-          await storage.delete(thumbnailKey);
-          await storage.delete(audioKey);
-          await storage.delete(videoKey);
-        } catch (cleanupErr) {
-          console.error("[content/upload] cleanup after DB failure", correlationId, cleanupErr);
-        }
+        // DB failed, wipe the local disk temp files immediately!
+        fs.promises.unlink(thumb.path).catch(e => e);
+        fs.promises.unlink(audio.path).catch(e => e);
+        fs.promises.unlink(video.path).catch(e => e);
         throw dbErr;
       }
+      
+      const row = insert.rows[0];
+
+      // Dispatch to BullMQ for background uploading!
+      await uploadQueue.add("upload", {
+        contentId: row.id,
+        thumbnail: { path: thumb.path, mime: thumbMime, key: thumbnailKey },
+        audio: { path: audio.path, mime: audioMime, key: audioKey },
+        video: { path: video.path, mime: videoMime, key: videoKey }
+      }, {
+        attempts: 3,
+        backoff: {
+          type: 'fixed',
+          delay: 5000
+        }
+      });
       
       await invalidateCache("home_content_feed_rows_dev");
       await invalidateCache("home_content_feed_rows_prod");
 
-      const row = insert.rows[0];
       return res.json({
         success: true,
         item: {
