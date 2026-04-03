@@ -77,7 +77,7 @@ export const registerFan = async (req: Request, res: Response) => {
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedUsername = username.trim();
 
-    const emailExists = await pool.query("SELECT id FROM users WHERE email = $1", [
+    const emailExists = await pool.query("SELECT id FROM public.users WHERE email = $1", [
       normalizedEmail
     ]);
     if (emailExists.rows.length > 0) {
@@ -89,7 +89,7 @@ export const registerFan = async (req: Request, res: Response) => {
     }
 
     const usernameExists = await pool.query(
-      "SELECT id FROM users WHERE username = $1",
+      "SELECT id FROM public.users WHERE username = $1",
       [normalizedUsername]
     );
     if (usernameExists.rows.length > 0) {
@@ -103,7 +103,7 @@ export const registerFan = async (req: Request, res: Response) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const insertQuery = `
-      INSERT INTO users (
+      INSERT INTO public.users (
         full_name,
         email,
         phone_number,

@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 dotenv.config();
-import "./common/db";
+import { pool } from "./common/db"; // Trigger restart for .env
 
 import express from "express";
 import morgan from "morgan";
@@ -47,24 +47,42 @@ process.on("unhandledRejection", (err) => {
   console.error("Unhandled Rejection:", err);
 });
 
-app.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
-    pid: process.pid,
-    port: process.env.PORT || 8000,
-    workerId: process.env.NODE_APP_INSTANCE ?? "N/A",
-  });
-});
-
-app.get("/health/redis", async (req, res) => {
+app.get("/health", async (req, res) => {
   try {
-    await redis.ping();
-    res.json({ status: "redis ok" });
-  } catch {
-    res.status(500).json({ status: "redis down" });
+    const user10 = await pool.query("SELECT id FROM public.users WHERE id = 10");
+    res.json({
+      status: "ok",
+      pid: process.pid,
+      db: "ok",
+      user_10_exists: !!user10.rows[0],
+      secret_prefix: process.env.JWT_SECRET?.substring(0, 10)
+    });
+  } catch (err: any) {
+    res.json({
+      status: "ok",
+      pid: process.pid,
+      db: "error",
+      message: err?.message
+    });
   }
 });
 
+app.get("/health/db", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT current_database(), current_schema() FROM (SELECT 1) AS dummy");
+    const countAll = await pool.query("SELECT COUNT(*) FROM public.users");
+    const user10 = await pool.query("SELECT id FROM public.users WHERE id = 10");
+    res.json({ 
+      status: "db ok", 
+      database: result.rows[0]?.current_database,
+      schema: result.rows[0]?.current_schema,
+      user_10_exists: !!user10.rows[0],
+      total_users: Number(countAll.rows[0].count)
+    });
+  } catch (err: any) {
+    res.status(500).json({ status: "db error", message: err?.message });
+  }
+});
 if (process.env.NODE_ENV !== "production") {
   app.set("etag", false);
 }

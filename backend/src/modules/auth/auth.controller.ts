@@ -80,28 +80,28 @@ export class AuthController {
       let dbUser: any = null;
       try {
         try {
-          const userQuery =
-            "SELECT id, name, email, status, role, COALESCE(is_verified, verified, false) as is_verified FROM users WHERE id = $1";
-          const userResult = await pool.query(userQuery, [tokenUser?.id]);
+            const userQuery =
+              "SELECT id, name, email, status, role, COALESCE(is_verified, verified, false) as is_verified FROM public.users WHERE id = $1";
+            const userResult = await pool.query(userQuery, [tokenUser?.id]);
           dbUser = userResult.rows?.[0] || null;
         } catch (err2: any) {
           if (err2?.code !== "42703") throw err2;
           try {
-            const userQuery =
-              "SELECT id, name, email, status, role, COALESCE(verified, false) as is_verified FROM users WHERE id = $1";
-            const userResult = await pool.query(userQuery, [tokenUser?.id]);
+              const userQuery =
+                "SELECT id, name, email, status, role, COALESCE(verified, false) as is_verified FROM public.users WHERE id = $1";
+              const userResult = await pool.query(userQuery, [tokenUser?.id]);
             dbUser = userResult.rows?.[0] || null;
           } catch (err3: any) {
             if (err3?.code !== "42703") throw err3;
-            const userQuery = "SELECT id, name, email, status, role FROM users WHERE id = $1";
-            const userResult = await pool.query(userQuery, [tokenUser?.id]);
+              const userQuery = "SELECT id, name, email, status, role FROM public.users WHERE id = $1";
+              const userResult = await pool.query(userQuery, [tokenUser?.id]);
             dbUser = userResult.rows?.[0] || null;
           }
         }
       } catch (err: any) {
         if (err?.code === "42703") {
-          const userQuery = "SELECT id, name, email, role FROM users WHERE id = $1";
-          const userResult = await pool.query(userQuery, [tokenUser?.id]);
+            const userQuery = "SELECT id, name, email, role FROM public.users WHERE id = $1";
+            const userResult = await pool.query(userQuery, [tokenUser?.id]);
           dbUser = userResult.rows?.[0] || null;
         } else {
           throw err;

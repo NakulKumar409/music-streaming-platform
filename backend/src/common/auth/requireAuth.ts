@@ -25,6 +25,7 @@ export const requireAuth = async (
     );
 
     const userId = decoded?.id ?? decoded?.userId;
+    console.log(`[Auth Debug] ID: ${userId}, Role: ${decoded?.role}, Secret Prefix: ${process.env.JWT_SECRET?.substring(0, 10)}`);
 
     if (!userId) {
       return res.status(401).json({
@@ -49,7 +50,7 @@ export const requireAuth = async (
     let dbUser: any = null;
     try {
       const result = await pool.query(
-        "SELECT id, role, COALESCE(status, 'ACTIVE') as status, COALESCE(is_deleted, false) as is_deleted FROM users WHERE id = $1",
+        "SELECT id, role, COALESCE(status, 'ACTIVE') as status, COALESCE(is_deleted, false) as is_deleted FROM public.users WHERE id = $1",
         [userId]
       );
       dbUser = result.rows?.[0] ?? null;

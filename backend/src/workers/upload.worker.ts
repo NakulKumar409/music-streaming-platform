@@ -47,7 +47,7 @@ export const uploadWorker = new Worker(
             audio_url = $6,
             video_url = $7,
             file_key = $8,
-            status = 'APPROVED'
+            status = 'PUBLISHED'
          WHERE id = $9`,
         [
           uploadedAudio.providerAssetId || uploadedVideo.providerAssetId || null,

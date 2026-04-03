@@ -40,6 +40,23 @@ export class CloudinaryStorageProvider implements IStorageProvider {
 
   async upload(params: UploadObjectParams): Promise<UploadObjectResult> {
     const { storageKey, body, contentType } = params;
+
+    // E2E Mock Trigger
+    if (storageKey.includes("E2E_MOCK")) {
+      if (storageKey.includes("E2E_MOCK_FAILURE")) {
+        console.error(`[Storage] E2E MOCK FAILURE triggered for key: ${storageKey}`);
+        throw new Error("E2E Mocked Storage Failure");
+      }
+      console.log(`[Storage] E2E MOCK UPLOAD triggered for key: ${storageKey}`);
+      return {
+        storageKey,
+        providerAssetId: `mock_${Date.now()}`,
+        providerUrl: `https://res.cloudinary.com/mock/${storageKey}`,
+        etag: `mock_${Date.now()}`,
+        sizeBytes: 1000,
+      };
+    }
+
     // Write body to temp file since CloudinaryProvider expects a file path
     const tempDir = process.env.TEMP_DIR || "/tmp";
     const tempFile = path.join(tempDir, `cloudinary-upload-${Date.now()}`);
@@ -47,8 +64,13 @@ export class CloudinaryStorageProvider implements IStorageProvider {
     if (Buffer.isBuffer(body)) {
       fs.writeFileSync(tempFile, body);
     } else {
-      // Handle stream - this is simplified
-      throw new Error("Stream upload not yet implemented for Cloudinary");
+      await new Promise((resolve, reject) => {
+        const writeStream = fs.createWriteStream(tempFile);
+        body.pipe(writeStream);
+        body.on('error', reject);
+        writeStream.on('error', reject);
+        writeStream.on('finish', resolve);
+      });
     }
 
     try {

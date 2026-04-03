@@ -9,7 +9,7 @@ export class AuthService {
         .trim()
         .toLowerCase();
 
-      const existingUserQuery = "SELECT id FROM users WHERE email = $1";
+      const existingUserQuery = "SELECT id FROM public.users WHERE email = $1";
       const existingUser = await pool.query(existingUserQuery, [normalizedEmail]);
 
       if (existingUser.rows.length > 0) {
@@ -19,7 +19,7 @@ export class AuthService {
       const hashedPassword = await bcrypt.hash(password, 10);
       const normalizedName = name ? String(name).trim() : null;
 
-      const insertUserQuery = "INSERT INTO users (email, password, name) VALUES ($1, $2, $3) RETURNING id";
+      const insertUserQuery = "INSERT INTO public.users (email, password, name) VALUES ($1, $2, $3) RETURNING id";
       await pool.query(insertUserQuery, [normalizedEmail, hashedPassword, normalizedName]);
 
       return { success: true, message: "User registered successfully" };
@@ -36,11 +36,11 @@ export class AuthService {
     let userResult;
     try {
       const userQuery =
-        "SELECT id, email, password, status, role, COALESCE(is_verified, verified, false) as is_verified, COALESCE(is_deleted, false) as is_deleted FROM users WHERE email = $1";
+        "SELECT id, email, password, status, role, COALESCE(is_verified, verified, false) as is_verified, COALESCE(is_deleted, false) as is_deleted FROM public.users WHERE email = $1";
       userResult = await pool.query(userQuery, [normalizedEmail]);
     } catch (err: any) {
       if (err?.code === "42703") {
-        const userQuery = "SELECT id, email, password, role FROM users WHERE email = $1";
+        const userQuery = "SELECT id, email, password, role FROM public.users WHERE email = $1";
         userResult = await pool.query(userQuery, [normalizedEmail]);
       } else {
         throw err;

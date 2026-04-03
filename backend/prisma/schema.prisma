@@ -7,12 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum ArtistStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
 model playing_with_neon {
   id    Int    @id @default(autoincrement())
   name  String
@@ -20,75 +14,76 @@ model playing_with_neon {
 }
 
 model users {
-  id                       Int            @id @default(autoincrement())
-  name                     String?        @db.VarChar(100)
-  email                    String         @unique @db.VarChar(100)
-  password                 String         @db.VarChar(255)
-  role                     String?        @default("FAN") @db.VarChar(20)
-  isDeleted                Boolean        @default(false) @map("is_deleted")
-  deletedAt                DateTime?      @map("deleted_at") @db.Timestamptz(6)
-  deletionReason           String?        @map("deletion_reason")
-  artistStatus             ArtistStatus   @default(PENDING) @map("artist_status")
-  artistBio                String?        @map("artist_bio")
-  portfolioLinks           String[]       @default([]) @map("portfolio_links")
-  onboardedAt              DateTime?      @map("onboarded_at") @db.Timestamptz(6)
-  created_at               DateTime       @default(now()) @db.Timestamptz(6)
+  id                       Int                @id @default(autoincrement())
+  email                    String             @unique(map: "idx_users_email_unique") @db.VarChar(100)
+  password                 String             @db.VarChar(255)
+  role                     String?            @default("FAN") @db.VarChar(20)
+  status                   String             @default("ACTIVE") @db.VarChar(20)
   is_verified              Boolean?
-  subscription_price       Decimal        @default(0) @db.Decimal
-  status                   String         @default("ACTIVE") @db.VarChar(20)
-  trustScore               Int            @default(100)
-  strikeCount              Int            @default(0)
   verified                 Boolean?
+  name                     String?            @db.VarChar(100)
   profile_image_url        String?
-  bio                      String?
-  banner_image_url         String?
-  phone                    String?        @db.VarChar(30)
-  genre                    String?        @db.VarChar(120)
-  social_links             Json?
-  revenue_share_percentage Decimal        @default(90) @db.Decimal
+  created_at               DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime           @default(now()) @db.Timestamptz(6)
+  subscription_price       Decimal            @default(0) @db.Decimal
+  accent_color             String?            @db.VarChar(20)
   admin_remarks            String?
-  updated_at               DateTime       @default(now()) @db.Timestamptz(6)
-  last_login               DateTime?      @db.Timestamptz(6)
-  audio_quality_pref       String         @default("HIGH") @db.VarChar(20)
-  notifications_pref       Boolean        @default(true)
-  subscription_count       Int            @default(0)
-  total_listen_time        Int            @default(0)
-  dob                      DateTime?      @db.Date
-  favoriteGenre            String?        @map("favorite_genre") @db.VarChar(120)
-  fullName                 String?        @map("full_name") @db.VarChar(150)
-  location                 String?        @db.VarChar(120)
-  phoneNumber              String?        @map("phone_number") @db.VarChar(30)
-  username                 String?        @unique @db.VarChar(60)
-  razorpay_customer_id     String?        @unique @db.VarChar(100)
-  accent_color             String?        @db.VarChar(20)
+  audio_quality_pref       String             @default("HIGH") @db.VarChar(20)
+  banner_image_url         String?
+  bio                      String?
+  dob                      DateTime?          @db.Date
+  favoriteGenre            String?            @map("favorite_genre") @db.VarChar(120)
+  fullName                 String?            @map("full_name") @db.VarChar(150)
+  genre                    String?            @db.VarChar(120)
+  last_login               DateTime?          @db.Timestamptz(6)
+  location                 String?            @db.VarChar(120)
+  notifications_pref       Boolean            @default(true)
+  phone                    String?            @db.VarChar(30)
+  phoneNumber              String?            @map("phone_number") @db.VarChar(30)
+  revenue_share_percentage Decimal            @default(90) @db.Decimal
+  social_links             Json?
+  subscription_count       Int                @default(0)
+  total_listen_time        Int                @default(0)
+  username                 String?            @unique @db.VarChar(60)
+  artistBio                String?            @map("artist_bio")
+  portfolioLinks           String[]           @default([]) @map("portfolio_links")
+  onboardedAt              DateTime?          @map("onboarded_at") @db.Timestamptz(6)
+  isDeleted                Boolean            @default(false) @map("is_deleted")
+  deletedAt                DateTime?          @map("deleted_at") @db.Timestamptz(6)
+  deletionReason           String?            @map("deletion_reason")
+  razorpay_customer_id     String?            @unique @db.VarChar(100)
+  strikeCount              Int                @default(0)
+  trustScore               Int                @default(100)
+  artistStatus             ArtistStatus       @default(PENDING) @map("artist_status")
+  trust_score              Int                @default(100)
+  strike_count             Int                @default(0)
+  artist_appeal_message    String?
   artist_stats             artist_stats?
-  transactions             transactions[]
-  search_history           search_history[]
-  subscriptions            subscriptions[]
+  featured_artists         featured_artists[]
   playback_history         playback_history[]
   reports                  reports[]
+  search_history           search_history[]
+  subscriptions            subscriptions[]
+  transactions             transactions[]
+
+  @@index([artistStatus], map: "idx_users_artist_status")
+  @@index([isDeleted], map: "idx_users_is_deleted")
+  @@index([role], map: "idx_users_role")
 }
 
 model transactions {
-  id                  Int      @id @default(autoincrement())
-  user_id             Int
-  // Razorpay Fields
-  razorpay_order_id   String   @unique @db.VarChar(100)
-  razorpay_payment_id String?  @unique @db.VarChar(100)
-  razorpay_signature  String?  @db.Text
-  
-  amount              Int      // Amount in paise
-  currency            String   @default("INR") @db.VarChar(10)
-  
-  // Status: CREATED, CAPTURED, FAILED
-  status              String   @db.VarChar(30) 
-  artist_name         String   @db.VarChar(120)
-  
-  // Truthful UX: Confirmation timestamp
+  id                   Int       @id @default(autoincrement())
+  user_id              Int
+  razorpay_order_id    String    @unique @db.VarChar(100)
+  razorpay_payment_id  String?   @unique @db.VarChar(100)
+  razorpay_signature   String?
+  amount               Int
+  currency             String    @default("INR") @db.VarChar(10)
+  status               String    @db.VarChar(30)
+  artist_name          String    @db.VarChar(120)
   payment_confirmed_at DateTime? @db.Timestamptz(6)
-  
-  date                DateTime @default(now()) @db.Timestamp(6)
-  user                users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  date                 DateTime  @default(now()) @db.Timestamp(6)
+  user                 users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
 }
@@ -104,105 +99,103 @@ model artist_stats {
 }
 
 model content_items {
-  id                    Int       @id @default(autoincrement())
-  title                 String    @db.VarChar(255)
-  type                  String    @db.VarChar(20)
-  artist_id             Int
-  thumbnail_url         String?
-  media_url             String?
-  audio_url             String?
-  video_url             String?
-  genre                 String?   @db.VarChar(80)
-  lifecycle_state       String    @default("PUBLISHED") @db.VarChar(20)
-  is_approved           Boolean   @default(true)
-  rejection_reason      String?
-  reportCount            Int       @default(0) @map("report_count")
-  created_at            DateTime  @default(now()) @db.Timestamptz(6)
-  published_at          DateTime? @db.Timestamptz(6)
-  subscription_required Boolean   @default(false)
-  // Provider-neutral media storage (section 14)
-  storage_provider      String?   @default("local") @map("storage_provider") @db.VarChar(20)
-  storage_key           String?   @map("storage_key") @db.Text
-  thumbnail_storage_key  String?   @map("thumbnail_storage_key") @db.Text
-  visibility            String?   @default("PROTECTED") @db.VarChar(30)
-  status                String?   @default("APPROVED") @db.VarChar(20)
-  mime_type             String?   @map("mime_type") @db.VarChar(100)
-  file_size_bytes       Int?      @map("file_size_bytes")
-  original_file_name    String?   @map("original_file_name") @db.VarChar(255)
-  video_storage_key     String?   @map("video_storage_key") @db.Text
-  uploaded_at           DateTime? @map("uploaded_at") @db.Timestamptz(6)
-  
-  // Storage & Streaming configuration additions
-  providerAssetId       String?   @unique @map("provider_asset_id") @db.VarChar(255)
-  audioProviderAssetId  String?   @map("audio_provider_asset_id") @db.VarChar(255)
-  videoProviderAssetId  String?   @map("video_provider_asset_id") @db.VarChar(255)
-  thumbnailProviderAssetId String? @map("thumbnail_provider_asset_id") @db.VarChar(255)
-  fileKey               String?   @map("file_key") @db.Text
-  metadata              Json?
-  technicalStatus       String?   @default("READY") @map("technical_status") @db.VarChar(20)
-  businessStatus        String?   @default("PUBLISHED") @map("business_status") @db.VarChar(20)
+  id                       Int                @id @default(autoincrement())
+  title                    String             @db.VarChar(255)
+  type                     String             @db.VarChar(20)
+  artist_id                Int
+  thumbnail_url            String?
+  media_url                String?
+  audio_url                String?
+  video_url                String?
+  genre                    String?            @db.VarChar(80)
+  lifecycle_state          String             @default("PUBLISHED") @db.VarChar(20)
+  is_approved              Boolean            @default(true)
+  rejection_reason         String?
+  created_at               DateTime           @default(now()) @db.Timestamptz(6)
+  published_at             DateTime?          @db.Timestamptz(6)
+  subscription_required    Boolean            @default(false)
+  storage_provider         String?            @default("local") @map("storage_provider") @db.VarChar(20)
+  storage_key              String?            @map("storage_key")
+  thumbnail_storage_key    String?            @map("thumbnail_storage_key")
+  visibility               String?            @default("PROTECTED") @db.VarChar(30)
+  status                   String?            @default("APPROVED") @db.VarChar(20)
+  mime_type                String?            @map("mime_type") @db.VarChar(100)
+  file_size_bytes          Int?               @map("file_size_bytes")
+  original_file_name       String?            @map("original_file_name") @db.VarChar(255)
+  uploaded_at              DateTime?          @map("uploaded_at") @db.Timestamptz(6)
+  video_storage_key        String?            @map("video_storage_key")
+  reportCount              Int                @default(0) @map("report_count")
+  fileKey                  String?            @map("file_key")
+  providerAssetId          String?            @map("provider_asset_id")
+  audioProviderAssetId     String?            @map("audio_provider_asset_id")
+  videoProviderAssetId     String?            @map("video_provider_asset_id")
+  thumbnailProviderAssetId String?            @map("thumbnail_provider_asset_id")
+  playback_history         playback_history[]
+  reports                  reports[]
 
-  playback_history      playback_history[]
-  reports               reports[]
+  @@index([audioProviderAssetId], map: "idx_content_items_audio_provider_asset_id")
+  @@index([storage_provider], map: "idx_content_items_storage_provider")
+  @@index([thumbnailProviderAssetId], map: "idx_content_items_thumbnail_provider_asset_id")
+  @@index([videoProviderAssetId], map: "idx_content_items_video_provider_asset_id")
 }
 
 model reports {
-  id         Int          @id @default(autoincrement())
-  reason     String       @db.VarChar(80)
-  contentId  Int          @map("content_id")
-  userId     Int          @map("user_id")
-  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  id        Int           @id @default(autoincrement())
+  reason    String        @db.VarChar(80)
+  contentId Int           @map("content_id")
+  userId    Int           @map("user_id")
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  content   content_items @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  user      users         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  content    content_items @relation(fields: [contentId], references: [id], onDelete: Cascade)
-  user       users         @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+  @@unique([contentId, userId])
+  @@unique([contentId, userId], map: "idx_reports_unique_content_user")
   @@index([contentId])
   @@index([userId])
-  @@unique([contentId, userId])
+  @@index([contentId], map: "idx_reports_content_id")
+  @@index([userId], map: "idx_reports_user_id")
 }
 
 model subscriptions {
-  id          Int      @id @default(autoincrement())
-  user_id     Int
-  artist_id   Int
-  // Status: ACTIVE, EXPIRED, CANCELLED, PENDING
-  status      String   @default("PENDING") @db.VarChar(20) 
-  plan_type   String   @default("MONTHLY") @db.VarChar(20)
-  
-  razorpay_subscription_id String?   @unique @db.VarChar(100)
-  plan_id                  String?   @db.VarChar(100)
-  payment_id               String?   @db.VarChar(100)
+  id                       Int       @id @default(autoincrement())
+  user_id                  Int
+  artist_id                Int
+  status                   String    @default("PENDING") @db.VarChar(20)
+  plan_type                String    @default("MONTHLY") @db.VarChar(20)
+  start_date               DateTime  @default(now()) @db.Timestamptz(6)
+  auto_renew               Boolean   @default(true)
+  created_at               DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime  @default(now()) @db.Timestamptz(6)
   invoice_id               String?   @db.VarChar(100)
+  next_billing_date        DateTime? @db.Timestamptz(6)
+  payment_id               String?   @db.VarChar(100)
+  plan_id                  String?   @db.VarChar(100)
+  razorpay_subscription_id String?   @unique @db.VarChar(100)
+  end_date                 DateTime? @db.Timestamptz(6)
+  user                     users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  // Dates for Subscription Detail screen
-  start_date        DateTime  @default(now()) @db.Timestamptz(6)
-  next_billing_date DateTime? @db.Timestamptz(6) // Renewal date calculation ke liye
-  auto_renew        Boolean   @default(true)
-
-  created_at  DateTime @default(now()) @db.Timestamptz(6)
-  updated_at  DateTime @default(now()) @db.Timestamptz(6)
-
-  user users @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
+  @@unique([user_id, artist_id])
+  @@unique([user_id, artist_id], map: "idx_subscriptions_user_artist")
   @@index([user_id])
   @@index([artist_id])
-  @@unique([user_id, artist_id])
+  @@index([artist_id], map: "idx_subscriptions_artist_id")
+  @@index([user_id], map: "idx_subscriptions_user_id")
 }
 
-
 model playback_history {
-  id        Int      @id @default(autoincrement())
+  id        Int           @id @default(autoincrement())
   user_id   Int
-  song_id   Int      @map("content_id")
-  played_at DateTime @default(now()) @db.Timestamptz(6)
+  song_id   Int           @map("content_id")
+  played_at DateTime      @default(now()) @db.Timestamptz(6)
+  song      content_items @relation(fields: [song_id], references: [id], onDelete: Cascade)
+  user      users         @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  user users         @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  song content_items @relation(fields: [song_id], references: [id], onDelete: Cascade)
-
+  @@unique([user_id, song_id])
   @@index([user_id])
   @@index([song_id])
   @@index([played_at])
-  @@unique([user_id, song_id])
+  @@index([played_at], map: "idx_playback_history_played_at")
+  @@index([user_id], map: "idx_playback_history_user_id")
 }
 
 model search_history {
@@ -210,9 +203,51 @@ model search_history {
   user_id    Int
   query      String
   created_at DateTime @default(now()) @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  user users @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
-  @@index([user_id])
   @@unique([user_id, query])
+  @@index([user_id])
+}
+
+model content_plays {
+  id         Int      @id @default(autoincrement())
+  content_id Int
+  user_id    Int?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([content_id], map: "idx_content_plays_content_id")
+  @@index([created_at], map: "idx_content_plays_created_at")
+}
+
+model content_reactions {
+  id         Int      @id @default(autoincrement())
+  content_id Int
+  user_id    Int
+  reaction   String   @db.VarChar(20)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([content_id, user_id], map: "idx_content_reactions_unique")
+  @@index([content_id], map: "idx_content_reactions_content_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model featured_artists {
+  id         Int       @id @default(autoincrement())
+  artist_id  Int?
+  is_active  Boolean?  @default(true)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at DateTime? @default(now()) @db.Timestamptz(6)
+  name       String?
+  avatar     String?
+  users      users?    @relation(fields: [artist_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([is_active, created_at(sort: Desc)], map: "idx_featured_artists_active")
+  @@index([artist_id], map: "idx_featured_artists_artist_id")
+  @@index([name], map: "idx_featured_artists_name")
+}
+
+enum ArtistStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
