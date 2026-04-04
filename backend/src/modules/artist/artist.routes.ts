@@ -28,7 +28,9 @@ const restrictedMediaUrl = (req: any, mediaType: 'audio' | 'video') => {
  */
 router.get("/featured", async (req, res) => {
   try {
-    const cacheKey = "featured_artists";
+    const limit = Number(req.query.limit) || 10;
+    const offset = Number(req.query.offset) || 0;
+    const cacheKey = `featured_artists:${limit}:${offset}`;
     const responseData = await fetchWithCache(cacheKey, async () => {
       const result = await pool.query(
         `SELECT fa.id, fa.artist_id, 
@@ -40,7 +42,8 @@ router.get("/featured", async (req, res) => {
            AND (fa.artist_id IS NULL OR (u.is_deleted = false OR u.is_deleted IS NULL))
            AND (fa.artist_id IS NULL OR COALESCE(u.status, 'ACTIVE') = 'ACTIVE')
          ORDER BY fa.created_at DESC
-         LIMIT 10`
+         LIMIT $1 OFFSET $2`,
+         [limit, offset]
       );
 
       const artists = (result.rows || []).map((row: any) => ({
@@ -67,34 +70,63 @@ router.get("/featured", async (req, res) => {
 router.get("/search", async (req, res) => {
   try {
     const query = String(req.query.q || "").trim();
+    const limit = Number(req.query.limit) || 10;
+    const offset = Number(req.query.offset) || 0;
+    // Cursor mode: sort by name DESC, use last returned name as cursor
+    const cursorRaw = req.query.cursor ? String(req.query.cursor) : null;
+    const useCursor = Boolean(cursorRaw);
 
     // Validation: require at least 2 characters
     if (query.length < 2) {
-      return res.json({ success: true, artists: [] });
+      return res.json({ success: true, artists: [], nextCursor: null });
     }
 
     // Case-insensitive search with partial match
     const searchPattern = `%${query}%`;
-    const cacheKey = `artist_search:${query.toLowerCase()}`;
+    const cacheKey = useCursor
+      ? `artist_search:${query.toLowerCase()}:cursor:${cursorRaw}:${limit}`
+      : `artist_search:${query.toLowerCase()}:${limit}:${offset}`;
 
     const responseData = await fetchWithCache(cacheKey, async () => {
-      const result = await pool.query(
-        `SELECT id,
-          name,
-          COALESCE(is_verified, verified, false) as is_verified,
-          profile_image_url,
-          COALESCE(status, 'ACTIVE') as status,
-          COALESCE(subscription_price, 0) as subscription_price,
-          COALESCE(genre, '') as genre
-         FROM users
-         WHERE UPPER(role) = 'ARTIST'
-           AND COALESCE(is_deleted, false) = false
-           AND COALESCE(status, 'ACTIVE') = 'ACTIVE'
-           AND LOWER(name) LIKE LOWER($1)
-         ORDER BY name ASC
-         LIMIT 10`,
-        [searchPattern]
-      );
+      let result: any;
+      if (useCursor) {
+        result = await pool.query(
+          `SELECT id,
+            name,
+            COALESCE(is_verified, verified, false) as is_verified,
+            profile_image_url,
+            COALESCE(status, 'ACTIVE') as status,
+            COALESCE(subscription_price, 0) as subscription_price,
+            COALESCE(genre, '') as genre
+           FROM users
+           WHERE UPPER(role) = 'ARTIST'
+             AND COALESCE(is_deleted, false) = false
+             AND COALESCE(status, 'ACTIVE') = 'ACTIVE'
+             AND LOWER(name) LIKE LOWER($1)
+             AND LOWER(name) > LOWER($2)
+           ORDER BY name ASC
+           LIMIT $3`,
+          [searchPattern, cursorRaw, limit]
+        );
+      } else {
+        result = await pool.query(
+          `SELECT id,
+            name,
+            COALESCE(is_verified, verified, false) as is_verified,
+            profile_image_url,
+            COALESCE(status, 'ACTIVE') as status,
+            COALESCE(subscription_price, 0) as subscription_price,
+            COALESCE(genre, '') as genre
+           FROM users
+           WHERE UPPER(role) = 'ARTIST'
+             AND COALESCE(is_deleted, false) = false
+             AND COALESCE(status, 'ACTIVE') = 'ACTIVE'
+             AND LOWER(name) LIKE LOWER($1)
+           ORDER BY name ASC
+           LIMIT $2 OFFSET $3`,
+          [searchPattern, limit, offset]
+        );
+      }
 
       const artists = (result.rows || []).map((row: any) => ({
         id: row.id,
@@ -106,7 +138,10 @@ router.get("/search", async (req, res) => {
         genre: (row.genre ?? '').toString(),
       }));
 
-      return { success: true, artists };
+      const lastArtist = artists[artists.length - 1];
+      const nextCursor = lastArtist?.name ?? null;
+
+      return { success: true, artists, nextCursor };
     }, 120);
 
     return res.json(responseData);
@@ -125,6 +160,9 @@ router.get("/", (req, res) => {
 
   (async () => {
     try {
+      const limit = Number(req.query.limit) || 10;
+      const offset = Number(req.query.offset) || 0;
+
       const r = await pool.query(
         `SELECT id,
           name,
@@ -139,7 +177,8 @@ router.get("/", (req, res) => {
            AND COALESCE(is_verified, verified, false) = true
            AND COALESCE(status, 'ACTIVE') = 'ACTIVE'
          ORDER BY id DESC
-         LIMIT 100`
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
       );
 
       const artists = (r.rows ?? []).map((row: any) => ({
@@ -154,6 +193,9 @@ router.get("/", (req, res) => {
 
       return res.json({ success: true, artists });
     } catch (err: any) {
+      const limit = Number(req.query.limit) || 10;
+      const offset = Number(req.query.offset) || 0;
+
       // Fallback if status or is_verified columns are missing
       const r = await pool.query(
         `SELECT id,
@@ -165,7 +207,8 @@ router.get("/", (req, res) => {
          WHERE UPPER(role) = 'ARTIST'
            AND COALESCE(is_deleted, false) = false
          ORDER BY id DESC
-         LIMIT 100`
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
       );
 
       const artists = (r.rows ?? []).map((row: any) => ({
@@ -308,21 +351,39 @@ router.get("/:artistId/content", (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid artistId" });
     }
 
+    const limit = Number(req.query.limit) || 10;
+    const offset = Number(req.query.offset) || 0;
+    // Cursor mode: ?cursor=<ISO timestamp>
+    const cursorRaw = req.query.cursor ? String(req.query.cursor) : null;
+    const cursor = cursorRaw ? new Date(cursorRaw) : null;
+    const useCursor = cursor instanceof Date && !isNaN(cursor.getTime());
+
     const userId = (req as any).user?.id ? Number((req as any).user.id) : null;
     try {
       const isDev = process.env.NODE_ENV !== "production";
       
       const rows = await pool.query(
-        `SELECT c.id, c.title, c.type, c.thumbnail_url, c.media_url, c.audio_url, c.video_url, c.storage_key, c.video_storage_key, c.created_at, c.subscription_required
-         FROM content_items c
-         LEFT JOIN users u ON u.id = c.artist_id
-         WHERE c.artist_id = $1
-           AND COALESCE(u.is_deleted, false) = false
-           AND ${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
-           AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})
-         ORDER BY c.created_at DESC
-         LIMIT 500`,
-        [artistId]
+        useCursor
+          ? `SELECT c.id, c.title, c.type, c.thumbnail_url, c.media_url, c.audio_url, c.video_url, c.storage_key, c.video_storage_key, c.created_at, c.subscription_required
+             FROM content_items c
+             LEFT JOIN users u ON u.id = c.artist_id
+             WHERE c.artist_id = $1
+               AND COALESCE(u.is_deleted, false) = false
+               AND ${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
+               AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})
+               AND c.created_at < $2
+             ORDER BY c.created_at DESC
+             LIMIT $3`
+          : `SELECT c.id, c.title, c.type, c.thumbnail_url, c.media_url, c.audio_url, c.video_url, c.storage_key, c.video_storage_key, c.created_at, c.subscription_required
+             FROM content_items c
+             LEFT JOIN users u ON u.id = c.artist_id
+             WHERE c.artist_id = $1
+               AND COALESCE(u.is_deleted, false) = false
+               AND ${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
+               AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})
+             ORDER BY c.created_at DESC
+             LIMIT $2 OFFSET $3`,
+        useCursor ? [artistIdNum, cursor, limit] : [artistIdNum, limit, offset]
       );
 
       const mediaCfg = getMediaConfig();
@@ -362,8 +423,13 @@ router.get("/:artistId/content", (req, res) => {
             return null;
           }
         }));
+        const filtered = content.filter(Boolean);
+        const lastItem = filtered[filtered.length - 1] as any;
+        const nextCursor = lastItem?.createdAt
+          ? new Date(lastItem.createdAt).toISOString()
+          : null;
         console.log(`[DEBUG] GET /artists/${artistIdNum}/content - MAPPING SUCCESS`);
-        return res.json({ success: true, content: content.filter(Boolean) });
+        return res.json({ success: true, content: filtered, nextCursor });
       } catch (mapErr) {
         console.error(`[DEBUG] Critical mapping error:`, mapErr);
         throw mapErr;
@@ -378,8 +444,8 @@ router.get("/:artistId/content", (req, res) => {
          WHERE c.artist_id = $1
            AND COALESCE(u.is_deleted, false) = false
          ORDER BY c.created_at DESC
-         LIMIT 500`,
-        [artistId]
+         LIMIT $2 OFFSET $3`,
+        [artistIdNum, limit, offset]
       );
 
       const mediaCfg = getMediaConfig();

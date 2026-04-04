@@ -35,63 +35,131 @@ router.get("/", (req, res) => {
       const userId = req.user?.id ? Number(req.user.id) : null;
       const isDev = process.env.NODE_ENV !== 'production';
       
-      const cacheKey = `home_content_feed_rows_${isDev ? 'dev' : 'prod'}`;
+      const limit = Number(req.query.limit) || 10;
+      const offset = Number(req.query.offset) || 0;
+      // Cursor-based pagination: ?cursor=<ISO timestamp> overrides offset
+      const cursorRaw = req.query.cursor ? String(req.query.cursor) : null;
+      const cursor = cursorRaw ? new Date(cursorRaw) : null;
+      const useCursor = cursor instanceof Date && !isNaN(cursor.getTime());
+
+      const cacheKey = useCursor
+        ? `home_content_feed_rows_${isDev ? 'dev' : 'prod'}:cursor:${cursorRaw}:${limit}`
+        : `home_content_feed_rows_${isDev ? 'dev' : 'prod'}:${limit}:${offset}`;
+
       let queryRows: any = await fetchWithCache(cacheKey, async () => {
         let rows: any;
         try {
-          rows = await pool.query(
-            `SELECT
-               c.id,
-               c.title,
-               c.type,
-               c.thumbnail_url,
-               c.media_url,
-               c.audio_url,
-               c.video_url,
-               c.storage_key,
-               c.video_storage_key,
-               c.thumbnail_storage_key,
-               c.storage_provider,
-               c.created_at,
-               c.artist_id,
-               c.subscription_required,
-               COALESCE(NULLIF(u.name, ''), NULLIF(u.full_name, ''), NULLIF(u.username, ''), NULLIF(split_part(u.email, '@', 1), ''), u.email) as artist_name
-             FROM content_items c
-             LEFT JOIN users u ON u.id = c.artist_id
-             WHERE ${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
+          const baseWhere = `${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
                AND COALESCE(u.is_deleted, false) = false
                AND UPPER(COALESCE(c.status, 'APPROVED')) = 'APPROVED'
-               AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})
-             ORDER BY c.created_at DESC
-             LIMIT 200`,
-            []
-          );
+               AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})`;
+
+          if (useCursor) {
+            rows = await pool.query(
+              `SELECT
+                 c.id,
+                 c.title,
+                 c.type,
+                 c.thumbnail_url,
+                 c.media_url,
+                 c.audio_url,
+                 c.video_url,
+                 c.storage_key,
+                 c.video_storage_key,
+                 c.thumbnail_storage_key,
+                 c.storage_provider,
+                 c.created_at,
+                 c.artist_id,
+                 c.subscription_required,
+                 COALESCE(NULLIF(u.name, ''), NULLIF(u.full_name, ''), NULLIF(u.username, ''), NULLIF(split_part(u.email, '@', 1), ''), u.email) as artist_name
+               FROM content_items c
+               LEFT JOIN users u ON u.id = c.artist_id
+               WHERE ${baseWhere}
+                 AND c.created_at < $1
+               ORDER BY c.created_at DESC
+               LIMIT $2`,
+              [cursor, limit]
+            );
+          } else {
+            rows = await pool.query(
+              `SELECT
+                 c.id,
+                 c.title,
+                 c.type,
+                 c.thumbnail_url,
+                 c.media_url,
+                 c.audio_url,
+                 c.video_url,
+                 c.storage_key,
+                 c.video_storage_key,
+                 c.thumbnail_storage_key,
+                 c.storage_provider,
+                 c.created_at,
+                 c.artist_id,
+                 c.subscription_required,
+                 COALESCE(NULLIF(u.name, ''), NULLIF(u.full_name, ''), NULLIF(u.username, ''), NULLIF(split_part(u.email, '@', 1), ''), u.email) as artist_name
+               FROM content_items c
+               LEFT JOIN users u ON u.id = c.artist_id
+               WHERE ${baseWhere}
+               ORDER BY c.created_at DESC
+               LIMIT $1 OFFSET $2`,
+              [limit, offset]
+            );
+          }
         } catch (err: any) {
           // Broaden catch to any error for the first attempt safely
-          rows = await pool.query(
-            `SELECT
-               c.id,
-               c.title,
-               c.type,
-               c.thumbnail_url,
-               c.media_url,
-               c.audio_url,
-               c.video_url,
-               c.storage_key,
-               c.video_storage_key,
-               c.thumbnail_storage_key,
-               c.storage_provider,
-               c.created_at,
-               c.artist_id,
-               c.subscription_required,
-               COALESCE(NULLIF(u.name, ''), NULLIF(u.full_name, ''), NULLIF(u.username, ''), NULLIF(split_part(u.email, '@', 1), ''), u.email) as artist_name
-             FROM content_items c
-             LEFT JOIN users u ON u.id = c.artist_id
-             WHERE COALESCE(u.is_deleted, false) = false
-             ORDER BY c.created_at DESC
-             LIMIT 200`,
-            []
-          );
+          if (useCursor) {
+            rows = await pool.query(
+              `SELECT
+                 c.id,
+                 c.title,
+                 c.type,
+                 c.thumbnail_url,
+                 c.media_url,
+                 c.audio_url,
+                 c.video_url,
+                 c.storage_key,
+                 c.video_storage_key,
+                 c.thumbnail_storage_key,
+                 c.storage_provider,
+                 c.created_at,
+                 c.artist_id,
+                 c.subscription_required,
+                 COALESCE(NULLIF(u.name, ''), NULLIF(u.full_name, ''), NULLIF(u.username, ''), NULLIF(split_part(u.email, '@', 1), ''), u.email) as artist_name
+               FROM content_items c
+               LEFT JOIN users u ON u.id = c.artist_id
+               WHERE COALESCE(u.is_deleted, false) = false
+                 AND c.created_at < $1
+               ORDER BY c.created_at DESC
+               LIMIT $2`,
+              [cursor, limit]
+            );
+          } else {
+            rows = await pool.query(
+              `SELECT
+                 c.id,
+                 c.title,
+                 c.type,
+                 c.thumbnail_url,
+                 c.media_url,
+                 c.audio_url,
+                 c.video_url,
+                 c.storage_key,
+                 c.video_storage_key,
+                 c.thumbnail_storage_key,
+                 c.storage_provider,
+                 c.created_at,
+                 c.artist_id,
+                 c.subscription_required,
+                 COALESCE(NULLIF(u.name, ''), NULLIF(u.full_name, ''), NULLIF(u.username, ''), NULLIF(split_part(u.email, '@', 1), ''), u.email) as artist_name
+               FROM content_items c
+               LEFT JOIN users u ON u.id = c.artist_id
+               WHERE COALESCE(u.is_deleted, false) = false
+               ORDER BY c.created_at DESC
+               LIMIT $1 OFFSET $2`,
+              [limit, offset]
+            );
+          }
         }
         return rows.rows;
       }, 120);
@@ -197,13 +265,18 @@ router.get("/", (req, res) => {
         { total: 0, audio: 0, video: 0 }
       );
 
+      const lastItem = items[items.length - 1];
+      const nextCursor = lastItem?.createdAt
+        ? new Date(lastItem.createdAt).toISOString()
+        : null;
+
       console.log('[fan/content] audio items found', {
         total: meta.total,
         audio: meta.audio,
         video: meta.video
       });
 
-      return res.json({ success: true, items, meta });
+      return res.json({ success: true, items, meta, nextCursor });
     } catch (err: any) {
       console.error("[fan/content] GET / error", err);
       return res.json({ success: true, items: [] });

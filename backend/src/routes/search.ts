@@ -55,6 +55,11 @@ router.get("/history", requireAuth, async (req: any, res) => {
 
     const items = await prismaAny.search_history.findMany({
       where: { user_id: userId },
+      select: {
+        id: true,
+        query: true,
+        created_at: true
+      },
       orderBy: { created_at: "desc" },
       take: 10,
     });

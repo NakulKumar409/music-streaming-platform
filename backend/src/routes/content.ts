@@ -12,7 +12,7 @@ import { generateStorageKey } from "../shared/storage/utils/storage-key.util";
 import { validateFileForUpload } from "../shared/storage/utils/file-validation.util";
 import { getExtensionFromMime } from "../shared/storage/utils/file-metadata.util";
 import { createPlaybackToken } from "../shared/security/signed-media-token.service";
-import { invalidateCache } from "../common/cache";
+import { invalidateCachePattern } from "../common/cache";
 import { uploadQueue } from "../common/queue";
 
 const router = Router();
@@ -258,8 +258,7 @@ router.post(
         }
       });
       
-      await invalidateCache("home_content_feed_rows_dev");
-      await invalidateCache("home_content_feed_rows_prod");
+      await invalidateCachePattern("home_content_feed_rows*");
 
       return res.json({
         success: true,
@@ -474,8 +473,7 @@ router.post("/upload-metadata", uploadLimiter, requireAuth, requireArtist, async
       [trimmedTitle, normalizedType, artistId, thumbnailUrl ?? null]
     );
 
-    await invalidateCache("home_content_feed_rows_dev");
-    await invalidateCache("home_content_feed_rows_prod");
+    await invalidateCachePattern("home_content_feed_rows*");
 
     return res.json({
       success: true,
@@ -544,9 +542,11 @@ router.get("/history", requireAuth, requireArtistOrAdmin, async (req: any, res: 
             c.is_approved,
             c.rejection_reason,
             c.created_at,
-            (SELECT COUNT(*)::int FROM public.content_plays p WHERE p.content_id = c.id) as total_plays
+            COUNT(p.id)::int as total_plays
            FROM public.content_items c
+           LEFT JOIN public.content_plays p ON p.content_id = c.id
            WHERE c.artist_id = $1
+           GROUP BY c.id
            ORDER BY c.created_at DESC
            LIMIT 500`,
           [artistId]
@@ -628,9 +628,11 @@ router.get("/history", requireAuth, requireArtistOrAdmin, async (req: any, res: 
           c.is_approved,
           c.rejection_reason,
           c.created_at,
-          (SELECT COUNT(*)::int FROM public.content_plays p WHERE p.content_id = c.id) as total_plays
+          COUNT(p.id)::int as total_plays
          FROM public.content_items c
+         LEFT JOIN public.content_plays p ON p.content_id = c.id
          WHERE c.artist_id = $1
+         GROUP BY c.id
          ORDER BY c.created_at DESC
          LIMIT 500`,
         [artistId]
@@ -754,8 +756,7 @@ router.delete("/:id", requireAuth, requireArtistOrAdmin, async (req: any, res: a
       `--------------------------------------------------\n[${eventLabel}] ${timestamp} correlationId=${correlationId} actorId=${actorId} contentId=${id} action=DELETED deletedArtistId=${deletedArtistId ?? "-"}`
     );
 
-    await invalidateCache("home_content_feed_rows_dev");
-    await invalidateCache("home_content_feed_rows_prod");
+    await invalidateCachePattern("home_content_feed_rows*");
 
     return res.json({ success: true, correlationId });
   } catch {

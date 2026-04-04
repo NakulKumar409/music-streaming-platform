@@ -1,14 +1,25 @@
-import React from 'react';
+import React, { lazy } from 'react';
 
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import LazyScreen from '../ui/LazyScreen';
 
-import ArtistScreen from '../screens/ArtistScreen';
-import ArtistSubscriptionScreen from '../screens/ArtistSubscriptionScreen';
-import ContentPlayerScreen from '../screens/ContentPlayerScreen';
-import HomeScreen from '../screens/HomeScreen';
-import SeeAllTrendingScreen from '../screens/SeeAllTrendingScreen';
-import SubscriptionFlowScreen from '../screens/SubscriptionFlowScreen';
-import SeeAllSongsScreen from '../screens/SeeAllSongsScreen';
+const ArtistScreen = lazy(() => import('../screens/ArtistScreen'));
+const ArtistSubscriptionScreen = lazy(() => import('../screens/ArtistSubscriptionScreen'));
+const ContentPlayerScreen = lazy(() => import('../screens/ContentPlayerScreen'));
+const HomeScreen = lazy(() => import('../screens/HomeScreen'));
+const SeeAllTrendingScreen = lazy(() => import('../screens/SeeAllTrendingScreen'));
+const SubscriptionFlowScreen = lazy(() => import('../screens/SubscriptionFlowScreen'));
+const SeeAllSongsScreen = lazy(() => import('../screens/SeeAllSongsScreen'));
+const FullPlayerScreen = lazy(() => import('../screens/FullPlayerScreen'));
+
+const LazyArtistScreen = LazyScreen(ArtistScreen);
+const LazyArtistSubscriptionScreen = LazyScreen(ArtistSubscriptionScreen);
+const LazyContentPlayerScreen = LazyScreen(ContentPlayerScreen);
+const LazyHomeScreen = LazyScreen(HomeScreen);
+const LazySeeAllTrendingScreen = LazyScreen(SeeAllTrendingScreen);
+const LazySubscriptionFlowScreen = LazyScreen(SubscriptionFlowScreen);
+const LazySeeAllSongsScreen = LazyScreen(SeeAllSongsScreen);
+const LazyFullPlayerScreen = LazyScreen(FullPlayerScreen);
 
 import type { MediaItem } from '../media.types';
 
@@ -56,35 +67,33 @@ export type HomeStackParamList = {
 
 const Stack = createNativeStackNavigator<HomeStackParamList>();
 
-import FullPlayerScreen from '../screens/FullPlayerScreen';
-
 export default function HomeStackNavigator() {
   return (
     <Stack.Navigator id="fan-home" screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="HomeIndex" component={HomeScreen} />
+      <Stack.Screen name="HomeIndex" component={LazyHomeScreen} />
       <Stack.Screen
         name="SeeAllSongs"
-        component={SeeAllSongsScreen}
+        component={LazySeeAllSongsScreen}
         options={{ headerShown: true, title: 'See All' }}
       />
       <Stack.Screen
         name="SeeAllTrending"
-        component={SeeAllTrendingScreen}
+        component={LazySeeAllTrendingScreen}
         options={{
           headerShown: false,
         }}
       />
       <Stack.Screen
         name="Artist"
-        component={ArtistScreen}
+        component={LazyArtistScreen}
         options={{ animation: 'slide_from_right' }}
       />
-      <Stack.Screen name="ArtistSubscription" component={ArtistSubscriptionScreen} />
-      <Stack.Screen name="ContentPlayer" component={ContentPlayerScreen} />
-      <Stack.Screen name="SubscriptionFlow" component={SubscriptionFlowScreen} />
+      <Stack.Screen name="ArtistSubscription" component={LazyArtistSubscriptionScreen} />
+      <Stack.Screen name="ContentPlayer" component={LazyContentPlayerScreen} />
+      <Stack.Screen name="SubscriptionFlow" component={LazySubscriptionFlowScreen} />
       <Stack.Screen
         name="FullPlayer"
-        component={FullPlayerScreen}
+        component={LazyFullPlayerScreen}
         options={{ animation: 'slide_from_bottom', gestureEnabled: true }}
       />
     </Stack.Navigator>

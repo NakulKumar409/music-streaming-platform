@@ -2,7 +2,7 @@ import { Worker } from "bullmq";
 import fs from "fs";
 import { getStorageService } from "../shared/storage/services/storage.service";
 import { pool } from "../common/db";
-import { invalidateCache } from "../common/cache";
+import { invalidateCachePattern } from "../common/cache";
 
 // Ensure we don't fail immediately inside the worker loop if DB reconnects
 export const uploadWorker = new Worker(
@@ -72,8 +72,7 @@ export const uploadWorker = new Worker(
         }
       }
 
-      await invalidateCache("home_content_feed_rows_dev");
-      await invalidateCache("home_content_feed_rows_prod");
+      await invalidateCachePattern("home_content_feed_rows*");
 
       return { success: true, contentId };
     } catch (err: any) {

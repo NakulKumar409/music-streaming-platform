@@ -1,18 +1,24 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, lazy } from 'react';
 
 import { Platform } from 'react-native';
-import LoginScreen from '../screens/LoginScreen';
-import SignupScreen from '../screens/SignupScreen';
 import SplashScreen from '../screens/SplashScreen';
-import MainTabsNavigator from './MainTabsNavigator';
 import { useAuth } from '../store/authStore';
 import { navigationRef } from './rootNavigation';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import MediaPlayerOverlay from '../ui/MediaPlayerOverlay';
+import LazyScreen from '../ui/LazyScreen';
 
 import type { RootStackParamList } from './types';
+
+const LoginScreen = lazy(() => import('../screens/LoginScreen'));
+const SignupScreen = lazy(() => import('../screens/SignupScreen'));
+const MainTabsNavigator = lazy(() => import('./MainTabsNavigator'));
+
+const LazyLoginScreen = LazyScreen(LoginScreen);
+const LazySignupScreen = LazyScreen(SignupScreen);
+const LazyMainTabsNavigator = LazyScreen(MainTabsNavigator);
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -54,19 +60,19 @@ export default function AppNavigator() {
         {isAuthenticated ? (
           <Stack.Screen
             name="MainTabs"
-            component={MainTabsNavigator}
+            component={LazyMainTabsNavigator}
             options={{ headerShown: false }}
           />
         ) : (
           <>
             <Stack.Screen
               name="Login"
-              component={LoginScreen}
+              component={LazyLoginScreen}
               options={{ headerShown: false }}
             />
             <Stack.Screen
               name="Signup"
-              component={SignupScreen}
+              component={LazySignupScreen}
               options={{ headerShown: false }}
             />
           </>

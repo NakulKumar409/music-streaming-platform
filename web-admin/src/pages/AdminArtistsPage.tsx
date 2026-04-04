@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { http } from "../services/http";
 import { useQuery } from "@tanstack/react-query";
+import { getOptimizedImageUrl } from "../services/cloudinary";
 import Skeleton from "../components/Skeleton";
 
 type ArtistListItem = {
@@ -91,15 +92,15 @@ function CheckIcon({ ok }: { ok: boolean }) {
   );
 }
 
-function formatPrice(n: number) {
-  const v = Number(n);
-  if (!Number.isFinite(v)) return "$0.00";
-  return `$${v.toFixed(2)}`;
-}
-
 export default function AdminArtistsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const formatPrice = useCallback((n: number) => {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return "$0.00";
+    return `$${v.toFixed(2)}`;
+  }, []);
 
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -166,16 +167,16 @@ export default function AdminArtistsPage() {
     }
   }, [artistsQuery.isError, artistsQuery.error]);
 
-  const setPage = (p: number) => {
+  const setPage = useCallback((p: number) => {
     const next = Math.max(1, Math.min(totalPages, p));
     const nextParams: any = {};
     if (filter) nextParams.filter = filter;
     if (search.trim()) nextParams.search = search.trim();
     if (next !== 1) nextParams.page = String(next);
     setSearchParams(nextParams);
-  };
+  }, [totalPages, filter, search, setSearchParams]);
 
-  const onSearchChange = (v: string) => {
+  const onSearchChange = useCallback((v: string) => {
     setSearch(v);
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => {
@@ -185,16 +186,16 @@ export default function AdminArtistsPage() {
       if (s) nextParams.search = s;
       setSearchParams(nextParams);
     }, 250);
-  };
+  }, [filter, setSearchParams]);
 
-  const setFilter = (nextFilter: string) => {
+  const setFilter = useCallback((nextFilter: string) => {
     const nextParams: any = {};
     const f = (nextFilter || "").trim();
     if (f) nextParams.filter = f;
     const s = search.trim();
     if (s) nextParams.search = s;
     setSearchParams(nextParams);
-  };
+  }, [search, setSearchParams]);
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[#4b1927] text-white">
@@ -334,7 +335,7 @@ export default function AdminArtistsPage() {
                           <div className="h-[40px] w-[40px] md:h-[34px] md:w-[34px] rounded-full bg-[#2a1c1c] border border-white/10 overflow-hidden shrink-0">
                             {a.profileImage ? (
                               <img
-                                src={a.profileImage}
+                                src={getOptimizedImageUrl(a.profileImage)}
                                 alt={a.name ?? a.email}
                                 className="h-full w-full object-cover"
                               />

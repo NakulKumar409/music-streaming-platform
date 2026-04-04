@@ -21,6 +21,8 @@ import type { AxiosRequestConfig } from 'axios';
 import { Colors } from '../theme';
 import { api } from '../services/api';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
+import { useQuery } from '@tanstack/react-query';
+import { getOptimizedImageUrl } from '../utils/cloudinary';
 
 type Artist = {
   id: number;
@@ -40,6 +42,50 @@ type SearchHistoryItem = {
 
 const RECENT_SEARCHES_STORAGE_KEY = 'recentSearches';
 
+const ArtistItem = React.memo(({ item, onPress }: { item: Artist; onPress: (item: Artist) => void }) => (
+  <Pressable style={styles.artistRow} onPress={() => onPress(item)}>
+    <View style={styles.artistThumbWrap}>
+      {item.profileImageUrl ? (
+        <Image source={{ uri: getOptimizedImageUrl(item.profileImageUrl) }} style={styles.artistThumb} />
+      ) : (
+        <View style={styles.artistThumbPlaceholder}>
+          <User color="rgba(255,255,255,0.5)" size={24} />
+        </View>
+      )}
+    </View>
+    <View style={styles.artistInfo}>
+      <Text style={styles.artistName} numberOfLines={1}>
+        {item.name}
+      </Text>
+      {item.genre ? (
+        <Text style={styles.artistGenre} numberOfLines={1}>
+          {item.genre}
+        </Text>
+      ) : null}
+    </View>
+  </Pressable>
+));
+
+const HistoryItem = React.memo(({ item, onPress, onDelete }: { item: SearchHistoryItem; onPress: (item: SearchHistoryItem) => void; onDelete: (id: number) => void }) => (
+  <BlurView intensity={18} tint="dark" style={styles.historyRow}>
+    <Pressable
+      style={{ flex: 1 }}
+      onPress={() => onPress(item)}
+    >
+      <Text style={styles.historyText} numberOfLines={1}>
+        {item.query}
+      </Text>
+    </Pressable>
+    <Pressable
+      accessibilityLabel="Delete recent search"
+      style={styles.historyDeleteBtn}
+      onPress={() => onDelete(item.id)}
+    >
+      <X color="#fff" size={16} />
+    </Pressable>
+  </BlurView>
+));
+
 export default function SearchScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
   const { currentItem } = useMediaPlayer();
@@ -47,14 +93,22 @@ export default function SearchScreen({ navigation }: any) {
   const hasActiveAudio = !!activeAudioMeta;
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [artists, setArtists] = useState<Artist[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<SearchHistoryItem[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const inputRef = useRef<TextInput | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Debounce: update debouncedQuery 300ms after user stops typing
+  useEffect(() => {
+    if (searchQuery.trim().length < 2) {
+      setDebouncedQuery('');
+      return;
+    }
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Load recent searches from AsyncStorage
   useEffect(() => {
@@ -149,72 +203,30 @@ export default function SearchScreen({ navigation }: any) {
     [fetchHistory, persistHistoryFallback, recentSearches]
   );
 
-  // Search artists API with debounce and cancellation
-  const searchArtists = useCallback(async (query: string) => {
-    const trimmed = query.trim();
+  // React Query: fetch artists for debouncedQuery
+  // staleTime is inherited from the global QueryClient default (5 min)
+  // React Query provides an AbortSignal via queryFn context — no manual AbortController needed
+  const {
+    data: searchData,
+    isFetching: isLoading,
+  } = useQuery({
+    queryKey: ['artistSearch', debouncedQuery],
+    queryFn: async ({ signal }) => {
+      const res = await api.get(
+        `/artists/search?q=${encodeURIComponent(debouncedQuery)}`,
+        { signal }
+      );
+      return (res.data?.artists ?? []) as Artist[];
+    },
+    enabled: debouncedQuery.length >= 2,
+    staleTime: 5 * 60 * 1000,
+  });
 
-    // Clear results if query is too short
-    if (trimmed.length < 2) {
-      setArtists([]);
-      setIsLoading(false);
-      return;
-    }
+  const artists = searchData ?? [];
 
-    // Cancel previous request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    // Create new abort controller
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-
-    setIsLoading(true);
-
-    try {
-      const config: AxiosRequestConfig = {
-        signal: abortController.signal,
-      };
-
-      const res = await api.get(`/artists/search?q=${encodeURIComponent(trimmed)}`, config);
-
-      // Only update if this request wasn't aborted
-      if (!abortController.signal.aborted) {
-        const artistData = (res.data?.artists ?? []) as Artist[];
-        setArtists(artistData);
-      }
-    } catch (err: any) {
-      // Ignore aborted requests
-      if (err.name === 'CanceledError' || err.name === 'AbortError') {
-        return;
-      }
-      console.error('[Artist Search Error]', err.message);
-      if (!abortController.signal.aborted) {
-        setArtists([]);
-      }
-    } finally {
-      if (!abortController.signal.aborted) {
-        setIsLoading(false);
-      }
-    }
-  }, []);
-
-  // Debounce search query (300ms)
+  // Cleanup on unmount (React Query handles in-flight cancellation via signal)
   useEffect(() => {
-    const delay = setTimeout(() => {
-      searchArtists(searchQuery);
-    }, 300);
-
-    return () => clearTimeout(delay);
-  }, [searchQuery, searchArtists]);
-
-  // Cleanup abort controller on unmount
-  useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
+    return () => { /* no-op — React Query cancels via AbortSignal */ };
   }, []);
 
   // Navigate to artist profile
@@ -232,34 +244,13 @@ export default function SearchScreen({ navigation }: any) {
   // Clear search input
   const onClearSearch = useCallback(() => {
     setSearchQuery('');
-    setArtists([]);
     inputRef.current?.focus();
   }, []);
 
   // Render artist item
   const renderArtistItem = useCallback(
     ({ item }: { item: Artist }) => (
-      <Pressable style={styles.artistRow} onPress={() => navigateToArtist(item)}>
-        <View style={styles.artistThumbWrap}>
-          {item.profileImageUrl ? (
-            <Image source={{ uri: item.profileImageUrl }} style={styles.artistThumb} />
-          ) : (
-            <View style={styles.artistThumbPlaceholder}>
-              <User color="rgba(255,255,255,0.5)" size={24} />
-            </View>
-          )}
-        </View>
-        <View style={styles.artistInfo}>
-          <Text style={styles.artistName} numberOfLines={1}>
-            {item.name}
-          </Text>
-          {item.genre ? (
-            <Text style={styles.artistGenre} numberOfLines={1}>
-              {item.genre}
-            </Text>
-          ) : null}
-        </View>
-      </Pressable>
+      <ArtistItem item={item} onPress={navigateToArtist} />
     ),
     [navigateToArtist]
   );
@@ -267,29 +258,17 @@ export default function SearchScreen({ navigation }: any) {
   // Render history item
   const renderHistoryItem = useCallback(
     ({ item }: { item: SearchHistoryItem }) => (
-      <BlurView intensity={18} tint="dark" style={styles.historyRow}>
-        <Pressable
-          style={{ flex: 1 }}
-          onPress={() => {
-            setSearchQuery(item.query);
-            setIsSearchFocused(true);
-            saveHistory(item.query).catch(() => undefined);
-          }}
-        >
-          <Text style={styles.historyText} numberOfLines={1}>
-            {item.query}
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityLabel="Delete recent search"
-          style={styles.historyDeleteBtn}
-          onPress={() => {
-            deleteHistoryItem(item.id).catch(() => undefined);
-          }}
-        >
-          <X color="#fff" size={16} />
-        </Pressable>
-      </BlurView>
+      <HistoryItem
+        item={item}
+        onPress={(it) => {
+          setSearchQuery(it.query);
+          setIsSearchFocused(true);
+          saveHistory(it.query).catch(() => undefined);
+        }}
+        onDelete={(id) => {
+          deleteHistoryItem(id).catch(() => undefined);
+        }}
+      />
     ),
     [deleteHistoryItem, saveHistory]
   );

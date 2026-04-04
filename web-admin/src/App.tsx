@@ -1,31 +1,43 @@
+import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import AdminLoginPage from "./pages/AdminLoginPage";
-import AdminHomePage from "./pages/AdminHomePage";
-import AdminAnalyticsPage from "./pages/AdminAnalyticsPage";
-import AdminArtistsPage from "./pages/AdminArtistsPage";
-import AdminArtistDetailPage from "./pages/AdminArtistDetailPage";
-import AdminContentApprovalQueuePage from "./pages/AdminContentApprovalQueuePage";
-import AdminArtistApplicationsPage from "./pages/AdminArtistApplicationsPage";
-import AdminFeaturedArtistsPage from "./pages/AdminFeaturedArtistsPage";
 import AdminLayout from "./components/AdminLayout";
+import Skeleton from "./components/Skeleton";
+
+const AdminLoginPage = lazy(() => import("./pages/AdminLoginPage"));
+const AdminHomePage = lazy(() => import("./pages/AdminHomePage"));
+const AdminAnalyticsPage = lazy(() => import("./pages/AdminAnalyticsPage"));
+const AdminArtistsPage = lazy(() => import("./pages/AdminArtistsPage"));
+const AdminArtistDetailPage = lazy(() => import("./pages/AdminArtistDetailPage"));
+const AdminContentApprovalQueuePage = lazy(() => import("./pages/AdminContentApprovalQueuePage"));
+const AdminArtistApplicationsPage = lazy(() => import("./pages/AdminArtistApplicationsPage"));
+const AdminFeaturedArtistsPage = lazy(() => import("./pages/AdminFeaturedArtistsPage"));
+
+const PageFallback = () => (
+  <div className="p-8">
+    <Skeleton className="h-8 w-64 mb-4" />
+    <Skeleton className="h-64 w-full" />
+  </div>
+);
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Navigate to="/admin/login" replace />} />
-      <Route path="/admin/login" element={<AdminLoginPage />} />
+    <Suspense fallback={<PageFallback />}>
+      <Routes>
+        <Route path="/" element={<Navigate to="/admin/login" replace />} />
+        <Route path="/admin/login" element={<AdminLoginPage />} />
 
-      <Route element={<AdminLayout />}>
-        <Route path="/admin/home" element={<AdminHomePage />} />
-        <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
-        <Route path="/admin/artists" element={<AdminArtistsPage />} />
-        <Route path="/admin/artist-applications" element={<AdminArtistApplicationsPage />} />
-        <Route path="/admin/artists/:id" element={<AdminArtistDetailPage />} />
-        <Route path="/admin/moderation" element={<AdminContentApprovalQueuePage />} />
-        <Route path="/admin/featured-artists" element={<AdminFeaturedArtistsPage />} />
-      </Route>
+        <Route element={<AdminLayout />}>
+          <Route path="/admin/home" element={<AdminHomePage />} />
+          <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
+          <Route path="/admin/artists" element={<AdminArtistsPage />} />
+          <Route path="/admin/artist-applications" element={<AdminArtistApplicationsPage />} />
+          <Route path="/admin/artists/:id" element={<AdminArtistDetailPage />} />
+          <Route path="/admin/moderation" element={<AdminContentApprovalQueuePage />} />
+          <Route path="/admin/featured-artists" element={<AdminFeaturedArtistsPage />} />
+        </Route>
 
-      <Route path="*" element={<Navigate to="/admin/login" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/admin/login" replace />} />
+      </Routes>
+    </Suspense>
   );
 }

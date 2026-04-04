@@ -1,15 +1,22 @@
-import React from 'react';
+import React, { lazy } from 'react';
 import { StyleSheet } from 'react-native';
 
 import { createBottomTabNavigator, type BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { BlurView } from 'expo-blur';
 import { Home as HomeIcon, Music, PlayCircle, Search, User } from 'lucide-react-native';
+import LazyScreen from '../ui/LazyScreen';
 
-import SearchStackNavigator from './SearchStackNavigator';
-import AccountStackNavigator from './AccountStackNavigator';
-import AudioStackNavigator from './AudioStackNavigator';
-import HomeStackNavigator from './HomeStackNavigator';
-import VideoStackNavigator from './VideoStackNavigator';
+const SearchStackNavigator = lazy(() => import('./SearchStackNavigator'));
+const AccountStackNavigator = lazy(() => import('./AccountStackNavigator'));
+const AudioStackNavigator = lazy(() => import('./AudioStackNavigator'));
+const HomeStackNavigator = lazy(() => import('./HomeStackNavigator'));
+const VideoStackNavigator = lazy(() => import('./VideoStackNavigator'));
+
+const LazySearchStack = LazyScreen(SearchStackNavigator);
+const LazyAccountStack = LazyScreen(AccountStackNavigator);
+const LazyAudioStack = LazyScreen(AudioStackNavigator);
+const LazyHomeStack = LazyScreen(HomeStackNavigator);
+const LazyVideoStack = LazyScreen(VideoStackNavigator);
 
 export type MainTabParamList = {
   HomeTab: undefined;
@@ -46,11 +53,11 @@ export default function MainTabsNavigator() {
         tabBarItemStyle: styles.tabBarItem,
       })}
     >
-      <Tab.Screen name="HomeTab" component={HomeStackNavigator} options={{ title: 'Home' }} />
-      <Tab.Screen name="SearchTab" component={SearchStackNavigator} options={{ title: 'Search' }} />
-      <Tab.Screen name="AudioTab" component={AudioStackNavigator} options={{ title: 'Audio' }} />
-      <Tab.Screen name="VideoTab" component={VideoStackNavigator} options={{ title: 'Video' }} />
-      <Tab.Screen name="AccountTab" component={AccountStackNavigator} options={{ title: 'Account' }} />
+      <Tab.Screen name="HomeTab" component={LazyHomeStack} options={{ title: 'Home' }} />
+      <Tab.Screen name="SearchTab" component={LazySearchStack} options={{ title: 'Search' }} />
+      <Tab.Screen name="AudioTab" component={LazyAudioStack} options={{ title: 'Audio' }} />
+      <Tab.Screen name="VideoTab" component={LazyVideoStack} options={{ title: 'Video' }} />
+      <Tab.Screen name="AccountTab" component={LazyAccountStack} options={{ title: 'Account' }} />
     </Tab.Navigator>
   );
 }

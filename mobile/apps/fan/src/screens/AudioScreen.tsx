@@ -30,6 +30,7 @@ import { getPlaybackUrl, normalizePlaybackUrl } from '../services/streamService'
 import { API_HOST_BASE_URL } from '../config/env';
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
+import { getOptimizedImageUrl } from '../utils/cloudinary';
 import type { MediaItem } from '../media.types';
 
 const REPORTED_CONTENT_STORAGE_KEY = 'reportedContentIds';
@@ -906,7 +907,7 @@ export default function AudioScreen({ navigation }: any) {
                 contentContainerStyle={styles.hListContent}
                 renderItem={({ item }) => (
                   <Pressable style={styles.topCard} onPress={() => onPressSong(item)}>
-                    <Image source={{ uri: item.artworkUrl || FALLBACK_ARTWORK }} style={styles.topImg} />
+                    <Image source={{ uri: getOptimizedImageUrl(item.artworkUrl || FALLBACK_ARTWORK) }} style={styles.topImg} />
                     <View style={styles.topMeta}>
                       <Text style={styles.topTitle} numberOfLines={1}>
                         {item.title}
@@ -933,7 +934,7 @@ export default function AudioScreen({ navigation }: any) {
           <View style={styles.listWrap}>
             {(searchResults ?? filtered).map((song) => (
               <Pressable key={song.id} style={styles.row} onPress={() => onPressSong(song)}>
-                <Image source={{ uri: song.artworkUrl || FALLBACK_ARTWORK }} style={styles.rowImg} />
+                <Image source={{ uri: getOptimizedImageUrl(song.artworkUrl || FALLBACK_ARTWORK) }} style={styles.rowImg} />
                 <View style={styles.rowMeta}>
                   <Text style={styles.rowTitle} numberOfLines={1}>
                     {song.title}

@@ -23,6 +23,7 @@ import { fetchVerifiedArtists, fetchFeaturedArtists, type ArtistListItem } from 
 import { API_HOST_BASE_URL } from '../config/env';
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
+import { getOptimizedImageUrl } from '../utils/cloudinary';
 import type { MediaItem } from '../media.types';
 
 const { width } = Dimensions.get('window');
@@ -289,7 +290,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const renderFeaturedArtist = ({ item }: { item: FeaturedArtistCard }) => (
     <View style={styles.featuredCard}>
-      <Image source={{ uri: item.avatar }} style={styles.featuredImg} resizeMode="cover" />
+      <Image source={{ uri: getOptimizedImageUrl(item.avatar) }} style={styles.featuredImg} resizeMode="cover" />
       <LinearGradient
         colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.85)']}
         style={styles.featuredOverlay}
@@ -304,7 +305,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const renderTrendingArtist = ({ item }: { item: ArtistCard }) => (
     <Pressable style={styles.trendingCard} onPress={() => onPressArtist(item.id)}>
-      <Image source={{ uri: item.image }} style={styles.trendingImg} resizeMode="contain" />
+      <Image source={{ uri: getOptimizedImageUrl(item.image) }} style={styles.trendingImg} resizeMode="contain" />
       <View style={styles.trendingNameRow}>
         <Text style={styles.trendingName} numberOfLines={1}>
           {item.name}
@@ -317,7 +318,7 @@ export default function HomeScreen({ navigation }: any) {
   // Square thumbnail for audio — tapping plays as audio
   const renderRecentAudio = ({ item }: { item: ContentCard }) => (
     <Pressable style={styles.audioCard} onPress={() => onPressAudioItem(item)}>
-      <Image source={{ uri: item.thumbnail || FALLBACK_THUMBNAIL }} style={styles.audioImg} />
+      <Image source={{ uri: getOptimizedImageUrl(item.thumbnail || FALLBACK_THUMBNAIL) }} style={styles.audioImg} />
       <View style={styles.audioBadge}>
         <View style={styles.audioDot} />
       </View>
@@ -331,7 +332,7 @@ export default function HomeScreen({ navigation }: any) {
   // 16:9 landscape thumbnail for video — tapping opens VideoTab
   const renderRecentVideo = ({ item }: { item: ContentCard }) => (
     <Pressable style={styles.videoCard} onPress={() => onPressVideoItem(item)}>
-      <Image source={{ uri: item.thumbnail || FALLBACK_THUMBNAIL }} style={styles.videoImg} />
+      <Image source={{ uri: getOptimizedImageUrl(item.thumbnail || FALLBACK_THUMBNAIL) }} style={styles.videoImg} />
       <View style={styles.videoPlayOverlay}>
         <Play color="#fff" size={22} fill="rgba(255,255,255,0.85)" />
       </View>

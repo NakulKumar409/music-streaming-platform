@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import {
   CartesianGrid,
   Line,
@@ -10,6 +10,7 @@ import {
 } from "recharts";
 import { http } from "../services/http";
 import { useQuery } from "@tanstack/react-query";
+import { getOptimizedImageUrl } from "../services/cloudinary";
 import ErrorBoundary from "../components/ErrorBoundary";
 import Skeleton from "../components/Skeleton";
 
@@ -46,7 +47,7 @@ export default function ArtistDashboardPage() {
     } as const;
   }, []);
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = useCallback((amount: number) => {
     const n = Number(amount);
     if (!Number.isFinite(n)) return "$0.00";
     return n.toLocaleString(undefined, {
@@ -55,18 +56,18 @@ export default function ArtistDashboardPage() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
-  };
+  }, []);
 
-  const formatCompact = (n: number) => {
+  const formatCompact = useCallback((n: number) => {
     const v = Number(n);
     if (!Number.isFinite(v)) return "0";
     return v.toLocaleString();
-  };
+  }, []);
 
-  const growthChartData = growth.map((p: { date: string; value: number }) => ({
+  const growthChartData = useMemo(() => growth.map((p: { date: string; value: number }) => ({
     name: p.date.slice(5),
     value: p.value
-  }));
+  })), [growth]);
 
   return (
     <div className="relative overflow-hidden rounded-[10px] border border-white/10 bg-[#141010]/35 backdrop-blur shadow-[0_30px_80px_rgba(0,0,0,0.55)]" style={backgroundStyle}>
@@ -167,7 +168,7 @@ export default function ArtistDashboardPage() {
                     <div key={a.id} className="px-6 py-4 flex items-center gap-4">
                       <div className="h-[36px] w-[36px] rounded-full overflow-hidden border border-white/10 bg-[#141010]/70">
                         {a.fanAvatarUrl ? (
-                          <img src={a.fanAvatarUrl} alt="" className="h-full w-full object-cover" />
+                          <img src={getOptimizedImageUrl(a.fanAvatarUrl)} alt="" className="h-full w-full object-cover" />
                         ) : (
                           <div className="h-full w-full bg-gradient-to-b from-[#2a1a17] to-[#0e0a0a]" />
                         )}
@@ -195,7 +196,7 @@ export default function ArtistDashboardPage() {
                     <div key={p.contentId} className="px-6 py-4 flex items-center gap-4">
                       <div className="h-[38px] w-[38px] rounded-[10px] overflow-hidden border border-white/10 bg-[#141010]/70">
                         {p.artwork ? (
-                          <img src={p.artwork} alt="" className="h-full w-full object-cover" />
+                          <img src={getOptimizedImageUrl(p.artwork)} alt="" className="h-full w-full object-cover" />
                         ) : (
                           <div className="h-full w-full bg-gradient-to-b from-[#2a1a17] to-[#0e0a0a]" />
                         )}

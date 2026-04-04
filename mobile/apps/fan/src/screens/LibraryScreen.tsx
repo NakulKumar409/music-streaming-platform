@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
+import { getOptimizedImageUrl } from '../utils/cloudinary';
 import {
   fetchRecentlyPlayed,
   fetchSubscribedArtists,
@@ -117,7 +118,7 @@ export default function LibraryScreen({ navigation }: any) {
                 onPress={() => navigation.navigate('SubscriptionDetail', { artistId: a.id })}
               >
                 <Image
-                  source={{ uri: a.profileImageUrl || artistImageFallback }}
+                  source={{ uri: getOptimizedImageUrl(a.profileImageUrl || artistImageFallback) }}
                   style={styles.subAvatar}
                 />
                 <View style={{ flex: 1, marginLeft: 12 }}>
@@ -195,7 +196,7 @@ export default function LibraryScreen({ navigation }: any) {
               }}
             >
               <ImageBackground
-                source={{ uri: item.artworkUrl || songArtworkFallback }}
+                source={{ uri: getOptimizedImageUrl(item.artworkUrl || songArtworkFallback) }}
                 style={styles.recentImg}
                 imageStyle={styles.recentImgStyle}
               >

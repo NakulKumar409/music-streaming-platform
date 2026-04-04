@@ -31,7 +31,11 @@ import { createStorageProvider } from "./shared/storage/factory/storage-provider
 import { getDeliveryStrategyForProvider } from "./shared/delivery/services/media-delivery.service";
 import { MediaProviderFactory } from "./services/providers/MediaProviderFactory";
 import { redis, connectRedisWithRetry } from "./common/redis";
+import { initSentry, captureError } from "./common/sentry";
 import "./workers/upload.worker";
+
+// Initialise Sentry as early as possible (no-op if SENTRY_DSN is unset)
+initSentry();
 
 
 
@@ -48,39 +52,60 @@ process.on("unhandledRejection", (err) => {
 });
 
 app.get("/health", async (req, res) => {
+  const startMs = Date.now();
+  const checks: Record<string, any> = { db: "unknown", redis: "unknown" };
+
+  // DB check
   try {
-    const user10 = await pool.query("SELECT id FROM public.users WHERE id = 10");
-    res.json({
-      status: "ok",
-      pid: process.pid,
-      db: "ok",
-      user_10_exists: !!user10.rows[0],
-      secret_prefix: process.env.JWT_SECRET?.substring(0, 10)
-    });
+    await pool.query("SELECT 1");
+    checks.db = "ok";
   } catch (err: any) {
-    res.json({
-      status: "ok",
-      pid: process.pid,
-      db: "error",
-      message: err?.message
-    });
+    checks.db = { status: "error", message: err?.message };
   }
+
+  // Redis check
+  try {
+    const pong = await redis.ping();
+    checks.redis = pong === "PONG" ? "ok" : "degraded";
+  } catch (err: any) {
+    checks.redis = { status: "error", message: err?.message };
+  }
+
+  const allOk = checks.db === "ok" && checks.redis === "ok";
+  const httpStatus = allOk ? 200 : 503;
+
+  return res.status(httpStatus).json({
+    status: allOk ? "ok" : "degraded",
+    pid: process.pid,
+    uptime: Math.floor(process.uptime()),
+    responseTimeMs: Date.now() - startMs,
+    checks,
+  });
 });
 
 app.get("/health/db", async (req, res) => {
   try {
     const result = await pool.query("SELECT current_database(), current_schema() FROM (SELECT 1) AS dummy");
     const countAll = await pool.query("SELECT COUNT(*) FROM public.users");
-    const user10 = await pool.query("SELECT id FROM public.users WHERE id = 10");
     res.json({ 
-      status: "db ok", 
+      status: "ok",
       database: result.rows[0]?.current_database,
       schema: result.rows[0]?.current_schema,
-      user_10_exists: !!user10.rows[0],
-      total_users: Number(countAll.rows[0].count)
+      totalUsers: Number(countAll.rows[0].count)
     });
   } catch (err: any) {
-    res.status(500).json({ status: "db error", message: err?.message });
+    res.status(503).json({ status: "error", message: err?.message });
+  }
+});
+
+app.get("/health/redis", async (req, res) => {
+  try {
+    const pong = await redis.ping();
+    if (pong !== "PONG") throw new Error(`Unexpected PING response: ${pong}`);
+    const dbSize = await redis.dbsize();
+    res.json({ status: "ok", pong, keyCount: dbSize });
+  } catch (err: any) {
+    res.status(503).json({ status: "error", message: err?.message });
   }
 });
 if (process.env.NODE_ENV !== "production") {
@@ -225,9 +250,7 @@ app.use((req: any, res, next) => {
   next();
 });
 
-app.get("/health", (req, res) => {
-  res.json({ status: "OK" });
-});
+// Stub removed — comprehensive /health is registered above before middleware
 
 app.use("/api/v1/fan", fanRoutes);
 app.use("/api/v1/artist", artistRoutes);
@@ -248,14 +271,33 @@ app.use((err: any, req: any, res: any, next: any) => {
   const timestamp = formatTimestamp();
   const message = err?.message || String(err);
   const stack = err?.stack || err;
+  const status = Number(err?.status || err?.statusCode || 500);
 
+  // Structured JSON error log for log aggregators (one line)
+  const structuredError = {
+    level: "error",
+    timestamp,
+    correlationId,
+    method: req?.method,
+    url: req?.originalUrl || req?.url,
+    statusCode: status,
+    message,
+    stack: process.env.NODE_ENV !== "production" ? stack : undefined,
+  };
   console.error(
-    `--------------------------------------------------\n[ERROR] ${timestamp} correlationId=${correlationId}\n${message}\n${stack}`
+    `--------------------------------------------------\n[ERROR] ${timestamp} correlationId=${correlationId}\n${message}\n${stack}\n${JSON.stringify(structuredError)}`
   );
+
+  // Forward to Sentry (no-op when SENTRY_DSN is not set)
+  captureError(err, {
+    correlationId,
+    method: req?.method,
+    url: req?.originalUrl || req?.url,
+    statusCode: status,
+  });
 
   if (res.headersSent) return next(err);
 
-  const status = Number(err?.status || err?.statusCode || 500);
   return res.status(status).json({
     success: false,
     message: err?.message || "Internal Server Error",

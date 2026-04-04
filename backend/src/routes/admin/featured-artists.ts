@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { pool } from "../../common/db";
 import { requireAuth } from "../../common/auth/requireAuth";
-import { invalidateCache } from "../../common/cache";
+import { invalidateCachePattern } from "../../common/cache";
 
 const router = Router();
 
@@ -123,7 +123,7 @@ router.post("/", async (req, res) => {
         
         const featured = result.rows[0];
 
-        await invalidateCache("featured_artists");
+        await invalidateCachePattern("featured_artists*");
 
         return res.json({
           success: true,
@@ -149,7 +149,7 @@ router.post("/", async (req, res) => {
 
       const featured = result.rows[0];
 
-      await invalidateCache("featured_artists");
+      await invalidateCachePattern("featured_artists*");
 
       return res.json({
         success: true,
@@ -188,7 +188,7 @@ router.post("/", async (req, res) => {
 
       const featured = result.rows[0];
 
-      await invalidateCache("featured_artists");
+      await invalidateCachePattern("featured_artists*");
 
       return res.json({
         success: true,
@@ -238,7 +238,7 @@ router.delete("/:id", async (req, res) => {
       return res.status(404).json({ success: false, message: "Featured artist not found" });
     }
 
-    await invalidateCache("featured_artists");
+    await invalidateCachePattern("featured_artists*");
 
     return res.json({ success: true, message: "Artist removed from featured" });
   } catch (err: any) {
@@ -278,7 +278,7 @@ router.patch("/:id", async (req, res) => {
 
     const featured = result.rows[0];
 
-    await invalidateCache("featured_artists");
+    await invalidateCachePattern("featured_artists*");
 
     return res.json({
       success: true,

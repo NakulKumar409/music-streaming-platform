@@ -3,7 +3,7 @@ import { requireAuth } from "../../common/auth/requireAuth";
 import { pool } from "../../common/db";
 import { createPlaybackToken } from "../../shared/security/signed-media-token.service";
 import { getMediaConfig } from "../../config/media.config";
-import { invalidateCache } from "../../common/cache";
+import { invalidateCachePattern } from "../../common/cache";
 
 const router = Router();
 
@@ -50,6 +50,9 @@ router.get("/flagged", requireAuth, requireAdmin, async (req: any, res: any) => 
       return `${baseUrlFull}/${streamRoute}/${contentId}?token=${encodeURIComponent(token)}&kind=${encodeURIComponent(kind)}`;
     };
 
+    const limit = Number(req.query.limit) || 10;
+    const offset = Number(req.query.offset) || 0;
+
     const rows = await pool.query(
       `WITH reason_counts AS (
          SELECT content_id, reason, COUNT(*)::int as count
@@ -85,8 +88,8 @@ router.get("/flagged", requireAuth, requireAdmin, async (req: any, res: any) => 
          AND UPPER(COALESCE(c.status, '')) != 'DELETED'
        GROUP BY c.id, u.id
        ORDER BY c.created_at DESC
-       LIMIT 200`,
-      []
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
     );
 
     const items = (rows.rows ?? []).map((r: any) => {
@@ -163,8 +166,7 @@ router.post("/:id/restore", requireAuth, requireAdmin, async (req: any, res: any
     await pool.query("DELETE FROM reports WHERE content_id = $1", [id]);
     await pool.query("COMMIT");
 
-    await invalidateCache("home_content_feed_rows_dev");
-    await invalidateCache("home_content_feed_rows_prod");
+    await invalidateCachePattern("home_content_feed_rows*");
 
     return res.json({ success: true, correlationId });
   } catch (err: any) {
@@ -188,38 +190,33 @@ router.post("/:id/delete-strike", requireAuth, requireAdmin, async (req: any, re
 
     await pool.query("BEGIN");
     const updated = await pool.query(
-      `WITH target AS (
-         SELECT id, artist_id
-         FROM content_items
-         WHERE id = $1
-         LIMIT 1
-       ),
-       mark_deleted AS (
-         UPDATE content_items
-         SET status = 'DELETED'
-         WHERE id IN (SELECT id FROM target)
-         RETURNING id
-       ),
-       strike AS (
-         UPDATE users
-         SET strike_count = COALESCE(strike_count, 0) + 1
-         WHERE id IN (SELECT artist_id FROM target)
-         RETURNING id
-       )
-       SELECT (SELECT id FROM mark_deleted LIMIT 1) as content_id`,
+      `UPDATE content_items
+       SET status = 'DELETED'
+       WHERE id = $1
+       RETURNING id as content_id, artist_id`,
       [id]
     );
 
-    if (!updated.rows?.[0]?.content_id) {
+    const contentRow = updated.rows?.[0];
+
+    if (!contentRow?.content_id) {
       await pool.query("ROLLBACK");
       return res.status(404).json({ success: false, message: "Content not found", correlationId });
+    }
+
+    if (contentRow.artist_id) {
+      await pool.query(
+        `UPDATE users
+         SET strike_count = COALESCE(strike_count, 0) + 1
+         WHERE id = $1`,
+        [contentRow.artist_id]
+      );
     }
 
     await pool.query("DELETE FROM reports WHERE content_id = $1", [id]);
     await pool.query("COMMIT");
 
-    await invalidateCache("home_content_feed_rows_dev");
-    await invalidateCache("home_content_feed_rows_prod");
+    await invalidateCachePattern("home_content_feed_rows*");
 
     return res.json({ success: true, correlationId });
   } catch (err: any) {

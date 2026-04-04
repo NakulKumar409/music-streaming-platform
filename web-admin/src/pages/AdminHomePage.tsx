@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Bar,
@@ -60,23 +60,6 @@ function PremiumPlayLogo() {
   );
 }
 
-function formatCurrency(amount: number) {
-  const n = Number(amount);
-  if (!Number.isFinite(n)) return "$0.00";
-  return n.toLocaleString(undefined, {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
-}
-
-function formatCompact(n: number) {
-  const v = Number(n);
-  if (!Number.isFinite(v)) return "0";
-  return v.toLocaleString();
-}
-
 function DashboardCard({
   title,
   value,
@@ -121,6 +104,23 @@ function DashboardCard({
 
 export default function AdminHomePage() {
   const navigate = useNavigate();
+
+  const formatCurrency = useCallback((amount: number) => {
+    const n = Number(amount);
+    if (!Number.isFinite(n)) return "$0.00";
+    return n.toLocaleString(undefined, {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  }, []);
+
+  const formatCompact = useCallback((n: number) => {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return "0";
+    return v.toLocaleString();
+  }, []);
 
   const backgroundStyle = useMemo(() => {
     return {
@@ -183,14 +183,15 @@ export default function AdminHomePage() {
     Number(alerts?.failedPayments?.length ?? summary?.alerts?.failedPaymentsCount ?? 0) ||
     0;
 
-  const growthChartData = growth.map((p: SeriesPoint) => ({
+  const growthChartData = useMemo(() => growth.map((p: SeriesPoint) => ({
     name: p.date.slice(5),
     value: p.value
-  }));
-  const revenueChartData = revenue.map((p: SeriesPoint) => ({
+  })), [growth]);
+
+  const revenueChartData = useMemo(() => revenue.map((p: SeriesPoint) => ({
     name: p.date.slice(5),
     value: p.value
-  }));
+  })), [revenue]);
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[#4b1927] text-white">

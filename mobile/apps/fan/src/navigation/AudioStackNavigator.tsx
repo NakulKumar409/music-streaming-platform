@@ -1,13 +1,21 @@
-import React from 'react';
+import React, { lazy } from 'react';
 
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import LazyScreen from '../ui/LazyScreen';
 
-import ArtistScreen from '../screens/ArtistScreen';
-import ArtistSubscriptionScreen from '../screens/ArtistSubscriptionScreen';
-import AudioScreen from '../screens/AudioScreen';
-import ContentPlayerScreen from '../screens/ContentPlayerScreen';
-import FullPlayerScreen from '../screens/FullPlayerScreen';
-import SubscriptionFlowScreen from '../screens/SubscriptionFlowScreen';
+const ArtistScreen = lazy(() => import('../screens/ArtistScreen'));
+const ArtistSubscriptionScreen = lazy(() => import('../screens/ArtistSubscriptionScreen'));
+const AudioScreen = lazy(() => import('../screens/AudioScreen'));
+const ContentPlayerScreen = lazy(() => import('../screens/ContentPlayerScreen'));
+const FullPlayerScreen = lazy(() => import('../screens/FullPlayerScreen'));
+const SubscriptionFlowScreen = lazy(() => import('../screens/SubscriptionFlowScreen'));
+
+const LazyArtistScreen = LazyScreen(ArtistScreen);
+const LazyArtistSubscriptionScreen = LazyScreen(ArtistSubscriptionScreen);
+const LazyAudioScreen = LazyScreen(AudioScreen);
+const LazyContentPlayerScreen = LazyScreen(ContentPlayerScreen);
+const LazyFullPlayerScreen = LazyScreen(FullPlayerScreen);
+const LazySubscriptionFlowScreen = LazyScreen(SubscriptionFlowScreen);
 import type { MediaItem } from '../media.types';
 
 export type AudioStackParamList = {
@@ -53,14 +61,14 @@ const Stack = createNativeStackNavigator<AudioStackParamList>();
 export default function AudioStackNavigator() {
   return (
     <Stack.Navigator id="fan-audio" screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="AudioIndex" component={AudioScreen} />
-      <Stack.Screen name="Artist" component={ArtistScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="ArtistSubscription" component={ArtistSubscriptionScreen} />
-      <Stack.Screen name="ContentPlayer" component={ContentPlayerScreen} />
-      <Stack.Screen name="SubscriptionFlow" component={SubscriptionFlowScreen} />
+      <Stack.Screen name="AudioIndex" component={LazyAudioScreen} />
+      <Stack.Screen name="Artist" component={LazyArtistScreen} options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="ArtistSubscription" component={LazyArtistSubscriptionScreen} />
+      <Stack.Screen name="ContentPlayer" component={LazyContentPlayerScreen} />
+      <Stack.Screen name="SubscriptionFlow" component={LazySubscriptionFlowScreen} />
       <Stack.Screen
         name="FullPlayer"
-        component={FullPlayerScreen}
+        component={LazyFullPlayerScreen}
         options={{ animation: 'slide_from_bottom', gestureEnabled: true }}
       />
     </Stack.Navigator>

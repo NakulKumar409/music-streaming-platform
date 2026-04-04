@@ -29,6 +29,7 @@ import { fetchArtistById, fetchArtistMedia, type ArtistDetail, type ArtistMediaI
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import YouTubeVideoControlsOverlay from '../ui/YouTubeVideoControlsOverlay';
 import { Colors } from '../theme';
+import { getOptimizedImageUrl } from '../utils/cloudinary';
 
 function SpotifyIcon({ size = 18 }: { size?: number }) {
   return (
@@ -656,7 +657,7 @@ function ProfileHeaderSection({
   return (
     <View style={styles.profileWrap}>
       <View style={styles.bannerWrap}>
-        <Image source={{ uri: bannerUrl }} style={styles.bannerImg} />
+        <Image source={{ uri: getOptimizedImageUrl(bannerUrl) }} style={styles.bannerImg} />
         <LinearGradient colors={['rgba(0,0,0,0.08)', 'rgba(0,0,0,0.75)']} style={styles.bannerGradient} />
         <View style={styles.bannerTopRow}>
           <Pressable onPress={onBack} style={styles.backBtn}>
@@ -667,7 +668,7 @@ function ProfileHeaderSection({
 
       <View style={styles.avatarRow}>
         <View style={styles.avatarWrap}>
-          <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+          <Image source={{ uri: getOptimizedImageUrl(avatarUrl) }} style={styles.avatarImg} />
         </View>
       </View>
 
@@ -752,7 +753,7 @@ function InlineArtistMetaSection({
 
       <View style={styles.inlineMetaRow}>
         <View style={styles.inlineAvatarWrap}>
-          <Image source={{ uri: avatarUrl }} style={styles.inlineAvatarImg} />
+          <Image source={{ uri: getOptimizedImageUrl(avatarUrl) }} style={styles.inlineAvatarImg} />
         </View>
 
         <View style={styles.inlineMetaTextWrap}>
@@ -864,7 +865,7 @@ function MediaCard({
     >
       <View style={styles.card}>
         <View style={styles.cardThumbWrap}>
-          <Image source={{ uri: item.thumbnail }} style={styles.cardThumb} />
+          <Image source={{ uri: getOptimizedImageUrl(item.thumbnail) }} style={styles.cardThumb} />
           <LinearGradient colors={['rgba(0,0,0,0.00)', 'rgba(0,0,0,0.55)']} style={styles.cardThumbGradient} />
 
           <View style={styles.cardBadgeRight}>

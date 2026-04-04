@@ -123,6 +123,9 @@ router.get("/subscribed-artists", requireAuth, async (req: any, res) => {
   try {
     await ensureSubscriptionsSchema();
 
+    const limit = Number(req.query.limit) || 10;
+    const offset = Number(req.query.offset) || 0;
+
     const rows = await pool.query(
       `SELECT
         u.id,
@@ -139,8 +142,8 @@ router.get("/subscribed-artists", requireAuth, async (req: any, res) => {
          AND UPPER(COALESCE(u.role, '')) = 'ARTIST'
          AND COALESCE(u.status, 'ACTIVE') = 'ACTIVE'
        ORDER BY s.updated_at DESC, s.created_at DESC
-       LIMIT 200`,
-      [userId]
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
     );
 
     const artists = (rows.rows ?? []).map((r: any) => ({
@@ -164,10 +167,8 @@ router.get("/recently-played", requireAuth, async (req: any, res) => {
     return res.status(401).json({ success: false, message: "Unauthorized" });
   }
 
-  const limitRequested = Number(req.query?.limit ?? 15);
-  const limit = Number.isFinite(limitRequested)
-    ? Math.max(1, Math.min(30, Math.floor(limitRequested)))
-    : 15;
+  const limit = Number(req.query.limit) || 10;
+  const offset = Number(req.query.offset) || 0;
 
   try {
     await ensurePlaybackHistorySchema();
@@ -189,8 +190,8 @@ router.get("/recently-played", requireAuth, async (req: any, res) => {
        LEFT JOIN users a ON a.id = c.artist_id
        WHERE ph.user_id = $1
        ORDER BY ph.played_at DESC
-       LIMIT ${limit}`,
-      [userId]
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
     );
 
     const items = (rows.rows ?? []).map((r: any) => {

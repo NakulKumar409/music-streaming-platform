@@ -47,6 +47,7 @@ import { contentApi } from '../services/api';
 import * as streamService from '../services/streamService';
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
+import { getOptimizedImageUrl } from '../utils/cloudinary';
 import { formatDurationLabel, hasFiniteDuration, toFiniteDurationMs } from '../utils/mediaTime';
 import PauseButtonImg from '../pausebuttton.png';
 import PlayButtonImg from '../playbutton.png';
@@ -1302,7 +1303,7 @@ export default function VideoScreen() {
       return (
         <Pressable style={styles.rowItem} onPress={() => onPressVideo(item)}>
           <View style={[styles.rowThumbWrap, isActive ? styles.rowThumbWrapActive : null]}>
-            <Image source={{ uri: item.artworkUrl || FALLBACK_ARTWORK }} style={styles.rowThumb} />
+            <Image source={{ uri: getOptimizedImageUrl(item.artworkUrl || FALLBACK_ARTWORK) }} style={styles.rowThumb} />
             <View style={styles.rowThumbOverlay}>
               <View style={styles.rowPlayBadge}>
                 <Image
@@ -1358,7 +1359,7 @@ export default function VideoScreen() {
         <Text style={styles.relatedTitle}>Related Videos</Text>
         {related.map((v) => (
           <Pressable key={v.id} style={styles.relatedRow} onPress={() => onPressVideo(v)}>
-            <Image source={{ uri: v.artworkUrl || FALLBACK_ARTWORK }} style={styles.relatedThumb} />
+            <Image source={{ uri: getOptimizedImageUrl(v.artworkUrl || FALLBACK_ARTWORK) }} style={styles.relatedThumb} />
             <View style={styles.relatedMeta}>
               <Text style={styles.relatedRowTitle} numberOfLines={2}>
                 {v.title}
@@ -1616,7 +1617,7 @@ export default function VideoScreen() {
                   
                   <View style={styles.artistRowContainer}>
                     <Pressable style={styles.artistRow} onPress={onPressArtist}>
-                      <Image source={{ uri: activeVideoMeta.artworkUrl || FALLBACK_ARTWORK }} style={styles.artistAvatar} />
+                      <Image source={{ uri: getOptimizedImageUrl(activeVideoMeta.artworkUrl || FALLBACK_ARTWORK) }} style={styles.artistAvatar} />
                       <View style={styles.artistNameCol}>
                         <Text style={styles.artistRowName} numberOfLines={1}>
                           {activeVideoMeta.artistName}
