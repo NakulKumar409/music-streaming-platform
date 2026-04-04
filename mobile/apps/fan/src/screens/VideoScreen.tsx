@@ -49,6 +49,7 @@ import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import { getOptimizedImageUrl } from '../utils/cloudinary';
 import { formatDurationLabel, hasFiniteDuration, toFiniteDurationMs } from '../utils/mediaTime';
+import { isStreamingUrlExpiringSoon, decodeJwtExpMsFromUrl } from '../utils/streaming';
 import PauseButtonImg from '../pausebuttton.png';
 import PlayButtonImg from '../playbutton.png';
 
@@ -436,48 +437,6 @@ export default function VideoScreen() {
     };
   }, [activePlaybackUrl, activeVideoMeta?.id, bgAudioOnlyMode, safePlay, videoPlayer]);
 
-  const base64Decode = useCallback((input: string): string => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-    let str = input.replace(/\s+/g, '');
-    let output = '';
-    let bc = 0;
-    let bs: number;
-    let buffer: number;
-
-    for (let idx = 0; idx < str.length; idx += 1) {
-      buffer = chars.indexOf(str.charAt(idx));
-      if (buffer < 0) continue;
-      bs = bc % 4 ? bs * 64 + buffer : buffer;
-      bc += 1;
-      if (bc % 4) continue;
-      output += String.fromCharCode((bs >> 16) & 255, (bs >> 8) & 255, bs & 255);
-    }
-
-    // Handle padding removal
-    output = output.replace(/\0+$/, '');
-    return output;
-  }, []);
-
-  const decodeJwtExpMsFromUrl = useCallback((url: string | null): number | null => {
-    if (!url) return null;
-    try {
-      const tokenMatch = url.match(/[?&]token=([^&]+)/i);
-      if (!tokenMatch?.[1]) return null;
-      const token = decodeURIComponent(tokenMatch[1]);
-      const parts = token.split('.');
-      if (parts.length < 2) return null;
-      const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      const pad = payloadB64.length % 4;
-      const padded = payloadB64 + (pad ? '='.repeat(4 - pad) : '');
-      const json = globalThis.atob ? globalThis.atob(padded) : base64Decode(padded);
-      const payload = JSON.parse(json);
-      const expSec = Number(payload?.exp ?? 0);
-      if (!Number.isFinite(expSec) || expSec <= 0) return null;
-      return expSec * 1000;
-    } catch {
-      return null;
-    }
-  }, [base64Decode]);
 
   const scheduleTokenRefresh = useCallback(
     (url: string | null) => {
@@ -489,14 +448,17 @@ export default function VideoScreen() {
       const expMs = decodeJwtExpMsFromUrl(url);
       if (!expMs) return;
 
-      // Refresh 30s before expiry (min 5s).
+      // Refresh 60s before expiry for better safety (min 10s delay).
       const now = Date.now();
-      const delay = Math.max(5000, expMs - now - 30_000);
+      const delay = Math.max(10000, expMs - now - 60_000);
+      console.log('[VideoScreen] Scheduling token refresh in', Math.round(delay / 1000), 's');
+      
       tokenRefreshTimerRef.current = setTimeout(() => {
         (async () => {
           if (!activeVideoMeta?.id) return;
           const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
 
+          console.log('[VideoScreen] Background refreshing video URL...');
           try {
             const nextUrl = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video');
             resumeAfterUrlChangeRef.current = pos;
@@ -507,7 +469,7 @@ export default function VideoScreen() {
         })().catch(() => undefined);
       }, delay);
     },
-    [activeVideoMeta?.id, decodeJwtExpMsFromUrl]
+    [activeVideoMeta?.id, videoPlayer]
   );
 
   useEffect(() => {
@@ -759,8 +721,25 @@ export default function VideoScreen() {
   // We use it for the quality-switch seek so it is truly atomic — no setTimeout.
   useEventListener(videoPlayer, 'statusChange', ({ status }: { status: string }) => {
     const isReady = status === 'readyToPlay';
+    const isFailed = status === 'failed';
     setIsVideoReady(isReady);
     setIsBuffering(status === 'loading');
+
+    if (isFailed || (videoPlayer.status === 'idle' && isStreamingUrlExpiringSoon(activePlaybackUrl))) {
+      console.log('[VideoScreen] Player status failed or URL expired, attempting refresh...');
+      (async () => {
+        if (!activeVideoMeta?.id) return;
+        const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
+        try {
+          const nextUrl = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video');
+          resumeAfterUrlChangeRef.current = pos;
+          setActivePlaybackUrl(nextUrl);
+        } catch {
+          // ignore
+        }
+      })().catch(() => undefined);
+      return;
+    }
 
     if (isReady && qualityResumePositionRef.current !== null) {
       const targetSeconds = qualityResumePositionRef.current;
@@ -1391,6 +1370,9 @@ export default function VideoScreen() {
           <FlatList
             data={Array.from({ length: 6 })}
             keyExtractor={(_, idx) => `sk-${idx}`}
+            initialNumToRender={5}
+            windowSize={5}
+            removeClippedSubviews={true}
             renderItem={({ item, index }) => renderSkeletonRow(item, index)}
             showsVerticalScrollIndicator={false}
             onScroll={onListScroll}
@@ -1405,6 +1387,9 @@ export default function VideoScreen() {
             }}
             data={visibleItems}
             keyExtractor={(it) => it.id}
+            initialNumToRender={5}
+            windowSize={5}
+            removeClippedSubviews={true}
             renderItem={renderVideoItem}
             showsVerticalScrollIndicator={false}
             onScroll={onListScroll}

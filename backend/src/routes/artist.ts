@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { requireAuth } from "../common/auth/requireAuth";
 import { pool } from "../common/db";
 import { uploadLimiter } from "../common/security/rateLimit";
+import { invalidateArtistCache } from "../common/cache";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -367,6 +368,7 @@ router.post(
         url
       });
 
+      await invalidateArtistCache();
       return res.json({ success: true, url, correlationId });
     } catch (err: any) {
       audit(req, {
@@ -502,6 +504,7 @@ router.patch("/me", requireAuth, requireArtist, async (req: any, res: any) => {
       }
     });
 
+    await invalidateArtistCache();
     return res.json({ success: true, correlationId });
   } catch (err: any) {
     audit(req, { event: "artist_profile_updated", outcome: "error", message: err?.message || String(err) });
@@ -559,6 +562,7 @@ router.patch("/pricing", requireAuth, requireArtist, async (req: any, res: any) 
       [artistUserId, next]
     );
 
+    await invalidateArtistCache();
     audit(req, { event: "artist_pricing_updated", outcome: "success", subscriptionPrice: next });
     return res.json({ success: true, correlationId });
   } catch (err: any) {

@@ -1,4 +1,5 @@
 import axios from "axios";
+import * as Sentry from "@sentry/react";
 
 export const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000",
@@ -38,6 +39,10 @@ http.interceptors.response.use(
           window.alert("Too many requests. Please wait a few seconds and try again.");
         }
       }
+    }
+
+    if (status >= 500) {
+      Sentry.captureException(error, { extra: { status, url: error.config?.url } });
     }
 
     return Promise.reject(error);

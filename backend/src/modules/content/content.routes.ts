@@ -48,119 +48,50 @@ router.get("/", (req, res) => {
 
       let queryRows: any = await fetchWithCache(cacheKey, async () => {
         let rows: any;
-        try {
-          const baseWhere = `${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
-               AND COALESCE(u.is_deleted, false) = false
-               AND UPPER(COALESCE(c.status, 'APPROVED')) = 'APPROVED'
-               AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})`;
+        const baseWhere = `${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
+             AND COALESCE(u.is_deleted, false) = false
+             AND UPPER(COALESCE(c.status, 'APPROVED')) = 'APPROVED'
+             AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})`;
 
-          if (useCursor) {
-            rows = await pool.query(
-              `SELECT
-                 c.id,
-                 c.title,
-                 c.type,
-                 c.thumbnail_url,
-                 c.media_url,
-                 c.audio_url,
-                 c.video_url,
-                 c.storage_key,
-                 c.video_storage_key,
-                 c.thumbnail_storage_key,
-                 c.storage_provider,
-                 c.created_at,
-                 c.artist_id,
-                 c.subscription_required,
-                 COALESCE(NULLIF(u.name, ''), NULLIF(u.full_name, ''), NULLIF(u.username, ''), NULLIF(split_part(u.email, '@', 1), ''), u.email) as artist_name
-               FROM content_items c
-               LEFT JOIN users u ON u.id = c.artist_id
-               WHERE ${baseWhere}
-                 AND c.created_at < $1
-               ORDER BY c.created_at DESC
-               LIMIT $2`,
-              [cursor, limit]
-            );
-          } else {
-            rows = await pool.query(
-              `SELECT
-                 c.id,
-                 c.title,
-                 c.type,
-                 c.thumbnail_url,
-                 c.media_url,
-                 c.audio_url,
-                 c.video_url,
-                 c.storage_key,
-                 c.video_storage_key,
-                 c.thumbnail_storage_key,
-                 c.storage_provider,
-                 c.created_at,
-                 c.artist_id,
-                 c.subscription_required,
-                 COALESCE(NULLIF(u.name, ''), NULLIF(u.full_name, ''), NULLIF(u.username, ''), NULLIF(split_part(u.email, '@', 1), ''), u.email) as artist_name
-               FROM content_items c
-               LEFT JOIN users u ON u.id = c.artist_id
-               WHERE ${baseWhere}
-               ORDER BY c.created_at DESC
-               LIMIT $1 OFFSET $2`,
-              [limit, offset]
-            );
-          }
-        } catch (err: any) {
-          // Broaden catch to any error for the first attempt safely
-          if (useCursor) {
-            rows = await pool.query(
-              `SELECT
-                 c.id,
-                 c.title,
-                 c.type,
-                 c.thumbnail_url,
-                 c.media_url,
-                 c.audio_url,
-                 c.video_url,
-                 c.storage_key,
-                 c.video_storage_key,
-                 c.thumbnail_storage_key,
-                 c.storage_provider,
-                 c.created_at,
-                 c.artist_id,
-                 c.subscription_required,
-                 COALESCE(NULLIF(u.name, ''), NULLIF(u.full_name, ''), NULLIF(u.username, ''), NULLIF(split_part(u.email, '@', 1), ''), u.email) as artist_name
-               FROM content_items c
-               LEFT JOIN users u ON u.id = c.artist_id
-               WHERE COALESCE(u.is_deleted, false) = false
-                 AND c.created_at < $1
-               ORDER BY c.created_at DESC
-               LIMIT $2`,
-              [cursor, limit]
-            );
-          } else {
-            rows = await pool.query(
-              `SELECT
-                 c.id,
-                 c.title,
-                 c.type,
-                 c.thumbnail_url,
-                 c.media_url,
-                 c.audio_url,
-                 c.video_url,
-                 c.storage_key,
-                 c.video_storage_key,
-                 c.thumbnail_storage_key,
-                 c.storage_provider,
-                 c.created_at,
-                 c.artist_id,
-                 c.subscription_required,
-                 COALESCE(NULLIF(u.name, ''), NULLIF(u.full_name, ''), NULLIF(u.username, ''), NULLIF(split_part(u.email, '@', 1), ''), u.email) as artist_name
-               FROM content_items c
-               LEFT JOIN users u ON u.id = c.artist_id
-               WHERE COALESCE(u.is_deleted, false) = false
-               ORDER BY c.created_at DESC
-               LIMIT $1 OFFSET $2`,
-              [limit, offset]
-            );
-          }
-        }
+        const querySql = `
+          SELECT
+             c.id,
+             c.title,
+             c.type,
+             c.thumbnail_url,
+             c.media_url,
+             c.audio_url,
+             c.video_url,
+             c.storage_key,
+             c.video_storage_key,
+             c.thumbnail_storage_key,
+             c.storage_provider,
+             c.created_at,
+             c.artist_id,
+             c.subscription_required,
+             COALESCE(NULLIF(u.name, ''), NULLIF(u.full_name, ''), NULLIF(u.username, ''), NULLIF(split_part(u.email, '@', 1), ''), u.email) as artist_name,
+             (SELECT COUNT(*)::int FROM content_plays WHERE content_id = c.id) as view_count,
+             (SELECT COUNT(*)::int FROM content_reactions WHERE content_id = c.id AND reaction = 'like') as like_count,
+             (SELECT COUNT(*)::int FROM content_reactions WHERE content_id = c.id AND reaction = 'dislike') as dislike_count,
+             (CASE 
+                WHEN $1::int IS NULL THEN false
+                ELSE EXISTS (
+                  SELECT 1 FROM subscriptions s 
+                  WHERE s.user_id = $1 
+                    AND s.artist_id = c.artist_id 
+                    AND UPPER(COALESCE(s.status, '')) = 'ACTIVE'
+                    AND (s.next_billing_date IS NULL OR s.next_billing_date > now() - interval '2 days')
+                )
+              END) as has_subscription
+           FROM content_items c
+           LEFT JOIN users u ON u.id = c.artist_id
+           WHERE ${baseWhere}
+             ${useCursor ? "AND c.created_at < $2" : ""}
+           ORDER BY c.created_at DESC
+           LIMIT ${useCursor ? "$3" : "$2"} ${useCursor ? "" : "OFFSET $3"}`;
+
+        const params = useCursor ? [userId, cursor, limit] : [userId, limit, offset];
+        rows = await pool.query(querySql, params);
         return rows.rows;
       }, 120);
 
@@ -174,10 +105,11 @@ router.get("/", (req, res) => {
         )}`;
       };
 
-      const items = await Promise.all((queryRows ?? []).map(async (r: any) => {
-        const { isLocked } = await checkContentAccess(userId, r.id);
-        const typeRaw = (r.type ?? '').toString().toLowerCase();
+      const items = (queryRows ?? []).map((r: any) => {
+        const subscriptionRequired = Boolean(r.subscription_required);
+        const isLocked = subscriptionRequired && !r.has_subscription;
         
+        const typeRaw = (r.type ?? '').toString().toLowerCase();
         const hasAudio = Boolean(r.storage_key || r.audio_url || r.media_url);
         const hasVideo = Boolean(r.video_storage_key || r.video_url);
 
@@ -208,27 +140,6 @@ router.get("/", (req, res) => {
             ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
             : null;
 
-        const [viewCount, likeCount, dislikeCount] = await Promise.all([
-          pool
-            .query('SELECT COUNT(*)::int as c FROM content_plays WHERE content_id = $1', [r.id])
-            .then((x) => Number(x.rows?.[0]?.c ?? 0))
-            .catch(() => 0),
-          pool
-            .query(
-              "SELECT COUNT(*)::int as c FROM content_reactions WHERE content_id = $1 AND reaction = 'like'",
-              [r.id]
-            )
-            .then((x) => Number(x.rows?.[0]?.c ?? 0))
-            .catch(() => 0),
-          pool
-            .query(
-              "SELECT COUNT(*)::int as c FROM content_reactions WHERE content_id = $1 AND reaction = 'dislike'",
-              [r.id]
-            )
-            .then((x) => Number(x.rows?.[0]?.c ?? 0))
-            .catch(() => 0),
-        ]);
-        
         return {
           id: r.id,
           title: r.title,
@@ -246,13 +157,13 @@ router.get("/", (req, res) => {
           createdAt: r.created_at,
           artistName: r.artist_name ?? null,
           artistId: r.artist_id,
-          subscriptionRequired: Boolean(r.subscription_required),
+          subscriptionRequired,
           isLocked,
-          viewCount,
-          likeCount,
-          dislikeCount
+          viewCount: r.view_count,
+          likeCount: r.like_count,
+          dislikeCount: r.dislike_count
         };
-      }));
+      });
 
       const meta = items.reduce(
         (acc: any, it: any) => {
@@ -301,64 +212,48 @@ router.get("/artist/:artistId", (req, res) => {
       const userId = req.user?.id ? Number(req.user.id) : null;
       const isDev = process.env.NODE_ENV !== 'production';
       
-      let rows: any;
-      try {
-        rows = await pool.query(
-          `SELECT c.id,
-                  c.title,
-                  c.type,
-                  c.thumbnail_url,
-                  c.media_url,
-                  c.audio_url,
-                  c.video_url,
-                  c.storage_key,
-                  c.video_storage_key,
-                  c.thumbnail_storage_key,
-                  c.storage_provider,
-                  c.created_at,
-                  c.subscription_required,
-                  c.status,
-                  c.is_approved
-           FROM content_items c
-           LEFT JOIN users u ON u.id = c.artist_id
-           WHERE c.artist_id = $1
-             AND COALESCE(u.is_deleted, false) = false
-             AND ${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
-             AND ${
-               isDev
-                 ? "UPPER(COALESCE(c.status, 'APPROVED')) IN ('APPROVED', 'PENDING', 'PROCESSING', 'READY', 'PUBLISHED')"
-                 : "UPPER(COALESCE(c.status, 'APPROVED')) IN ('APPROVED', 'READY', 'PUBLISHED')"
-             }
-             AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})
-           ORDER BY c.created_at DESC
-           LIMIT 500`,
-          [artistId]
-        );
-      } catch (err: any) {
-        // Fallback to minimal query if anything fails in the first attempt
-        rows = await pool.query(
-          `SELECT c.id,
-                  c.title,
-                  c.type,
-                  c.thumbnail_url,
-                  c.media_url,
-                  c.audio_url,
-                  c.video_url,
-                  c.storage_key,
-                  c.video_storage_key,
-                  c.thumbnail_storage_key,
-                  c.storage_provider,
-                  c.created_at,
-                  c.subscription_required
-           FROM content_items c
-           LEFT JOIN users u ON u.id = c.artist_id
-           WHERE c.artist_id = $1
-             AND COALESCE(u.is_deleted, false) = false
-           ORDER BY c.created_at DESC
-           LIMIT 500`,
-          [artistId]
-        );
-      }
+      const querySql = `
+        SELECT c.id,
+                c.title,
+                c.type,
+                c.thumbnail_url,
+                c.media_url,
+                c.audio_url,
+                c.video_url,
+                c.storage_key,
+                c.video_storage_key,
+                c.thumbnail_storage_key,
+                c.storage_provider,
+                c.created_at,
+                c.subscription_required,
+                (SELECT COUNT(*)::int FROM content_plays WHERE content_id = c.id) as view_count,
+                (SELECT COUNT(*)::int FROM content_reactions WHERE content_id = c.id AND reaction = 'like') as like_count,
+                (SELECT COUNT(*)::int FROM content_reactions WHERE content_id = c.id AND reaction = 'dislike') as dislike_count,
+                (CASE 
+                  WHEN $2::int IS NULL THEN false
+                  ELSE EXISTS (
+                    SELECT 1 FROM subscriptions s 
+                    WHERE s.user_id = $2 
+                      AND s.artist_id = c.artist_id 
+                      AND UPPER(COALESCE(s.status, '')) = 'ACTIVE'
+                      AND (s.next_billing_date IS NULL OR s.next_billing_date > now() - interval '2 days')
+                  )
+                END) as has_subscription
+         FROM content_items c
+         LEFT JOIN users u ON u.id = c.artist_id
+         WHERE c.artist_id = $1
+           AND COALESCE(u.is_deleted, false) = false
+           AND ${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
+           AND ${
+             isDev
+               ? "UPPER(COALESCE(c.status, 'APPROVED')) IN ('APPROVED', 'PENDING', 'PROCESSING', 'READY', 'PUBLISHED')"
+               : "UPPER(COALESCE(c.status, 'APPROVED')) IN ('APPROVED', 'READY', 'PUBLISHED')"
+           }
+           AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})
+         ORDER BY c.created_at DESC
+         LIMIT 500`;
+
+      const rows = await pool.query(querySql, [artistId, userId]);
 
       const mediaCfg = getMediaConfig();
       const streamRoute = (mediaCfg.localPrivateStreamRoute || "media/stream").replace(/^\//, "");
@@ -370,87 +265,64 @@ router.get("/artist/:artistId", (req, res) => {
         )}`;
       };
 
-      const items = await Promise.all(
-        (rows.rows ?? []).map(async (r: any) => {
-          const { isLocked } = await checkContentAccess(userId, r.id);
-          const type = (r.type ?? "").toString().toLowerCase();
+      const items = (rows.rows ?? []).map((r: any) => {
+        const subscriptionRequired = Boolean(r.subscription_required);
+        const isLocked = subscriptionRequired && !r.has_subscription;
+        const type = (r.type ?? "").toString().toLowerCase();
 
-          const hasAudio = Boolean(r.storage_key || r.audio_url || r.media_url);
-          const hasVideo = Boolean(r.video_storage_key || r.video_url);
+        const hasAudio = Boolean(r.storage_key || r.audio_url || r.media_url);
+        const hasVideo = Boolean(r.video_storage_key || r.video_url);
 
-          const isAudioVideo = type === 'audio_video' || type === 'audiovideo' || type === 'audio+video';
-          const inferredMediaType = isAudioVideo ? 'audio_video' : (type.includes('video') || hasVideo ? 'video' : 'audio');
+        const isAudioVideo = type === 'audio_video' || type === 'audiovideo' || type === 'audio+video';
+        const inferredMediaType = isAudioVideo ? 'audio_video' : (type.includes('video') || hasVideo ? 'video' : 'audio');
 
-          const hasNewAudioStorage = Boolean(r.storage_key);
-          const hasNewVideoStorage = Boolean(r.video_storage_key || (type === "video" && r.storage_key));
+        const hasNewAudioStorage = Boolean(r.storage_key);
+        const hasNewVideoStorage = Boolean(r.video_storage_key || (type === "video" && r.storage_key));
 
-          const legacyAudioUrlRaw = r.audio_url ?? r.media_url;
-          const legacyVideoUrlRaw = r.video_url ?? r.media_url;
+        const legacyAudioUrlRaw = r.audio_url ?? r.media_url;
+        const legacyVideoUrlRaw = r.video_url ?? r.media_url;
 
-          const streamAudioUrl = hasNewAudioStorage && !isLocked ? issueStreamUrl(r.id, "audio") : null;
-          const streamVideoUrl = hasNewVideoStorage && !isLocked ? issueStreamUrl(r.id, "video") : null;
+        const streamAudioUrl = hasNewAudioStorage && !isLocked ? issueStreamUrl(r.id, "audio") : null;
+        const streamVideoUrl = hasNewVideoStorage && !isLocked ? issueStreamUrl(r.id, "video") : null;
 
-          const unlockedAudioUrl =
-            streamAudioUrl || (!hasNewAudioStorage ? toAbsoluteUrl(req, legacyAudioUrlRaw) : null);
-          const unlockedVideoUrl =
-            streamVideoUrl || (!hasNewVideoStorage ? toAbsoluteUrl(req, legacyVideoUrlRaw) : null);
+        const unlockedAudioUrl =
+          streamAudioUrl || (!hasNewAudioStorage ? toAbsoluteUrl(req, legacyAudioUrlRaw) : null);
+        const unlockedVideoUrl =
+          streamVideoUrl || (!hasNewVideoStorage ? toAbsoluteUrl(req, legacyVideoUrlRaw) : null);
 
-          const finalAudioUrl = hasAudio ? (isLocked ? restrictedMediaUrl(req, "audio") : unlockedAudioUrl) : null;
-          const finalVideoUrl = hasVideo ? (isLocked ? restrictedMediaUrl(req, "video") : unlockedVideoUrl) : null;
+        const finalAudioUrl = hasAudio ? (isLocked ? restrictedMediaUrl(req, "audio") : unlockedAudioUrl) : null;
+        const finalVideoUrl = hasVideo ? (isLocked ? restrictedMediaUrl(req, "video") : unlockedVideoUrl) : null;
 
-          const finalMediaUrl = inferredMediaType === "video" ? finalVideoUrl : finalAudioUrl;
-          const useStreamAccess = Boolean((hasNewAudioStorage || hasNewVideoStorage) && !isLocked);
+        const finalMediaUrl = inferredMediaType === "video" ? finalVideoUrl : finalAudioUrl;
+        const useStreamAccess = Boolean((hasNewAudioStorage || hasNewVideoStorage) && !isLocked);
 
-          const thumbnailUrl = r.thumbnail_url
-            ? toAbsoluteUrl(req, r.thumbnail_url)
-            : r.thumbnail_storage_key
-              ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
-              : null;
+        const thumbnailUrl = r.thumbnail_url
+          ? toAbsoluteUrl(req, r.thumbnail_url)
+          : r.thumbnail_storage_key
+            ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
+            : null;
 
-          const [viewCount, likeCount, dislikeCount] = await Promise.all([
-            pool
-              .query('SELECT COUNT(*)::int as c FROM content_plays WHERE content_id = $1', [r.id])
-              .then((x) => Number(x.rows?.[0]?.c ?? 0))
-              .catch(() => 0),
-            pool
-              .query(
-                "SELECT COUNT(*)::int as c FROM content_reactions WHERE content_id = $1 AND reaction = 'like'",
-                [r.id]
-              )
-              .then((x) => Number(x.rows?.[0]?.c ?? 0))
-              .catch(() => 0),
-            pool
-              .query(
-                "SELECT COUNT(*)::int as c FROM content_reactions WHERE content_id = $1 AND reaction = 'dislike'",
-                [r.id]
-              )
-              .then((x) => Number(x.rows?.[0]?.c ?? 0))
-              .catch(() => 0),
-          ]);
-
-          return {
-            id: r.id,
-            title: r.title,
-            type,
-            mediaType: inferredMediaType,
-            thumbnailUrl,
-            artwork: thumbnailUrl,
-            mediaUrl: finalMediaUrl,
-            fileUrl: finalMediaUrl,
-            audioUrl: finalAudioUrl,
-            videoUrl: finalVideoUrl,
-            storage_provider: r.storage_provider ?? 'local',
-            // We return direct stream URLs, so client does not need POST /stream/access
-            useStreamAccess,
-            subscriptionRequired: Boolean(r.subscription_required),
-            isLocked,
-            createdAt: r.created_at,
-            viewCount,
-            likeCount,
-            dislikeCount
-          };
-        })
-      );
+        return {
+          id: r.id,
+          title: r.title,
+          type,
+          mediaType: inferredMediaType,
+          thumbnailUrl,
+          artwork: thumbnailUrl,
+          mediaUrl: finalMediaUrl,
+          fileUrl: finalMediaUrl,
+          audioUrl: finalAudioUrl,
+          videoUrl: finalVideoUrl,
+          storage_provider: r.storage_provider ?? 'local',
+          useStreamAccess,
+          subscriptionRequired,
+          isLocked,
+          createdAt: r.created_at,
+          viewCount: r.view_count,
+          likeCount: r.like_count,
+          dislikeCount: r.dislike_count
+        };
+      });
 
       if (process.env.NODE_ENV !== 'production') {
         const meta = items.reduce(

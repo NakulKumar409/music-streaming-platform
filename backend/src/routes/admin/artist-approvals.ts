@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../common/auth/requireAuth";
 import { pool } from "../../common/db";
+import { invalidateArtistCache } from "../../common/cache";
 
 const router = Router();
 
@@ -125,6 +126,8 @@ router.patch("/resolve-artist/:id", requireAuth, requireAdmin, async (req: any, 
       if (!r.rows?.length) {
         return res.status(404).json({ success: false, message: "Artist not found", correlationId });
       }
+
+      await invalidateArtistCache();
 
       await pool
         .query(

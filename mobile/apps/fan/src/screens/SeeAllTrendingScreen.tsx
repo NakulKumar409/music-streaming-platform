@@ -85,6 +85,9 @@ export default function SeeAllTrendingScreen({ navigation, route }: any) {
           data={artists}
           keyExtractor={(item) => item.id}
           numColumns={2}
+          initialNumToRender={5}
+          windowSize={5}
+          removeClippedSubviews={true}
           contentContainerStyle={styles.content}
           columnWrapperStyle={styles.row}
           showsVerticalScrollIndicator={false}

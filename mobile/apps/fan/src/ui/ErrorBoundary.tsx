@@ -1,4 +1,5 @@
 import React from 'react';
+import * as Sentry from '@sentry/react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
@@ -24,6 +25,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
       error,
       info,
     });
+    Sentry.captureException(error, { extra: { ...info, label: this.props.label } });
   }
 
   private retry = () => {

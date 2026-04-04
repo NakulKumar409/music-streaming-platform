@@ -2,7 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcrypt";
 import { requireAuth } from "../../common/auth/requireAuth";
 import { pool } from "../../common/db";
-import { invalidateCachePattern } from "../../common/cache";
+import { invalidateCachePattern, invalidateArtistCache } from "../../common/cache";
 
 const router = Router();
 
@@ -151,7 +151,7 @@ router.post("/create", requireAuth, requireAdmin, async (req, res) => {
       })}`
     );
 
-    await invalidateCachePattern("artist_search:*");
+    await invalidateArtistCache();
 
     return res.status(201).json({
       success: true,
@@ -416,7 +416,7 @@ router.patch("/:id/soft-delete", requireAuth, requireAdmin, async (req, res) => 
       return res.status(404).json({ success: false, message: "Artist not found", correlationId });
     }
 
-    await invalidateCachePattern("artist_search:*");
+    await invalidateArtistCache();
 
     return res.json({
       success: true,
@@ -463,7 +463,7 @@ router.patch("/:id/reactivate", requireAuth, requireAdmin, async (req, res) => {
       return res.status(404).json({ success: false, message: "Artist not found", correlationId });
     }
 
-    await invalidateCachePattern("artist_search:*");
+    await invalidateArtistCache();
 
     return res.json({
       success: true,
@@ -563,7 +563,7 @@ router.patch("/:id", requireAuth, requireAdmin, async (req, res) => {
       return res.status(404).json({ success: false, message: "Artist not found", correlationId });
     }
 
-    await invalidateCachePattern("artist_search:*");
+    await invalidateArtistCache();
 
     const u = updated.rows[0] as any;
 

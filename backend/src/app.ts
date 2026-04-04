@@ -32,6 +32,7 @@ import { getDeliveryStrategyForProvider } from "./shared/delivery/services/media
 import { MediaProviderFactory } from "./services/providers/MediaProviderFactory";
 import { redis, connectRedisWithRetry } from "./common/redis";
 import { initSentry, captureError } from "./common/sentry";
+import { logger, httpLogger } from "./common/logger";
 import "./workers/upload.worker";
 
 // Initialise Sentry as early as possible (no-op if SENTRY_DSN is unset)
@@ -141,17 +142,7 @@ app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")
 
 app.use("/media/stream", mediaStreamRoutes);
 
-app.use(
-  morgan("dev", {
-    stream: {
-      write: (message: string) => {
-        process.stdout.write(
-          `--------------------------------------------------\n${message.trimEnd()}\n`
-        );
-      }
-    }
-  })
-);
+app.use(httpLogger);
 
 const formatTimestamp = () => {
   const d = new Date();
@@ -189,6 +180,7 @@ const sanitizeBody = (body: any) => {
   return walk(body);
 };
 
+// Custom correlation ID middleware
 app.use((req: any, res, next) => {
   const incomingCorrelationId =
     (req.headers["x-correlation-id"] as string | undefined) ||
@@ -197,56 +189,6 @@ app.use((req: any, res, next) => {
   const correlationId = incomingCorrelationId || uuidv4();
   req.correlationId = correlationId;
   res.setHeader("X-Correlation-Id", correlationId);
-
-  const startNs = process.hrtime.bigint();
-
-  res.on("finish", () => {
-    const endNs = process.hrtime.bigint();
-    const responseTimeMs = Number(endNs - startNs) / 1_000_000;
-    const contentLength =
-      (res.getHeader("content-length") as string | number | undefined) ?? "-";
-
-    const payload =
-      req.body && Object.keys(req.body).length ? sanitizeBody(req.body) : null;
-
-    let tokenUser: any = req.user ?? null;
-    if (!tokenUser) {
-      const authHeader = req.headers.authorization;
-      if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
-        const token = authHeader.split(" ")[1];
-        try {
-          tokenUser = jwt.verify(token, process.env.JWT_SECRET as string);
-        } catch {
-          tokenUser = null;
-        }
-      }
-    }
-
-    const userId = tokenUser?.id ?? tokenUser?.userId ?? null;
-    const role = tokenUser?.role ?? null;
-
-    const details = {
-      timestamp: formatTimestamp(),
-      correlationId: req.correlationId,
-      method: req.method,
-      url: req.originalUrl || req.url,
-      statusCode: res.statusCode,
-      responseTimeMs: Number(responseTimeMs.toFixed(2)),
-      contentLength,
-      user: userId || role ? { userId, role } : null,
-      payload
-    };
-
-    const roleLabel = role ?? "-";
-    console.log(
-      `--------------------------------------------------\n[REQUEST] ${details.timestamp} ${details.method} ${details.url} role=${roleLabel} ${details.responseTimeMs}ms\n${JSON.stringify(
-        details,
-        null,
-        2
-      )}`
-    );
-  });
-
   next();
 });
 
@@ -273,20 +215,15 @@ app.use((err: any, req: any, res: any, next: any) => {
   const stack = err?.stack || err;
   const status = Number(err?.status || err?.statusCode || 500);
 
-  // Structured JSON error log for log aggregators (one line)
-  const structuredError = {
-    level: "error",
-    timestamp,
+  // Structured JSON error log for log aggregators
+  logger.error({
     correlationId,
     method: req?.method,
     url: req?.originalUrl || req?.url,
     statusCode: status,
     message,
     stack: process.env.NODE_ENV !== "production" ? stack : undefined,
-  };
-  console.error(
-    `--------------------------------------------------\n[ERROR] ${timestamp} correlationId=${correlationId}\n${message}\n${stack}\n${JSON.stringify(structuredError)}`
-  );
+  }, `[ERROR] ${message}`);
 
   // Forward to Sentry (no-op when SENTRY_DSN is not set)
   captureError(err, {
@@ -324,9 +261,8 @@ const PORT = process.env.PORT || 8000;
 
   // ── Start HTTP server ──────────────────────────────────────────────────
   app.listen(PORT, () => {
-    console.log("--- Logger Initialized Successfully ---");
-    console.log(`[Startup] Server running on port ${PORT}`);
-    console.log(`[Startup] STORAGE_PROVIDER=${storageConfig.storageProvider}`);
+    logger.info(`[Startup] Server running on port ${PORT}`);
+    logger.info(`[Startup] STORAGE_PROVIDER=${storageConfig.storageProvider}`);
 
     try {
       const routes: string[] = [];

@@ -66,6 +66,9 @@ export default function SeeAllSongsScreen() {
       <FlatList
         data={items}
         keyExtractor={(item) => String(item.id)}
+        initialNumToRender={5}
+        windowSize={5}
+        removeClippedSubviews={true}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
         renderItem={({ item }) => (

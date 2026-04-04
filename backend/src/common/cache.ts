@@ -4,13 +4,10 @@ export async function getCache<T = any>(key: string): Promise<T | null> {
   try {
     const data = await redis.get(key);
     if (data) {
-      console.log("[CACHE HIT]", key);
       return JSON.parse(data) as T;
     }
-    console.log("[CACHE MISS]", key);
     return null;
   } catch (err: any) {
-    console.warn("[CACHE ERROR GET]", key, err.message);
     return null;
   }
 }
@@ -18,25 +15,17 @@ export async function getCache<T = any>(key: string): Promise<T | null> {
 export async function setCache(key: string, value: any, ttl: number = 120): Promise<void> {
   try {
     await redis.set(key, JSON.stringify(value), "EX", ttl);
-    console.log("[CACHE SET]", key);
   } catch (err: any) {
-    console.warn("[CACHE ERROR SET]", key, err.message);
   }
 }
 
 export async function deleteCache(key: string): Promise<void> {
   try {
     await redis.del(key);
-    console.log("[CACHE DELETE]", key);
   } catch (err: any) {
-    console.warn("[CACHE ERROR DELETE]", key, err.message);
   }
 }
 
-/**
- * Fetch data with Redis caching wrapper utilizing getCache and setCache.
- * Logs CACHE HIT / CACHE MISS / CACHE SET for easy debugging.
- */
 export async function fetchWithCache<T>(
   key: string,
   fetcher: () => Promise<T>,
@@ -54,19 +43,48 @@ export async function fetchWithCache<T>(
   return data;
 }
 
-export const invalidateCache = deleteCache; // Alias for backward compatibility if needed
+export const invalidateCache = deleteCache;
 
 /**
- * Invalidate all cache keys matching a specific pattern.
+ * Invalidate all cache keys matching a specific pattern using non-blocking SCAN.
  */
 export async function invalidateCachePattern(pattern: string): Promise<void> {
   try {
-    const keys = await redis.keys(pattern);
-    if (keys.length > 0) {
-      await redis.del(...keys);
-      console.log(`[CACHE INVALIDATED] pattern ${pattern} matched ${keys.length} keys`);
+    let cursor = "0";
+    let deletedCount = 0;
+    
+    do {
+      const [nextCursor, keys] = await redis.scan(cursor, "MATCH", pattern, "COUNT", 100);
+      cursor = nextCursor;
+      
+      if (keys.length > 0) {
+        await redis.del(...keys);
+        deletedCount += keys.length;
+      }
+    } while (cursor !== "0");
+
+    if (deletedCount > 0) {
+      console.log(`[CACHE INVALIDATED] pattern ${pattern} matched ${deletedCount} keys`);
     }
   } catch (err: any) {
     console.warn(`[Redis] pattern DEL error for ${pattern}`, err.message);
   }
+}
+
+/**
+ * Invalidate artist-related caches.
+ */
+export async function invalidateArtistCache(): Promise<void> {
+  await Promise.all([
+    invalidateCachePattern("artist_search:*"),
+    invalidateCachePattern("featured_artists:*"),
+    invalidateCachePattern("home_content_feed_rows*"),
+  ]);
+}
+
+/**
+ * Invalidate content-related caches.
+ */
+export async function invalidateContentCache(): Promise<void> {
+  await invalidateCachePattern("home_content_feed_rows*");
 }

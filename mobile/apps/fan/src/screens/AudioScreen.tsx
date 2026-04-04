@@ -902,6 +902,9 @@ export default function AudioScreen({ navigation }: any) {
               <FlatList
                 data={topSongs}
                 horizontal
+                initialNumToRender={5}
+                windowSize={5}
+                removeClippedSubviews={true}
                 keyExtractor={(i) => i.id}
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.hListContent}

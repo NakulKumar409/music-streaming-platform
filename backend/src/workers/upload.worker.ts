@@ -2,7 +2,9 @@ import { Worker } from "bullmq";
 import fs from "fs";
 import { getStorageService } from "../shared/storage/services/storage.service";
 import { pool } from "../common/db";
-import { invalidateCachePattern } from "../common/cache";
+import { invalidateCachePattern, invalidateContentCache } from "../common/cache";
+import { logger } from "../common/logger";
+import * as Sentry from "@sentry/node";
 
 // Ensure we don't fail immediately inside the worker loop if DB reconnects
 export const uploadWorker = new Worker(
@@ -11,7 +13,7 @@ export const uploadWorker = new Worker(
     const { contentId, thumbnail, audio, video } = job.data;
     const storage = getStorageService();
 
-    console.log(`[Worker] Started processing upload for Content ID: ${contentId}`);
+    logger.info({ contentId, jobId: job.id }, `[Worker] Started processing upload`);
 
     try {
       // 1. Upload Thumbnail
@@ -62,7 +64,7 @@ export const uploadWorker = new Worker(
         ]
       );
 
-      console.log(`[Worker] Successfully completed upload for Content ID: ${contentId}`);
+      logger.info({ contentId, jobId: job.id }, `[Worker] Successfully completed upload`);
 
       // 5. Cleanup Local Files
       const filesToClean = [thumbnail.path, audio.path, video.path];
@@ -72,11 +74,12 @@ export const uploadWorker = new Worker(
         }
       }
 
-      await invalidateCachePattern("home_content_feed_rows*");
+      await invalidateContentCache();
 
       return { success: true, contentId };
     } catch (err: any) {
-      console.error(`[Worker Error] Job failed to process Content ID: ${contentId}`, err.message);
+      logger.error({ err, contentId, jobId: job.id }, `[Worker Error] Job failed to process`);
+      Sentry.captureException(err, { extra: { contentId, jobId: job.id } });
       // We throw the error so BullMQ knows it failed and can retry it.
       // We do NOT delete files here because the retry will need them!
       throw err;
@@ -92,10 +95,8 @@ export const uploadWorker = new Worker(
 
 uploadWorker.on("failed", async (job, err) => {
   if (!job) return;
-  console.error(`[Worker Event] Job ${job.id} failed (attempt ${job.attemptsMade} of ${job.opts.attempts}) with error:`, err.message);
-
   if (job.attemptsMade >= (job.opts.attempts || 1)) {
-    console.log(`[Worker] Job ${job.id} completely exhausted retries. Marking as FAILED in DB and cleaning up files.`);
+    logger.warn({ jobId: job.id, contentId: job.data.contentId }, `[Worker] Job completely exhausted retries. Marking as FAILED.`);
     const { contentId, thumbnail, audio, video } = job.data;
     
     // Ultimate Failure: Set status to FAILED so user sees it in their UI

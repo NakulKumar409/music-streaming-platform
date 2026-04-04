@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios, { AxiosHeaders } from 'axios';
+import * as Sentry from '@sentry/react-native';
 import { API_HOST_BASE_URL } from '../config/env';
 
 const API_BASE_URL = `${API_HOST_BASE_URL}/api/v1/fan`;
@@ -45,6 +46,12 @@ function attachRetry(client: typeof api) {
     (res) => res,
     async (error) => {
       const config = error?.config as (typeof error.config & { __retryCount?: number }) | undefined;
+      const status = error?.response?.status;
+
+      if (status >= 500) {
+        Sentry.captureException(error, { extra: { status, url: config?.url } });
+      }
+
       if (!config) throw error;
 
       const retryCount = config.__retryCount ?? 0;

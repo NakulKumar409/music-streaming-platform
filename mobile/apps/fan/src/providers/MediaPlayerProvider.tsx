@@ -18,6 +18,7 @@ import { navigationRef } from '../navigation/rootNavigation';
 import MediaPlayerOverlay from '../ui/MediaPlayerOverlay';
 import { recordPlayback } from '../services/libraryService';
 import { getPlaybackUrl, normalizePlaybackUrl, validatePlaybackUrl } from '../services/streamService';
+import { isStreamingUrlExpiringSoon, decodeJwtExpMsFromUrl } from '../utils/streaming';
 
 import type { MediaItem, MediaType, PlayerState } from '../media.types';
 
@@ -105,6 +106,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   const playbackRecordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRecordedRef = useRef<string | null>(null);
+  const tokenRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const preloadedUrlRef = useRef<{ id: string; url: string } | null>(null);
 
   const stateRef = useRef<PlayerState>(state);
   useEffect(() => {
@@ -338,6 +341,60 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     videoPlayer?.pause();
   }, [videoPlayer]);
 
+  const scheduleTokenRefresh = useCallback(
+    (url: string | null, type: 'audio' | 'video') => {
+      if (tokenRefreshTimerRef.current) {
+        clearTimeout(tokenRefreshTimerRef.current);
+        tokenRefreshTimerRef.current = null;
+      }
+
+      const expMs = decodeJwtExpMsFromUrl(url);
+      if (!expMs) return;
+
+      const now = Date.now();
+      const delay = Math.max(10_000, expMs - now - 35_000); // 35s buffer
+      console.log(`[MediaPlayer] Scheduling ${type} refresh in ${Math.round(delay / 1000)}s`);
+
+      tokenRefreshTimerRef.current = setTimeout(() => {
+        (async () => {
+          const item = currentItemRef.current;
+          if (!item?.id) return;
+          console.log(`[MediaPlayer] Background refreshing ${type} URL...`);
+          try {
+            const nextUrl = await getPlaybackUrl(item.contentId ?? item.id, type);
+            if (type === 'audio') {
+              setAudioSource(nextUrl);
+              scheduleTokenRefresh(nextUrl, 'audio');
+            } else {
+              setVideoSource(nextUrl);
+              scheduleTokenRefresh(nextUrl, 'video');
+            }
+          } catch (e) {
+            console.warn(`[MediaPlayer] Failed to background refresh ${type} token`, e);
+          }
+        })().catch(() => undefined);
+      }, delay);
+    },
+    []
+  );
+
+  const preloadNextItem = useCallback(async () => {
+    const s = stateRef.current;
+    if (!s.queue.length) return;
+    const nextIdx = s.currentIndex + 1;
+    if (nextIdx >= s.queue.length) return;
+    const item = s.queue[nextIdx];
+    if (!item?.id || preloadedUrlRef.current?.id === item.id) return;
+
+    try {
+      console.log('[MediaPlayer] Preloading next item', { id: item.id });
+      const url = await getPlaybackUrl(item.contentId ?? item.id, item.mediaType);
+      preloadedUrlRef.current = { id: item.id, url };
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const loadAndPlayAudio = useCallback(
     async (item: MediaItem) => {
       const loadToken = (audioLoadTokenRef.current += 1);
@@ -401,6 +458,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       try {
         console.log('[MediaPlayer] Loading audio', { playbackUrl });
         setAudioSource(playbackUrl);
+        scheduleTokenRefresh(playbackUrl, 'audio');
         
         // We set isPlaying to true, and we'll use an effect to trigger actual play 
         // once the player is ready/synced with the new source.
@@ -557,6 +615,13 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       const item = s.queue[safeIndex];
       if (!item) return;
 
+      // Use preloaded URL if available
+      let playbackUrl = item.mediaUrl;
+      if (preloadedUrlRef.current?.id === item.id) {
+        playbackUrl = preloadedUrlRef.current.url;
+        preloadedUrlRef.current = null; // consume it
+      }
+
       if (item.mediaType === 'audio') {
         await loadAndPlayAudio(item);
       } else {
@@ -680,6 +745,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       const shouldUpdate = s.isPlaying !== nextIsPlaying || posDiff > 800 || s.durationMs !== dur;
       
       if (!shouldUpdate) return s;
+
+      // Trigger preload when ~1 min remaining or 75% through
+      if (nextIsPlaying && dur > 30000 && pos > dur * 0.75 && !preloadedUrlRef.current) {
+        preloadNextItem().catch(() => undefined);
+      }
       
       return {
         ...s,
@@ -705,6 +775,25 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     if (state.isPlaying && audioSource && audioPlayer) {
       if (audioStatus?.playing) return; // already playing
       if (!audioStatus?.isLoaded) return; // wait until loaded before calling play()
+
+      // Silent retry on 403 or loading error
+      const statusAny = audioStatus as any;
+      if (statusAny.error && (statusAny.error.includes('403') || isStreamingUrlExpiringSoon(audioSource))) {
+        console.log('[MediaPlayer] URL expired or 403 detected, refreshing...');
+        (async () => {
+          const item = currentItemRef.current;
+          if (!item?.id) return;
+          try {
+            const nextUrl = await getPlaybackUrl(item.contentId ?? item.id, 'audio');
+            setAudioSource(nextUrl);
+            scheduleTokenRefresh(nextUrl, 'audio');
+          } catch {
+            // ignore
+          }
+        })().catch(() => undefined);
+        return;
+      }
+
       try {
         audioPlayer.play();
       } catch (err) {
@@ -712,12 +801,16 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         console.log('[MediaPlayer] Auto-play retry...');
       }
     }
-  }, [audioSource, state.isPlaying, audioPlayer, audioStatus]);
+  }, [audioSource, state.isPlaying, audioPlayer, audioStatus, scheduleTokenRefresh]);
 
   useEffect(() => {
     return () => {
       stopVideo().catch(() => undefined);
       unloadAudio().catch(() => undefined);
+      if (tokenRefreshTimerRef.current) {
+        clearTimeout(tokenRefreshTimerRef.current);
+        tokenRefreshTimerRef.current = null;
+      }
     };
   }, [stopVideo, unloadAudio]);
 

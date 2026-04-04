@@ -155,6 +155,7 @@ export class CloudinaryProvider implements MediaProvider {
       resource_type: "video", // Cloudinary uses resource_type video for both audio and video
       type: "authenticated",
       sign_url: true,
+      expires_at: expiresAt,
     };
     
     if (isVideo) {

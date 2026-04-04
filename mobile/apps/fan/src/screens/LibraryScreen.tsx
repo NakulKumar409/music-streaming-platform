@@ -170,6 +170,9 @@ export default function LibraryScreen({ navigation }: any) {
         <FlatList
           data={recentlyPlayed}
           horizontal
+          initialNumToRender={5}
+          windowSize={5}
+          removeClippedSubviews={true}
           keyExtractor={(i) => i.id}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingLeft: 16, paddingRight: 10 }}

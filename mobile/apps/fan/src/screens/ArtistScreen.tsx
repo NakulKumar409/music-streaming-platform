@@ -480,6 +480,9 @@ export default function ArtistScreen({ navigation, route }: any) {
             <FlatList
               key="list"
               numColumns={1}
+              initialNumToRender={5}
+              windowSize={5}
+              removeClippedSubviews={true}
               data={channelContent}
               keyExtractor={(item) => item.id}
               ListHeaderComponent={

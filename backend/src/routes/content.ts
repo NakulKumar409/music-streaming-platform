@@ -12,7 +12,7 @@ import { generateStorageKey } from "../shared/storage/utils/storage-key.util";
 import { validateFileForUpload } from "../shared/storage/utils/file-validation.util";
 import { getExtensionFromMime } from "../shared/storage/utils/file-metadata.util";
 import { createPlaybackToken } from "../shared/security/signed-media-token.service";
-import { invalidateCachePattern } from "../common/cache";
+import { invalidateCachePattern, invalidateContentCache } from "../common/cache";
 import { uploadQueue } from "../common/queue";
 
 const router = Router();
@@ -258,7 +258,7 @@ router.post(
         }
       });
       
-      await invalidateCachePattern("home_content_feed_rows*");
+      await invalidateContentCache();
 
       return res.json({
         success: true,
@@ -473,7 +473,7 @@ router.post("/upload-metadata", uploadLimiter, requireAuth, requireArtist, async
       [trimmedTitle, normalizedType, artistId, thumbnailUrl ?? null]
     );
 
-    await invalidateCachePattern("home_content_feed_rows*");
+    await invalidateContentCache();
 
     return res.json({
       success: true,
@@ -756,7 +756,7 @@ router.delete("/:id", requireAuth, requireArtistOrAdmin, async (req: any, res: a
       `--------------------------------------------------\n[${eventLabel}] ${timestamp} correlationId=${correlationId} actorId=${actorId} contentId=${id} action=DELETED deletedArtistId=${deletedArtistId ?? "-"}`
     );
 
-    await invalidateCachePattern("home_content_feed_rows*");
+    await invalidateContentCache();
 
     return res.json({ success: true, correlationId });
   } catch {

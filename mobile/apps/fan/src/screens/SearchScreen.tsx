@@ -331,6 +331,9 @@ export default function SearchScreen({ navigation }: any) {
           <FlatList
             data={recentSearches}
             keyExtractor={(item) => String(item.id)}
+            initialNumToRender={5}
+            windowSize={5}
+            removeClippedSubviews={true}
             keyboardShouldPersistTaps="handled"
             style={styles.list}
             contentContainerStyle={{
@@ -348,6 +351,9 @@ export default function SearchScreen({ navigation }: any) {
           <FlatList
             data={artists}
             keyExtractor={(item) => String(item.id)}
+            initialNumToRender={5}
+            windowSize={5}
+            removeClippedSubviews={true}
             keyboardShouldPersistTaps="handled"
             style={styles.list}
             contentContainerStyle={{

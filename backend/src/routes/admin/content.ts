@@ -3,7 +3,7 @@ import { requireAuth } from "../../common/auth/requireAuth";
 import { pool } from "../../common/db";
 import { createPlaybackToken } from "../../shared/security/signed-media-token.service";
 import { getMediaConfig } from "../../config/media.config";
-import { invalidateCachePattern } from "../../common/cache";
+import { invalidateCachePattern, invalidateContentCache } from "../../common/cache";
 
 const router = Router();
 
@@ -166,7 +166,7 @@ router.post("/:id/restore", requireAuth, requireAdmin, async (req: any, res: any
     await pool.query("DELETE FROM reports WHERE content_id = $1", [id]);
     await pool.query("COMMIT");
 
-    await invalidateCachePattern("home_content_feed_rows*");
+    await invalidateContentCache();
 
     return res.json({ success: true, correlationId });
   } catch (err: any) {
@@ -216,7 +216,7 @@ router.post("/:id/delete-strike", requireAuth, requireAdmin, async (req: any, re
     await pool.query("DELETE FROM reports WHERE content_id = $1", [id]);
     await pool.query("COMMIT");
 
-    await invalidateCachePattern("home_content_feed_rows*");
+    await invalidateContentCache();
 
     return res.json({ success: true, correlationId });
   } catch (err: any) {

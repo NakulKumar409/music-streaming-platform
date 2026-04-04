@@ -474,6 +474,9 @@ export default function HomeScreen({ navigation }: any) {
           <FlatList
             data={featuredArtists}
             horizontal
+            initialNumToRender={5}
+            windowSize={5}
+            removeClippedSubviews={true}
             renderItem={renderFeaturedArtist}
             keyExtractor={(item) => item.id}
             showsHorizontalScrollIndicator={false}
@@ -505,6 +508,9 @@ export default function HomeScreen({ navigation }: any) {
           <FlatList
             data={trendingArtists}
             horizontal
+            initialNumToRender={5}
+            windowSize={5}
+            removeClippedSubviews={true}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingLeft: 18, paddingRight: 8 }}
             renderItem={renderTrendingArtist}
@@ -523,6 +529,9 @@ export default function HomeScreen({ navigation }: any) {
           <FlatList
             data={recentAudios}
             horizontal
+            initialNumToRender={5}
+            windowSize={5}
+            removeClippedSubviews={true}
             showsHorizontalScrollIndicator={false}
             nestedScrollEnabled
             contentContainerStyle={{ paddingLeft: 18, paddingRight: 8 }}
@@ -541,6 +550,9 @@ export default function HomeScreen({ navigation }: any) {
           <FlatList
             data={recentVideos}
             horizontal
+            initialNumToRender={5}
+            windowSize={5}
+            removeClippedSubviews={true}
             showsHorizontalScrollIndicator={false}
             nestedScrollEnabled
             contentContainerStyle={{ paddingLeft: 18, paddingRight: 8, paddingBottom: 50 }}

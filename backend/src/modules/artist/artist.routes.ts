@@ -362,29 +362,33 @@ router.get("/:artistId/content", (req, res) => {
     try {
       const isDev = process.env.NODE_ENV !== "production";
       
-      const rows = await pool.query(
-        useCursor
-          ? `SELECT c.id, c.title, c.type, c.thumbnail_url, c.media_url, c.audio_url, c.video_url, c.storage_key, c.video_storage_key, c.created_at, c.subscription_required
-             FROM content_items c
-             LEFT JOIN users u ON u.id = c.artist_id
-             WHERE c.artist_id = $1
-               AND COALESCE(u.is_deleted, false) = false
-               AND ${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
-               AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})
-               AND c.created_at < $2
-             ORDER BY c.created_at DESC
-             LIMIT $3`
-          : `SELECT c.id, c.title, c.type, c.thumbnail_url, c.media_url, c.audio_url, c.video_url, c.storage_key, c.video_storage_key, c.created_at, c.subscription_required
-             FROM content_items c
-             LEFT JOIN users u ON u.id = c.artist_id
-             WHERE c.artist_id = $1
-               AND COALESCE(u.is_deleted, false) = false
-               AND ${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
-               AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})
-             ORDER BY c.created_at DESC
-             LIMIT $2 OFFSET $3`,
-        useCursor ? [artistIdNum, cursor, limit] : [artistIdNum, limit, offset]
-      );
+      const querySql = `
+        SELECT c.id, c.title, c.type, c.thumbnail_url, c.media_url, c.audio_url, c.video_url, c.storage_key, c.video_storage_key, c.created_at, c.subscription_required,
+               (SELECT COUNT(*)::int FROM content_plays WHERE content_id = c.id) as view_count,
+               (SELECT COUNT(*)::int FROM content_reactions WHERE content_id = c.id AND reaction = 'like') as like_count,
+               (SELECT COUNT(*)::int FROM content_reactions WHERE content_id = c.id AND reaction = 'dislike') as dislike_count,
+               (CASE 
+                  WHEN $userId::int IS NULL THEN false
+                  ELSE EXISTS (
+                    SELECT 1 FROM subscriptions s 
+                    WHERE s.user_id = $userId 
+                      AND s.artist_id = c.artist_id 
+                      AND UPPER(COALESCE(s.status, '')) = 'ACTIVE'
+                      AND (s.next_billing_date IS NULL OR s.next_billing_date > now() - interval '2 days')
+                  )
+                END) as has_subscription
+        FROM content_items c
+        LEFT JOIN users u ON u.id = c.artist_id
+        WHERE c.artist_id = $artistId
+          AND COALESCE(u.is_deleted, false) = false
+          AND ${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
+          AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})
+          ${useCursor ? "AND c.created_at < $cursor" : ""}
+        ORDER BY c.created_at DESC
+        LIMIT $limit ${useCursor ? "" : "OFFSET $offset"}`.replace(/\$userId/g, "$1").replace(/\$artistId/g, "$2").replace(/\$cursor/g, "$3").replace(/\$limit/g, "$4").replace(/\$offset/g, "$5");
+
+      const params = useCursor ? [userId, artistIdNum, cursor, limit] : [userId, artistIdNum, limit, offset];
+      const rows = await pool.query(querySql, params);
 
       const mediaCfg = getMediaConfig();
       const streamRoute = (mediaCfg.localPrivateStreamRoute || "media/stream").replace(/^\//, "");
@@ -398,42 +402,35 @@ router.get("/:artistId/content", (req, res) => {
       };
 
       console.log(`[DEBUG] GET /artists/${artistIdNum}/content - QUERY SUCCESS, mapping ${rows.rows?.length} rows`);
-      try {
-        const content = await Promise.all((rows.rows ?? []).map(async (r: any) => {
-          try {
-            const { isLocked } = await checkContentAccess(userId, r.id);
-            const type = (r.type ?? '').toString().toLowerCase();
-            const artwork = toAbsoluteUrl(req, r.thumbnail_url);
-            
-            return {
-              id: r.id,
-              title: r.title ?? 'Untitled',
-              type,
-              mediaType: type.includes('video') ? 'video' : 'audio',
-              artwork,
-              thumbnailUrl: artwork,
-              mediaUrl: null, // Stream on demand
-              useStreamAccess: !isLocked,
-              subscriptionRequired: Boolean(r.subscription_required),
-              isLocked,
-              createdAt: r.created_at,
-            };
-          } catch (mErr) {
-            console.error(`[DEBUG] Mapping error for artist content row ${r?.id}:`, mErr);
-            return null;
-          }
-        }));
-        const filtered = content.filter(Boolean);
-        const lastItem = filtered[filtered.length - 1] as any;
-        const nextCursor = lastItem?.createdAt
-          ? new Date(lastItem.createdAt).toISOString()
-          : null;
-        console.log(`[DEBUG] GET /artists/${artistIdNum}/content - MAPPING SUCCESS`);
-        return res.json({ success: true, content: filtered, nextCursor });
-      } catch (mapErr) {
-        console.error(`[DEBUG] Critical mapping error:`, mapErr);
-        throw mapErr;
-      }
+      const content = (rows.rows ?? []).map((r: any) => {
+        const subscriptionRequired = Boolean(r.subscription_required);
+        const isLocked = subscriptionRequired && !r.has_subscription;
+        const type = (r.type ?? '').toString().toLowerCase();
+        const artwork = toAbsoluteUrl(req, r.thumbnail_url);
+        
+        return {
+          id: r.id,
+          title: r.title ?? 'Untitled',
+          type,
+          mediaType: type.includes('video') ? 'video' : 'audio',
+          artwork,
+          thumbnailUrl: artwork,
+          mediaUrl: null, // Stream on demand
+          useStreamAccess: !isLocked,
+          subscriptionRequired,
+          isLocked,
+          createdAt: r.created_at,
+          viewCount: r.view_count,
+          likeCount: r.like_count,
+          dislikeCount: r.dislike_count
+        };
+      });
+      const lastItem = content[content.length - 1] as any;
+      const nextCursor = lastItem?.createdAt
+        ? new Date(lastItem.createdAt).toISOString()
+        : null;
+      console.log(`[DEBUG] GET /artists/${artistIdNum}/content - MAPPING SUCCESS`);
+      return res.json({ success: true, content, nextCursor });
     } catch (err: any) {
       console.log(`[DEBUG] GET /artists/${artistIdNum}/content - PRIMARY FAILED, trying fallback`, err.message);
       // Fallback if is_approved or lifecycle_state are missing
