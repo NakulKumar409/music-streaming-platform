@@ -947,12 +947,13 @@ export default function VideoScreen() {
   );
 
   useEffect(() => {
+    if (!isFullscreen) return;
+
     const tabParent: any = navigation.getParent?.('fan-tabs') ?? navigation.getParent?.()?.getParent?.();
     if (!tabParent?.setOptions) return;
 
-    const hideTabBar = isFullscreen;
     tabParent.setOptions({
-      tabBarStyle: hideTabBar ? { display: 'none' } : undefined,
+      tabBarStyle: { display: 'none' },
     });
 
     return () => {
