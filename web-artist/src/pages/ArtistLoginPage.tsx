@@ -182,7 +182,16 @@ export default function ArtistLoginPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#4b1927] text-white" style={backgroundStyle}>
+    <div className="min-h-screen w-full bg-[#4b1927] text-white relative" style={backgroundStyle}>
+      <Link
+        to="/artist/landing"
+        className="absolute top-6 left-6 text-[#b8a6a1] hover:text-[#e6d6d2] flex items-center gap-2 text-sm font-medium transition-colors"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        Back to Landing Page
+      </Link>
       <div className="min-h-screen w-full flex items-center justify-center px-6">
         <div className="w-full max-w-[520px]">
           <div className="flex items-center justify-center mb-10">
@@ -199,6 +208,8 @@ export default function ArtistLoginPage() {
                   className="mt-2 w-full h-[44px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-4 text-[14px] text-[#e6d6d2] outline-none focus:border-white/20"
                   placeholder="artist@example.com"
                   autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
                 />
               </div>
 
@@ -212,6 +223,8 @@ export default function ArtistLoginPage() {
                     className="w-full h-[44px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 pl-4 pr-11 text-[14px] text-[#e6d6d2] outline-none focus:border-white/20"
                     placeholder="••••••"
                     autoComplete="current-password"
+                    autoCapitalize="none"
+                    autoCorrect="off"
                   />
                   <button
                     type="button"

@@ -80,7 +80,17 @@ export default function ArtistUnderReviewPage() {
   }, []);
 
   return (
-    <div className="min-h-screen w-full bg-[#4b1927] text-white" style={backgroundStyle}>
+    <div className="min-h-screen w-full bg-[#4b1927] text-white relative" style={backgroundStyle}>
+      <Link
+        to="/artist/landing"
+        className="absolute top-6 left-6 text-[#b8a6a1] hover:text-[#e6d6d2] flex items-center gap-2 text-sm font-medium transition-colors"
+        onClick={() => localStorage.removeItem("artistToken")}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        Back to Landing Page
+      </Link>
       <div className="min-h-screen w-full flex items-center justify-center px-6">
         <div className="w-full max-w-[720px] rounded-[10px] border border-white/10 bg-[#141010]/35 backdrop-blur shadow-[0_30px_80px_rgba(0,0,0,0.55)] px-10 py-10">
           <div className="flex items-center gap-4">

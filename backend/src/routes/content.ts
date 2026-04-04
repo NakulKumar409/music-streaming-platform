@@ -179,36 +179,39 @@ router.post(
         return res.status(400).json({ success: false, message: vAudio.error || "Invalid audio", correlationId });
       }
 
-      const vVideo = validateFileForUpload({
-        originalFilename: video.originalname || "video",
-        mimeType: videoMime,
-        sizeBytes: video.size ?? 0,
-        claimedMediaType: "video",
-        maxSizeBytes: mediaCfg.maxUploadVideoBytes
-      });
-      if (!vVideo.ok) {
-        return res.status(400).json({ success: false, message: vVideo.error || "Invalid video", correlationId });
-      }
-
       const extThumb = vThumb.extension || getExtensionFromMime(thumbMime) || "jpg";
       const extAudio = vAudio.extension || getExtensionFromMime(audioMime) || "mp3";
-      const extVideo = vVideo.extension || getExtensionFromMime(videoMime) || "mp4";
+      
+      let videoKey: string | null = null;
+      if (video) {
+        const vVideo = validateFileForUpload({
+          originalFilename: video.originalname || "video",
+          mimeType: videoMime,
+          sizeBytes: video.size ?? 0,
+          claimedMediaType: "video",
+          maxSizeBytes: mediaCfg.maxUploadVideoBytes
+        });
+        if (!vVideo.ok) {
+          return res.status(400).json({ success: false, message: vVideo.error || "Invalid video", correlationId });
+        }
+        const extVideo = vVideo.extension || getExtensionFromMime(videoMime) || "mp4";
+        videoKey = generateStorageKey(artistId, "video", extVideo);
+      }
 
       let thumbnailKey = generateStorageKey(artistId, "thumbnails", extThumb);
       let audioKey = generateStorageKey(artistId, "audio", extAudio);
-      let videoKey = generateStorageKey(artistId, "video", extVideo);
 
       if (trimmedTitle === "FINAL_E2E_TEST_SUCCESS") {
         thumbnailKey = `E2E_MOCK/${thumbnailKey}`;
         audioKey = `E2E_MOCK/${audioKey}`;
-        videoKey = `E2E_MOCK/${videoKey}`;
+        if (videoKey) videoKey = `E2E_MOCK/${videoKey}`;
       } else if (trimmedTitle === "FINAL_E2E_TEST_FAILURE") {
         thumbnailKey = `E2E_MOCK_FAILURE/${thumbnailKey}`;
         audioKey = `E2E_MOCK_FAILURE/${audioKey}`;
-        videoKey = `E2E_MOCK_FAILURE/${videoKey}`;
+        if (videoKey) videoKey = `E2E_MOCK_FAILURE/${videoKey}`;
       }
 
-      const normalizedType = "AUDIO_VIDEO";
+      const normalizedType = videoKey ? "AUDIO_VIDEO" : "AUDIO";
       const now = new Date().toISOString();
       let insert;
       try {
@@ -245,12 +248,16 @@ router.post(
       const row = insert.rows[0];
 
       // Dispatch to BullMQ for background uploading!
-      await uploadQueue.add("upload", {
+      const jobData: any = {
         contentId: row.id,
         thumbnail: { path: thumb.path, mime: thumbMime, key: thumbnailKey },
-        audio: { path: audio.path, mime: audioMime, key: audioKey },
-        video: { path: video.path, mime: videoMime, key: videoKey }
-      }, {
+        audio: { path: audio.path, mime: audioMime, key: audioKey }
+      };
+      if (video && videoKey) {
+        jobData.video = { path: video.path, mime: videoMime, key: videoKey };
+      }
+
+      await uploadQueue.add("upload", jobData, {
         attempts: 3,
         backoff: {
           type: 'fixed',

@@ -5,30 +5,90 @@ import ErrorBoundary from "../components/ErrorBoundary";
 type PricingResponse = {
   success: boolean;
   subscriptionPrice?: number;
+  yearlyPrice?: number;
   earlyAccessDays?: number;
+  contentAccess?: "free" | "subscription";
 };
+
+const EARLY_ACCESS_OPTIONS = [7, 14, 30];
+
+const PRICING_TIPS = [
+  "Artists charging $4–$8/month see the highest subscriber conversions.",
+  "Yearly plans with ~20% discount retain fans 3x longer.",
+  "Early access is your biggest hook — fans love being first.",
+  "Free + subscription hybrid unlocks the widest audience."
+];
+
+function EarningsRow({ label, count, price }: { label: string; count: number; price: number }) {
+  const monthly = count * price;
+  const yearly = monthly * 12;
+  return (
+    <div className="flex items-center justify-between py-3 border-b border-white/6 last:border-0">
+      <div className="flex items-center gap-3">
+        <div className="h-[28px] w-[28px] rounded-full bg-[#6a352c]/30 border border-[#7a3f31]/30 flex items-center justify-center text-[11px] font-medium text-[#c97a54]">
+          {count}
+        </div>
+        <div className="text-[13px] text-[#b8a6a1]">{label}</div>
+      </div>
+      <div className="text-right">
+        <div className="text-[14px] font-medium text-[#e6d6d2]">${monthly.toLocaleString()}<span className="text-[11px] text-[#8d7b77] font-normal">/mo</span></div>
+        <div className="text-[11px] text-[#8d7b77]">${yearly.toLocaleString()}/yr</div>
+      </div>
+    </div>
+  );
+}
 
 export default function ArtistPricingPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
-  const [price, setPrice] = useState<string>("0");
+  const [monthlyPrice, setMonthlyPrice] = useState<string>("9.99");
+  const [discountPercent, setDiscountPercent] = useState<number>(20);
   const [earlyAccessDays, setEarlyAccessDays] = useState<number>(7);
+  const [contentAccess, setContentAccess] = useState<"free" | "subscription">("free");
+  const [activeTip, setActiveTip] = useState(0);
 
-  const backgroundStyle = useMemo(() => {
-    return {
-      backgroundImage:
-        "radial-gradient(circle at 30% 10%, rgba(193,117,86,0.12) 0%, rgba(25,18,18,0.55) 45%, rgba(10,8,8,0.92) 100%)"
-    } as const;
+  const backgroundStyle = useMemo(() => ({
+    backgroundImage:
+      "radial-gradient(circle at 30% 10%, rgba(193,117,86,0.12) 0%, rgba(25,18,18,0.55) 45%, rgba(10,8,8,0.92) 100%)"
+  } as const), []);
+
+  const monthlyNum = useMemo(() => {
+    const v = parseFloat(monthlyPrice);
+    return isNaN(v) || v < 0 ? 0 : v;
+  }, [monthlyPrice]);
+
+  // Yearly price auto-computed from monthly × 12 × (1 - discount%)
+  const yearlyNum = useMemo(() => {
+    if (!monthlyNum || discountPercent < 0 || discountPercent >= 100) return monthlyNum * 12;
+    return parseFloat((monthlyNum * 12 * (1 - discountPercent / 100)).toFixed(2));
+  }, [monthlyNum, discountPercent]);
+
+  // Rotate tips every 5s
+  useEffect(() => {
+    const t = setInterval(() => setActiveTip((p) => (p + 1) % PRICING_TIPS.length), 5000);
+    return () => clearInterval(t);
   }, []);
 
   const load = async () => {
-    const res = await http.get<PricingResponse>("/api/v1/artist/pricing");
-    const p = Number(res.data?.subscriptionPrice ?? 0);
-    setPrice(p.toFixed(2));
-    setEarlyAccessDays(Number(res.data?.earlyAccessDays ?? 7));
+    try {
+      const res = await http.get<PricingResponse>("/api/v1/artist/pricing");
+      const p = Number(res.data?.subscriptionPrice ?? 9.99);
+      const y = Number(res.data?.yearlyPrice ?? 0);
+      setMonthlyPrice(p.toFixed(2));
+      // Derive discount from saved prices if available
+      if (y > 0 && p > 0) {
+        const savedDiscount = Math.round(((p * 12 - y) / (p * 12)) * 100);
+        setDiscountPercent(Math.max(0, Math.min(70, savedDiscount)));
+      }
+      setEarlyAccessDays(Number(res.data?.earlyAccessDays ?? 7));
+      setContentAccess((res.data?.contentAccess as any) ?? "free");
+    } catch {
+      // Use defaults on first load
+    }
   };
 
   useEffect(() => {
@@ -43,23 +103,37 @@ export default function ArtistPricingPage() {
         if (mounted) setLoading(false);
       }
     })();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, []);
 
+  const validate = () => {
+    if (monthlyNum <= 0) {
+      setValidationError("Monthly price must be greater than $0.00");
+      return false;
+    }
+    if (discountPercent < 0 || discountPercent > 70) {
+      setValidationError("Yearly discount must be between 0% and 70%.");
+      return false;
+    }
+    setValidationError(null);
+    return true;
+  };
+
   const save = async () => {
+    if (!validate()) return;
     setSaving(true);
     setSaved(false);
     setError(null);
-
     try {
-      const next = Number(price);
       await http.patch("/api/v1/artist/pricing", {
-        subscriptionPrice: next
+        subscriptionPrice: monthlyNum,
+        yearlyPrice: yearlyNum,
+        discountPercent,
+        earlyAccessDays,
+        contentAccess
       });
       setSaved(true);
-      window.setTimeout(() => setSaved(false), 2500);
+      window.setTimeout(() => setSaved(false), 3000);
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || "Failed to save pricing");
     } finally {
@@ -70,67 +144,297 @@ export default function ArtistPricingPage() {
   return (
     <ErrorBoundary label="Artist: Pricing">
       <div className="w-full" style={backgroundStyle}>
-        <div className="rounded-[10px] border border-white/10 bg-[#141010]/35 backdrop-blur px-7 py-6 shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
-          <div className="relative px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
-            <div className="text-[28px] font-light tracking-wide text-[#e6d6d2]">Subscription Pricing</div>
+        <div className="px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 max-w-5xl mx-auto space-y-6">
 
-            <div className="mt-6 rounded-[10px] border border-white/10 bg-[#0e0a0a]/25 px-8 py-7">
-              <div className="flex items-start gap-4">
-                <div className="h-[44px] w-[44px] rounded-[10px] bg-[#141010]/70 border border-white/10 flex items-center justify-center">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 1V23" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                    <path d="M17 5H9.5C7.01472 5 5 7.01472 5 9.5C5 11.9853 7.01472 14 9.5 14H14.5C16.9853 14 19 16.0147 19 18.5C19 20.9853 16.9853 23 14.5 23H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <div className="text-[13px] text-[#b8a6a1]">
-                    Subscription pricing is managed by platform administrators and set collectively.
+          {/* ── Header ── */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-[28px] font-light tracking-wide text-white">Monetize Your Content</h1>
+              <p className="mt-1 text-[14px] text-[#b8a6a1]">Set how fans access your music and maximize your earnings.</p>
+            </div>
+            <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full border border-[#c97a54]/20 bg-[#6a352c]/10">
+              <span className="text-[#c97a54] text-[18px]">💡</span>
+              <span className="text-[12px] text-[#b8a6a1] max-w-[200px] leading-snug transition-all duration-500">{PRICING_TIPS[activeTip]}</span>
+            </div>
+          </div>
+
+          {/* ── Error / Validation ── */}
+          {(error || validationError) && (
+            <div className="p-4 rounded-[8px] bg-red-950/40 border border-red-900/50 text-[13px] text-[#fca5a5] flex items-center gap-2">
+              <span>⚠️</span> {validationError || error}
+            </div>
+          )}
+
+          {/* ── Main Grid ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            {/* Left column — Pricing plans */}
+            <div className="lg:col-span-2 space-y-4">
+
+              <div className="rounded-[12px] border border-white/10 bg-[#0e0a0a]/35 overflow-hidden">
+                <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-[36px] w-[36px] rounded-[10px] bg-gradient-to-br from-[#4a2a27] to-[#1e100a] border border-white/10 flex items-center justify-center text-[16px]">📅</div>
+                    <div>
+                      <div className="text-[15px] font-medium text-[#e6d6d2]">Monthly Plan</div>
+                      <div className="text-[12px] text-[#8d7b77]">Cancel anytime, billed monthly</div>
+                    </div>
                   </div>
-                  <div className="mt-2 text-[13px] text-[#b8a6a1]">
-                    You can adjust the monthly price to your liking, but the admin controls the early-access duration.
+                  <div className="px-3 py-1 rounded-full bg-[#141010]/60 border border-white/10 text-[11px] text-[#b8a6a1]">Recommended</div>
+                </div>
+                <div className="px-6 py-5">
+                  <div className="text-[12px] uppercase tracking-widest text-[#8d7b77] mb-3">Price per month</div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-[52px] w-[44px] shrink-0 rounded-[10px] border border-white/10 bg-[#141010]/60 flex items-center justify-center text-[20px] font-light text-[#c97a54]">$</div>
+                    <input
+                      value={monthlyPrice}
+                      onChange={(e) => { setMonthlyPrice(e.target.value); setValidationError(null); }}
+                      className="w-full h-[52px] rounded-[10px] border border-white/10 bg-[#141010]/55 px-4 text-[22px] font-light text-[#e6d6d2] outline-none focus:border-[#7a3f31]/60 transition-colors"
+                      inputMode="decimal"
+                      placeholder="9.99"
+                    />
+                  </div>
+                  <div className="mt-2 text-[12px] text-[#8d7b77]">
+                    per month &nbsp;·&nbsp; {monthlyNum > 0 ? `$${(monthlyNum * 12).toFixed(2)} billed yearly equivalent` : "Enter a price above"}
+                  </div>
+                  <p className="mt-3 text-[12px] text-[#b8a6a1] leading-relaxed">
+                    Fans can subscribe and cancel at any time. Best for attracting new listeners.
+                  </p>
+                </div>
+              </div>
+
+              {/* Yearly Plan Card */}
+              <div className="rounded-[12px] border border-[#c97a54]/20 bg-[#0e0a0a]/35 overflow-hidden">
+                <div className="px-6 py-4 border-b border-[#c97a54]/15 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-[36px] w-[36px] rounded-[10px] bg-gradient-to-br from-[#6a352c] to-[#3d1e18] border border-[#7a3f31]/30 flex items-center justify-center text-[16px]">⭐</div>
+                    <div>
+                      <div className="text-[15px] font-medium text-[#e6d6d2]">Yearly Plan</div>
+                      <div className="text-[12px] text-[#8d7b77]">Best value · Billed once annually</div>
+                    </div>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full border text-[11px] font-medium transition-all ${
+                    discountPercent > 0
+                      ? "bg-[#6a352c]/40 border-[#c97a54]/30 text-[#c97a54]"
+                      : "bg-[#141010]/40 border-white/10 text-[#8d7b77]"
+                  }`}>
+                    {discountPercent > 0 ? `Save ${discountPercent}%` : "No discount"}
+                  </div>
+                </div>
+                <div className="px-6 py-5">
+                  {/* Discount Control — artist sets this directly */}
+                  <div className="mb-5 rounded-[10px] border border-[#c97a54]/15 bg-[#6a352c]/10 px-4 py-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-[12px] uppercase tracking-widest text-[#8d7b77]">Yearly Discount</div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          max={70}
+                          value={discountPercent}
+                          onChange={(e) => {
+                            const v = Math.max(0, Math.min(70, Number(e.target.value)));
+                            setDiscountPercent(v);
+                            setValidationError(null);
+                          }}
+                          className="w-[64px] h-[34px] rounded-[6px] border border-[#c97a54]/30 bg-[#141010]/60 px-2 text-[16px] font-medium text-[#c97a54] outline-none focus:border-[#c97a54]/60 text-center"
+                        />
+                        <span className="text-[16px] font-medium text-[#c97a54]">%</span>
+                      </div>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={70}
+                      step={1}
+                      value={discountPercent}
+                      onChange={(e) => { setDiscountPercent(Number(e.target.value)); setValidationError(null); }}
+                      className="w-full h-[4px] rounded-full accent-[#c97a54] cursor-pointer"
+                    />
+                    <div className="flex justify-between mt-1 text-[10px] text-[#8d7b77]">
+                      <span>0%</span><span>10%</span><span>20%</span><span>30%</span><span>40%</span><span>50%</span><span>70%</span>
+                    </div>
+                  </div>
+
+                  <div className="text-[12px] uppercase tracking-widest text-[#8d7b77] mb-3">Computed yearly price</div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-[52px] w-[44px] shrink-0 rounded-[10px] border border-[#7a3f31]/30 bg-[#6a352c]/20 flex items-center justify-center text-[20px] font-light text-[#c97a54]">$</div>
+                    <div className="w-full h-[52px] rounded-[10px] border border-[#7a3f31]/30 bg-[#141010]/40 px-4 flex items-center text-[22px] font-light text-[#e6d6d2]">
+                      {yearlyNum.toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="mt-2 text-[12px] text-[#8d7b77]">
+                    per year &nbsp;·&nbsp; {yearlyNum > 0 ? `$${(yearlyNum / 12).toFixed(2)}/month equivalent` : "Set monthly price first"}
+                  </div>
+                  <p className="mt-3 text-[12px] text-[#c97a54]/80 leading-relaxed">
+                    {discountPercent > 0
+                      ? `Fans save ${discountPercent}% vs monthly — fans who commit yearly stay 3× longer.`
+                      : "Fans pay full yearly price with no discount. Add a discount to boost conversions."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Early Access + Content Access row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                {/* Early Access */}
+                <div className="rounded-[12px] border border-white/10 bg-[#0e0a0a]/35 px-5 py-5">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[16px]">⏰</span>
+                    <div className="text-[14px] font-medium text-[#e6d6d2]">Early Access</div>
+                  </div>
+                  <div className="text-[12px] text-[#8d7b77] mb-4">How many days before public release subscribers get access.</div>
+                  <div className="flex gap-2">
+                    {EARLY_ACCESS_OPTIONS.map((days) => (
+                      <button
+                        key={days}
+                        type="button"
+                        onClick={() => setEarlyAccessDays(days)}
+                        className={`flex-1 h-[42px] rounded-[8px] border text-[13px] font-medium transition-all ${
+                          earlyAccessDays === days
+                            ? "border-[#c97a54]/50 bg-[#6a352c]/35 text-[#c97a54]"
+                            : "border-white/10 bg-[#141010]/40 text-[#8d7b77] hover:text-[#e6d6d2] hover:bg-white/5"
+                        }`}
+                      >
+                        {days}d
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-[11px] text-[#8d7b77]">
+                    Subscribers get content <span className="text-[#e6d6d2]">{earlyAccessDays} days</span> before everyone else.
+                  </p>
+                </div>
+
+                {/* Content Access */}
+                <div className="rounded-[12px] border border-white/10 bg-[#0e0a0a]/35 px-5 py-5">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[16px]">🔐</span>
+                    <div className="text-[14px] font-medium text-[#e6d6d2]">Content Access</div>
+                  </div>
+                  <div className="text-[12px] text-[#8d7b77] mb-4">Control who can listen to your uploaded tracks.</div>
+                  <div className="flex flex-col gap-2">
+                    {(["free", "subscription"] as const).map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setContentAccess(type)}
+                        className={`h-[42px] rounded-[8px] border text-[13px] font-medium transition-all flex items-center gap-2 px-4 ${
+                          contentAccess === type
+                            ? "border-[#c97a54]/50 bg-[#6a352c]/35 text-[#c97a54]"
+                            : "border-white/10 bg-[#141010]/40 text-[#8d7b77] hover:text-white hover:bg-white/5"
+                        }`}
+                      >
+                        <span>{type === "free" ? "🌐" : "🔒"}</span>
+                        <span>{type === "free" ? "Free for Everyone" : "Subscribers Only"}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <div className="flex items-center gap-4 pt-2">
+                <button
+                  type="button"
+                  disabled={saving || loading}
+                  onClick={save}
+                  className="h-[52px] px-10 rounded-[10px] border border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] text-[15px] font-medium tracking-wide text-white shadow-[0_10px_25px_rgba(0,0,0,0.35)] hover:shadow-[0_15px_30px_rgba(106,53,44,0.4)] disabled:opacity-60 transition-all hover:-translate-y-0.5"
+                >
+                  {saving ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                      Saving...
+                    </span>
+                  ) : (
+                    "Save & Apply Pricing 🚀"
+                  )}
+                </button>
+                {saved && (
+                  <div className="flex items-center gap-2 text-[13px] text-[#6e8f72] animate-pulse">
+                    <span>✓</span> Pricing saved successfully!
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right column — Earnings preview + Tips */}
+            <div className="space-y-4">
+
+              {/* Earnings Preview */}
+              <div className="rounded-[12px] border border-white/10 bg-[#0e0a0a]/35 overflow-hidden">
+                <div className="px-5 py-4 border-b border-white/10">
+                  <div className="text-[14px] font-medium text-[#e6d6d2]">📈 Earnings Preview</div>
+                  <div className="text-[12px] text-[#8d7b77] mt-0.5">Based on your monthly price</div>
+                </div>
+                <div className="px-5 py-4">
+                  {monthlyNum > 0 ? (
+                    <>
+                      <EarningsRow label="10 subscribers" count={10} price={monthlyNum} />
+                      <EarningsRow label="50 subscribers" count={50} price={monthlyNum} />
+                      <EarningsRow label="100 subscribers" count={100} price={monthlyNum} />
+                      <EarningsRow label="500 subscribers" count={500} price={monthlyNum} />
+                    </>
+                  ) : (
+                    <div className="py-4 text-center text-[13px] text-[#8d7b77]">
+                      Enter a price to see your earnings estimate.
+                    </div>
+                  )}
+                </div>
+                {yearlyNum > 0 && monthlyNum > 0 && (
+                  <div className="px-5 py-3 border-t border-white/6 bg-[#6a352c]/10">
+                    <div className="text-[11px] text-[#c97a54]">
+                      💡 With yearly plan at ${yearlyNum}/yr, 100 yearly subs = ${(100 * yearlyNum).toLocaleString()}/yr
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Pricing Tips */}
+              <div className="rounded-[12px] border border-white/10 bg-[#0e0a0a]/35 px-5 py-5">
+                <div className="text-[13px] font-medium text-[#e6d6d2] mb-3">💡 Pricing Tips</div>
+                <ul className="space-y-3">
+                  {PRICING_TIPS.map((tip, i) => (
+                    <li key={i} className="flex gap-2 text-[12px] text-[#8d7b77] leading-relaxed">
+                      <span className="text-[#c97a54]/60 mt-0.5 shrink-0">•</span>
+                      <span>{tip}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Current Config Summary */}
+              <div className="rounded-[12px] border border-white/10 bg-[#0e0a0a]/35 px-5 py-5">
+                <div className="text-[13px] font-medium text-[#e6d6d2] mb-3">⚙️ Current Config</div>
+                <div className="space-y-2 text-[12px]">
+                  <div className="flex justify-between">
+                    <span className="text-[#8d7b77]">Monthly</span>
+                    <span className="text-[#e6d6d2]">${monthlyNum.toFixed(2)}/mo</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[#8d7b77]">Yearly</span>
+                    <span className="text-[#e6d6d2]">${yearlyNum.toFixed(2)}/yr</span>
+                  </div>
+                  {discountPercent > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-[#8d7b77]">Discount</span>
+                      <span className="text-[#c97a54]">{discountPercent}% off</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-[#8d7b77]">Early Access</span>
+                    <span className="text-[#e6d6d2]">{earlyAccessDays} days</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[#8d7b77]">Content</span>
+                    <span className="text-[#e6d6d2] capitalize">{contentAccess === "free" ? "Free" : "Sub only"}</span>
                   </div>
                 </div>
               </div>
             </div>
-
-          <div className="mt-8">
-            <div className="text-[12px] uppercase tracking-widest text-[#8d7b77]">Monthly Subscription Price</div>
-            <div className="mt-3 flex items-center gap-3">
-              <div className="text-[20px] text-[#e6d6d2]">$</div>
-              <input
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                className="w-[220px] h-[46px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-4 text-[16px] text-[#e6d6d2] outline-none focus:border-white/20"
-                inputMode="decimal"
-              />
-              <div className="text-[13px] text-[#8d7b77]">/ month</div>
-            </div>
-
-            <div className="mt-4 text-[13px] text-[#b8a6a1]">
-              Fans get early access to new content <span className="text-[#e6d6d2]">{earlyAccessDays} days</span> before public release.
-            </div>
-
-            {error ? <div className="mt-4 text-[13px] text-[#e3a1a1]">{error}</div> : null}
-
-            <div className="mt-6 flex items-center gap-4">
-              <button
-                type="button"
-                disabled={saving || loading}
-                onClick={save}
-                className="h-[44px] px-8 rounded-[7px] border border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] text-[14px] font-light tracking-wide text-[#e6d6d2] shadow-[0_10px_25px_rgba(0,0,0,0.35)] disabled:opacity-60"
-              >
-                {saving ? "Saving..." : "Save Pricing"}
-              </button>
-
-              <div className="text-[13px] text-[#a99792]">{saved ? "Saved pricing" : ""}</div>
-            </div>
-
-            <div className="mt-4 text-[13px] text-[#8d7b77]">
-              Your monthly price affects your earnings and how many fans will join.
-            </div>
-            <div className="mt-1 text-[13px] text-[#8d7b77]">Set it to a price that feels right for your content.</div>
           </div>
-        </div>
         </div>
       </div>
     </ErrorBoundary>

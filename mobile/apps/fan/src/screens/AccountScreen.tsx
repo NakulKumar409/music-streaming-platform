@@ -10,6 +10,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +22,7 @@ import { JWT_STORAGE_KEY } from '../services/api';
 import { resetToLogin } from '../navigation/rootNavigation';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../theme';
+import { ARTIST_WEB_URL } from '../config/env';
 
 function PremiumBadge() {
   return (
@@ -177,6 +179,16 @@ export default function AccountScreen() {
     }
   };
 
+  const handleOpenArtistDashboard = () => {
+    let url = ARTIST_WEB_URL;
+    if (user?.role === 'ARTIST') {
+      url += '/artist/dashboard';
+    } else {
+      url += '/artist/landing';
+    }
+    Linking.openURL(url).catch((err) => console.error('An error occurred', err));
+  };
+
   const handleSelectQuality = async (next: AudioQualityPref) => {
     setAudioQuality(next);
     try {
@@ -304,6 +316,14 @@ export default function AccountScreen() {
         {/* Account Settings */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Settings</Text>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={handleOpenArtistDashboard}
+          >
+            <User size={20} color="#fff" />
+            <Text style={styles.menuText}>{user?.role === 'ARTIST' ? 'Artist Dashboard' : 'Become an Artist'}</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.menuItem}

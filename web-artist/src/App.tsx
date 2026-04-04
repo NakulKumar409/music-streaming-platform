@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import ArtistShell from "./components/ArtistShell";
 import Skeleton from "./components/Skeleton";
 
+const ArtistLandingPage = lazy(() => import("./pages/ArtistLandingPage"));
 const ArtistLoginPage = lazy(() => import("./pages/ArtistLoginPage"));
 const ArtistDashboardPage = lazy(() => import("./pages/ArtistDashboardPage"));
 const PendingApprovalPage = lazy(() => import("./pages/PendingApprovalPage"));
@@ -28,7 +29,8 @@ export default function App() {
   return (
     <Suspense fallback={<PageFallback />}>
       <Routes>
-        <Route path="/" element={<Navigate to="/artist/login" replace />} />
+        <Route path="/" element={<Navigate to="/artist/landing" replace />} />
+        <Route path="/artist/landing" element={<ArtistLandingPage />} />
         <Route path="/artist/login" element={<ArtistLoginPage />} />
         <Route path="/artist/signup" element={<ArtistSignupPage />} />
         <Route path="/artist/account-inactive" element={<ArtistAccountInactivePage />} />

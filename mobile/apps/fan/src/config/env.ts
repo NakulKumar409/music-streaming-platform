@@ -7,3 +7,4 @@ if (!rawApiUrl) {
 }
 
 export const API_HOST_BASE_URL = rawApiUrl.replace(/\/+$/, '');
+export const ARTIST_WEB_URL = process.env.EXPO_PUBLIC_ARTIST_WEB_URL?.trim() || 'http://localhost:5175';

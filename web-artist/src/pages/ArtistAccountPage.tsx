@@ -16,7 +16,7 @@ type MeResponse = {
   };
 };
 
-const ACCENTS = ["#6b4bb8", "#5b6bb8", "#4b87b8", "#5bb88b", "#b8b25b", "#b8744b", "#b85b5b", "#d48a3c"];
+
 
 export default function ArtistAccountPage() {
   const [loading, setLoading] = useState(true);
@@ -33,7 +33,7 @@ export default function ArtistAccountPage() {
   const [bio, setBio] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [bannerImageUrl, setBannerImageUrl] = useState<string | null>(null);
-  const [accentColor, setAccentColor] = useState<string | null>(null);
+
 
   const [spotify, setSpotify] = useState("");
   const [youtube, setYoutube] = useState("");
@@ -45,13 +45,7 @@ export default function ArtistAccountPage() {
   const profileInputRef = useRef<HTMLInputElement | null>(null);
   const bannerInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [passwordOpen, setPasswordOpen] = useState(false);
-  const [passwordBusy, setPasswordBusy] = useState(false);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [passwordSaved, setPasswordSaved] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+
 
   const apiBaseUrl = useMemo(() => {
     return (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").toString().replace(/\/$/, "");
@@ -167,7 +161,7 @@ export default function ArtistAccountPage() {
     setBio(a.bio ?? "");
     setProfileImageUrl(resolvePublicUrl(a.profileImageUrl ?? null));
     setBannerImageUrl(resolvePublicUrl(a.bannerImageUrl ?? null));
-    setAccentColor(a.accentColor ?? null);
+
 
     const socials = (a.socialLinks ?? null) as any;
     setSpotify((socials?.spotify ?? "").toString());
@@ -213,7 +207,6 @@ export default function ArtistAccountPage() {
         bio,
         profileImageUrl,
         bannerImageUrl,
-        accentColor,
         socialLinks
       });
       setSaved(true);
@@ -225,60 +218,7 @@ export default function ArtistAccountPage() {
     }
   };
 
-  const saveAccent = async (next: string) => {
-    setAccentColor(next);
-    try {
-      await http.patch("/api/v1/artist/me", { accentColor: next });
-    } catch {
-      // ignore; user can retry with Save Changes
-    }
-  };
 
-  const openPassword = () => {
-    setPasswordError(null);
-    setPasswordSaved(false);
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setPasswordOpen(true);
-  };
-
-  const submitPassword = async () => {
-    setPasswordError(null);
-    setPasswordSaved(false);
-    const cp = currentPassword;
-    const np = newPassword;
-    const conf = confirmPassword;
-
-    if (!cp || !np) {
-      setPasswordError("Current password and new password are required");
-      return;
-    }
-    if (np.length < 6) {
-      setPasswordError("New password must be at least 6 characters");
-      return;
-    }
-    if (np !== conf) {
-      setPasswordError("New password and confirmation do not match");
-      return;
-    }
-
-    setPasswordBusy(true);
-    try {
-      await http.patch("/api/v1/artist/update-password", {
-        currentPassword: cp,
-        newPassword: np
-      });
-      setPasswordSaved(true);
-      window.setTimeout(() => {
-        setPasswordOpen(false);
-      }, 900);
-    } catch (err: any) {
-      setPasswordError(err?.response?.data?.message || err?.message || "Failed to update password");
-    } finally {
-      setPasswordBusy(false);
-    }
-  };
 
   return (
     <div
@@ -557,27 +497,6 @@ export default function ArtistAccountPage() {
                   />
                 </div>
               </div>
-            </div>
-
-            <div className="rounded-[10px] border border-white/10 bg-[#0e0a0a]/35 px-5 py-5">
-              <div className="text-[14px] tracking-wide text-[#e6d6d2]">Accent Color</div>
-              <div className="mt-1 text-[12px] text-[#8d7b77]">Choose your theme highlight.</div>
-
-              <div className="mt-4 flex items-center gap-3 flex-wrap">
-                {ACCENTS.map((c) => {
-                  const active = (accentColor || "").toLowerCase() === c.toLowerCase();
-                  return (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => saveAccent(c)}
-                      className={`h-[18px] w-[18px] rounded-full border ${active ? "border-white/70" : "border-white/15"}`}
-                      style={{ backgroundColor: c }}
-                      aria-label={`Set accent ${c}`}
-                    />
-                  );
-                })}
-              </div>
 
               <div className="mt-5 flex items-center gap-4">
                 <button
@@ -591,114 +510,9 @@ export default function ArtistAccountPage() {
                 <div className="text-[13px] text-[#6e8f72]">{saved ? "✓ Saved changes" : ""}</div>
               </div>
             </div>
-
-            <div className="rounded-[10px] border border-white/10 bg-[#0e0a0a]/35 px-5 py-5">
-              <div className="text-[14px] tracking-wide text-[#e6d6d2]">Danger Zone</div>
-              <div className="mt-1 text-[12px] text-[#8d7b77]">Security actions for your account.</div>
-
-              <div className="mt-4 rounded-[10px] border border-white/10 bg-[#0a0808]/35 px-4 py-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="text-[13px] text-[#e6d6d2]">Change Password</div>
-                    <div className="mt-1 text-[12px] text-[#8d7b77]">Update your login password.</div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={openPassword}
-                    className="h-[36px] px-4 rounded-[8px] border border-white/10 bg-[#141010]/35 text-[13px] text-[#d8c7c3] hover:text-white hover:bg-white/5"
-                  >
-                    Change
-                  </button>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
-
-      {passwordOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div
-            className="absolute inset-0 bg-black/70"
-            onClick={() => {
-              if (passwordBusy) return;
-              setPasswordOpen(false);
-            }}
-          />
-          <div className="relative w-full max-w-[520px] rounded-[12px] border border-white/10 bg-[#141010]/80 backdrop-blur shadow-[0_30px_90px_rgba(0,0,0,0.65)]">
-            <div className="px-6 py-5 border-b border-white/10">
-              <div className="text-[16px] tracking-wide text-[#e6d6d2]">Change Password</div>
-              <div className="mt-1 text-[12px] text-[#8d7b77]">Enter your current password to confirm.</div>
-            </div>
-
-            <div className="px-6 py-5 space-y-4">
-              {passwordError ? (
-                <div className="rounded-[8px] border border-[#e3a1a1]/25 bg-[#7a4b28]/30 px-4 py-3 text-[13px] text-[#e3a1a1]">
-                  {passwordError}
-                </div>
-              ) : null}
-              {passwordSaved ? (
-                <div className="rounded-[8px] border border-[#3b5d45]/35 bg-[#0f1d14]/55 px-4 py-3 text-[13px] text-[#9ad0a7]">
-                  Password updated.
-                </div>
-              ) : null}
-
-              <div>
-                <div className="text-[12px] uppercase tracking-widest text-[#8d7b77]">Current Password</div>
-                <input
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  type="password"
-                  className="mt-2 w-full h-[46px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-4 text-[14px] text-[#e6d6d2] outline-none focus:border-white/20"
-                  placeholder="••••••"
-                />
-              </div>
-
-              <div>
-                <div className="text-[12px] uppercase tracking-widest text-[#8d7b77]">New Password</div>
-                <input
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  type="password"
-                  className="mt-2 w-full h-[46px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-4 text-[14px] text-[#e6d6d2] outline-none focus:border-white/20"
-                  placeholder="Min 6 characters"
-                />
-              </div>
-
-              <div>
-                <div className="text-[12px] uppercase tracking-widest text-[#8d7b77]">Confirm New Password</div>
-                <input
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  type="password"
-                  className="mt-2 w-full h-[46px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-4 text-[14px] text-[#e6d6d2] outline-none focus:border-white/20"
-                  placeholder="Repeat new password"
-                />
-              </div>
-            </div>
-
-            <div className="px-6 py-5 border-t border-white/10 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                disabled={passwordBusy}
-                onClick={() => setPasswordOpen(false)}
-                className="h-[38px] px-4 rounded-[8px] border border-white/10 bg-[#1a1414]/40 text-[13px] text-[#d8c7c3] hover:text-white hover:bg-white/5 disabled:opacity-60"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={passwordBusy}
-                onClick={submitPassword}
-                className="h-[38px] px-5 rounded-[8px] border border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] text-[13px] font-light tracking-wide text-[#e6d6d2] disabled:opacity-60"
-              >
-                {passwordBusy ? "Saving..." : "Update password"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { http } from "../services/http";
 
 type UploadResponse = {
@@ -78,7 +79,7 @@ function UnifiedUploadSection({
   const validateVideoFile = (file: File) => {
     const name = (file?.name || "").toLowerCase();
     const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
-    return ext === ".mp4";
+    return ext === ".mp4" || ext === ".webm" || file.type.startsWith("video/");
   };
 
   const setAudioFile = (file: File | null) => {
@@ -102,7 +103,7 @@ function UnifiedUploadSection({
       return;
     }
     if (!validateVideoFile(file)) {
-      onError("Invalid video file type. Please select a .mp4 file.");
+      onError("Invalid video file type. Please select a .mp4 or .webm file.");
       if (videoInputRef.current) videoInputRef.current.value = "";
       return;
     }
@@ -134,7 +135,10 @@ function UnifiedUploadSection({
       return;
     }
 
-    setVideoFile(f);
+    if (kind === "VIDEO") {
+      setVideoFile(f);
+      return;
+    }
   };
 
   const onDropZone = (e: React.DragEvent<HTMLDivElement>, kind: "THUMBNAIL" | "AUDIO" | "VIDEO") => {
@@ -158,7 +162,10 @@ function UnifiedUploadSection({
       return;
     }
 
-    setVideoFile(f);
+    if (kind === "VIDEO") {
+      setVideoFile(f);
+      return;
+    }
   };
 
   const canPost = Boolean(
@@ -173,45 +180,44 @@ function UnifiedUploadSection({
     <div className="rounded-[10px] border border-white/10 bg-[#0e0a0a]/22 overflow-hidden">
       <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
         <div>
-          <div className="text-[15px] tracking-wide text-[#e6d6d2]">Upload Content</div>
-          <div className="mt-1 text-[12px] text-[#b8a6a1]">
-            Fill out details, preview locally, then post.
+          <div className="text-[17px] font-medium tracking-wide text-[#e6d6d2]">Upload Track</div>
+          <div className="mt-1 text-[13px] text-[#b8a6a1]">
+            Upload your audio, video, and cover art. Your release will be processed and live in seconds.
           </div>
         </div>
       </div>
 
-      <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-4">
+      <div className="p-6 grid grid-cols-1 lg:grid-cols-5 gap-8">
+        <div className="space-y-6 lg:col-span-3">
           <div>
-            <label className="block text-[12px] uppercase tracking-widest text-[#b8a6a1]">Title</label>
+            <label className="block text-[13px] uppercase tracking-widest text-[#b8a6a1]">Track Title</label>
             <input
               value={value.title}
               onChange={(e) => onChange({ ...value, title: e.target.value })}
-              className="mt-2 w-full h-[42px] rounded-[8px] border border-white/10 bg-[#141010]/55 px-3 text-[13px] text-[#f0e5e2] outline-none focus:border-white/20"
-              placeholder="Track title"
+              className="mt-2 w-full h-[48px] rounded-[8px] border border-white/10 bg-[#141010]/55 px-4 text-[14px] text-[#f0e5e2] outline-none focus:border-[#7a3f31]/60 transition-colors"
+              placeholder="e.g. Midnight City"
+              autoFocus
             />
           </div>
 
           <div>
-            <label className="block text-[12px] uppercase tracking-widest text-[#b8a6a1]">Genre</label>
-            <select
+            <label className="block text-[13px] uppercase tracking-widest text-[#b8a6a1]">Genre</label>
+            <input
+              list="genre-options"
               value={value.genre}
               onChange={(e) => onChange({ ...value, genre: e.target.value })}
-              className="mt-2 w-full h-[42px] rounded-[8px] border border-white/10 bg-[#141010]/55 px-3 text-[13px] text-[#f0e5e2] outline-none focus:border-white/20"
-            >
-              <option value="" disabled>
-                Select genre
-              </option>
+              className="mt-2 w-full h-[48px] rounded-[8px] border border-white/10 bg-[#141010]/55 px-4 text-[14px] text-[#f0e5e2] outline-none focus:border-[#7a3f31]/60 transition-colors"
+              placeholder="Start typing or select a genre..."
+            />
+            <datalist id="genre-options">
               {GENRES.map((g) => (
-                <option key={g} value={g}>
-                  {g}
-                </option>
+                <option key={g} value={g} />
               ))}
-            </select>
+            </datalist>
           </div>
 
           <div>
-            <label className="block text-[12px] uppercase tracking-widest text-[#b8a6a1]">Thumbnail (Image)</label>
+            <label className="block text-[13px] uppercase tracking-widest text-[#b8a6a1]">Cover Art</label>
             <div
               tabIndex={0}
               onPaste={(e) => onPasteZone(e, "THUMBNAIL")}
@@ -219,48 +225,39 @@ function UnifiedUploadSection({
                 e.preventDefault();
               }}
               onDrop={(e) => onDropZone(e, "THUMBNAIL")}
-              className="mt-2 rounded-[10px] border border-white/10 bg-[#141010]/35 p-3"
+              className="mt-2 h-[120px] rounded-[10px] border border-dashed border-white/20 bg-[#141010]/35 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors"
+              onClick={() => thumbnailInputRef.current?.click()}
             >
-              <div className="flex items-center gap-3">
-                <input
-                  ref={thumbnailInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0] || null;
-                    setThumbnailFile(f);
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => thumbnailInputRef.current?.click()}
-                  className="h-[32px] rounded-[6px] border border-white/10 bg-[#141010]/60 px-3 text-[12px] font-light tracking-wide text-[#e6d6d2] hover:bg-white/5"
-                >
-                  Choose file
-                </button>
-                <div className="min-w-0 text-[12px] text-[#d8c7c3] truncate">
-                  {value.thumbnailFile?.name || "No file chosen"}
-                </div>
-              </div>
-              <div className="mt-2 text-[11px] text-[#8d7b77]">
-                Drag & drop an image here, or paste an image from clipboard.
+              <input
+                ref={thumbnailInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0] || null;
+                  setThumbnailFile(f);
+                }}
+              />
+              <div className="text-[28px] mb-2 opacity-60">🖼️</div>
+              <div className="text-[13px] font-medium text-[#e6d6d2]">
+                {value.thumbnailFile?.name || "Click or drop image"}
               </div>
             </div>
           </div>
 
-          <div>
-            <label className="block text-[12px] uppercase tracking-widest text-[#b8a6a1]">Audio File (MP3)</label>
-            <div
-              tabIndex={0}
-              onPaste={(e) => onPasteZone(e, "AUDIO")}
-              onDragOver={(e) => {
-                e.preventDefault();
-              }}
-              onDrop={(e) => onDropZone(e, "AUDIO")}
-              className="mt-2 rounded-[10px] border border-white/10 bg-[#141010]/35 p-3"
-            >
-              <div className="flex items-center gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[13px] uppercase tracking-widest text-[#b8a6a1]">Audio File (MP3)</label>
+              <div
+                tabIndex={0}
+                onPaste={(e) => onPasteZone(e, "AUDIO")}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                }}
+                onDrop={(e) => onDropZone(e, "AUDIO")}
+                className="mt-2 h-[120px] rounded-[10px] border border-dashed border-white/20 bg-[#141010]/35 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors p-4 text-center"
+                onClick={() => audioInputRef.current?.click()}
+              >
                 <input
                   ref={audioInputRef}
                   type="file"
@@ -271,51 +268,40 @@ function UnifiedUploadSection({
                     setAudioFile(f);
                   }}
                 />
-                <button
-                  type="button"
-                  onClick={() => audioInputRef.current?.click()}
-                  className="h-[32px] rounded-[6px] border border-white/10 bg-[#141010]/60 px-3 text-[12px] font-light tracking-wide text-[#e6d6d2] hover:bg-white/5"
-                >
-                  Choose file
-                </button>
-                <div className="min-w-0 text-[12px] text-[#d8c7c3] truncate">{value.audioFile?.name || "No file chosen"}</div>
+                <div className="text-[28px] mb-2 opacity-60">🎵</div>
+                <div className="text-[13px] font-medium text-[#e6d6d2] line-clamp-2">
+                  {value.audioFile?.name || "Click or drop .mp3 file"}
+                </div>
               </div>
-              <div className="mt-2 text-[11px] text-[#8d7b77]">Drag & drop an audio file here, or paste a file from clipboard.</div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-[12px] uppercase tracking-widest text-[#b8a6a1]">Video File (MP4)</label>
-            <div
-              tabIndex={0}
-              onPaste={(e) => onPasteZone(e, "VIDEO")}
-              onDragOver={(e) => {
-                e.preventDefault();
-              }}
-              onDrop={(e) => onDropZone(e, "VIDEO")}
-              className="mt-2 rounded-[10px] border border-white/10 bg-[#141010]/35 p-3"
-            >
-              <div className="flex items-center gap-3">
+            <div>
+              <label className="block text-[13px] uppercase tracking-widest text-[#b8a6a1]">Video File (MP4/WEBM)</label>
+              <div
+                tabIndex={0}
+                onPaste={(e) => onPasteZone(e, "VIDEO")}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                }}
+                onDrop={(e) => onDropZone(e, "VIDEO")}
+                className="mt-2 h-[120px] rounded-[10px] border border-dashed border-white/20 bg-[#141010]/35 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors p-4 text-center"
+                onClick={() => videoInputRef.current?.click()}
+              >
                 <input
                   ref={videoInputRef}
                   type="file"
-                  accept=".mp4"
+                  accept="video/mp4,video/webm"
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0] || null;
                     setVideoFile(f);
                   }}
                 />
-                <button
-                  type="button"
-                  onClick={() => videoInputRef.current?.click()}
-                  className="h-[32px] rounded-[6px] border border-white/10 bg-[#141010]/60 px-3 text-[12px] font-light tracking-wide text-[#e6d6d2] hover:bg-white/5"
-                >
-                  Choose file
-                </button>
-                <div className="min-w-0 text-[12px] text-[#d8c7c3] truncate">{value.videoFile?.name || "No file chosen"}</div>
+                <div className="text-[28px] mb-2 opacity-60">🎬</div>
+                <div className="text-[13px] font-medium text-[#e6d6d2] line-clamp-2">
+                  {value.videoFile?.name || "Click or drop video file"}
+                </div>
               </div>
-              <div className="mt-2 text-[11px] text-[#8d7b77]">Drag & drop a video file here, or paste a file from clipboard.</div>
             </div>
           </div>
 
@@ -323,54 +309,67 @@ function UnifiedUploadSection({
             type="button"
             disabled={busy || !canPost}
             onClick={onPost}
-            className="mt-2 h-[40px] rounded-[8px] border border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] px-4 text-[13px] font-light tracking-wide text-[#e6d6d2] shadow-[0_10px_25px_rgba(0,0,0,0.25)] disabled:opacity-60"
+            className="w-full mt-4 h-[54px] rounded-[8px] border border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] px-4 text-[16px] font-medium tracking-wide text-white shadow-[0_10px_25px_rgba(0,0,0,0.25)] hover:shadow-[0_15px_30px_rgba(106,53,44,0.4)] disabled:opacity-60 transition-all hover:-translate-y-0.5"
           >
-            {busy ? "Posting..." : "Post Content"}
+            {busy ? "Uploading..." : "Publish Track"}
           </button>
         </div>
 
-        <div className="space-y-4">
-          <div className="rounded-[10px] border border-white/10 bg-[#141010]/35 p-4">
-            <div className="text-[12px] uppercase tracking-widest text-[#b8a6a1]">Real-time preview</div>
+        <div className="space-y-4 lg:col-span-2">
+          <div className="rounded-[10px] border border-[#7a3f31]/10 bg-gradient-to-b from-[#141010]/60 to-[#0a0808]/80 p-6 flex flex-col items-center justify-center shadow-inner h-full">
+            <h3 className="text-[14px] uppercase tracking-widest text-[#b8a6a1] mb-6 w-full text-left">Preview</h3>
 
-            <div className="mt-4 grid grid-cols-1 gap-4">
-              <div className="rounded-[10px] border border-white/10 bg-[#0e0a0a]/40 overflow-hidden">
-                <div className="px-3 py-2 border-b border-white/10 text-[12px] text-[#cdbdb8]">Thumbnail</div>
-                <div className="h-[180px] bg-[#0a0808] flex items-center justify-center">
-                  {thumbnailPreviewUrl ? (
-                    <img src={thumbnailPreviewUrl} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="text-[12px] text-[#8d7b77]">Select an image to preview</div>
-                  )}
+            <div className="h-[200px] w-[200px] sm:h-[240px] sm:w-[240px] rounded-[20px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] bg-[#141010] mb-8 group relative aspect-square">
+              {thumbnailPreviewUrl ? (
+                <img src={thumbnailPreviewUrl} alt="" className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-[#8d7b77]">
+                  <span className="text-4xl mb-2">🎧</span>
+                  <span className="text-xs">No Cover Art</span>
                 </div>
-              </div>
-
-              <div className="rounded-[10px] border border-white/10 bg-[#0e0a0a]/40 overflow-hidden">
-                <div className="px-3 py-2 border-b border-white/10 text-[12px] text-[#cdbdb8]">Audio</div>
-                <div className="p-3">
-                  {audioPreviewUrl ? (
-                    <audio controls className="w-full" src={audioPreviewUrl} />
-                  ) : (
-                    <div className="text-[12px] text-[#8d7b77]">Select an audio file to preview</div>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-[10px] border border-white/10 bg-[#0e0a0a]/40 overflow-hidden">
-                <div className="px-3 py-2 border-b border-white/10 text-[12px] text-[#cdbdb8]">Video</div>
-                <div className="p-3">
-                  {videoPreviewUrl ? (
-                    <video controls className="w-full rounded-[8px]" src={videoPreviewUrl} />
-                  ) : (
-                    <div className="text-[12px] text-[#8d7b77]">Select a video file to preview</div>
-                  )}
-                </div>
-              </div>
+              )}
             </div>
 
-            <div className="mt-4 text-[12px] text-[#b8a6a1]">
-              Preview happens locally on your device.
+            <div className="w-full text-center mb-6">
+              <h4 className="text-[20px] font-medium text-white truncate px-4">
+                {value.title || "Untitled Track"}
+              </h4>
+              <p className="text-[14px] text-[#c97a54] mt-1">{value.genre || "Genre"}</p>
             </div>
+
+            <div className="w-full max-w-sm bg-[#0e0a0a]/50 p-4 rounded-[12px] border border-white/5 space-y-4 flex-1">
+              <div className="w-full">
+                <span className="text-xs text-[#b8a6a1] mb-2 block uppercase tracking-wide font-medium">Audio</span>
+                {audioPreviewUrl ? (
+                  <audio controls className="w-full h-[40px] outline-none custom-audio-player" src={audioPreviewUrl} />
+                ) : (
+                  <div className="h-[40px] flex items-center justify-center text-[12px] text-[#8d7b77] bg-[#141010]/50 rounded-[8px]">
+                    No audio loaded
+                  </div>
+                )}
+              </div>
+              <div className="w-full">
+                <span className="text-xs text-[#b8a6a1] mb-2 block uppercase tracking-wide font-medium">Video</span>
+                {videoPreviewUrl ? (
+                  <video controls className="w-full h-[160px] outline-none rounded-[8px] bg-black" src={videoPreviewUrl} />
+                ) : (
+                  <div className="h-[160px] flex items-center justify-center text-[12px] text-[#8d7b77] bg-[#141010]/50 rounded-[8px]">
+                    No video loaded
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Inline style specifically for the custom audio player */}
+            <style>{`
+              .custom-audio-player::-webkit-media-controls-panel {
+                background-color: transparent;
+              }
+              .custom-audio-player::-webkit-media-controls-current-time-display,
+              .custom-audio-player::-webkit-media-controls-time-remaining-display {
+                color: #e6d6d2;
+              }
+            `}</style>
           </div>
         </div>
       </div>
@@ -409,20 +408,16 @@ export default function ArtistContentUploadPage() {
 
       if (!title) throw new Error("Title is required");
       if (!genre) throw new Error("Genre is required");
-      if (!form.thumbnailFile) throw new Error("Thumbnail is required");
-
-      const hasAudio = Boolean(form.audioFile);
-      const hasVideo = Boolean(form.videoFile);
-      if (!hasAudio || !hasVideo) {
-        throw new Error("Both Audio and Video files are required for this post.");
-      }
+      if (!form.thumbnailFile) throw new Error("Cover Art is required");
+      if (!form.audioFile) throw new Error("Audio File is required");
+      if (!form.videoFile) throw new Error("Video File is required");
 
       const fd = new FormData();
       fd.append("title", title);
       fd.append("genre", genre);
       fd.append("thumbnail", form.thumbnailFile);
-      fd.append("audio", form.audioFile as File);
-      fd.append("video", form.videoFile as File);
+      fd.append("audio", form.audioFile);
+      fd.append("video", form.videoFile);
 
       const res = await http.post<UploadResponse>("/api/v1/content/upload", fd, {
         headers: {
@@ -434,7 +429,7 @@ export default function ArtistContentUploadPage() {
         throw new Error(res.data?.message || "Upload failed");
       }
 
-      setSuccess("Post is now Live on Fan App!");
+      setSuccess("Your release has been uploaded and is currently Under Review!");
 
       setForm({ title: "", genre: "", thumbnailFile: null, audioFile: null, videoFile: null });
     } catch (e: any) {
@@ -446,29 +441,45 @@ export default function ArtistContentUploadPage() {
 
   return (
     <div className="w-full" style={backgroundStyle}>
-      <div className="rounded-[10px] border border-white/10 bg-[#141010]/35 backdrop-blur px-7 py-6 shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
-        <div className="flex items-start justify-between gap-6">
+      <div className="px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 max-w-6xl mx-auto">
+        <div className="flex items-start justify-between gap-6 mb-8">
           <div>
-            <div className="text-[18px] font-light tracking-wide">Content Upload</div>
-            <div className="mt-1 text-[13px] text-[#b8a6a1]">Upload audio and video with local previews. New posts go live immediately.</div>
+            <h1 className="text-[28px] font-light tracking-wide text-white">New Release</h1>
+            <p className="mt-1 text-[14px] text-[#b8a6a1]">Share your latest master track alongside a visual experience.</p>
           </div>
         </div>
 
-        {error ? <div className="mt-4 text-[13px] text-[#e3a1a1]">{error}</div> : null}
-        {success ? <div className="mt-4 text-[13px] text-emerald-200">{success}</div> : null}
+        {error ? (
+          <div className="mb-6 p-4 rounded-[8px] bg-red-950/40 border border-red-900/50 text-[14px] text-[#fca5a5] flex items-center">
+            <span className="mr-2">⚠️</span> {error}
+          </div>
+        ) : null}
+        
+        {success ? (
+          <div className="mb-6 rounded-[8px] bg-[#10b981]/15 border border-[#10b981]/30 p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center text-[15px] text-[#34d399]">
+              <span className="mr-3 text-2xl">🎉</span> 
+              <span>{success}</span>
+            </div>
+            <Link
+              to="/artist/dashboard"
+              className="px-6 py-2 bg-[#10b981]/20 hover:bg-[#10b981]/30 text-[#10b981] rounded-full text-[14px] font-semibold transition-colors whitespace-nowrap"
+            >
+              Back to Dashboard
+            </Link>
+          </div>
+        ) : null}
 
-        <div className="mt-6">
-          <UnifiedUploadSection
-            value={form}
-            onChange={setForm}
-            onPost={() => post()}
-            onError={(m) => {
-              setError(m);
-              if (m) setSuccess(null);
-            }}
-            busy={busy}
-          />
-        </div>
+        <UnifiedUploadSection
+          value={form}
+          onChange={setForm}
+          onPost={() => post()}
+          onError={(m) => {
+            setError(m);
+            if (m) setSuccess(null);
+          }}
+          busy={busy}
+        />
       </div>
     </div>
   );

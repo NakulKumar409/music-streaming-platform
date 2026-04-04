@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
   Dimensions,
+  Linking,
 } from 'react-native';
 
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,7 +21,8 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { BadgeCheck, Play, Search } from 'lucide-react-native';
 import { apiV1 } from '../services/api';
 import { fetchVerifiedArtists, fetchFeaturedArtists, type ArtistListItem } from '../services/artistService';
-import { API_HOST_BASE_URL } from '../config/env';
+import { API_HOST_BASE_URL, ARTIST_WEB_URL } from '../config/env';
+import { useAuth } from '../store/authStore';
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import { getOptimizedImageUrl } from '../utils/cloudinary';
@@ -90,6 +92,7 @@ type ApiContentItem = {
 export default function HomeScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
   const { currentItem, state: playerState, togglePlayPause, playQueue } = useMediaPlayer();
+  const { user } = useAuth();
   const activeAudioMeta = currentItem?.mediaType === 'audio' ? currentItem : null;
   const hasActiveAudio = !!activeAudioMeta;
 
@@ -288,6 +291,16 @@ export default function HomeScreen({ navigation }: any) {
     });
   };
 
+  const onPressBecomeArtist = () => {
+    let url = ARTIST_WEB_URL;
+    if (user?.role === 'ARTIST') {
+      url += '/artist/dashboard';
+    } else {
+      url += '/artist/landing';
+    }
+    Linking.openURL(url).catch((err) => console.error('An error occurred', err));
+  };
+
   const renderFeaturedArtist = ({ item }: { item: FeaturedArtistCard }) => (
     <View style={styles.featuredCard}>
       <Image source={{ uri: getOptimizedImageUrl(item.avatar) }} style={styles.featuredImg} resizeMode="cover" />
@@ -421,6 +434,32 @@ export default function HomeScreen({ navigation }: any) {
             <Search color="#fff" size={22} />
           </Pressable>
         </View>
+
+        {/* BECOME AN ARTIST BANNER */}
+        <Pressable onPress={onPressBecomeArtist} style={styles.artistBannerContainer}>
+          <LinearGradient
+            colors={['rgba(255,106,0,0.15)', 'rgba(255,106,0,0.02)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.artistBannerGradient}
+          >
+            <View style={styles.artistBannerContent}>
+              <View>
+                <Text style={styles.artistBannerTitle}>
+                  {user?.role === 'ARTIST' ? 'Artist Dashboard' : 'Become an Artist'}
+                </Text>
+                <Text style={styles.artistBannerSub}>
+                  {user?.role === 'ARTIST' ? 'Manage your music & analytics' : 'Upload your music & grow your audience'}
+                </Text>
+              </View>
+              <View style={styles.artistBannerBtn}>
+                <Text style={styles.artistBannerBtnText}>
+                  {user?.role === 'ARTIST' ? 'Open' : 'Get Started'}
+                </Text>
+              </View>
+            </View>
+          </LinearGradient>
+        </Pressable>
 
         {/* FEATURED ARTISTS */}
         <Text style={styles.sectionTitleTop}>Featured Artists</Text>
@@ -635,6 +674,48 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.45)',
     fontSize: 12,
     fontWeight: '600',
+  },
+
+  artistBannerContainer: {
+    marginHorizontal: 18,
+    marginTop: 10,
+    marginBottom: 4,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,106,0,0.15)',
+  },
+  artistBannerGradient: {
+    padding: 16,
+  },
+  artistBannerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  artistBannerTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  artistBannerSub: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  artistBannerBtn: {
+    backgroundColor: 'rgba(255,106,0,0.2)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,106,0,0.4)',
+  },
+  artistBannerBtnText: {
+    color: Colors.accent,
+    fontSize: 12,
+    fontWeight: '800',
   },
 
   featuredCard: {

@@ -65,7 +65,8 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
       artistName,
       bio,
       portfolioLinks,
-      phone
+      phone,
+      genre
     } = req.body as {
       email?: string;
       password?: string;
@@ -73,6 +74,7 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
       bio?: string;
       portfolioLinks?: any;
       phone?: string;
+      genre?: string;
     };
 
     const trimmedEmail = (email || "").trim().toLowerCase();
@@ -106,16 +108,6 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
     if (!trimmedName) {
       return res.status(400).json({ success: false, message: "artistName is required", correlationId });
     }
-    if (!trimmedBio) {
-      return res.status(400).json({ success: false, message: "bio is required", correlationId });
-    }
-    if (!links.length) {
-      return res.status(400).json({
-        success: false,
-        message: "portfolioLinks is required",
-        correlationId
-      });
-    }
 
     const existing = await safeRows<any>(
       "SELECT id, role FROM users WHERE LOWER(email) = $1 LIMIT 1",
@@ -128,10 +120,10 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
     let userId: number | null = null;
     if (!existing.length) {
       const inserted = await pool.query(
-        `INSERT INTO users (email, password, name, role, status, is_verified, verified, phone, artist_status, artist_bio, portfolio_links, onboarded_at, created_at, updated_at)
-         VALUES ($1, $2, $3, 'ARTIST', 'ACTIVE', false, false, $4, 'PENDING', $5, $6, now(), now(), now())
+        `INSERT INTO users (email, password, name, role, status, is_verified, verified, phone, genre, artist_status, artist_bio, portfolio_links, onboarded_at, created_at, updated_at)
+         VALUES ($1, $2, $3, 'ARTIST', 'ACTIVE', false, false, $4, $5, 'PENDING', $6, $7, now(), now(), now())
          RETURNING id`,
-        [trimmedEmail, hashedPassword, trimmedName, phone ?? null, trimmedBio, links]
+        [trimmedEmail, hashedPassword, trimmedName, phone ?? null, genre ?? null, trimmedBio, links]
       );
       userId = Number(inserted.rows?.[0]?.id ?? 0) || null;
     } else {
@@ -149,14 +141,15 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
              is_verified = false,
              verified = false,
              phone = COALESCE($4, phone),
+             genre = COALESCE($5, genre),
              artist_status = 'PENDING',
-             artist_bio = $5,
-             portfolio_links = $6,
+             artist_bio = $6,
+             portfolio_links = $7,
              onboarded_at = now(),
              updated_at = now()
          WHERE LOWER(email) = $1
          RETURNING id`,
-        [trimmedEmail, hashedPassword, trimmedName, phone ?? null, trimmedBio, links]
+        [trimmedEmail, hashedPassword, trimmedName, phone ?? null, genre ?? null, trimmedBio, links]
       );
       userId = Number(updated.rows?.[0]?.id ?? 0) || null;
     }

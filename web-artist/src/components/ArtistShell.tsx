@@ -195,60 +195,96 @@ export default function ArtistShell() {
               </div>
             </div>
 
-            <div className="relative z-[9999]">
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen((v) => !v);
-                  setMobileNavOpen(false);
-                }}
-                className="flex items-center gap-2 text-[13px] text-[#d8c7c3] hover:text-white"
+            {/* Right side: Fan App button + profile menu */}
+            <div className="flex items-center gap-3">
+              {/* Fan App Link — always visible */}
+              <a
+                href="exp://localhost:8081"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open Fan App (requires Expo Go or your mobile build)"
+                className="hidden sm:inline-flex items-center gap-2 h-[34px] px-4 rounded-full border border-[#c97a54]/30 bg-[#6a352c]/20 text-[12px] font-medium text-[#c97a54] hover:bg-[#6a352c]/40 hover:border-[#c97a54]/50 transition-all"
               >
-                <div className="h-[26px] w-[26px] rounded-full overflow-hidden border border-white/10 bg-[#141010]/70">
-                  {profileSrc ? (
-                    <img src={profileSrc} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="h-full w-full bg-gradient-to-b from-[#2a1a17] to-[#0e0a0a]" />
-                  )}
-                </div>
-                <span className="max-w-[160px] truncate">{me?.name || me?.email || "Account"}</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="5" y="2" width="14" height="20" rx="2" stroke="currentColor" strokeWidth="1.6" />
+                  <circle cx="12" cy="18" r="1" fill="currentColor" />
                 </svg>
-              </button>
+                Fan App
+              </a>
 
-              {menuOpen ? (
-                <div className="absolute right-0 z-[9999] mt-3 w-[200px] rounded-[6px] border border-white/10 bg-[#141010]/90 backdrop-blur px-2 py-2 shadow-[0_18px_40px_rgba(0,0,0,0.55)]">
-                  <button
-                    type="button"
-                    className="w-full text-left px-3 py-2 text-[13px] text-[#d8c7c3] hover:bg-white/5 rounded-[4px]"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      navigate("/artist/account");
-                    }}
-                  >
-                    Account settings
-                  </button>
+              <div className="relative z-[9999]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen((v) => !v);
+                    setMobileNavOpen(false);
+                  }}
+                  className="flex items-center gap-2 text-[13px] text-[#d8c7c3] hover:text-white"
+                >
+                  <div className="h-[32px] w-[32px] rounded-full overflow-hidden border border-white/10 bg-[#141010]/70 hover:border-[#c97a54]/50 transition-colors">
+                    {profileSrc ? (
+                      <img src={profileSrc} alt="Profile" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="h-full w-full bg-gradient-to-b from-[#4a2a27] to-[#1e100a] flex items-center justify-center">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#c97a54]/70"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                      </div>
+                    )}
+                  </div>
+                </button>
 
-                  <button
-                    type="button"
-                    className="w-full text-left px-3 py-2 text-[13px] text-[#d8c7c3] hover:bg-white/5 rounded-[4px]"
-                    onClick={() => {
-                      localStorage.removeItem("artistToken");
-                      navigate("/artist/login", { replace: true });
-                    }}
-                  >
-                    Logout
-                  </button>
-                </div>
-              ) : null}
+                {menuOpen ? (
+                  <div className="absolute right-0 z-[9999] mt-3 w-[220px] rounded-[8px] border border-white/10 bg-[#141010]/90 backdrop-blur px-2 py-2 shadow-[0_18px_40px_rgba(0,0,0,0.55)]">
+                    {/* Fan App entry — most prominent */}
+                    <a
+                      href="exp://localhost:8081"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-3 w-full px-3 py-2.5 mb-1 rounded-[6px] bg-[#6a352c]/20 border border-[#c97a54]/20 text-[13px] text-[#c97a54] hover:bg-[#6a352c]/35 transition-colors"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="5" y="2" width="14" height="20" rx="2" stroke="currentColor" strokeWidth="1.6" />
+                        <circle cx="12" cy="18" r="1" fill="currentColor" />
+                      </svg>
+                      <div>
+                        <div className="font-medium">Open Fan App</div>
+                        <div className="text-[10px] text-[#c97a54]/60 mt-0.5">See how your music looks to fans</div>
+                      </div>
+                    </a>
+
+                    <div className="my-1 border-t border-white/10" />
+
+                    <button
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-[13px] text-[#d8c7c3] hover:bg-white/5 rounded-[4px]"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        navigate("/artist/account");
+                      }}
+                    >
+                      Account settings
+                    </button>
+
+                    <button
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-[13px] text-[#d8c7c3] hover:bg-white/5 rounded-[4px]"
+                      onClick={() => {
+                        localStorage.removeItem("artistToken");
+                        navigate("/artist/login", { replace: true });
+                      }}
+                    >
+                      Logout
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
 
           {mobileNavOpen ? (
             <div className="md:hidden rounded-[10px] border border-white/10 bg-[#141010]/45 backdrop-blur shadow-[0_18px_40px_rgba(0,0,0,0.35)] overflow-hidden">
               <div className="px-3 py-2">
-                {navItems.map((item) => (
+                  {navItems.map((item) => (
                   <Link
                     key={item.to}
                     to={item.to}
@@ -258,6 +294,23 @@ export default function ArtistShell() {
                     {item.label}
                   </Link>
                 ))}
+
+                {/* Fan App link in mobile menu */}
+                <div className="mt-2 pt-2 border-t border-white/10">
+                  <a
+                    href="exp://localhost:8081"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setMobileNavOpen(false)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-[8px] text-[13px] text-[#c97a54] bg-[#6a352c]/20 border border-[#c97a54]/20"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="5" y="2" width="14" height="20" rx="2" stroke="currentColor" strokeWidth="1.6" />
+                      <circle cx="12" cy="18" r="1" fill="currentColor" />
+                    </svg>
+                    Open Fan App
+                  </a>
+                </div>
               </div>
             </div>
           ) : null}

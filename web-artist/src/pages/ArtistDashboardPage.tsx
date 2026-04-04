@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from "react";
+import { Link } from "react-router-dom";
 import {
   CartesianGrid,
   Line,
@@ -10,7 +11,7 @@ import {
 } from "recharts";
 import { http } from "../services/http";
 import { useQuery } from "@tanstack/react-query";
-import { getOptimizedImageUrl } from "../services/cloudinary";
+
 import ErrorBoundary from "../components/ErrorBoundary";
 import Skeleton from "../components/Skeleton";
 
@@ -18,18 +19,14 @@ export default function ArtistDashboardPage() {
   const dashboardQuery = useQuery({
     queryKey: ["artist", "dashboard"],
     queryFn: async () => {
-      const [s, g, a, p] = await Promise.all([
+      const [s, g] = await Promise.all([
         http.get("/api/v1/artist/dashboard/summary"),
-        http.get("/api/v1/artist/dashboard/growth?days=30"),
-        http.get("/api/v1/artist/dashboard/recent-activity"),
-        http.get("/api/v1/artist/dashboard/new-plays")
+        http.get("/api/v1/artist/dashboard/growth?days=30")
       ]);
 
       return {
         stats: s.data?.stats ?? null,
-        growth: Array.isArray(g.data?.data) ? g.data.data : [],
-        recentActivity: Array.isArray(a.data?.items) ? a.data.items : [],
-        newPlays: Array.isArray(p.data?.items) ? p.data.items : []
+        growth: Array.isArray(g.data?.data) ? g.data.data : []
       };
     }
   });
@@ -37,8 +34,8 @@ export default function ArtistDashboardPage() {
   const loading = dashboardQuery.isLoading;
   const stats = dashboardQuery.data?.stats ?? null;
   const growth = dashboardQuery.data?.growth ?? [];
-  const recentActivity = dashboardQuery.data?.recentActivity ?? [];
-  const newPlays = dashboardQuery.data?.newPlays ?? [];
+
+  const isFirstTimeUser = !loading && stats && stats.subscribers === 0 && stats.totalPlays === 0;
 
   const backgroundStyle = useMemo(() => {
     return {
@@ -72,6 +69,43 @@ export default function ArtistDashboardPage() {
   return (
     <div className="relative overflow-hidden rounded-[10px] border border-white/10 bg-[#141010]/35 backdrop-blur shadow-[0_30px_80px_rgba(0,0,0,0.55)]" style={backgroundStyle}>
       <div className="relative px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
+        
+        {/* Quick Actions / Header */}
+        <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-light tracking-wide text-white">Dashboard Overview</h2>
+            <p className="text-[#b8a6a1] text-sm mt-1">Manage your content and view analytics</p>
+          </div>
+          <Link
+            to="/artist/content-upload"
+            className="inline-flex h-[44px] items-center justify-center rounded-full border border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] px-8 text-[14px] font-medium tracking-wide text-white shadow-[0_10px_25px_rgba(0,0,0,0.35)] hover:shadow-[0_15px_30px_rgba(106,53,44,0.4)] transition-all hover:-translate-y-0.5"
+          >
+            <span className="mr-2">➕</span> Upload New Song
+          </Link>
+        </div>
+
+        {isFirstTimeUser && (
+          <div className="mb-8 rounded-[10px] border border-[#7a3f31]/30 bg-gradient-to-r from-[#211210] to-[#141010]/35 p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-inner">
+            <div className="flex items-center gap-6">
+              <div className="h-16 w-16 rounded-full bg-gradient-to-br from-[#c97a54] to-[#7d4a41] flex items-center justify-center text-3xl shadow-[0_0_30px_rgba(201,122,84,0.3)]">
+                🚀
+              </div>
+              <div>
+                <h3 className="text-xl font-medium tracking-wide text-white mb-1">Welcome to your new Artist Studio!</h3>
+                <p className="text-[#b8a6a1] text-sm max-w-lg leading-relaxed">
+                  You're all set to start building your audience. Your dashboard is a bit quiet right now. Let's fix that by releasing your first track to the world.
+                </p>
+              </div>
+            </div>
+            <Link
+              to="/artist/content-upload"
+              className="whitespace-nowrap inline-flex h-[50px] items-center justify-center rounded-[8px] bg-white text-[#141010] px-8 text-[15px] font-bold tracking-wide shadow-[0_4px_14px_rgba(255,255,255,0.25)] hover:bg-[#f0f0f0] transition-colors"
+            >
+              Upload First Track
+            </Link>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div className="rounded-[10px] border border-white/10 bg-[#0e0a0a]/25 px-7 py-6">
             <div className="flex items-center gap-3 text-[12px] uppercase tracking-widest text-[#8d7b77]">
@@ -155,63 +189,7 @@ export default function ArtistDashboardPage() {
           </div>
         </ErrorBoundary>
 
-        <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div>
-            <div className="text-[18px] font-light tracking-wide text-[#e6d6d2]">Recent Activity</div>
-            <div className="mt-4 rounded-[10px] border border-white/10 bg-[#0e0a0a]/22 overflow-hidden">
-              {recentActivity.length === 0 ? (
-                <div className="px-6 py-6 text-[13px] text-[#b8a6a1]">No recent subscriptions yet.</div>
-              ) : (
-                <div className="divide-y divide-white/10">
-                  {recentActivity.map(
-                    (a: { id: any; fanName: string; fanAvatarUrl: string | null; createdAt: string }) => (
-                    <div key={a.id} className="px-6 py-4 flex items-center gap-4">
-                      <div className="h-[36px] w-[36px] rounded-full overflow-hidden border border-white/10 bg-[#141010]/70">
-                        {a.fanAvatarUrl ? (
-                          <img src={getOptimizedImageUrl(a.fanAvatarUrl)} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="h-full w-full bg-gradient-to-b from-[#2a1a17] to-[#0e0a0a]" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[14px] text-[#e6d6d2] truncate">{a.fanName || "New subscriber"}</div>
-                      </div>
-                      <div className="text-[12px] text-[#8d7b77]">{new Date(a.createdAt).toLocaleString()}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
 
-          <div>
-            <div className="text-[18px] font-light tracking-wide text-[#e6d6d2]">New Plays</div>
-            <div className="mt-4 rounded-[10px] border border-white/10 bg-[#0e0a0a]/22 overflow-hidden">
-              {newPlays.length === 0 ? (
-                <div className="px-6 py-6 text-[13px] text-[#b8a6a1]">No play data yet.</div>
-              ) : (
-                <div className="divide-y divide-white/10">
-                  {newPlays.map(
-                    (p: { contentId: any; title: string; artwork: string | null; plays: number }) => (
-                    <div key={p.contentId} className="px-6 py-4 flex items-center gap-4">
-                      <div className="h-[38px] w-[38px] rounded-[10px] overflow-hidden border border-white/10 bg-[#141010]/70">
-                        {p.artwork ? (
-                          <img src={getOptimizedImageUrl(p.artwork)} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="h-full w-full bg-gradient-to-b from-[#2a1a17] to-[#0e0a0a]" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[14px] text-[#e6d6d2] truncate">{p.title}</div>
-                      </div>
-                      <div className="text-[12px] text-[#8d7b77]">{formatCompact(p.plays)} times</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
