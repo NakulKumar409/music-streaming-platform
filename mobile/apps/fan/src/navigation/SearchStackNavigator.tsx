@@ -1,12 +1,9 @@
-import React, { lazy } from 'react';
+import React, {} from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import LazyScreen from '../ui/LazyScreen';
 
-const SearchScreen = lazy(() => import('../screens/SearchScreen'));
-const FullPlayerScreen = lazy(() => import('../screens/FullPlayerScreen'));
+import SearchScreen from '../screens/SearchScreen';
+import FullPlayerScreen from '../screens/FullPlayerScreen';
 
-const LazySearchScreen = LazyScreen(SearchScreen);
-const LazyFullPlayerScreen = LazyScreen(FullPlayerScreen);
 import type { MediaItem } from '../media.types';
 
 export type SearchStackParamList = {
@@ -27,10 +24,10 @@ const Stack = createNativeStackNavigator<SearchStackParamList>();
 export default function SearchStackNavigator() {
   return (
     <Stack.Navigator id="fan-search" screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="SearchIndex" component={LazySearchScreen} />
+      <Stack.Screen name="SearchIndex" component={SearchScreen} />
       <Stack.Screen
         name="FullPlayer"
-        component={LazyFullPlayerScreen}
+        component={FullPlayerScreen}
         options={{ animation: 'slide_from_bottom', gestureEnabled: true }}
       />
     </Stack.Navigator>

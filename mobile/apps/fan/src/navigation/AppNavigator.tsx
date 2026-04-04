@@ -1,6 +1,6 @@
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import React, { useEffect, useState, lazy } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { Platform } from 'react-native';
 import SplashScreen from '../screens/SplashScreen';
@@ -8,17 +8,13 @@ import { useAuth } from '../store/authStore';
 import { navigationRef } from './rootNavigation';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import MediaPlayerOverlay from '../ui/MediaPlayerOverlay';
-import LazyScreen from '../ui/LazyScreen';
 
 import type { RootStackParamList } from './types';
 
-const LoginScreen = lazy(() => import('../screens/LoginScreen'));
-const SignupScreen = lazy(() => import('../screens/SignupScreen'));
-const MainTabsNavigator = lazy(() => import('./MainTabsNavigator'));
+import LoginScreen from '../screens/LoginScreen';
+import SignupScreen from '../screens/SignupScreen';
+import MainTabsNavigator from './MainTabsNavigator';
 
-const LazyLoginScreen = LazyScreen(LoginScreen);
-const LazySignupScreen = LazyScreen(SignupScreen);
-const LazyMainTabsNavigator = LazyScreen(MainTabsNavigator);
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -60,19 +56,19 @@ export default function AppNavigator() {
         {isAuthenticated ? (
           <Stack.Screen
             name="MainTabs"
-            component={LazyMainTabsNavigator}
+            component={MainTabsNavigator}
             options={{ headerShown: false }}
           />
         ) : (
           <>
             <Stack.Screen
               name="Login"
-              component={LazyLoginScreen}
+              component={LoginScreen}
               options={{ headerShown: false }}
             />
             <Stack.Screen
               name="Signup"
-              component={LazySignupScreen}
+              component={SignupScreen}
               options={{ headerShown: false }}
             />
           </>

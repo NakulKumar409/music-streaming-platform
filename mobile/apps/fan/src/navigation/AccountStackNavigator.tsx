@@ -1,15 +1,11 @@
-import React, { lazy } from 'react';
+import React, {} from 'react';
 
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import LazyScreen from '../ui/LazyScreen';
 
-const AccountScreen = lazy(() => import('../screens/AccountScreen'));
-const MyLibraryScreen = lazy(() => import('../screens/MyLibraryScreen'));
-const SubscriptionDetail = lazy(() => import('../screens/SubscriptionDetail'));
+import AccountScreen from '../screens/AccountScreen';
+import MyLibraryScreen from '../screens/MyLibraryScreen';
+import SubscriptionDetail from '../screens/SubscriptionDetail';
 
-const LazyAccountScreen = LazyScreen(AccountScreen);
-const LazyMyLibraryScreen = LazyScreen(MyLibraryScreen);
-const LazySubscriptionDetail = LazyScreen(SubscriptionDetail);
 
 export type AccountStackParamList = {
   AccountIndex: undefined;
@@ -24,9 +20,9 @@ const Stack = createNativeStackNavigator<AccountStackParamList>();
 export default function AccountStackNavigator() {
   return (
     <Stack.Navigator id="fan-account" screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="AccountIndex" component={LazyAccountScreen} />
-      <Stack.Screen name="MyLibrary" component={LazyMyLibraryScreen} />
-      <Stack.Screen name="SubscriptionDetail" component={LazySubscriptionDetail} />
+      <Stack.Screen name="AccountIndex" component={AccountScreen} />
+      <Stack.Screen name="MyLibrary" component={MyLibraryScreen} />
+      <Stack.Screen name="SubscriptionDetail" component={SubscriptionDetail} />
     </Stack.Navigator>
   );
 }
