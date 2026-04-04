@@ -265,8 +265,8 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
   return items;
 }
 
-export async function fetchVerifiedArtists(): Promise<ArtistListItem[]> {
-  const res = await apiV1.get('/artists');
+export async function fetchVerifiedArtists(limit = 10, offset = 0): Promise<ArtistListItem[]> {
+  const res = await apiV1.get('/artists', { params: { limit, offset } });
 
   const raw: ApiArtist[] = Array.isArray(res.data?.artists)
     ? res.data.artists
