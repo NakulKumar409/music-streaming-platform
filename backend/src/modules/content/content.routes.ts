@@ -35,7 +35,7 @@ router.get("/", (req, res) => {
       const userId = req.user?.id ? Number(req.user.id) : null;
       const isDev = process.env.NODE_ENV !== 'production';
       
-      const limit = Number(req.query.limit) || 10;
+      const limit = Number(req.query.limit) || 50;
       const offset = Number(req.query.offset) || 0;
       // Cursor-based pagination: ?cursor=<ISO timestamp> overrides offset
       const cursorRaw = req.query.cursor ? String(req.query.cursor) : null;
@@ -50,7 +50,7 @@ router.get("/", (req, res) => {
         let rows: any;
         const baseWhere = `${isDev ? "true" : "COALESCE(c.is_approved, false) = true"}
              AND COALESCE(u.is_deleted, false) = false
-             AND UPPER(COALESCE(c.status, 'APPROVED')) = 'APPROVED'
+             AND UPPER(COALESCE(c.status, 'APPROVED')) IN ('APPROVED', 'PUBLISHED'${isDev ? ", 'PROCESSING', 'READY'" : ", 'READY'"})
              AND UPPER(COALESCE(c.lifecycle_state, '')) IN ('PUBLISHED', 'READY'${isDev ? ", 'PENDING', 'PROCESSING'" : ""})`;
 
         const querySql = `

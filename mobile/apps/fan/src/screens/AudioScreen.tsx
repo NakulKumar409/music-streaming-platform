@@ -98,7 +98,7 @@ export default function AudioScreen({ navigation }: any) {
 
   const fetchAll = useCallback(async () => {
     const res = await apiV1.get(`/content?ts=${Date.now()}`, {
-      params: { mediaType: 'audio' },
+      params: { mediaType: 'audio', limit: 50 },
       headers: { 'Cache-Control': 'no-store', Pragma: 'no-cache' },
     });
 
@@ -317,7 +317,7 @@ export default function AudioScreen({ navigation }: any) {
         setSearchLoading(true);
         try {
           const res = await apiV1.get(`/content?ts=${Date.now()}`, {
-            params: { mediaType: 'audio' },
+            params: { mediaType: 'audio', limit: 50 },
             headers: { 'Cache-Control': 'no-store', Pragma: 'no-cache' },
           });
 

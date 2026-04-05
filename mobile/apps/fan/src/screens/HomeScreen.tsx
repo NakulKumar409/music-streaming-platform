@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -18,6 +18,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useFocusEffect } from '@react-navigation/native';
 import { BadgeCheck, Play, Search } from 'lucide-react-native';
 import { apiV1 } from '../services/api';
 import { fetchVerifiedArtists, fetchFeaturedArtists, type ArtistListItem } from '../services/artistService';
@@ -100,6 +101,7 @@ export default function HomeScreen({ navigation }: any) {
   const [artistsLoading, setArtistsLoading] = useState(true);
   const [artistsError, setArtistsError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
   const [featuredArtists, setFeaturedArtists] = useState<FeaturedArtistCard[]>([]);
   const [trendingArtists, setTrendingArtists] = useState<ArtistCard[]>([]);
   const [recentlyAdded, setRecentlyAdded] = useState<ContentCard[]>([]);
@@ -142,119 +144,119 @@ export default function HomeScreen({ navigation }: any) {
   );
 
 
-  useEffect(() => {
-    let mounted = true;
-    const toArtistCard = (a: ArtistListItem): ArtistCard => {
-      const isSubscriptionBased = Number(a.subscriptionPrice ?? 0) > 0;
-      return {
-        id: a.id,
-        name: a.name,
-        image: a.image,
-        isVerified: Boolean(a.isVerified),
-        isSubscriptionBased,
-        subText: '',
-      };
-    };
-
-    const load = async (opts?: { isRefresh?: boolean }) => {
-      const isRefresh = Boolean(opts?.isRefresh);
-      try {
-        if (isRefresh) setRefreshing(true);
-
-        setArtistsLoading(true);
-        setArtistsError(null);
-
-        // Fetch data independently so failures don't block other sections
-        const [featuredResult, artistsResult, contentRes] = await Promise.allSettled([
-          fetchFeaturedArtists().catch(() => []),
-          fetchVerifiedArtists().catch(() => []),
-          apiV1.get('/content').catch(() => null),
-        ]);
-
-        // Handle featured artists (can fail gracefully)
-        const featuredData = featuredResult.status === 'fulfilled' ? featuredResult.value : [];
-        
-        // Handle trending artists
-        const artists = artistsResult.status === 'fulfilled' ? artistsResult.value : [];
-        const trending = artists.slice(0, 12).map(toArtistCard);
-
-        // Handle content (audio/video)
-        let recentFromApi: ContentCard[] = [];
-        if (contentRes.status === 'fulfilled' && contentRes.value?.data) {
-          const apiItems: ApiContentItem[] = Array.isArray(contentRes.value.data?.items)
-            ? contentRes.value.data.items
-            : [];
-          const baseUrl = API_HOST_BASE_URL;
-
-          recentFromApi = apiItems
-            .map((it) => {
-              const rawMt = (it.mediaType || it.type || '').toString().toLowerCase();
-              const hasVideoUrl = Boolean((it as any).videoUrl);
-              let mediaType: ContentCard['mediaType'];
-              if (
-                rawMt === 'audio_video' ||
-                rawMt === 'audiovideo' ||
-                rawMt === 'audio+video'
-              ) {
-                mediaType = 'audio_video';
-              } else if (rawMt.includes('video') || hasVideoUrl) {
-                mediaType = 'video';
-              } else {
-                mediaType = 'audio';
-              }
-              const thumb = (it.thumbnailUrl || it.artwork || '').toString();
-              const thumbFallbackFromStorageKey = it.thumbnail_storage_key
-                ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(String(it.id))}`
-                : '';
-              const artistId = (it.artistId ?? it.artist?.id ?? '') as any;
-              return {
-                id: String(it.id),
-                contentId: String(it.id),
-                title: it.title ?? 'Untitled',
-                artist: String(it.artistName ?? it.artist?.name ?? 'Artist'),
-                artistId: artistId ? String(artistId) : undefined,
-                description: (it.type || '').toString(),
-                thumbnail: thumb || thumbFallbackFromStorageKey || FALLBACK_THUMBNAIL,
-                isLocked: false,
-                createdAt: (it.createdAt ?? null) as any,
-                mediaType,
-                mediaUrl: (it.mediaUrl ?? it.fileUrl ?? null) as any,
-                useStreamAccess: Boolean(it.useStreamAccess),
-              };
-            })
-            .sort((a, b) => {
-              const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-              const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-              return tb - ta;
-            });
-        }
-
-        if (!mounted) return;
-        setFeaturedArtists(featuredData);
-        setTrendingArtists(trending);
-        setRecentlyAdded(recentFromApi);
-        
-        // Only show error if both artist fetches failed and we have no content
-        if (featuredResult.status === 'rejected' && artistsResult.status === 'rejected') {
-          setArtistsError('Could not load artists. Please try again.');
-        }
-      } catch {
-        if (!mounted) return;
-        setArtistsError('Could not load artists. Please try again.');
-      } finally {
-        if (!mounted) return;
-        setArtistsLoading(false);
-        setLoading(false);
-        setRefreshing(false);
-      }
-    };
-
-    load();
-
-    return () => {
-      mounted = false;
+  const toArtistCard = useCallback((a: ArtistListItem): ArtistCard => {
+    const isSubscriptionBased = Number(a.subscriptionPrice ?? 0) > 0;
+    return {
+      id: a.id,
+      name: a.name,
+      image: a.image,
+      isVerified: Boolean(a.isVerified),
+      isSubscriptionBased,
+      subText: '',
     };
   }, []);
+
+  const fetchContent = useCallback(async (opts?: { isRefresh?: boolean }) => {
+    const isRefresh = Boolean(opts?.isRefresh);
+    try {
+      if (isRefresh) setRefreshing(true);
+      setArtistsLoading(true);
+      setArtistsError(null);
+
+      const [featuredResult, artistsResult, contentRes] = await Promise.allSettled([
+        fetchFeaturedArtists().catch(() => []),
+        fetchVerifiedArtists().catch(() => []),
+        apiV1.get(`/content?ts=${Date.now()}`, {
+          headers: { 'Cache-Control': 'no-store', Pragma: 'no-cache' },
+        }).catch(() => null),
+      ]);
+
+      const featuredData = featuredResult.status === 'fulfilled' ? featuredResult.value : [];
+      const artists = artistsResult.status === 'fulfilled' ? artistsResult.value : [];
+      const trending = artists.slice(0, 12).map(toArtistCard);
+
+      let recentFromApi: ContentCard[] = [];
+      if (contentRes.status === 'fulfilled' && contentRes.value?.data) {
+        const apiItems: ApiContentItem[] = Array.isArray(contentRes.value.data?.items)
+          ? contentRes.value.data.items
+          : [];
+        const baseUrl = API_HOST_BASE_URL;
+
+        recentFromApi = apiItems
+          .map((it) => {
+            const rawMt = (it.mediaType || it.type || '').toString().toLowerCase();
+            const hasVideoUrl = Boolean((it as any).videoUrl);
+            let mediaType: ContentCard['mediaType'];
+            if (
+              rawMt === 'audio_video' ||
+              rawMt === 'audiovideo' ||
+              rawMt === 'audio+video'
+            ) {
+              mediaType = 'audio_video';
+            } else if (rawMt.includes('video') || hasVideoUrl) {
+              mediaType = 'video';
+            } else {
+              mediaType = 'audio';
+            }
+            const thumb = (it.thumbnailUrl || it.artwork || '').toString();
+            const thumbFallbackFromStorageKey = it.thumbnail_storage_key
+              ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(String(it.id))}`
+              : '';
+            const artistId = (it.artistId ?? it.artist?.id ?? '') as any;
+            return {
+              id: String(it.id),
+              contentId: String(it.id),
+              title: it.title ?? 'Untitled',
+              artist: String(it.artistName ?? it.artist?.name ?? 'Artist'),
+              artistId: artistId ? String(artistId) : undefined,
+              description: (it.type || '').toString(),
+              thumbnail: thumb || thumbFallbackFromStorageKey || FALLBACK_THUMBNAIL,
+              isLocked: false,
+              createdAt: (it.createdAt ?? null) as any,
+              mediaType,
+              mediaUrl: (it.mediaUrl ?? it.fileUrl ?? null) as any,
+              useStreamAccess: Boolean(it.useStreamAccess),
+            };
+          })
+          .sort((a, b) => {
+            const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return tb - ta;
+          });
+      }
+
+      if (!mountedRef.current) return;
+      setFeaturedArtists(featuredData);
+      setTrendingArtists(trending);
+      setRecentlyAdded(recentFromApi);
+
+      if (featuredResult.status === 'rejected' && artistsResult.status === 'rejected') {
+        setArtistsError('Could not load artists. Please try again.');
+      }
+    } catch {
+      if (!mountedRef.current) return;
+      setArtistsError('Could not load artists. Please try again.');
+    } finally {
+      if (!mountedRef.current) return;
+      setArtistsLoading(false);
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [toArtistCard]);
+
+  // Initial load on mount
+  useEffect(() => {
+    mountedRef.current = true;
+    fetchContent();
+    return () => { mountedRef.current = false; };
+  }, [fetchContent]);
+
+  // Reload content every time the screen comes into focus (catches new uploads)
+  useFocusEffect(
+    useCallback(() => {
+      fetchContent();
+    }, [fetchContent])
+  );
 
   const onPressArtist = (artistId: string) => {
     navigation.navigate('Artist', { artistId });
@@ -389,40 +391,7 @@ export default function HomeScreen({ navigation }: any) {
           <RefreshControl
             tintColor={Colors.accent}
             refreshing={refreshing}
-            onRefresh={async () => {
-              setRefreshing(true);
-              setArtistsError(null);
-
-              try {
-                const [featuredData, artists] = await Promise.allSettled([
-                  fetchFeaturedArtists().catch(() => []),
-                  fetchVerifiedArtists().catch(() => [])
-                ]);
-                
-                if (featuredData.status === 'fulfilled') {
-                  setFeaturedArtists(featuredData.value);
-                }
-                
-                if (artists.status === 'fulfilled') {
-                  const toArtistCard = (a: ArtistListItem): ArtistCard => {
-                    const isSubscriptionBased = Number(a.subscriptionPrice ?? 0) > 0;
-                    return {
-                      id: a.id,
-                      name: a.name,
-                      image: a.image,
-                      isVerified: Boolean(a.isVerified),
-                      isSubscriptionBased,
-                      subText: '',
-                    };
-                  };
-                  setTrendingArtists(artists.value.slice(0, 12).map(toArtistCard));
-                }
-              } catch {
-                setArtistsError('Could not refresh artists. Please try again.');
-              } finally {
-                setRefreshing(false);
-              }
-            }}
+            onRefresh={() => { fetchContent({ isRefresh: true }); }}
           />
         }
       >
@@ -471,39 +440,7 @@ export default function HomeScreen({ navigation }: any) {
           <View style={styles.sectionErrorWrap}>
             <Text style={styles.sectionErrorText}>{artistsError}</Text>
             <Pressable
-              onPress={async () => {
-                setArtistsLoading(true);
-                setArtistsError(null);
-                try {
-                  const [featuredData, artists] = await Promise.allSettled([
-                    fetchFeaturedArtists().catch(() => []),
-                    fetchVerifiedArtists().catch(() => [])
-                  ]);
-                  
-                  const toArtistCard = (a: ArtistListItem): ArtistCard => {
-                    const isSubscriptionBased = Number(a.subscriptionPrice ?? 0) > 0;
-                    return {
-                      id: a.id,
-                      name: a.name,
-                      image: a.image,
-                      isVerified: Boolean(a.isVerified),
-                      isSubscriptionBased,
-                      subText: '',
-                    };
-                  };
-
-                  if (featuredData.status === 'fulfilled') {
-                    setFeaturedArtists(featuredData.value);
-                  }
-                  if (artists.status === 'fulfilled') {
-                    setTrendingArtists(artists.value.slice(0, 12).map(toArtistCard));
-                  }
-                } catch {
-                  setArtistsError('Could not load artists. Please try again.');
-                } finally {
-                  setArtistsLoading(false);
-                }
-              }}
+              onPress={() => { fetchContent(); }}
               style={styles.retryBtn}
             >
               <Text style={styles.retryBtnText}>Retry</Text>

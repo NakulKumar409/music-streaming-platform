@@ -25,7 +25,13 @@ export default function SeeAllSongsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = async () => {
-    const res = await apiV1.get('/content');
+    const res = await apiV1.get(`/content?ts=${Date.now()}&limit=50`, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
     const nextItems: ContentItem[] = Array.isArray(res.data?.items) ? res.data.items : [];
     setItems(nextItems);
   };

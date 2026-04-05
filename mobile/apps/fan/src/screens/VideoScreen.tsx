@@ -485,7 +485,10 @@ export default function VideoScreen() {
   const hasPlaybackStarted = Boolean(activePlaybackUrl);
 
   const fetchAll = useCallback(async () => {
-    const res = await apiV1.get('/content', { params: { mediaType: 'video' } });
+    const res = await apiV1.get(`/content?ts=${Date.now()}`, {
+      params: { mediaType: 'video' },
+      headers: { 'Cache-Control': 'no-store', Pragma: 'no-cache' },
+    });
     const raw: ApiContentItem[] = Array.isArray(res.data?.items) ? res.data.items : [];
 
     const mapped: VideoCard[] = raw
@@ -774,10 +777,12 @@ export default function VideoScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // Reload video list every time screen gains focus so new uploads appear.
+      load().catch(() => undefined);
       return () => {
         pauseInlineVideoIfNeeded().catch(() => undefined);
       };
-    }, [pauseInlineVideoIfNeeded])
+    }, [load, pauseInlineVideoIfNeeded])
   );
 
   useEffect(() => {
