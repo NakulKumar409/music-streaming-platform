@@ -86,7 +86,7 @@ export default function MediaPlayerOverlay({
     return unsub;
   }, []);
 
-  const isVisible = Boolean(currentItem) && currentRouteName !== 'FullPlayer';
+  const isVisible = Boolean(currentItem) && state.queue.length > 0 && currentRouteName !== 'FullPlayer';
 
   const bottomOffset = useMemo(() => {
     const extra = bottomSafeAreaPadding ?? 0;
@@ -323,6 +323,13 @@ export default function MediaPlayerOverlay({
               <Play size={16} color="#000" />
             )}
           </Pressable>
+          <Pressable
+            style={styles.miniCloseBtn}
+            onPress={() => close().catch(() => undefined)}
+            hitSlop={8}
+          >
+            <X size={14} color="rgba(255,255,255,0.7)" />
+          </Pressable>
         </Pressable>
       </Animated.View>
     </View>
@@ -473,5 +480,14 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 2,
     backgroundColor: '#000',
+  },
+  miniCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
   },
 });

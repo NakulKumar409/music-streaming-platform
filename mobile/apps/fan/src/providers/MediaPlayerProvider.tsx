@@ -460,15 +460,25 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         console.log('[MediaPlayer] Loading audio', { playbackUrl });
         setAudioSource(playbackUrl);
         scheduleTokenRefresh(playbackUrl, 'audio');
-        
+
         hasStartedPlayingRef.current = false;
-        
-        // We set isPlaying to true, and we'll use an effect to trigger actual play 
-        // once the player is ready/synced with the new source.
+
+        // Update state to playing immediately
         setState((s) => ({
           ...s,
           isPlaying: true,
         }));
+
+        // Directly call play() — expo-audio queues this until the source is buffered.
+        // Using setTimeout(0) to let React flush the setAudioSource state update first.
+        setTimeout(() => {
+          try {
+            audioPlayer.play();
+            console.log('[MediaPlayer] play() called directly after source set');
+          } catch (playErr) {
+            console.warn('[MediaPlayer] Direct play() failed, effect-based retry will handle it', playErr);
+          }
+        }, 0);
       } catch (err) {
         console.warn('[MediaPlayer] Failed to create or play audio', err);
         Alert.alert(
@@ -782,35 +792,38 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [audioStatus, audioPlayer, handleDidJustFinish]);
 
-  // Effect to handle auto-play when source changes and isPlaying is true
+  // Retry effect: if state says we should be playing but native isn't playing yet,
+  // retry calling play(). This handles cases where the direct play() call in
+  // loadAndPlayAudio fired before the native player finished initializing.
   useEffect(() => {
-    if (state.isPlaying && audioSource && audioPlayer) {
-      if (audioStatus?.playing) return; // already playing
-      if (!audioStatus?.isLoaded) return; // wait until loaded before calling play()
+    if (!state.isPlaying || !audioSource || !audioPlayer) return;
+    if (audioStatus?.playing) return; // already playing — nothing to do
 
-      // Silent retry on 403 or loading error
-      const statusAny = audioStatus as any;
-      if (statusAny.error && (statusAny.error.includes('403') || isStreamingUrlExpiringSoon(audioSource))) {
-        console.log('[MediaPlayer] URL expired or 403 detected, refreshing...');
-        (async () => {
-          const item = currentItemRef.current;
-          if (!item?.id) return;
-          try {
-            const nextUrl = await getPlaybackUrl(item.contentId ?? item.id, 'audio');
-            setAudioSource(nextUrl);
-            scheduleTokenRefresh(nextUrl, 'audio');
-          } catch {
-            // ignore
-          }
-        })().catch(() => undefined);
-        return;
-      }
+    // Silent retry on 403 or loading error
+    const statusAny = audioStatus as any;
+    if (statusAny.error && (statusAny.error.includes('403') || isStreamingUrlExpiringSoon(audioSource))) {
+      console.log('[MediaPlayer] URL expired or 403 detected, refreshing...');
+      (async () => {
+        const item = currentItemRef.current;
+        if (!item?.id) return;
+        try {
+          const nextUrl = await getPlaybackUrl(item.contentId ?? item.id, 'audio');
+          setAudioSource(nextUrl);
+          scheduleTokenRefresh(nextUrl, 'audio');
+        } catch {
+          // ignore
+        }
+      })().catch(() => undefined);
+      return;
+    }
 
+    // Retry play() if audio is loaded but not yet playing
+    if (audioStatus?.isLoaded && !audioStatus?.playing) {
       try {
         audioPlayer.play();
+        console.log('[MediaPlayer] Retry play() from effect — was loaded but not playing');
       } catch (err) {
-        // Silently fail if native object is not ready yet; the next render/status update will retry if needed
-        console.log('[MediaPlayer] Auto-play retry...');
+        console.log('[MediaPlayer] Retry play() failed', err);
       }
     }
   }, [audioSource, state.isPlaying, audioPlayer, audioStatus, scheduleTokenRefresh]);
