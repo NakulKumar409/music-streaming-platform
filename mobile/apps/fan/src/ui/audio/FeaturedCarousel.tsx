@@ -29,7 +29,7 @@ export default function FeaturedCarousel({ items, onPressItem, isLoading }: Feat
 
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionTitle}>Featured</Text>
+      <Text style={styles.sectionTitle}>New Song</Text>
       <FlatList
         data={items}
         horizontal
