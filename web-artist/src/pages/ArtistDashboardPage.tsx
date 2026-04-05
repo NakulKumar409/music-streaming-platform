@@ -1,316 +1,233 @@
-import { useCallback, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis
-} from "recharts";
-import { http } from "../services/http";
-import { useQuery } from "@tanstack/react-query";
-
-import ErrorBoundary from "../components/ErrorBoundary";
-import Skeleton from "../components/Skeleton";
-
-type MetricType = "plays" | "earnings" | "subscribers";
-type TimeFilter = 7 | 30 | 90 | 365;
-
-function CustomTooltip({ active, payload, label, metric }: any) {
-  if (active && payload && payload.length) {
-    const val = payload[0].value;
-    const formattedVal =
-      metric === "earnings"
-        ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(val)
-        : new Intl.NumberFormat("en-US").format(val);
-
-    return (
-      <div className="bg-[#141010]/95 border border-white/10 rounded-lg p-3 shadow-xl backdrop-blur-md">
-        <p className="text-[#a99792] text-xs font-medium uppercase font-mono tracking-wider mb-1">{label}</p>
-        <p className="text-white text-lg font-bold">
-          {formattedVal}
-        </p>
-      </div>
-    );
-  }
-  return null;
-}
 
 export default function ArtistDashboardPage() {
-  const [metricFilter, setMetricFilter] = useState<MetricType>("plays");
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>(30);
+  const backgroundStyle = useMemo(() => ({
+    backgroundImage:
+      "radial-gradient(ellipse at 20% 0%, rgba(201,122,84,0.18) 0%, rgba(20,16,16,0.9) 50%, rgba(10,8,8,1) 100%)"
+  } as const), []);
 
-  const dashboardQuery = useQuery({
-    queryKey: ["artist", "dashboard", metricFilter, timeFilter],
-    queryFn: async () => {
-      const [s, g] = await Promise.all([
-        http.get("/api/v1/artist/dashboard/summary"),
-        http.get(`/api/v1/artist/dashboard/growth?days=${timeFilter}&metric=${metricFilter}`)
-      ]);
-
-      return {
-        stats: s.data?.stats ?? null,
-        growth: Array.isArray(g.data?.data) ? g.data.data : [],
-        growthTotal: g.data?.total ?? 0
-      };
+  const featureCards = [
+    {
+      icon: "🎵",
+      title: "Upload Your First Song",
+      desc: "Share your music with thousands of listeners. Upload audio or video tracks and go live instantly.",
+      color: "from-[#c97a54]/20 to-transparent",
+      border: "border-[#c97a54]/30",
+      to: "/artist/content-upload"
+    },
+    {
+      icon: "📈",
+      title: "Track Your Growth",
+      desc: "See detailed play counts, subscriber trends, and earnings breakdowns — all in one place.",
+      color: "from-[#5468c9]/20 to-transparent",
+      border: "border-[#5468c9]/30",
+      to: "/artist/analytics-summary"
+    },
+    {
+      icon: "💰",
+      title: "Earn from Your Content",
+      desc: "Set your own subscription price. Get paid directly every time a fan subscribes to your profile.",
+      color: "from-[#54c97a]/20 to-transparent",
+      border: "border-[#54c97a]/30",
+      to: "/artist/analytics-summary"
     }
-  });
+  ];
 
-  const loading = dashboardQuery.isLoading;
-  const isFetching = dashboardQuery.isFetching;
-  const stats = dashboardQuery.data?.stats ?? null;
-  const growth = dashboardQuery.data?.growth ?? [];
-  const growthTotal = dashboardQuery.data?.growthTotal ?? 0;
+  const steps = [
+    { num: "01", title: "Upload Your Song",  desc: "Add your audio or video track with cover art and description." },
+    { num: "02", title: "Get Approved",      desc: "Our team reviews and approves your content within 24 hours." },
+    { num: "03", title: "Reach Listeners",   desc: "Go live to thousands of active fans browsing for new music." },
+    { num: "04", title: "Grow & Earn",       desc: "Build your subscriber base and start generating real income." }
+  ];
 
-  const isFirstTimeUser = !loading && stats && stats.subscribers === 0 && stats.totalPlays === 0;
-
-  const backgroundStyle = useMemo(() => {
-    return {
-      backgroundImage:
-        "radial-gradient(circle at 35% 15%, rgba(193,117,86,0.10) 0%, rgba(25,18,18,0.55) 48%, rgba(10,8,8,0.92) 100%)"
-    } as const;
-  }, []);
-
-  const formatCurrency = useCallback((amount: number) => {
-    const n = Number(amount);
-    if (!Number.isFinite(n)) return "$0.00";
-    return n.toLocaleString(undefined, {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
-  }, []);
-
-  const formatCompact = useCallback((n: number) => {
-    const v = Number(n);
-    if (!Number.isFinite(v)) return "0";
-    return v.toLocaleString();
-  }, []);
-
-  const growthChartData = useMemo(() => growth.map((p: { date: string; value: number }) => ({
-    name: p.date.slice(5),
-    value: p.value
-  })), [growth]);
-
-  const isEmptyGraph = !loading && growthTotal === 0 && growth.every((p: any) => p.value === 0);
+  const previews = [
+    { icon: "📊", label: "Your analytics will appear here", sub: "Plays, earnings & subscriber data" },
+    { icon: "🎧", label: "Your songs will appear here",     sub: "All your uploaded tracks in one view" }
+  ];
 
   return (
-    <div className="relative min-h-[500px] overflow-hidden rounded-[10px] border border-white/10 bg-[#141010]/35 backdrop-blur shadow-[0_30px_80px_rgba(0,0,0,0.55)]" style={backgroundStyle}>
-      <div className="relative px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
-        
-        {/* Quick Actions / Header */}
-        <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-light tracking-wide text-white">Dashboard Overview</h2>
-            <p className="text-[#b8a6a1] text-sm mt-1">Manage your content and view analytics</p>
+    <div
+      className="relative min-h-screen overflow-hidden rounded-[16px] border border-white/5 bg-[#0e0a0a] shadow-2xl"
+      style={backgroundStyle}
+    >
+      {/* Ambient glow blobs */}
+      <div className="pointer-events-none absolute -top-32 -left-32 h-[400px] w-[400px] rounded-full bg-[#c97a54]/10 blur-[120px]" />
+      <div className="pointer-events-none absolute top-1/2 -right-40 h-[350px] w-[350px] rounded-full bg-[#5468c9]/[0.08] blur-[100px]" />
+
+      <div className="relative px-5 py-10 sm:px-8 sm:py-12 lg:px-12 lg:py-14 flex flex-col gap-16">
+
+        {/* ── 1. HERO ──────────────────────────────── */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+          <div className="max-w-xl">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#c97a54]/30 bg-[#c97a54]/10 px-4 py-1.5 text-[13px] font-semibold text-[#c97a54] tracking-wide">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#c97a54] animate-pulse" />
+              Artist Studio
+            </div>
+            <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-white mb-4 leading-tight">
+              Your Creative Space<br />
+              <span className="bg-gradient-to-r from-[#c97a54] via-[#e6a070] to-[#c97a54] bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]">
+                to Grow Your Music 🎧
+              </span>
+            </h1>
+            <p className="text-[#a99792] text-lg leading-relaxed mb-8 max-w-lg">
+              Upload tracks, build your subscriber base, and start earning — all from one powerful dashboard.
+            </p>
+            <div className="flex flex-wrap gap-4">
+              <Link
+                to="/artist/content-upload"
+                className="group inline-flex h-[52px] items-center justify-center rounded-full bg-gradient-to-r from-[#c97a54] to-[#a65f3d] px-8 text-[15px] font-bold text-white shadow-[0_0_30px_rgba(201,122,84,0.4)] hover:shadow-[0_0_50px_rgba(201,122,84,0.6)] transition-all hover:-translate-y-1 animate-[pulse-glow_2.5s_ease-in-out_infinite]"
+              >
+                <span className="mr-2">🎵</span> Start Uploading Music
+              </Link>
+              <Link
+                to="/artist/analytics-summary"
+                className="inline-flex h-[52px] items-center justify-center rounded-full border border-white/10 bg-white/5 px-8 text-[15px] font-semibold text-[#d8c7c3] hover:bg-white/10 hover:text-white transition-all"
+              >
+                View Analytics →
+              </Link>
+            </div>
           </div>
-          <Link
-            to="/artist/content-upload"
-            className="inline-flex h-[44px] items-center justify-center rounded-full border border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] px-8 text-[14px] font-medium tracking-wide text-white shadow-[0_10px_25px_rgba(0,0,0,0.35)] hover:shadow-[0_15px_30px_rgba(106,53,44,0.4)] transition-all hover:-translate-y-0.5"
-          >
-            <span className="mr-2">➕</span> Upload New Song
-          </Link>
+
+          {/* Decorative visual */}
+          <div className="hidden lg:flex items-center justify-center">
+            <div className="relative h-[220px] w-[220px]">
+              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[#c97a54]/30 to-transparent" style={{ animation: "spin 12s linear infinite" }} />
+              <div className="absolute inset-4 rounded-full bg-gradient-to-br from-[#c97a54]/20 to-black/50 border border-[#c97a54]/20 flex items-center justify-center shadow-[0_0_60px_rgba(201,122,84,0.2)]">
+                <span className="text-6xl drop-shadow-xl">🎵</span>
+              </div>
+              <div className="absolute -top-3 -right-3 h-14 w-14 rounded-full bg-[#c97a54]/20 border border-[#c97a54]/30 flex items-center justify-center text-2xl animate-bounce" style={{ animationDelay: "0.3s" }}>📈</div>
+              <div className="absolute -bottom-3 -left-3 h-14 w-14 rounded-full bg-[#54c97a]/20 border border-[#54c97a]/30 flex items-center justify-center text-2xl animate-bounce" style={{ animationDelay: "0.8s" }}>💰</div>
+            </div>
+          </div>
         </div>
 
-        {isFirstTimeUser && (
-          <div className="mb-8 rounded-[10px] border border-[#7a3f31]/30 bg-gradient-to-r from-[#211210] to-[#141010]/35 p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-inner">
-            <div className="flex items-center gap-6">
-              <div className="h-16 w-16 rounded-full bg-gradient-to-br from-[#c97a54] to-[#7d4a41] flex items-center justify-center text-3xl shadow-[0_0_30px_rgba(201,122,84,0.3)]">
-                🚀
-              </div>
-              <div>
-                <h3 className="text-xl font-medium tracking-wide text-white mb-1">Welcome to your new Artist Studio!</h3>
-                <p className="text-[#b8a6a1] text-sm max-w-lg leading-relaxed">
-                  You're all set to start building your audience. Your dashboard is a bit quiet right now. Let's fix that by releasing your first track to the world.
-                </p>
-              </div>
+        {/* ── 2. EMPTY STATE CARD ──────────────────── */}
+        <div className="relative overflow-hidden rounded-[20px] border border-[#c97a54]/25 bg-gradient-to-br from-[#c97a54]/10 via-black/30 to-[#141010] p-8 md:p-12 text-center shadow-[0_0_60px_rgba(201,122,84,0.1)]">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(201,122,84,0.15),transparent_70%)]" />
+          <div className="relative">
+            <div className="mb-6 mx-auto h-20 w-20 rounded-2xl bg-gradient-to-br from-[#c97a54] to-[#7d4a41] flex items-center justify-center text-4xl shadow-[0_10px_40px_rgba(201,122,84,0.4)]">
+              🎧
             </div>
+            <h2 className="text-3xl font-black text-white mb-3">Your dashboard is ready 🎧</h2>
+            <p className="text-[#a99792] text-lg max-w-lg mx-auto mb-8 leading-relaxed">
+              Upload your first track to unlock analytics, earnings, and audience insights. Your journey starts with one song.
+            </p>
             <Link
               to="/artist/content-upload"
-              className="whitespace-nowrap inline-flex h-[50px] items-center justify-center rounded-[8px] bg-white text-[#141010] px-8 text-[15px] font-bold tracking-wide shadow-[0_4px_14px_rgba(255,255,255,0.25)] hover:bg-[#f0f0f0] transition-colors"
+              className="inline-flex h-[54px] items-center justify-center rounded-[14px] bg-white px-12 text-[16px] font-black text-[#141010] shadow-[0_10px_40px_rgba(255,255,255,0.15)] hover:scale-105 hover:shadow-[0_15px_50px_rgba(255,255,255,0.3)] transition-all"
             >
-              Upload First Track
+              Upload First Song →
             </Link>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div className="rounded-[10px] border border-white/10 bg-[#0e0a0a]/25 px-7 py-6 hover:bg-[#0e0a0a]/40 transition-colors">
-            <div className="flex items-center gap-3 text-[12px] uppercase tracking-widest text-[#8d7b77]">
-              <div className="h-[28px] w-[28px] rounded-[9px] bg-[#141010]/60 border border-white/10 flex items-center justify-center">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M20 21V19C20 16.7909 18.2091 15 16 15H8C5.79086 15 4 16.7909 4 19V21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  <path d="M12 11C14.2091 11 16 9.20914 16 7C16 4.79086 14.2091 3 12 3C9.79086 3 8 4.79086 8 7C8 9.20914 9.79086 11 12 11Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </div>
-              <div>Subscribers</div>
-            </div>
-            <div className="mt-4 text-[34px] font-light tracking-wide text-[#e6d6d2]">
-              {loading ? <Skeleton className="h-[34px] w-[140px]" /> : formatCompact(stats?.subscribers ?? 0)}
-            </div>
-          </div>
-
-          <div className="rounded-[10px] border border-white/10 bg-[#0e0a0a]/25 px-7 py-6 hover:bg-[#0e0a0a]/40 transition-colors">
-            <div className="flex items-center gap-3 text-[12px] uppercase tracking-widest text-[#8d7b77]">
-              <div className="h-[28px] w-[28px] rounded-[9px] bg-[#141010]/60 border border-white/10 flex items-center justify-center">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M9 7.5V16.5L17 12L9 7.5Z" fill="#b16e5b" />
-                </svg>
-              </div>
-              <div>Total Plays</div>
-            </div>
-            <div className="mt-4 text-[34px] font-light tracking-wide text-[#e6d6d2]">
-              {loading ? <Skeleton className="h-[34px] w-[140px]" /> : formatCompact(stats?.totalPlays ?? 0)}
-            </div>
-          </div>
-
-          <div className="rounded-[10px] border border-white/10 bg-[#0e0a0a]/25 px-7 py-6 hover:bg-[#0e0a0a]/40 transition-colors">
-            <div className="flex items-center gap-3 text-[12px] uppercase tracking-widest text-[#8d7b77]">
-              <div className="h-[28px] w-[28px] rounded-[9px] bg-[#141010]/60 border border-white/10 flex items-center justify-center">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 1V23" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  <path d="M17 5H9.5C7.01472 5 5 7.01472 5 9.5C5 11.9853 7.01472 14 9.5 14H14.5C16.9853 14 19 16.0147 19 18.5C19 20.9853 16.9853 23 14.5 23H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </div>
-              <div>Gross Earnings</div>
-            </div>
-            <div className="mt-4 text-[34px] font-light tracking-wide text-[#e6d6d2]">
-              {loading ? <Skeleton className="h-[34px] w-[180px]" /> : formatCurrency(stats?.grossEarnings ?? 0)}
-            </div>
           </div>
         </div>
 
-        <ErrorBoundary label="Artist Dashboard: Growth Chart">
-          <div className="mt-8 rounded-[12px] border border-white/5 bg-[#141010]/50 p-6 sm:p-8 shadow-2xl backdrop-blur-sm relative">
-            
-            {/* Header & Controls */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8">
-              <div>
-                <h3 className="text-xl font-bold tracking-tight text-white mb-1 flex items-center gap-2">
-                  Growth Overview <span className="text-lg">📈</span>
-                </h3>
-                <p className="text-[14px] text-[#a99792]">This graph shows how your music is performing over time.</p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                {/* Metric Switch */}
-                <div className="flex p-1 bg-black/40 rounded-lg border border-white/5">
-                  {(["plays", "earnings", "subscribers"] as MetricType[]).map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => setMetricFilter(m)}
-                      className={`px-4 py-1.5 text-[13px] font-medium capitalize rounded-md transition-all ${metricFilter === m ? "bg-[#c97a54] text-white shadow-lg" : "text-[#8d7b77] hover:text-[#e6d6d2]"}`}
-                    >
-                      {m}
-                    </button>
-                  ))}
+        {/* ── 3. GUIDED FEATURE CARDS ──────────────── */}
+        <div>
+          <h2 className="text-2xl font-black text-white mb-2 text-center">Everything You Need to Succeed</h2>
+          <p className="text-[#8d7b77] text-center mb-8">Powerful tools built for independent artists</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {featureCards.map((card, i) => (
+              <Link
+                key={i}
+                to={card.to}
+                className={`group relative overflow-hidden rounded-[18px] border ${card.border} bg-gradient-to-br ${card.color} p-6 shadow-lg hover:-translate-y-2 transition-all duration-300 block`}
+              >
+                <div className="mb-4 h-14 w-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-3xl group-hover:scale-110 transition-transform">
+                  {card.icon}
                 </div>
+                <h3 className="text-white font-bold text-[17px] mb-2 group-hover:text-[#e6d6d2] transition-colors">{card.title}</h3>
+                <p className="text-[#8d7b77] text-sm leading-relaxed group-hover:text-[#a99792] transition-colors">{card.desc}</p>
+                <div className="absolute bottom-4 right-4 text-white/20 group-hover:text-white/60 transition-colors text-xl">→</div>
+              </Link>
+            ))}
+          </div>
+        </div>
 
-                {/* Time Filters Dropdown */}
-                <div className="relative">
-                  <select
-                    value={timeFilter}
-                    onChange={(e) => setTimeFilter(Number(e.target.value) as TimeFilter)}
-                    className="appearance-none bg-black/40 border border-white/5 rounded-lg text-[#e6d6d2] text-[13px] font-medium py-2 pl-4 pr-10 hover:border-white/10 focus:border-[#c97a54]/50 focus:ring-1 focus:ring-[#c97a54]/50 outline-none transition-all cursor-pointer"
-                  >
-                    <option value={7}>Last 7 Days</option>
-                    <option value={30}>Last 30 Days</option>
-                    <option value={90}>Last 3 Months</option>
-                    <option value={365}>Last 1 Year</option>
-                  </select>
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#8d7b77]">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
+        {/* ── 4. HOW IT WORKS ──────────────────────── */}
+        <div className="rounded-[20px] border border-white/5 bg-black/30 p-8 md:p-10">
+          <h2 className="text-2xl font-black text-white mb-2 text-center">How It Works</h2>
+          <p className="text-[#8d7b77] text-center mb-10">Get from zero to live in 4 simple steps</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {steps.map((step, i) => (
+              <div key={i} className="relative flex flex-col items-center text-center group">
+                {i < steps.length - 1 && (
+                  <div className="hidden lg:block absolute top-[28px] left-[calc(50%+28px)] w-[calc(100%-56px)] h-px bg-gradient-to-r from-[#c97a54]/40 to-transparent" />
+                )}
+                <div className="mb-4 h-14 w-14 rounded-2xl bg-gradient-to-br from-[#c97a54]/30 to-black/50 border border-[#c97a54]/40 flex items-center justify-center font-black text-[#c97a54] text-lg shadow-[0_0_20px_rgba(201,122,84,0.2)] group-hover:shadow-[0_0_30px_rgba(201,122,84,0.4)] transition-all">
+                  {step.num}
+                </div>
+                <h4 className="text-white font-bold text-[15px] mb-2">{step.title}</h4>
+                <p className="text-[#8d7b77] text-xs leading-relaxed max-w-[160px]">{step.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── 5. MOTIVATION SECTION ─────────────────── */}
+        <div className="relative overflow-hidden rounded-[20px] border border-white/5 bg-gradient-to-r from-[#1a1010] via-[#0e0a0a] to-[#101a1a] p-8 md:p-12 text-center">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(201,122,84,0.08),transparent_70%)]" />
+          <div className="relative">
+            <div className="text-5xl mb-4">🚀</div>
+            <h2 className="text-3xl sm:text-4xl font-black text-white mb-4">
+              Start Your Journey Today
+            </h2>
+            <p className="text-[#a99792] text-[18px] max-w-lg mx-auto mb-8 leading-relaxed">
+              Thousands of listeners are waiting for your music. Your next fan is just one upload away.
+            </p>
+            <Link
+              to="/artist/content-upload"
+              className="inline-flex h-[52px] items-center justify-center rounded-full bg-gradient-to-r from-[#c97a54] to-[#a65f3d] px-10 text-[15px] font-bold text-white shadow-[0_0_30px_rgba(201,122,84,0.35)] hover:shadow-[0_0_50px_rgba(201,122,84,0.6)] hover:-translate-y-1 transition-all"
+            >
+              🎵 Upload My First Song
+            </Link>
+          </div>
+        </div>
+
+        {/* ── 6. PREVIEW / FUTURE STATE ─────────────── */}
+        <div>
+          <h2 className="text-2xl font-black text-white mb-2">Coming Soon to Your Dashboard</h2>
+          <p className="text-[#8d7b77] mb-8">This is what your dashboard will look like once you start uploading</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {previews.map((p, i) => (
+              <div key={i} className="relative overflow-hidden rounded-[18px] border border-dashed border-white/10 bg-black/20 p-8 flex flex-col items-center text-center gap-3">
+                <div className="absolute inset-0 opacity-20 pointer-events-none">
+                  <div className="h-3 w-3/4 mx-auto rounded-full bg-white/20 mt-6 mb-3" />
+                  <div className="h-3 w-1/2 mx-auto rounded-full bg-white/10 mb-3" />
+                  <div className="h-3 w-2/3 mx-auto rounded-full bg-white/10" />
+                </div>
+                <div className="relative z-10">
+                  <div className="h-16 w-16 mx-auto rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-4xl mb-4">
+                    {p.icon}
+                  </div>
+                  <h4 className="text-[#8d7b77] font-bold text-[16px] mb-1">{p.label}</h4>
+                  <p className="text-[#8d7b77]/60 text-xs">{p.sub}</p>
+                  <div className="mt-4 inline-flex items-center gap-1 text-[12px] text-[#c97a54]/60 font-medium border border-[#c97a54]/20 rounded-full px-3 py-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#c97a54]/40" />
+                    Unlocks after first upload
                   </div>
                 </div>
               </div>
-            </div>
-
-            {/* Summary Insights above the graph */}
-            <div className="mb-6 flex flex-wrap items-end gap-3 px-1">
-               <div className="text-sm text-[#b8a6a1] uppercase tracking-wider font-semibold">Total {metricFilter}:</div>
-               <div className="text-2xl font-bold text-white leading-none">
-                 {loading ? <Skeleton className="h-6 w-20 inline-block mb-1" /> : (
-                   metricFilter === 'earnings' ? formatCurrency(growthTotal) : formatCompact(growthTotal)
-                 )}
-               </div>
-               {!loading && growthTotal > 0 && (
-                 <div className="flex items-center text-emerald-400 text-xs font-bold bg-emerald-400/10 px-2 py-0.5 rounded-full ml-2">
-                   ↑ Trending
-                 </div>
-               )}
-            </div>
-
-            {/* Main Graph Area */}
-            <div className={`mt-2 h-[260px] relative transition-opacity duration-300 ${isFetching ? "opacity-50" : "opacity-100"}`}>
-              {loading ? (
-                <div className="h-full w-full flex flex-col justify-end pb-8 gap-4 px-12">
-                   <Skeleton className="h-[40%] w-full rounded-t-xl" />
-                   <div className="flex justify-between w-full">
-                     <Skeleton className="h-4 w-10" />
-                     <Skeleton className="h-4 w-10" />
-                     <Skeleton className="h-4 w-10" />
-                     <Skeleton className="h-4 w-10" />
-                     <Skeleton className="h-4 w-10" />
-                   </div>
-                </div>
-              ) : isEmptyGraph ? (
-                <div className="h-full w-full flex flex-col items-center justify-center bg-black/20 rounded-xl border border-white/5 border-dashed">
-                    <div className="text-4xl mb-3 opacity-60">📭</div>
-                    <h4 className="text-white font-medium text-lg mb-1">No data yet</h4>
-                    <p className="text-[#a99792] text-sm text-center max-w-xs">Upload your first song and share it to start seeing analytics.</p>
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={growthChartData} margin={{ left: -20, right: 0, top: 10, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorMetric" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#c97a54" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#c97a54" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false} strokeDasharray="4 4" />
-                    <XAxis 
-                      dataKey="name" 
-                      tick={{ fill: "rgba(230,214,210,0.5)", fontSize: 11 }} 
-                      axisLine={false} 
-                      tickLine={false} 
-                      minTickGap={30}
-                    />
-                    <YAxis 
-                      tick={{ fill: "rgba(230,214,210,0.5)", fontSize: 11 }} 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tickFormatter={(val) => {
-                         if (val >= 1000 && metricFilter !== 'earnings') return `${(val/1000).toFixed(0)}k`;
-                         if (metricFilter === 'earnings') return `$${val}`;
-                         return val;
-                      }}
-                    />
-                    <Tooltip content={<CustomTooltip metric={metricFilter} />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1, strokeDasharray: '4 4' }} />
-                    <Area 
-                      type="monotone" 
-                      dataKey="value" 
-                      stroke="#c97a54" 
-                      strokeWidth={3} 
-                      fillOpacity={1} 
-                      fill="url(#colorMetric)" 
-                      activeDot={{ r: 6, fill: "#c97a54", stroke: "#141010", strokeWidth: 2 }}
-                      animationDuration={1200}
-                      animationEasing="ease-in-out"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
-            </div>
+            ))}
           </div>
-        </ErrorBoundary>
+        </div>
 
       </div>
+
+      <style>{`
+        @keyframes shimmer {
+          0% { background-position: 200% center; }
+          100% { background-position: -200% center; }
+        }
+        @keyframes pulse-glow {
+          0%, 100% { box-shadow: 0 0 30px rgba(201,122,84,0.4); }
+          50% { box-shadow: 0 0 60px rgba(201,122,84,0.7); }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

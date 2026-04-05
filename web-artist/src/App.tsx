@@ -14,7 +14,6 @@ const ArtistAccountInactivePage = lazy(() => import("./pages/ArtistAccountInacti
 const ArtistAccountPage = lazy(() => import("./pages/ArtistAccountPage"));
 const ArtistPricingPage = lazy(() => import("./pages/ArtistPricingPage"));
 const ArtistAnalyticsSummaryPage = lazy(() => import("./pages/ArtistAnalyticsSummaryPage"));
-const ArtistChannelPreviewPage = lazy(() => import("./pages/ArtistChannelPreviewPage"));
 const ArtistContentHistoryPage = lazy(() => import("./pages/ArtistContentHistoryPage"));
 const ArtistContentUploadPage = lazy(() => import("./pages/ArtistContentUploadPage"));
 
@@ -42,7 +41,6 @@ export default function App() {
           <Route path="/artist/account" element={<ArtistAccountPage />} />
           <Route path="/artist/pricing" element={<ArtistPricingPage />} />
           <Route path="/artist/analytics-summary" element={<ArtistAnalyticsSummaryPage />} />
-          <Route path="/artist/channel-preview" element={<ArtistChannelPreviewPage />} />
           <Route path="/artist/content-upload" element={<ArtistContentUploadPage />} />
           <Route path="/artist/content-history" element={<ArtistContentHistoryPage />} />
         </Route>

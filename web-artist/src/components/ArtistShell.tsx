@@ -144,7 +144,6 @@ export default function ArtistShell() {
         { to: "/artist/dashboard", label: "Dashboard" },
         { to: "/artist/account", label: "Account" },
         { to: "/artist/analytics-summary", label: "Analytics" },
-        { to: "/artist/channel-preview", label: "Channel Preview" },
         { to: "/artist/content-history", label: "Content History" }
       ];
 
