@@ -95,12 +95,14 @@ router.get("/summary", requireAuth, (req: any, res: any) => {
 
     try {
       const row = await pool.query(
-        `SELECT user_id, artist_id, status, plan_type, start_date, next_billing_date, auto_renew
-         FROM subscriptions
-         WHERE user_id = $1
-           AND UPPER(COALESCE(status, '')) = 'ACTIVE'
-           AND (next_billing_date IS NULL OR next_billing_date > now() - interval '2 days')
-         ORDER BY next_billing_date DESC NULLS LAST, updated_at DESC, created_at DESC
+        `SELECT s.user_id, s.artist_id, s.status, s.plan_type, s.start_date, s.next_billing_date, s.auto_renew,
+                u.full_name as artist_name, u.name as artist_display_name
+         FROM subscriptions s
+         LEFT JOIN users u ON s.artist_id = u.id
+         WHERE s.user_id = $1
+           AND UPPER(COALESCE(s.status, '')) = 'ACTIVE'
+           AND (s.next_billing_date IS NULL OR s.next_billing_date > now() - interval '2 days')
+         ORDER BY s.next_billing_date DESC NULLS LAST, s.updated_at DESC, s.created_at DESC
          LIMIT 1`,
         [userId]
       );
@@ -110,15 +112,17 @@ router.get("/summary", requireAuth, (req: any, res: any) => {
       return res.json({
         success: true,
         plan: s
-          ? {
-              user_id: s.user_id,
-              artist_id: s.artist_id,
-              status: s.status,
-              plan_type: s.plan_type,
-              start_date: s.start_date,
-              next_billing_date: s.next_billing_date,
-              auto_renew: s.auto_renew,
-            }
+            ? {
+                user_id: s.user_id,
+                artist_id: s.artist_id,
+                artist_name: s.artist_name || s.artist_display_name || 'Artist',
+                status: s.status,
+                plan_type: s.plan_type,
+                start_date: s.start_date,
+                next_billing_date: s.next_billing_date,
+                end_date: s.next_billing_date, // Map billing date to end_date for simplicity in UI
+                auto_renew: s.auto_renew,
+              }
           : null,
       });
     } catch {

@@ -23,6 +23,7 @@ import { resetToLogin } from '../navigation/rootNavigation';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../theme';
 import { ARTIST_WEB_URL } from '../config/env';
+import { registerForPushNotifications, disablePushNotifications } from '../services/notificationService';
 
 function PremiumBadge() {
   return (
@@ -81,12 +82,6 @@ export default function AccountScreen() {
   const [audioQuality, setAudioQuality] = React.useState<AudioQualityPref>('HIGH');
 
   const [showTransactions, setShowTransactions] = React.useState(false);
-  const [showEditProfile, setShowEditProfile] = React.useState(false);
-  const [isSaving, setIsSaving] = React.useState(false);
-
-  const [editName, setEditName] = React.useState('');
-  const [editImageUrl, setEditImageUrl] = React.useState('');
-  const [editPassword, setEditPassword] = React.useState('');
 
   const refresh = React.useCallback(async () => {
     setIsLoading(true);
@@ -129,8 +124,11 @@ export default function AccountScreen() {
   }, [planSummary?.endDate]);
 
   React.useEffect(() => {
-    refresh();
-  }, [refresh]);
+    const unsubscribe = navigation.addListener('focus', () => {
+      refresh();
+    });
+    return unsubscribe;
+  }, [navigation, refresh]);
 
   const handleLogout = () => {
     console.log('LOGOUT_CLICKED');
@@ -171,10 +169,33 @@ export default function AccountScreen() {
   };
 
   const handleToggleNotifications = async (next: boolean) => {
+    // Optimistically update the UI immediately
     setPushNotifications(next);
     try {
-      await userService.updateSettings({ pushNotifications: next });
-    } catch {
+      if (next) {
+        // Enable: request OS permission, fetch token, sync to backend
+        const result = await registerForPushNotifications();
+        if (!result.success) {
+          // Revert if permission denied
+          setPushNotifications(false);
+          if (result.status === 'denied') {
+            Alert.alert(
+              'Notifications Blocked',
+              'Please enable notifications for this app in your iPhone Settings → Music Streaming Platform → Notifications.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Open Settings', onPress: () => Linking.openSettings() },
+              ]
+            );
+          }
+        }
+      } else {
+        // Disable: tell backend to clear the preference
+        await disablePushNotifications();
+      }
+    } catch (err) {
+      console.error('[AccountScreen] Notification toggle error:', err);
+      // Revert UI on unexpected error
       setPushNotifications((v) => !v);
     }
   };
@@ -198,26 +219,8 @@ export default function AccountScreen() {
     }
   };
 
-  const openEditProfile = () => {
-    setEditName(profileName || user?.name?.toString?.() || '');
-    setEditImageUrl('');
-    setEditPassword('');
-    setShowEditProfile(true);
-  };
-
-  const submitEditProfile = async () => {
-    setIsSaving(true);
-    try {
-      const updated = await userService.updateProfile({
-        name: editName,
-        profileImageUrl: editImageUrl,
-        password: editPassword,
-      });
-      setProfileName(updated.name);
-      setShowEditProfile(false);
-    } finally {
-      setIsSaving(false);
-    }
+  const handleOpenEditProfile = () => {
+    navigation.navigate('EditProfile');
   };
 
   return (
@@ -241,7 +244,7 @@ export default function AccountScreen() {
         <View style={styles.section}>
           <View style={styles.profileCard}>
             <View style={styles.profileTitleRow}>
-              <Text style={styles.profileName}>{profileName || user?.name?.toString?.() || 'User'}</Text>
+              <Text style={styles.profileName}>{profileName || user?.name?.toString?.() || (user as any)?.fullName || (user as any)?.full_name || 'User'}</Text>
               {!isLoading && isPremium ? <PremiumBadge /> : null}
             </View>
             <Text style={styles.profileEmail}>{user?.email || 'Not available'}</Text>
@@ -257,7 +260,7 @@ export default function AccountScreen() {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.primaryButton} onPress={openEditProfile} disabled={isLoading}>
+            <TouchableOpacity style={styles.primaryButton} onPress={handleOpenEditProfile} disabled={isLoading}>
               <Text style={styles.primaryButtonText}>Edit Profile</Text>
             </TouchableOpacity>
           </View>
@@ -280,7 +283,10 @@ export default function AccountScreen() {
               <CreditCard size={20} color="#fff" />
               <View style={styles.statusInfo}>
                 <Text style={styles.statusLabel}>Plan</Text>
-                <Text style={styles.statusValue}>{(planSummary?.planType ?? '—').toString()}</Text>
+                <Text style={styles.statusValue}>
+                  {(planSummary?.planType ?? '—').toString()}
+                  {planSummary?.artistName ? ` - ${planSummary.artistName}` : ''}
+                </Text>
               </View>
             </View>
           </View>
@@ -343,25 +349,6 @@ export default function AccountScreen() {
             <Switch value={pushNotifications} onValueChange={handleToggleNotifications} />
           </View>
 
-          <View style={styles.qualityCard}>
-            <Text style={styles.qualityTitle}>Audio Quality</Text>
-            <View style={styles.qualityRow}>
-              <TouchableOpacity
-                style={[styles.qualityPill, audioQuality === 'HIGH' ? styles.qualityPillActive : null]}
-                onPress={() => handleSelectQuality('HIGH')}
-              >
-                <Text style={styles.qualityPillText}>High Quality</Text>
-                <Text style={styles.qualityPillSub}>320kbps</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.qualityPill, audioQuality === 'DATA SAVER' ? styles.qualityPillActive : null]}
-                onPress={() => handleSelectQuality('DATA SAVER')}
-              >
-                <Text style={styles.qualityPillText}>Data Saver</Text>
-                <Text style={styles.qualityPillSub}>96kbps</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
 
           <TouchableOpacity style={styles.menuItem}>
             <HelpCircle size={20} color="#fff" />
@@ -382,7 +369,7 @@ export default function AccountScreen() {
               <Text style={styles.userInfoLabel}>Email</Text>
               <Text style={styles.userInfoValue}>{user.email || 'Not available'}</Text>
               <Text style={styles.userInfoLabel}>Name</Text>
-              <Text style={styles.userInfoValue}>{profileName || user.name || 'Not set'}</Text>
+              <Text style={styles.userInfoValue}>{profileName || user.name || (user as any).fullName || (user as any).full_name || 'Not set'}</Text>
             </View>
           </View>
         )}
@@ -417,59 +404,6 @@ export default function AccountScreen() {
         </SafeAreaView>
       </Modal>
 
-      <Modal visible={showEditProfile} animationType="fade" transparent onRequestClose={() => setShowEditProfile(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.editModalCard}>
-            <Text style={styles.editTitle}>Edit Profile</Text>
-
-            <Text style={styles.inputLabel}>Name</Text>
-            <TextInput
-              value={editName}
-              onChangeText={setEditName}
-              style={styles.input}
-              placeholder="Your name"
-              placeholderTextColor="rgba(255,255,255,0.35)"
-            />
-
-            <Text style={styles.inputLabel}>Profile Image URL</Text>
-            <TextInput
-              value={editImageUrl}
-              onChangeText={setEditImageUrl}
-              style={styles.input}
-              placeholder="https://..."
-              placeholderTextColor="rgba(255,255,255,0.35)"
-              autoCapitalize="none"
-            />
-
-            <Text style={styles.inputLabel}>Password</Text>
-            <TextInput
-              value={editPassword}
-              onChangeText={setEditPassword}
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor="rgba(255,255,255,0.35)"
-              secureTextEntry
-            />
-
-            <View style={styles.editActions}>
-              <TouchableOpacity
-                style={[styles.secondaryButton, isSaving ? styles.buttonDisabled : null]}
-                onPress={() => setShowEditProfile(false)}
-                disabled={isSaving}
-              >
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.primaryButtonSmall, isSaving ? styles.buttonDisabled : null]}
-                onPress={submitEditProfile}
-                disabled={isSaving}
-              >
-                <Text style={styles.primaryButtonText}>{isSaving ? 'Saving…' : 'Save'}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
       </SafeAreaView>
     </LinearGradient>
   );

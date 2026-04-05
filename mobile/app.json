@@ -22,7 +22,9 @@
     ],
     "plugins": [
       "expo-audio",
-      "expo-video"
+      "expo-video",
+      "expo-notifications",
+      "@sentry/react-native"
     ],
     "extra": {
       "eas": {
@@ -41,7 +43,9 @@
     "ios": {
       "bundleIdentifier": "com.moinimran.fanapp",
       "infoPlist": {
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": [
+          "audio"
+        ]
       }
     }
   }

@@ -8,6 +8,7 @@ import AudioScreen from '../screens/AudioScreen';
 import ContentPlayerScreen from '../screens/ContentPlayerScreen';
 import FullPlayerScreen from '../screens/FullPlayerScreen';
 import SubscriptionFlowScreen from '../screens/SubscriptionFlowScreen';
+import AlbumDetailScreen from '../screens/AlbumDetailScreen';
 
 import type { MediaItem } from '../media.types';
 
@@ -47,6 +48,13 @@ export type AudioStackParamList = {
     queueIndex: number;
     queue: MediaItem[];
   };
+  AlbumDetail: {
+    albumId: string;
+    title: string;
+    artistName: string;
+    coverImage: string;
+    tracks: any[];
+  };
 };
 
 const Stack = createNativeStackNavigator<AudioStackParamList>();
@@ -63,6 +71,11 @@ export default function AudioStackNavigator() {
         name="FullPlayer"
         component={FullPlayerScreen}
         options={{ animation: 'slide_from_bottom', gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="AlbumDetail"
+        component={AlbumDetailScreen}
+        options={{ animation: 'slide_from_right' }}
       />
     </Stack.Navigator>
   );

@@ -38,6 +38,7 @@ model users {
   last_login               DateTime?          @db.Timestamptz(6)
   location                 String?            @db.VarChar(120)
   notifications_pref       Boolean            @default(true)
+  expo_push_token          String?            @db.VarChar(255)
   phone                    String?            @db.VarChar(30)
   phoneNumber              String?            @map("phone_number") @db.VarChar(30)
   revenue_share_percentage Decimal            @default(90) @db.Decimal

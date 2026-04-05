@@ -32,6 +32,7 @@ import CategoryChips, { CategoryType } from '../ui/audio/CategoryChips';
 import FeaturedCarousel from '../ui/audio/FeaturedCarousel';
 import AudioListItem, { AudioItemData } from '../ui/audio/AudioListItem';
 import ArtistListItem from '../ui/audio/ArtistListItem';
+import AlbumCard, { AlbumData } from '../ui/audio/AlbumCard';
 
 const REPORTED_CONTENT_STORAGE_KEY = 'reportedContentIds';
 
@@ -275,8 +276,6 @@ export default function AudioScreen({ navigation }: any) {
           const tb = b.createdAt ? new Date(String(b.createdAt)).getTime() : 0;
           return tb - ta;
         });
-      } else if (activeCategory === 'Albums') {
-        base = items.filter((_, i) => i % 2 === 1);
       }
     }
 
@@ -286,6 +285,23 @@ export default function AudioScreen({ navigation }: any) {
       return hay.includes(q);
     });
   }, [items, normalizedQuery, activeCategory]);
+
+  const albumsData = useMemo(() => {
+    const groups = new Map<string, AudioCard[]>();
+    items.forEach(song => {
+      const key = song.artistId || song.artistName || 'Unknown';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(song);
+    });
+    return Array.from(groups.values()).map(songs => ({
+        id: `album-${songs[0].artistId || songs[0].artistName}`,
+        title: `${songs[0].artistName} Collection`,
+        artistName: songs[0].artistName,
+        coverImage: songs[0].artworkUrl,
+        tracks: songs,
+        totalTracks: songs.length,
+    }));
+  }, [items]);
 
   const topSongs = useMemo(() => {
     return [...items]
@@ -442,6 +458,16 @@ export default function AudioScreen({ navigation }: any) {
         </View>
       );
     }
+    
+    if (activeCategory === 'Albums') {
+      return (
+        <View style={styles.emptyWrap}>
+          <Text style={[styles.emptyText, { fontSize: 16, color: '#fff', marginBottom: 8 }]}>No albums yet 📀</Text>
+          <Text style={styles.emptyText}>Explore music or upload your own album</Text>
+        </View>
+      );
+    }
+
     return (
       <View style={styles.emptyWrap}>
         <Text style={styles.emptyText}>
@@ -451,18 +477,39 @@ export default function AudioScreen({ navigation }: any) {
     );
   };
 
+  const getListData = () => {
+    if (activeCategory === 'Artists') return artists;
+    if (activeCategory === 'Albums') {
+       if (normalizedQuery) {
+          return albumsData.filter(a => a.artistName.toLowerCase().includes(normalizedQuery) || a.title.toLowerCase().includes(normalizedQuery));
+       }
+       return albumsData;
+    }
+    return searchResults ?? filtered;
+  };
+
   return (
     <LinearGradient colors={['#0A0A0A', '#000000']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradient}>
       <SafeAreaView style={styles.container}>
         <FlatList
-          data={activeCategory === 'Artists' ? artists : (searchResults ?? filtered)}
-          keyExtractor={(item) => item.id}
+          key={activeCategory}
+          data={getListData()}
+          numColumns={activeCategory === 'Albums' ? 2 : 1}
+          keyExtractor={(item: any) => item.id}
           renderItem={({ item }: any) => {
             if (activeCategory === 'Artists') {
               return (
                 <ArtistListItem 
                   item={item} 
                   onPress={() => navigation.navigate('Artist', { artistId: item.id })} 
+                />
+              );
+            }
+            if (activeCategory === 'Albums') {
+              return (
+                <AlbumCard 
+                  album={item} 
+                  onPress={() => navigation.navigate('AlbumDetail', item)} 
                 />
               );
             }

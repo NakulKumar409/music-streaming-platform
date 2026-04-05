@@ -55,6 +55,7 @@ declare module 'lucide-react-native' {
   export const Share2: LucideIcon;
   export const Volume2: LucideIcon;
   export const VolumeX: LucideIcon;
+  export const Camera: LucideIcon;
 }
 
 declare module '*.png' {
