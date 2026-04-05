@@ -94,73 +94,95 @@ export default function AudioScreen({ navigation }: any) {
   const [hasMoreArtists, setHasMoreArtists] = useState(true);
   const [fetchingArtists, setFetchingArtists] = useState(false);
 
+  // Pagination states for Audio (All/Trending/Albums)
+  const [audioOffset, setAudioOffset] = useState(0);
+  const [hasMoreAudio, setHasMoreAudio] = useState(true);
+  const [fetchingAudio, setFetchingAudio] = useState(false);
+
   const hasActiveAudio = Boolean(currentItem?.mediaType === 'audio');
 
-  const fetchAll = useCallback(async () => {
-    const res = await apiV1.get(`/content?ts=${Date.now()}`, {
-      params: { mediaType: 'audio', limit: 50 },
-      headers: { 'Cache-Control': 'no-store', Pragma: 'no-cache' },
-    });
-
-    const fromResponse = (data: any): ApiContentItem[] => {
-      if (!data) return [];
-      if (Array.isArray(data?.items)) return data.items;
-      if (Array.isArray(data?.data?.items)) return data.data.items;
-      if (Array.isArray(data?.result?.items)) return data.result.items;
-      if (Array.isArray(data?.content?.items)) return data.content.items;
-      if (Array.isArray(data?.content)) return data.content;
-      if (Array.isArray(data)) return data;
-      return [];
-    };
-
-    const raw: ApiContentItem[] = fromResponse(res.data);
-    if (raw.length > 0) {
-      lastContentItemsRef.current = raw;
-    }
-
-    const effectiveRaw: ApiContentItem[] = raw.length > 0 ? raw : lastContentItemsRef.current;
-
-    const mapped: AudioCard[] = effectiveRaw.map((it) => {
-      const baseUrl = API_HOST_BASE_URL;
-      const thumbStorageKey = (it.thumbnail_storage_key ?? it.thumbnailStorageKey ?? null) as any;
-      const artworkFromStorageKey = thumbStorageKey
-        ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(String(it.id))}`
-        : '';
-      const artworkUrl = (it.thumbnailUrl ?? it.artwork ?? '').toString() || artworkFromStorageKey || FALLBACK_ARTWORK;
-      const artistIdValue = it.artistId !== null && it.artistId !== undefined ? String(it.artistId) : undefined;
-      const rawMediaUrl = (it.mediaUrl ?? it.fileUrl ?? it.audioUrl ?? '').toString();
-
-      return {
-        id: String(it.id),
-        contentId: String(it.id),
-        title: (it.title ?? 'Untitled').toString(),
-        artistName: (it.artistName ?? 'Artist').toString(),
-        artistId: artistIdValue,
-        artworkUrl,
-        mediaUrl: rawMediaUrl ? normalizePlaybackUrl(rawMediaUrl) : '',
-        useStreamAccess: Boolean(it.useStreamAccess),
-        createdAt: (it.createdAt ?? null) as any,
-      };
-    }).filter(Boolean) as AudioCard[];
-
-    return mapped;
-  }, []);
-
-  const load = useCallback(async (opts?: { refresh?: boolean }) => {
+  const loadAudio = useCallback(async (opts?: { refresh?: boolean }) => {
     const isRefresh = Boolean(opts?.refresh);
-    try {
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
+    if (fetchingAudio || (!isRefresh && !hasMoreAudio)) return;
 
-      const next = await fetchAll();
-      setItems(next);
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+        if (items.length === 0) setLoading(true);
+      } else {
+        setFetchingAudio(true);
+      }
+
+      const limit = 20;
+      const currentOffset = isRefresh ? 0 : audioOffset;
+      const res = await apiV1.get(`/content?ts=${Date.now()}`, {
+        params: { mediaType: 'audio', limit, offset: currentOffset },
+        headers: { 'Cache-Control': 'no-store', Pragma: 'no-cache' },
+      });
+
+      const fromResponse = (data: any): ApiContentItem[] => {
+        if (!data) return [];
+        if (Array.isArray(data?.items)) return data.items;
+        if (Array.isArray(data?.data?.items)) return data.data.items;
+        if (Array.isArray(data?.result?.items)) return data.result.items;
+        if (Array.isArray(data?.content?.items)) return data.content.items;
+        if (Array.isArray(data?.content)) return data.content;
+        if (Array.isArray(data)) return data;
+        return [];
+      };
+
+      const raw: ApiContentItem[] = fromResponse(res.data);
+      if (raw.length > 0 && isRefresh) {
+        lastContentItemsRef.current = raw;
+      }
+
+      const effectiveRaw: ApiContentItem[] = raw.length > 0 ? raw : (isRefresh ? lastContentItemsRef.current : []);
+
+      const mapped: AudioCard[] = effectiveRaw.map((it) => {
+        const baseUrl = API_HOST_BASE_URL;
+        const thumbStorageKey = (it.thumbnail_storage_key ?? it.thumbnailStorageKey ?? null) as any;
+        const artworkFromStorageKey = thumbStorageKey
+          ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(String(it.id))}`
+          : '';
+        const artworkUrl = (it.thumbnailUrl ?? it.artwork ?? '').toString() || artworkFromStorageKey || FALLBACK_ARTWORK;
+        const artistIdValue = it.artistId !== null && it.artistId !== undefined ? String(it.artistId) : undefined;
+        const rawMediaUrl = (it.mediaUrl ?? it.fileUrl ?? it.audioUrl ?? '').toString();
+
+        return {
+          id: String(it.id),
+          contentId: String(it.id),
+          title: (it.title ?? 'Untitled').toString(),
+          artistName: (it.artistName ?? 'Artist').toString(),
+          artistId: artistIdValue,
+          artworkUrl,
+          mediaUrl: rawMediaUrl ? normalizePlaybackUrl(rawMediaUrl) : '',
+          useStreamAccess: Boolean(it.useStreamAccess),
+          createdAt: (it.createdAt ?? null) as any,
+        };
+      }).filter(Boolean) as AudioCard[];
+
+      if (isRefresh) {
+        setItems(mapped);
+      } else {
+        const appended = [...items, ...mapped];
+        // naive deduplication
+        const unique = Array.from(new Map(appended.map(item => [item.id, item])).values());
+        setItems(unique);
+      }
+      
+      setAudioOffset(currentOffset + mapped.length);
+      setHasMoreAudio(raw.length >= limit);
+
     } catch (e) {
-      if (__DEV__) console.warn('[AudioScreen] load failed', e);
+      if (__DEV__) console.warn('[AudioScreen] loadAudio failed', e);
     } finally {
-      setRefreshing(false);
-      setLoading(false);
+      if (isRefresh) {
+        setRefreshing(false);
+        setLoading(false);
+      }
+      setFetchingAudio(false);
     }
-  }, [fetchAll]);
+  }, [audioOffset, fetchingAudio, hasMoreAudio, items]);
 
   const loadArtists = useCallback(async (isRefresh = false) => {
     if (fetchingArtists || (!isRefresh && !hasMoreArtists)) return;
@@ -222,13 +244,14 @@ export default function AudioScreen({ navigation }: any) {
   }, []);
 
   useEffect(() => {
-    load().catch(() => undefined);
-  }, [load]);
+    loadAudio({ refresh: true }).catch(() => undefined);
+  }, []); // Intentionally empty dependency array so it runs on mount
 
   useFocusEffect(
     useCallback(() => {
-      load().catch(() => undefined);
-    }, [load])
+      // Optional: Refresh on focus, but be careful of unneeded re-fetches.
+      // loadAudio({ refresh: true }).catch(() => undefined);
+    }, [])
   );
 
   useEffect(() => {
@@ -245,7 +268,13 @@ export default function AudioScreen({ navigation }: any) {
     // Optional client-side category filtering (basic demo logic)
     if (activeCategory !== 'All') {
       if (activeCategory === 'Trending') {
-        base = [...items].reverse(); // Mock trending
+        // Trending: make sure newest content is properly displayed at top.
+        // We ensure sort by createdAt DESC
+        base = [...items].sort((a, b) => {
+          const ta = a.createdAt ? new Date(String(a.createdAt)).getTime() : 0;
+          const tb = b.createdAt ? new Date(String(b.createdAt)).getTime() : 0;
+          return tb - ta;
+        });
       } else if (activeCategory === 'Albums') {
         base = items.filter((_, i) => i % 2 === 1);
       }
@@ -449,9 +478,17 @@ export default function AudioScreen({ navigation }: any) {
           }}
           ListHeaderComponent={renderHeader()}
           ListEmptyComponent={renderEmpty}
-          ListFooterComponent={fetchingArtists && activeCategory === 'Artists' ? <ActivityIndicator color={Colors.accent} size="large" style={{ marginVertical: 20 }} /> : null}
+          ListFooterComponent={
+            (fetchingArtists && activeCategory === 'Artists') || (fetchingAudio && activeCategory !== 'Artists') ? (
+              <ActivityIndicator color={Colors.accent} size="large" style={{ marginVertical: 20 }} />
+            ) : null
+          }
           onEndReached={() => {
-            if (activeCategory === 'Artists') loadArtists(false);
+            if (activeCategory === 'Artists') {
+              loadArtists(false);
+            } else {
+              loadAudio({ refresh: false });
+            }
           }}
           onEndReachedThreshold={0.5}
           showsVerticalScrollIndicator={false}
@@ -464,7 +501,7 @@ export default function AudioScreen({ navigation }: any) {
                 if (activeCategory === 'Artists') {
                   loadArtists(true);
                 } else {
-                  load({ refresh: true });
+                  loadAudio({ refresh: true });
                 }
               }} 
             />

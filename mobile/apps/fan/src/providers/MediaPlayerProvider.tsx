@@ -99,6 +99,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   const videoPlayer = useVideoPlayer(videoSource);
 
   const audioLoadTokenRef = useRef(0);
+  const hasStartedPlayingRef = useRef(false);
 
   const currentItem = state.queue.length ? state.queue[state.currentIndex] ?? null : null;
 
@@ -460,6 +461,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         setAudioSource(playbackUrl);
         scheduleTokenRefresh(playbackUrl, 'audio');
         
+        hasStartedPlayingRef.current = false;
+        
         // We set isPlaying to true, and we'll use an effect to trigger actual play 
         // once the player is ready/synced with the new source.
         setState((s) => ({
@@ -548,6 +551,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           audioPlayer.pause();
           setState((s) => ({ ...s, isPlaying: false }));
         } else {
+          hasStartedPlayingRef.current = false;
           audioPlayer.play();
           setState((s) => ({ ...s, isPlaying: true }));
         }
@@ -564,6 +568,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         videoPlayer.pause();
         setState((s) => ({ ...s, isPlaying: false }));
       } else {
+        hasStartedPlayingRef.current = false;
         videoPlayer.play();
         setState((s) => ({ ...s, isPlaying: true }));
       }
@@ -733,11 +738,18 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       const pos = Math.max(0, Math.round((audioPlayer.currentTime || 0) * 1000));
       const dur = Math.max(0, Math.round((audioPlayer.duration || 0) * 1000));
       
+      if (nextIsPlaying) {
+        hasStartedPlayingRef.current = true;
+      }
+
       // If we INTEND to play (s.isPlaying is true) but native is paused natively, 
       // we must not prematurely set it back to false during the initial load phase
       // where the auto-play effect is waiting to trigger `audioPlayer.play()`.
-      if (s.isPlaying && !nextIsPlaying && (!audioStatus.isLoaded || pos < 500)) {
-        nextIsPlaying = true;
+      if (s.isPlaying && !nextIsPlaying) {
+        // If we haven't successfully started playing yet, ignore the native pause state.
+        if (!hasStartedPlayingRef.current || !audioStatus.isLoaded || pos < 500) {
+          nextIsPlaying = true;
+        }
       }
 
       // Throttle updates: only update if playing state changed, or position changed by > 500ms, or duration changed
