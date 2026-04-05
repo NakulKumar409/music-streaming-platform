@@ -624,7 +624,10 @@ router.get("/dashboard/growth", requireAuth, requireArtist, async (req: any, res
   const artistUserId = req.user?.id;
 
   const daysRequested = Number(req.query?.days ?? 30);
-  const days = Number.isFinite(daysRequested) ? Math.max(1, Math.min(90, Math.floor(daysRequested))) : 30;
+  const days = Number.isFinite(daysRequested) ? Math.max(1, Math.min(365, Math.floor(daysRequested))) : 30;
+
+  const metricRaw = (req.query?.metric ?? "subscribers").toString().toLowerCase();
+  const metric = ["subscribers", "plays", "earnings"].includes(metricRaw) ? metricRaw : "subscribers";
 
   try {
     const end = new Date();
@@ -636,21 +639,53 @@ router.get("/dashboard/growth", requireAuth, requireArtist, async (req: any, res
     }
 
     const startIso = points[0].date + "T00:00:00.000Z";
-    const rows = await safeRows<{ date: string; value: number }>(
-      "SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, COUNT(*)::int as value FROM subscriptions WHERE artist_id = $1 AND created_at >= $2 GROUP BY 1 ORDER BY 1 ASC",
-      [artistUserId, startIso],
-      []
-    );
+    
+    let rows: { date: string; value: number }[] = [];
+    
+    if (metric === "plays") {
+      rows = await safeRows<{ date: string; value: number }>(
+        `SELECT to_char(date_trunc('day', p.created_at), 'YYYY-MM-DD') as date, COUNT(p.id)::int as value 
+         FROM content_plays p 
+         JOIN content_items c ON c.id = p.content_id 
+         WHERE c.artist_id = $1 AND p.created_at >= $2 
+         GROUP BY 1 ORDER BY 1 ASC`,
+        [artistUserId, startIso],
+        []
+      );
+    } else if (metric === "earnings") {
+      const dbRows = await safeRows<{ date: string; value: number }>(
+        `SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, COALESCE(SUM(amount), 0)::float as value 
+         FROM payments 
+         WHERE artist_id = $1 AND created_at >= $2 AND (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID') 
+         GROUP BY 1 ORDER BY 1 ASC`,
+        [artistUserId, startIso],
+        []
+      );
+      rows = dbRows.map(r => ({ date: r.date, value: Number((r.value * 0.9).toFixed(2)) }));
+    } else {
+      rows = await safeRows<{ date: string; value: number }>(
+        `SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, COUNT(*)::int as value 
+         FROM subscriptions 
+         WHERE artist_id = $1 AND created_at >= $2 
+         GROUP BY 1 ORDER BY 1 ASC`,
+        [artistUserId, startIso],
+        []
+      );
+    }
 
     const map = new Map<string, number>();
     for (const r of rows) map.set(r.date, Number(r.value) || 0);
 
     const data = points.map((p) => ({ date: p.date, value: map.get(p.date) ?? 0 }));
-    audit(req, { event: "artist_subscribers_growth", outcome: "success", days });
-    return res.json({ success: true, data, correlationId });
+    
+    const summaryTotal = data.reduce((sum, p) => sum + p.value, 0);
+    const totalCurrent = metric === "earnings" ? Number(summaryTotal.toFixed(2)) : summaryTotal;
+
+    audit(req, { event: "artist_growth", outcome: "success", days, metric });
+    return res.json({ success: true, metric, days, total: totalCurrent, data, correlationId });
   } catch (err: any) {
-    audit(req, { event: "artist_subscribers_growth", outcome: "error", message: err?.message || String(err) });
-    return res.json({ success: true, data: [], correlationId });
+    audit(req, { event: "artist_growth", outcome: "error", metric, message: err?.message || String(err) });
+    return res.json({ success: true, metric, data: [], correlationId });
   }
 });
 

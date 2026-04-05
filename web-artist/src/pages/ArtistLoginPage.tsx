@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { http } from "../services/http";
 
@@ -27,12 +27,15 @@ type MeResponse = {
 
 function PremiumPlayLogo() {
   return (
-    <div className="h-[48px] w-[48px] rounded-full bg-gradient-to-b from-[#7d4a41] to-[#2d1b18] p-[2px]">
-      <div className="h-full w-full rounded-full bg-[#1a1414]/80 border border-white/10 flex items-center justify-center">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M9 7.5V16.5L17 12L9 7.5Z" fill="#b16e5b" />
-        </svg>
+    <div className="flex items-center gap-3">
+      <div className="h-[44px] w-[44px] rounded-[14px] bg-gradient-to-b from-[#c97a54] to-[#7d4a41] p-[1.5px] shadow-[0_4px_20px_rgba(201,122,84,0.3)]">
+        <div className="h-full w-full rounded-[12.5px] bg-[#141010] flex items-center justify-center">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M9 7.5V16.5L17 12L9 7.5Z" fill="#c97a54" />
+          </svg>
+        </div>
       </div>
+      <span className="text-xl font-bold tracking-wide text-white lg:hidden">Artist Studio</span>
     </div>
   );
 }
@@ -45,13 +48,6 @@ export default function ArtistLoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const backgroundStyle = useMemo(() => {
-    return {
-      backgroundImage:
-        "radial-gradient(circle at 30% 10%, rgba(193,117,86,0.22) 0%, rgba(30,18,18,0.75) 40%, rgba(10,8,8,0.97) 100%)"
-    } as const;
-  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -182,144 +178,172 @@ export default function ArtistLoginPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#4b1927] text-white relative" style={backgroundStyle}>
-      <Link
-        to="/artist/landing"
-        className="absolute top-6 left-6 text-[#b8a6a1] hover:text-[#e6d6d2] flex items-center gap-2 text-sm font-medium transition-colors"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        Back to Landing Page
-      </Link>
-      <div className="min-h-screen w-full flex items-center justify-center px-6">
-        <div className="w-full max-w-[520px]">
-          <div className="flex items-center justify-center mb-10">
+    <div className="min-h-screen w-full flex bg-[#0e0a0a] text-white selection:bg-[#c97a54]/30 overflow-hidden font-sans">
+      
+      {/* LEFT PANEL: Branding & Visuals (Hidden on small screens) */}
+      <div className="hidden lg:flex w-[45%] relative items-center justify-center p-12 border-r border-[#ffffff0a]">
+        {/* Immersive mesh gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#c97a54]/15 via-[#4b1927]/30 to-[#0e0a0a]" />
+        <div className="absolute top-[-10%] left-[-20%] w-[80%] h-[80%] bg-[#b16e5b]/10 blur-[130px] rounded-full pointer-events-none" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-[#c97a54]/15 blur-[100px] rounded-full pointer-events-none" />
+        
+        {/* Subtle grid pattern */}
+        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
+
+        <div className="relative z-10 w-full max-w-md">
+          <Link
+            to="/artist/landing"
+            className="inline-flex items-center gap-2 text-[#b8a6a1] hover:text-[#e6d6d2] text-sm font-medium transition-colors group mb-16"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="transition-transform group-hover:-translate-x-1">
+              <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Back to Website
+          </Link>
+          
+          <div className="mb-10">
             <PremiumPlayLogo />
+            <div className="mt-4 text-xl font-bold tracking-wide text-white">Artist Studio</div>
+          </div>
+          
+          <h1 className="text-5xl font-extrabold tracking-tight mb-6 leading-tight">
+            Welcome back to your stage.
+          </h1>
+          <p className="text-[#a99792] text-lg font-light leading-relaxed max-w-sm">
+            Access your artist dashboard, track your performance, and keep growing your independent fanbase.
+          </p>
+          
+          {/* Decorative stats */}
+          <div className="grid grid-cols-2 gap-6 mt-16 pt-12 border-t border-white/5 opacity-80">
+            <div>
+              <div className="text-3xl font-bold text-[#e6d6d2]">2M+</div>
+              <div className="text-sm text-[#b8a6a1] mt-1">Listeners Reached</div>
+            </div>
+            <div>
+              <div className="text-3xl font-bold text-[#c97a54]">$15M</div>
+              <div className="text-sm text-[#b8a6a1] mt-1">Paid to Artists</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* RIGHT PANEL: Login Form */}
+      <div className="flex-1 flex flex-col justify-center relative p-6 sm:p-12 lg:p-24 overflow-y-auto">
+        {/* Mobile Background Fallback */}
+        <div className="absolute inset-0 lg:hidden bg-gradient-to-tr from-[#1e1311] via-[#140e0d] to-[#0e0a0a]" />
+        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-[#c97a54]/5 blur-[120px] rounded-full pointer-events-none" />
+
+        <div className="w-full max-w-[420px] mx-auto relative z-10 transition-all">
+          
+          {/* Mobile Back Button & Logo */}
+          <div className="lg:hidden flex flex-col gap-10 mb-10">
+            <Link
+              to="/artist/landing"
+              className="inline-flex items-center gap-2 text-[#b8a6a1] hover:text-[#e6d6d2] text-sm font-medium transition-colors group self-start"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="transition-transform group-hover:-translate-x-1">
+                <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Landing Page
+            </Link>
+            <div className="self-center">
+              <PremiumPlayLogo />
+            </div>
           </div>
 
-          <div className="rounded-[10px] border border-white/10 bg-[#141010]/35 backdrop-blur shadow-[0_30px_80px_rgba(0,0,0,0.55)] px-10 py-10">
-            <div className="space-y-6">
-              <div>
-                <div className="text-[13px] text-[#b8a6a1]">Email</div>
+          <div className="text-center lg:text-left mb-10">
+            <h2 className="text-3xl font-bold tracking-tight text-white mb-3">Log in to Artist Studio</h2>
+            <p className="text-[#a99792] text-[15px]">Enter your credentials to access your dashboard.</p>
+          </div>
+          
+          <form 
+            onSubmit={(e) => { e.preventDefault(); onSubmit(); }}
+            className="space-y-6 bg-black/20 p-8 rounded-[20px] border border-white/5 backdrop-blur-xl shadow-2xl"
+          >
+            <div>
+              <label className="block text-[13px] font-medium text-[#b8a6a1] mb-2">Email Address</label>
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full h-[50px] rounded-[10px] bg-white/5 border border-white/10 px-4 text-[15px] text-[#e6d6d2] outline-none hover:border-white/20 focus:border-[#c97a54]/50 focus:ring-2 focus:ring-[#c97a54]/20 transition-all placeholder:text-[#b8a6a1]/50"
+                placeholder="artist@example.com"
+                autoComplete="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[13px] font-medium text-[#b8a6a1] mb-2">Password</label>
+              <div className="relative">
                 <input
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="mt-2 w-full h-[44px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-4 text-[14px] text-[#e6d6d2] outline-none focus:border-white/20"
-                  placeholder="artist@example.com"
-                  autoComplete="email"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full h-[50px] rounded-[10px] bg-white/5 border border-white/10 pl-4 pr-12 text-[15px] text-[#e6d6d2] outline-none hover:border-white/20 focus:border-[#c97a54]/50 focus:ring-2 focus:ring-[#c97a54]/20 transition-all placeholder:text-[#b8a6a1]/50"
+                  placeholder="••••••"
+                  autoComplete="current-password"
                   autoCapitalize="none"
                   autoCorrect="off"
                 />
-              </div>
-
-              <div>
-                <div className="text-[13px] text-[#b8a6a1]">Password</div>
-                <div className="relative mt-2">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full h-[44px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 pl-4 pr-11 text-[14px] text-[#e6d6d2] outline-none focus:border-white/20"
-                    placeholder="••••••"
-                    autoComplete="current-password"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((s) => !s)}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-[6px] flex items-center justify-center text-[#b8a6a1] hover:text-[#e6d6d2] hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-white/20"
-                  >
-                    {showPassword ? (
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          d="M3 3L21 21"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                        />
-                        <path
-                          d="M10.6 10.6C10.2 11 10 11.5 10 12C10 13.1 10.9 14 12 14C12.5 14 13 13.8 13.4 13.4"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        <path
-                          d="M9.9 5.1C10.6 4.9 11.3 4.8 12 4.8C18 4.8 21.5 12 21.5 12C20.7 13.6 19.6 15 18.3 16.2M6.8 6.8C4.2 8.7 2.5 12 2.5 12C2.5 12 4.2 15.3 6.8 17.2C8.3 18.3 10.1 19.2 12 19.2C12.9 19.2 13.8 19 14.6 18.7"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    ) : (
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          d="M2.5 12C2.5 12 6 4.8 12 4.8C18 4.8 21.5 12 21.5 12C21.5 12 18 19.2 12 19.2C6 19.2 2.5 12 2.5 12Z"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        <path
-                          d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {error ? (
-                <div className="text-[13px] text-[#e3a1a1]">{error}</div>
-              ) : null}
-
-              <button
-                type="button"
-                disabled={busy}
-                onClick={onSubmit}
-                className="h-[46px] w-full rounded-[7px] border border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] text-[15px] font-light tracking-wide text-[#e6d6d2] shadow-[0_10px_25px_rgba(0,0,0,0.35)] disabled:opacity-60"
-              >
-                {busy ? "Logging in..." : "Log in"}
-              </button>
-
-              <div className="pt-1 text-[13px] text-[#a99792]">
-                Don&apos;t have an artist account?{" "}
-                <Link to="/artist/signup" className="text-[#e6d6d2] hover:underline">
-                  Register here
-                </Link>
-              </div>
-
-              <div className="text-center">
-                <a
-                  href="#"
-                  onClick={(e) => e.preventDefault()}
-                  className="text-[13px] text-[#a99792] hover:text-[#e6d6d2]"
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((s) => !s)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-lg flex items-center justify-center text-[#b8a6a1] hover:text-[#e6d6d2] hover:bg-white/10 focus:outline-none transition-colors"
                 >
-                  Contact support ›
-                </a>
+                  {showPassword ? (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                      <line x1="1" y1="1" x2="23" y2="23"></line>
+                    </svg>
+                  ) : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  )}
+                </button>
               </div>
             </div>
+
+            {error && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[13px]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full h-[52px] mt-2 rounded-[12px] bg-gradient-to-b from-[#b16e5b] to-[#8c4836] text-[16px] font-bold tracking-wide text-white shadow-[0_8px_20px_rgba(201,122,84,0.25)] hover:shadow-[0_12px_25px_rgba(201,122,84,0.35)] hover:-translate-y-[1px] active:translate-y-[1px] disabled:opacity-70 disabled:hover:translate-y-0 disabled:hover:shadow-[0_8px_20px_rgba(201,122,84,0.25)] transition-all"
+            >
+              {busy ? "Authenticating..." : "Log In"}
+            </button>
+          </form>
+
+          <div className="mt-8 text-center text-[14px] text-[#a99792]">
+            Don't have an artist account?{" "}
+            <Link to="/artist/signup" className="text-[#c97a54] font-medium hover:text-[#e6d6d2] transition-colors">
+              Apply now
+            </Link>
           </div>
+
+          <div className="mt-8 text-center">
+            <a
+              href="#"
+              onClick={(e) => e.preventDefault()}
+              className="text-[13px] text-white/30 hover:text-white/60 transition-colors"
+            >
+              Contact Support
+            </a>
+          </div>
+          
         </div>
       </div>
     </div>

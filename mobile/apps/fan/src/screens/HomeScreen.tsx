@@ -292,13 +292,13 @@ export default function HomeScreen({ navigation }: any) {
   };
 
   const onPressBecomeArtist = () => {
-    let url = ARTIST_WEB_URL;
     if (user?.role === 'ARTIST') {
-      url += '/artist/dashboard';
+      Linking.openURL(ARTIST_WEB_URL + '/artist/dashboard').catch((err) =>
+        console.error('An error occurred', err)
+      );
     } else {
-      url += '/artist/landing';
+      navigation.navigate('ArtistOnboarding');
     }
-    Linking.openURL(url).catch((err) => console.error('An error occurred', err));
   };
 
   const renderFeaturedArtist = ({ item }: { item: FeaturedArtistCard }) => (

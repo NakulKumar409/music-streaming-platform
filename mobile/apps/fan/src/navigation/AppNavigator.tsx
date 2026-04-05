@@ -15,6 +15,7 @@ import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
 import MainTabsNavigator from './MainTabsNavigator';
 
+import ArtistOnboardingScreen from '../screens/ArtistOnboardingScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -54,11 +55,18 @@ export default function AppNavigator() {
     <NavigationContainer ref={navigationRef} theme={DarkTheme}>
       <Stack.Navigator id="fan-root">
         {isAuthenticated ? (
-          <Stack.Screen
-            name="MainTabs"
-            component={MainTabsNavigator}
-            options={{ headerShown: false }}
-          />
+          <>
+            <Stack.Screen
+              name="MainTabs"
+              component={MainTabsNavigator}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="ArtistOnboarding"
+              component={ArtistOnboardingScreen}
+              options={{ headerShown: false, presentation: 'modal' }}
+            />
+          </>
         ) : (
           <>
             <Stack.Screen
