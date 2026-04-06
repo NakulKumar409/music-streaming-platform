@@ -10,7 +10,7 @@ import React, {
 } from 'react';
 import { Alert, AppState, Platform } from 'react-native';
 
-import { useAudioPlayer, useAudioPlayerStatus, AudioPlayer, setAudioModeAsync } from 'expo-audio';
+import TrackPlayer, { State as TrackPlayerState, Event, Capability, AppKilledPlaybackBehavior, Track } from 'react-native-track-player';
 import { useVideoPlayer, VideoView, VideoPlayer } from 'expo-video';
 
 import { navigationRef } from '../navigation/rootNavigation';
@@ -54,7 +54,7 @@ type MediaPlayerContextValue = {
   onVideoPlaybackStatusUpdate: (status: any) => void;
 
   videoPlayer: VideoPlayer | null;
-  audioPlayer: AudioPlayer | null;
+  audioPlayer: null; isPlayerReady: boolean;
 };
 
 const MediaPlayerContext = createContext<MediaPlayerContextValue | undefined>(undefined);
@@ -91,9 +91,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   const [inlineVideoHostActive, setInlineVideoHostActive] = useState(false);
   const [inlineAudioHostActive, setInlineAudioHostActive] = useState(false);
 
-  const [audioSource, setAudioSource] = useState<string | null>(null);
-  const audioPlayer = useAudioPlayer(audioSource);
-  const audioStatus = useAudioPlayerStatus(audioPlayer);
+  const [isPlayerReady, setIsPlayerReady] = useState(false); const audioPlayer = null; const [audioSource, setAudioSource] = useState<string | null>(null);
 
   const [videoSource, setVideoSource] = useState<string | null>(null);
   const videoPlayer = useVideoPlayer(videoSource);
@@ -116,12 +114,34 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   }, [state]);
 
   useEffect(() => {
-    // Ensure audio can continue in background (iOS playback category + silent mode + background).
-    setAudioModeAsync({
-      playsInSilentMode: true,
-      shouldPlayInBackground: true,
-      interruptionMode: 'doNotMix',
-    }).catch(() => undefined);
+    let unmounted = false;
+    const setup = async () => {
+      let isSetup = false;
+      try {
+        await TrackPlayer.getCurrentTrack();
+        isSetup = true;
+      } catch {
+        await TrackPlayer.setupPlayer();
+        isSetup = true;
+      }
+
+      if (isSetup) {
+        await TrackPlayer.updateOptions({
+          android: { appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification },
+          capabilities: [
+            Capability.Play,
+            Capability.Pause,
+            Capability.SkipToNext,
+            Capability.SkipToPrevious,
+            Capability.SeekTo,
+          ],
+          compactCapabilities: [Capability.Play, Capability.Pause, Capability.SkipToNext],
+        });
+        if (!unmounted) setIsPlayerReady(true);
+      }
+    };
+    setup();
+    return () => { unmounted = true; };
   }, []);
 
   useEffect(() => {
@@ -135,11 +155,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           // Do NOT pause. Keep playback going, but mark UI as audio-only.
           videoRestorePositionMsRef.current = s.positionMs;
           setVideoAudioOnlyMode(true);
-          setAudioModeAsync({
-            playsInSilentMode: true,
-            shouldPlayInBackground: true,
-            interruptionMode: 'doNotMix',
-          }).catch(() => undefined);
+          // setAudioModeAsync removed for TrackPlayer
 
           // iOS can briefly pause the playback object during the transition; force resume.
           (async () => {
@@ -252,12 +268,12 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
     if (item.mediaType === 'audio') {
       try {
-        audioPlayer.playbackRate = s.playbackRate;
+        TrackPlayer.setRate(s.playbackRate);
       } catch {
         // ignore
       }
       try {
-        audioPlayer.volume = s.volume;
+        TrackPlayer.setVolume(s.volume);
       } catch {
         // ignore
       }
@@ -298,8 +314,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     if (s.repeatMode === 'one') {
       try {
         if (item.mediaType === 'audio') {
-          audioPlayer.seekTo(0);
-          audioPlayer.play();
+          TrackPlayer.seekTo(0);
+          TrackPlayer.play();
         } else if (videoPlayer) {
           videoPlayer.seekBy(-videoPlayer.currentTime);
           videoPlayer.play();
@@ -334,9 +350,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const unloadAudio = useCallback(async () => {
-    setAudioSource(null);
-  }, []);
+  const unloadAudio = useCallback(async () => { setAudioSource(null); await TrackPlayer.reset(); }, []);
 
   const stopVideo = useCallback(async () => {
     videoPlayer?.pause();
@@ -451,10 +465,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      await setAudioModeAsync({
-        playsInSilentMode: true,
-        shouldPlayInBackground: true,
-      });
+      // track-player automatically handles background audio settings when configured with capabilities
 
       try {
         console.log('[MediaPlayer] Loading audio', { playbackUrl });
@@ -463,22 +474,24 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
         hasStartedPlayingRef.current = false;
 
-        // Update state to playing immediately
-        setState((s) => ({
-          ...s,
-          isPlaying: true,
-        }));
+        const track = {
+          id: item.id.toString(),
+          url: playbackUrl,
+          title: item.title,
+          artist: item.artistName || 'Unknown',
+          artwork: (item as any).thumbnailUrl || (item as any).avatarUrl,
+        };
 
-        // Directly call play() — expo-audio queues this until the source is buffered.
-        // Using setTimeout(0) to let React flush the setAudioSource state update first.
-        setTimeout(() => {
-          try {
-            audioPlayer.play();
-            console.log('[MediaPlayer] play() called directly after source set');
-          } catch (playErr) {
-            console.warn('[MediaPlayer] Direct play() failed, effect-based retry will handle it', playErr);
-          }
-        }, 0);
+        TrackPlayer.reset().then(() => {
+          TrackPlayer.add([track]).then(() => {
+             TrackPlayer.play();
+             // Update state to playing immediately
+             setState((s) => ({
+               ...s,
+               isPlaying: true,
+             }));
+          });
+        });
       } catch (err) {
         console.warn('[MediaPlayer] Failed to create or play audio', err);
         Alert.alert(
@@ -555,14 +568,13 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
     if (item.mediaType === 'audio') {
       try {
-        if (!audioPlayer) return;
         const isCurrentlyPlaying = stateRef.current.isPlaying;
         if (isCurrentlyPlaying) {
-          audioPlayer.pause();
+          TrackPlayer.pause();
           setState((s) => ({ ...s, isPlaying: false }));
         } else {
           hasStartedPlayingRef.current = false;
-          audioPlayer.play();
+          TrackPlayer.play();
           setState((s) => ({ ...s, isPlaying: true }));
         }
       } catch (err) {
@@ -596,7 +608,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       if (item.mediaType === 'audio') {
         try {
-          audioPlayer.seekTo(safe / 1000);
+          TrackPlayer.seekTo(safe / 1000);
         } catch (err) {
           console.warn('[MediaPlayer] audio seekTo failed', err);
         }
@@ -704,7 +716,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     if (!item) return;
     try {
     if (item.mediaType === 'audio') {
-      audioPlayer.playbackRate = safe;
+      TrackPlayer.setRate(safe);
     } else if (videoPlayer) {
       videoPlayer.playbackRate = safe;
     }
@@ -721,7 +733,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     if (!item) return;
     try {
       if (item.mediaType === 'audio') {
-        audioPlayer.volume = safe;
+        TrackPlayer.setVolume(safe);
       } else if (videoPlayer) {
         videoPlayer.volume = safe;
       }
@@ -741,92 +753,57 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!audioStatus) return;
+    const interval = setInterval(async () => {
+      if (!isPlayerReady) return;
+      const progress = await TrackPlayer.getProgress();
+      const pos = Math.max(0, Math.round(progress.position * 1000));
+      const dur = Math.max(0, Math.round(progress.duration * 1000));
+      const trackState = await TrackPlayer.getState();
+      const isNativePlaying = trackState === TrackPlayerState.Playing;
 
-    setState((s) => {
-      let nextIsPlaying = Boolean(audioStatus.playing);
-      const pos = Math.max(0, Math.round((audioPlayer.currentTime || 0) * 1000));
-      const dur = Math.max(0, Math.round((audioPlayer.duration || 0) * 1000));
-      
-      if (nextIsPlaying) {
-        hasStartedPlayingRef.current = true;
-      }
-
-      // If we INTEND to play (s.isPlaying is true) but native is paused natively, 
-      // we must not prematurely set it back to false during the initial load phase
-      // where the auto-play effect is waiting to trigger `audioPlayer.play()`.
-      if (s.isPlaying && !nextIsPlaying) {
-        // If we haven't successfully started playing yet, ignore the native pause state.
-        if (!hasStartedPlayingRef.current || !audioStatus.isLoaded || pos < 500) {
-          nextIsPlaying = true;
+      setState((s) => {
+        let nextIsPlaying = isNativePlaying;
+        if (nextIsPlaying) hasStartedPlayingRef.current = true;
+        
+        if (s.isPlaying && !nextIsPlaying) {
+          if (!hasStartedPlayingRef.current || pos < 500) {
+            nextIsPlaying = true;
+          }
         }
-      }
 
-      // Throttle updates: only update if playing state changed, or position changed by > 500ms, or duration changed
-      const posDiff = Math.abs(s.positionMs - pos);
-      const shouldUpdate = s.isPlaying !== nextIsPlaying || posDiff > 800 || s.durationMs !== dur;
-      
-      if (!shouldUpdate) return s;
+        const posDiff = Math.abs(s.positionMs - pos);
+        const shouldUpdate = s.isPlaying !== nextIsPlaying || posDiff > 800 || s.durationMs !== dur;
+        if (!shouldUpdate) return s;
 
-      // Trigger preload when ~1 min remaining or 75% through
-      if (nextIsPlaying && dur > 30000 && pos > dur * 0.75 && !preloadedUrlRef.current) {
-        preloadNextItem().catch(() => undefined);
-      }
-      
-      return {
-        ...s,
-        isPlaying: nextIsPlaying,
-        positionMs: pos,
-        durationMs: dur,
-      };
-    });
+        if (nextIsPlaying && dur > 30000 && pos > dur * 0.75 && !preloadedUrlRef.current) {
+          preloadNextItem().catch(() => undefined);
+        }
+        
+        return { ...s, isPlaying: nextIsPlaying, positionMs: pos, durationMs: dur };
+      });
 
-    // Auto-next / repeat handling
-    try {
-      const isFinished = (audioPlayer.duration || 0) > 0 && (audioPlayer.currentTime || 0) >= (audioPlayer.duration || 0) - 0.1;
-      if (isFinished && !audioStatus.playing && stateRef.current.isPlaying) {
+      if (dur > 0 && progress.position >= progress.duration - 0.5 && preloadedUrlRef.current && isNativePlaying === false && stateRef.current.isPlaying) {
          handleDidJustFinish().catch(() => undefined);
       }
-    } catch {
-      // ignore native errors in status effect
-    }
-  }, [audioStatus, audioPlayer, handleDidJustFinish]);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isPlayerReady, handleDidJustFinish, preloadNextItem]);
 
   // Retry effect: if state says we should be playing but native isn't playing yet,
   // retry calling play(). This handles cases where the direct play() call in
   // loadAndPlayAudio fired before the native player finished initializing.
   useEffect(() => {
-    if (!state.isPlaying || !audioSource || !audioPlayer) return;
-    if (audioStatus?.playing) return; // already playing — nothing to do
-
-    // Silent retry on 403 or loading error
-    const statusAny = audioStatus as any;
-    if (statusAny.error && (statusAny.error.includes('403') || isStreamingUrlExpiringSoon(audioSource))) {
-      console.log('[MediaPlayer] URL expired or 403 detected, refreshing...');
-      (async () => {
-        const item = currentItemRef.current;
-        if (!item?.id) return;
-        try {
-          const nextUrl = await getPlaybackUrl(item.contentId ?? item.id, 'audio');
-          setAudioSource(nextUrl);
-          scheduleTokenRefresh(nextUrl, 'audio');
-        } catch {
-          // ignore
-        }
-      })().catch(() => undefined);
-      return;
-    }
-
-    // Retry play() if audio is loaded but not yet playing
-    if (audioStatus?.isLoaded && !audioStatus?.playing) {
-      try {
-        audioPlayer.play();
-        console.log('[MediaPlayer] Retry play() from effect — was loaded but not playing');
-      } catch (err) {
-        console.log('[MediaPlayer] Retry play() failed', err);
+    if (!state.isPlaying || !audioSource || !isPlayerReady) return;
+    
+    // Polling retry
+    const timer = setTimeout(async () => {
+      const ts = await TrackPlayer.getState();
+      if (ts !== TrackPlayerState.Playing && stateRef.current.isPlaying) {
+        TrackPlayer.play();
       }
-    }
-  }, [audioSource, state.isPlaying, audioPlayer, audioStatus, scheduleTokenRefresh]);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [audioSource, state.isPlaying, isPlayerReady]);
 
   useEffect(() => {
     return () => {
@@ -867,9 +844,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       inlineAudioHostActive,
       setInlineAudioHostActive,
       onVideoPlaybackStatusUpdate,
-      videoPlayer,
-      audioPlayer,
-    }),
+      videoPlayer, audioPlayer, isPlayerReady }),
     [
       close,
       currentItem,
@@ -893,9 +868,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       togglePlayPause,
       videoAudioOnlyMode,
       videoRestoreNonce,
-      videoPlayer,
-      audioPlayer,
-    ]
+      videoPlayer, audioPlayer, isPlayerReady ]
   );
 
   return (
