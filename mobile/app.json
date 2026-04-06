@@ -23,8 +23,7 @@
     "plugins": [
       "expo-audio",
       "expo-video",
-      "expo-notifications",
-      "@sentry/react-native"
+      "expo-notifications"
     ],
     "extra": {
       "eas": {

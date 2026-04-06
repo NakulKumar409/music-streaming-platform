@@ -113,9 +113,9 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
         throw new Error('Order creation succeeded but order id was missing');
       }
 
-      const keyId = (res.data?.order?.key_id ?? '').toString();
+      const keyId = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || (res.data?.order?.key_id ?? '').toString();
       if (!keyId) {
-        throw new Error('Missing Razorpay key_id in order response');
+        throw new Error('Missing Razorpay key_id in environment or order response');
       }
 
       setOrderId(nextOrderId);
