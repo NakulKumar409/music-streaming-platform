@@ -11,12 +11,14 @@ import {
   TouchableOpacity,
   View,
   Linking,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../store/authStore';
-import { CreditCard, HelpCircle, Library, LogOut, User } from 'lucide-react-native';
+import { CreditCard, HelpCircle, Library, LogOut, User, Camera } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { userService, type AudioQualityPref, type SubscriptionPlanSummary, type Transaction } from '../services/userService';
 import { JWT_STORAGE_KEY } from '../services/api';
 import { resetToLogin } from '../navigation/rootNavigation';
@@ -71,6 +73,7 @@ export default function AccountScreen() {
 
   const [isLoading, setIsLoading] = React.useState(true);
   const [profileName, setProfileName] = React.useState<string>('');
+  const [profileImageUrl, setProfileImageUrl] = React.useState<string>('');
   const [isPremium, setIsPremium] = React.useState(false);
   const [subscriptionCount, setSubscriptionCount] = React.useState(0);
   const [planSummary, setPlanSummary] = React.useState<SubscriptionPlanSummary | null>(null);
@@ -94,6 +97,7 @@ export default function AccountScreen() {
       ]);
 
       setProfileName(p.name);
+      setProfileImageUrl(p.profileImageUrl || '');
       setIsPremium(p.isPremium);
       setSubscriptionCount(p.subscriptionCount);
       setTransactions(t);
@@ -223,6 +227,38 @@ export default function AccountScreen() {
     navigation.navigate('EditProfile');
   };
 
+  const handleChangeProfileImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please allow access to your photo library to change your profile picture.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+      try {
+        setIsLoading(true);
+        const newImageUrl = await userService.uploadProfileImage(
+          asset.uri,
+          asset.mimeType || 'image/jpeg',
+          asset.fileName || 'profile.jpg'
+        );
+        setProfileImageUrl(newImageUrl);
+      } catch (error: any) {
+        Alert.alert('Error', 'Failed to upload profile image. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
   return (
     <LinearGradient
       colors={Colors.backgroundGradient}
@@ -243,6 +279,20 @@ export default function AccountScreen() {
 
         <View style={styles.section}>
           <View style={styles.profileCard}>
+            <View style={styles.profileAvatarRow}>
+              <TouchableOpacity onPress={handleChangeProfileImage} disabled={isLoading}>
+                {profileImageUrl ? (
+                  <Image source={{ uri: profileImageUrl }} style={styles.profileAvatar} />
+                ) : (
+                  <View style={styles.profileAvatarPlaceholder}>
+                    <User size={40} color="#fff" />
+                  </View>
+                )}
+                <View style={styles.cameraIconOverlay}>
+                  <Camera size={18} color="#fff" />
+                </View>
+              </TouchableOpacity>
+            </View>
             <View style={styles.profileTitleRow}>
               <Text style={styles.profileName}>{profileName || user?.name?.toString?.() || (user as any)?.fullName || (user as any)?.full_name || 'User'}</Text>
               {!isLoading && isPremium ? <PremiumBadge /> : null}
@@ -533,6 +583,40 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  profileAvatarRow: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  profileAvatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  profileAvatarPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  cameraIconOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#0B0B0B',
+  },
   profileCard: {
     backgroundColor: 'rgba(255,255,255,0.04)',
     borderWidth: 1,

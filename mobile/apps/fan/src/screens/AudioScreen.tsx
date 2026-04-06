@@ -35,6 +35,7 @@ import ArtistListItem from '../ui/audio/ArtistListItem';
 import AlbumCard, { AlbumData } from '../ui/audio/AlbumCard';
 
 const REPORTED_CONTENT_STORAGE_KEY = 'reportedContentIds';
+const AUDIO_CACHE_KEY = 'audio_screen_cache_v1';
 
 type ApiContentItem = {
   id: string | number;
@@ -73,8 +74,9 @@ export default function AudioScreen({ navigation }: any) {
   const playbackUrlCacheRef = useRef<Map<string, { url: string; ts: number }>>(new Map());
   const prefetchingRef = useRef<Set<string>>(new Set());
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // false by default; true only when cache is empty
   const [refreshing, setRefreshing] = useState(false);
+  const isMountedRef = useRef(true);
 
   const [query, setQuery] = useState('');
   const normalizedQuery = useMemo(() => query.trim().toLowerCase(), [query]);
@@ -102,23 +104,25 @@ export default function AudioScreen({ navigation }: any) {
 
   const hasActiveAudio = Boolean(currentItem?.mediaType === 'audio');
 
-  const loadAudio = useCallback(async (opts?: { refresh?: boolean }) => {
+  const loadAudio = useCallback(async (opts?: { refresh?: boolean; silent?: boolean }) => {
     const isRefresh = Boolean(opts?.refresh);
+    const isSilent = Boolean(opts?.silent); // silent = background refresh, no spinner
+    // Block duplicate fetches, but allow background (silent) refreshes even if items are loaded
     if (fetchingAudio || (!isRefresh && !hasMoreAudio)) return;
+    if (!isSilent && (refreshing)) return;
 
     try {
-      if (isRefresh) {
+      if (isRefresh && !isSilent) {
         setRefreshing(true);
         if (items.length === 0) setLoading(true);
-      } else {
+      } else if (!isRefresh) {
         setFetchingAudio(true);
       }
 
       const limit = 20;
       const currentOffset = isRefresh ? 0 : audioOffset;
-      const res = await apiV1.get(`/content?ts=${Date.now()}`, {
+      const res = await apiV1.get('/content', {
         params: { mediaType: 'audio', limit, offset: currentOffset },
-        headers: { 'Cache-Control': 'no-store', Pragma: 'no-cache' },
       });
 
       const fromResponse = (data: any): ApiContentItem[] => {
@@ -163,30 +167,38 @@ export default function AudioScreen({ navigation }: any) {
       }).filter(Boolean) as AudioCard[];
 
       if (isRefresh) {
-        setItems(mapped);
+        if (isMountedRef.current) setItems(mapped);
+        // Persist to cache so next open is instant
+        if (mapped.length > 0) {
+          AsyncStorage.setItem(AUDIO_CACHE_KEY, JSON.stringify(mapped.slice(0, 40))).catch(() => {});
+        }
       } else {
         const appended = [...items, ...mapped];
         // naive deduplication
         const unique = Array.from(new Map(appended.map(item => [item.id, item])).values());
-        setItems(unique);
+        if (isMountedRef.current) setItems(unique);
       }
       
-      setAudioOffset(currentOffset + mapped.length);
-      setHasMoreAudio(raw.length >= limit);
+      if (isMountedRef.current) {
+        setAudioOffset(currentOffset + mapped.length);
+        setHasMoreAudio(raw.length >= limit);
+      }
 
     } catch (e) {
       if (__DEV__) console.warn('[AudioScreen] loadAudio failed', e);
     } finally {
-      if (isRefresh) {
-        setRefreshing(false);
-        setLoading(false);
+      if (isMountedRef.current) {
+        if (isRefresh && !isSilent) {
+          setRefreshing(false);
+          setLoading(false);
+        }
+        setFetchingAudio(false);
       }
-      setFetchingAudio(false);
     }
   }, [audioOffset, fetchingAudio, hasMoreAudio, items]);
 
   const loadArtists = useCallback(async (isRefresh = false) => {
-    if (fetchingArtists || (!isRefresh && !hasMoreArtists)) return;
+    if (loading || refreshing || fetchingArtists || (!isRefresh && !hasMoreArtists)) return;
     try {
       setFetchingArtists(true);
       const limit = 20;
@@ -244,9 +256,36 @@ export default function AudioScreen({ navigation }: any) {
     );
   }, []);
 
+  // Stale-While-Revalidate: load cache instantly, then refresh from network in background
   useEffect(() => {
-    loadAudio({ refresh: true }).catch(() => undefined);
-  }, []); // Intentionally empty dependency array so it runs on mount
+    isMountedRef.current = true;
+
+    const bootLoad = async () => {
+      try {
+        const cached = await AsyncStorage.getItem(AUDIO_CACHE_KEY);
+        if (cached) {
+          const parsed: AudioCard[] = JSON.parse(cached);
+          if (parsed.length > 0 && isMountedRef.current) {
+            setItems(parsed);
+            // Cache hit — render immediately, then silently refresh in background
+            loadAudio({ refresh: true, silent: true }).catch(() => undefined);
+            return;
+          }
+        }
+      } catch {
+        // If cache read fails, fall through to normal load
+      }
+      // No cache — show spinner and do a normal load
+      setLoading(true);
+      loadAudio({ refresh: true }).catch(() => undefined);
+    };
+
+    bootLoad();
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []); // Intentionally empty — runs only on mount
 
   useFocusEffect(
     useCallback(() => {
@@ -526,7 +565,8 @@ export default function AudioScreen({ navigation }: any) {
           ListHeaderComponent={renderHeader()}
           ListEmptyComponent={renderEmpty}
           ListFooterComponent={
-            (fetchingArtists && activeCategory === 'Artists') || (fetchingAudio && activeCategory !== 'Artists') ? (
+            ((fetchingArtists && activeCategory === 'Artists' && artists.length > 0) || 
+             (fetchingAudio && activeCategory !== 'Artists' && items.length > 0)) ? (
               <ActivityIndicator color={Colors.accent} size="large" style={{ marginVertical: 20 }} />
             ) : null
           }

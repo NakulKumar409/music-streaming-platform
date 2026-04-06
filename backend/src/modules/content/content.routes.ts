@@ -22,13 +22,9 @@ const restrictedMediaUrl = (req: any, mediaType: 'audio' | 'video') => {
 };
 
 router.get("/", (req, res) => {
-  // Prevent conditional requests (ETag/If-None-Match) from returning 304 with an empty body.
-  // Mobile clients rely on a JSON payload here.
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  res.setHeader('Surrogate-Control', 'no-store');
-  res.removeHeader('ETag');
+  // Allow short-lived caching (30s) and conditional GET (304) so repeat
+  // loads are near-instant for clients that already have the response.
+  res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
 
   (async () => {
     try {

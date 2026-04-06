@@ -12,7 +12,15 @@
   },
   "exclude": [
     "node_modules",
-    "**/node_modules/*"
+    "**/node_modules/*",
+    "android",
+    "**/android/**",
+    "ios",
+    "**/ios/**",
+    ".expo",
+    "**/.expo/**",
+    "dist",
+    "build"
   ],
   "extends": "expo/tsconfig.base"
 }

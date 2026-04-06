@@ -326,6 +326,7 @@ export default function VideoScreen() {
 
   const videoPlayer = useVideoPlayer(activePlaybackUrl, (player) => {
     player.loop = false;
+    player.staysActiveInBackground = true;
     safePlay(player as any, 'init');
   });
   const lastTapRef = useRef(0);
