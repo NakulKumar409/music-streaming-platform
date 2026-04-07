@@ -1,4 +1,5 @@
 import { pool } from "./db";
+import { validateEnv } from "../config/env.validation";
 
 /**
  * Check if a user has access to an artist's subscription-based content
@@ -8,21 +9,43 @@ import { pool } from "./db";
  */
 export const checkAccess = async (userId: number, artistId: number): Promise<boolean> => {
   try {
+    // Global killswitch
+    const config = validateEnv();
+    if (!config.subscriptionEnabled) {
+      return true;
+    }
+
     if (!Number.isFinite(userId) || userId <= 0) {
       return false;
+    }
+
+    // Admin bypass
+    const userRoleResult = await pool.query(`SELECT role FROM users WHERE id = $1`, [userId]);
+    const role = (userRoleResult.rows[0]?.role || "").toUpperCase();
+    if (role === "ADMIN") {
+      return true;
     }
     
     if (!Number.isFinite(artistId) || artistId <= 0) {
       return false;
     }
 
+    // A user has access if:
+    // 1. They have an ACTIVE or GRACE_PERIOD subscription for this specific artist
+    // 2. OR they have an ACTIVE or GRACE_PERIOD subscription for the entire PLATFORM
     const result = await pool.query(
-      `SELECT id
+      `SELECT id, type, status, grace_ends_at, next_billing_date
        FROM subscriptions
        WHERE user_id = $1
-         AND artist_id = $2
-         AND UPPER(COALESCE(status, '')) = 'ACTIVE'
-         AND (next_billing_date IS NULL OR next_billing_date > now() - interval '2 days')
+         AND (
+           (type = 'ARTIST' AND artist_id = $2)
+           OR (type = 'PLATFORM')
+         )
+         AND UPPER(COALESCE(status, '')) IN ('ACTIVE', 'GRACE_PERIOD', 'PAST_DUE', 'GRACE')
+         AND (
+           COALESCE(grace_ends_at, next_billing_date) IS NULL 
+           OR COALESCE(grace_ends_at, next_billing_date) > now()
+         )
        LIMIT 1`,
       [userId, artistId]
     );

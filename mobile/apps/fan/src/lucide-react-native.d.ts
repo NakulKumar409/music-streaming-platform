@@ -44,6 +44,15 @@ declare module 'lucide-react-native' {
 
   export const AlertTriangle: LucideIcon;
   export const Crown: LucideIcon;
+  export const Star: LucideIcon;
+  export const Sparkles: LucideIcon;
+  export const Shield: LucideIcon;
+  export const ShieldCheck: LucideIcon;
+  export const Bookmark: LucideIcon;
+  export const Zap: LucideIcon;
+  export const Award: LucideIcon;
+  export const RefreshCcw: LucideIcon;
+  export const TrendingUp: LucideIcon;
 
   export const Eye: LucideIcon;
   export const EyeOff: LucideIcon;

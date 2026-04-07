@@ -30,6 +30,7 @@ export type HomeStackParamList = {
     artistName?: string;
     contentId?: string;
     artwork?: string;
+    defaultPlan?: 'ARTIST' | 'PLATFORM';
   };
   ContentPlayer: {
     contentId?: string;

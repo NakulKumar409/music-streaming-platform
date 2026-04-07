@@ -5,12 +5,61 @@
 
 import { checkAccess } from "../../common/accessControl";
 import { pool } from "../../common/db";
+import { logger } from "../../common/logger";
 
 export type VisibilityType = "PUBLIC" | "PROTECTED" | "PRIVATE_INTERNAL";
 
 export interface MediaAccessCheckResult {
   allowed: boolean;
   reason?: string;
+  tier?: 'FREE' | 'ARTIST' | 'PLATFORM';
+}
+
+/**
+ * Check if user has a platform-wide subscription (HD access)
+ */
+export async function checkPlatformAccess(userId: number | null): Promise<boolean> {
+  if (!userId) return false;
+  try {
+    const result = await pool.query(
+      `SELECT id FROM subscriptions 
+       WHERE user_id = $1 
+         AND type = 'PLATFORM' 
+         AND UPPER(COALESCE(status, '')) IN ('ACTIVE', 'GRACE_PERIOD', 'PAST_DUE', 'GRACE')
+         AND (COALESCE(grace_ends_at, next_billing_date) IS NULL OR COALESCE(grace_ends_at, next_billing_date) > now())
+       LIMIT 1`,
+      [userId]
+    );
+    return Boolean(result.rows?.length);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validate requested quality against user's subscription level.
+ * HD (High Quality) is reserved for PLATFORM subscribers.
+ * SD (Standard Quality) is available to all authorized users.
+ */
+export async function validateQualityAccess(
+  userId: number | null,
+  requestedQuality?: string
+): Promise<{ authorized: boolean; quality: 'SD' | 'HD' }> {
+  const isHD = (requestedQuality || "").toString().toUpperCase() === "HD";
+  
+  // If user didn't request HD, allow SD by default.
+  if (!isHD) {
+    return { authorized: true, quality: "SD" };
+  }
+
+  // If user requested HD, check for PLATFORM subscription.
+  const isPlatform = await checkPlatformAccess(userId);
+  if (isPlatform) {
+    return { authorized: true, quality: "HD" };
+  }
+
+  // Unauthorized person or Free user requesting HD.
+  return { authorized: false, quality: "SD" };
 }
 
 /**
@@ -23,24 +72,34 @@ export async function checkMediaEntitlement(
   subscriptionRequired: boolean
 ): Promise<MediaAccessCheckResult> {
   if (visibility === "PRIVATE_INTERNAL") {
-    return { allowed: false, reason: "Content is internal only" };
+    return { allowed: false, reason: "Content is internal only", tier: 'FREE' };
   }
 
   if (visibility === "PUBLIC") {
-    return { allowed: true };
+    const isPlatform = await checkPlatformAccess(userId);
+    return { allowed: true, tier: isPlatform ? 'PLATFORM' : 'FREE' };
   }
 
   if (visibility === "PROTECTED") {
-    if (!userId) return { allowed: false, reason: "Authentication required" };
-    if (!subscriptionRequired) return { allowed: true };
-    const hasAccess = await checkAccess(userId, artistId);
-    if (!hasAccess) {
-      return { allowed: false, reason: "Subscription required" };
+    if (!userId) {
+      logger.warn({ artistId, visibility }, "[AUTHZ] Access denied: Authentication required for PROTECTED content");
+      return { allowed: false, reason: "Authentication required", tier: 'FREE' };
     }
-    return { allowed: true };
+    
+    const isPlatform = await checkPlatformAccess(userId);
+    if (isPlatform) return { allowed: true, tier: 'PLATFORM' };
+
+    if (!subscriptionRequired) return { allowed: true, tier: 'FREE' };
+
+    const hasArtistAccess = await checkAccess(userId, artistId);
+    if (!hasArtistAccess) {
+      logger.info({ userId, artistId, tier: 'FREE' }, "[AUTHZ] Access denied: Subscription required");
+      return { allowed: false, reason: "Subscription required", tier: 'FREE' };
+    }
+    return { allowed: true, tier: 'ARTIST' };
   }
 
-  return { allowed: false, reason: "Unknown visibility" };
+  return { allowed: false, reason: "Unknown visibility", tier: 'FREE' };
 }
 
 /**

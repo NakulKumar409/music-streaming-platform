@@ -66,6 +66,7 @@ model users {
   search_history           search_history[]
   subscriptions            subscriptions[]
   transactions             transactions[]
+  payments                 payments[]
 
   @@index([artistStatus], map: "idx_users_artist_status")
   @@index([isDeleted], map: "idx_users_is_deleted")
@@ -168,7 +169,8 @@ model reports {
 model subscriptions {
   id                       Int       @id @default(autoincrement())
   user_id                  Int
-  artist_id                Int
+  type                     String    @default("ARTIST") @db.VarChar(20)
+  artist_id                Int?
   status                   String    @default("PENDING") @db.VarChar(20)
   plan_type                String    @default("MONTHLY") @db.VarChar(20)
   start_date               DateTime  @default(now()) @db.Timestamptz(6)
@@ -177,20 +179,35 @@ model subscriptions {
   updated_at               DateTime  @default(now()) @db.Timestamptz(6)
   invoice_id               String?   @db.VarChar(100)
   next_billing_date        DateTime? @db.Timestamptz(6)
+  grace_ends_at            DateTime? @db.Timestamptz(6)
   payment_id               String?   @db.VarChar(100)
   plan_id                  String?   @db.VarChar(100)
   razorpay_subscription_id String?   @unique @db.VarChar(100)
   end_date                 DateTime? @db.Timestamptz(6)
   user                     users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  payments                 payments[]
 
-  @@unique([user_id, artist_id])
-  @@unique([user_id, artist_id], map: "idx_subscriptions_user_artist")
   @@index([user_id])
   @@index([artist_id])
   @@index([artist_id], map: "idx_subscriptions_artist_id")
   @@index([user_id], map: "idx_subscriptions_user_id")
   @@index([status], map: "idx_subscriptions_status")
   @@index([end_date], map: "idx_subscriptions_end_date")
+}
+
+model payments {
+  id                  String        @id @default(uuid()) @db.Uuid
+  user_id             Int
+  subscription_id     Int
+  amount              Int
+  status              String        @db.VarChar(30)
+  razorpay_payment_id String?       @unique @db.VarChar(100)
+  created_at          DateTime      @default(now()) @db.Timestamptz(6)
+  user                users         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  subscription        subscriptions @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([subscription_id])
 }
 
 model playback_history {

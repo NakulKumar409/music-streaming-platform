@@ -17,7 +17,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../store/authStore';
-import { CreditCard, HelpCircle, Library, LogOut, User, Camera } from 'lucide-react-native';
+import { CreditCard, HelpCircle, Library, LogOut, User, Camera, Crown } from 'lucide-react-native';
+import { SubscriptionStatusCard } from '../ui/SubscriptionUI';
 import * as ImagePicker from 'expo-image-picker';
 import { userService, type AudioQualityPref, type SubscriptionPlanSummary, type Transaction } from '../services/userService';
 import { JWT_STORAGE_KEY } from '../services/api';
@@ -126,6 +127,23 @@ export default function AccountScreen() {
       return d.toISOString().slice(0, 10);
     }
   }, [planSummary?.endDate]);
+
+  const handleRenewArtist = React.useCallback(() => {
+    const plan = planSummary?.artistPlan;
+    navigation.navigate('SubscriptionFlow', {
+      artistId: plan?.artistId ?? '',
+      artistName: plan?.artistName ?? 'Artist',
+      defaultPlan: 'ARTIST',
+    });
+  }, [planSummary, navigation]);
+
+  const handleRenewPlatform = React.useCallback(() => {
+    navigation.navigate('SubscriptionFlow', { defaultPlan: 'PLATFORM' });
+  }, [navigation]);
+
+  const handleUpgrade = React.useCallback(() => {
+    navigation.navigate('SubscriptionFlow', {});
+  }, [navigation]);
 
   React.useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
@@ -317,39 +335,54 @@ export default function AccountScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Current Plan</Text>
-          <View style={styles.statusCard}>
-            <View style={styles.statusLeft}>
-              <CreditCard size={20} color="#fff" />
-              <View style={styles.statusInfo}>
-                <Text style={styles.statusLabel}>Status</Text>
-                <Text style={[styles.statusValue, { color: '#10B981' }]}>{planStatusText}</Text>
-              </View>
-            </View>
-          </View>
+          <Text style={styles.sectionTitle}>My Subscriptions</Text>
 
-          <View style={[styles.statusCard, { marginTop: 10 }]}>
-            <View style={styles.statusLeft}>
-              <CreditCard size={20} color="#fff" />
-              <View style={styles.statusInfo}>
-                <Text style={styles.statusLabel}>Plan</Text>
-                <Text style={styles.statusValue}>
-                  {(planSummary?.planType ?? '—').toString()}
-                  {planSummary?.artistName ? ` - ${planSummary.artistName}` : ''}
-                </Text>
-              </View>
-            </View>
-          </View>
+          {/* Artist Plan card */}
+          {planSummary?.artistPlan ? (
+            <SubscriptionStatusCard
+              plan={planSummary.artistPlan}
+              onRenew={handleRenewArtist}
+              onManage={() =>
+                navigation.navigate('SubscriptionDetail', {
+                  artistId: planSummary.artistPlan?.artistId ?? '',
+                })
+              }
+            />
+          ) : null}
 
-          <View style={[styles.statusCard, { marginTop: 10 }]}>
-            <View style={styles.statusLeft}>
-              <CreditCard size={20} color="#fff" />
-              <View style={styles.statusInfo}>
-                <Text style={styles.statusLabel}>Renews</Text>
-                <Text style={styles.statusValue}>{planEndDateText}</Text>
+          {/* Platform Plan card */}
+          {planSummary?.platformPlan ? (
+            <SubscriptionStatusCard
+              plan={planSummary.platformPlan}
+              onRenew={handleRenewPlatform}
+            />
+          ) : null}
+
+          {/* No subscriptions → show upgrade CTA */}
+          {!planSummary?.artistPlan && !planSummary?.platformPlan && !isLoading && (
+            <TouchableOpacity
+              style={styles.upgradeCta}
+              onPress={handleUpgrade}
+            >
+              <Crown size={20} color="#4AA3FF" />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.upgradeCtaTitle}>No Active Plan</Text>
+                <Text style={styles.upgradeCtaSub}>Subscribe for HD streaming &amp; exclusive content</Text>
               </View>
-            </View>
-          </View>
+              <Text style={styles.upgradeCtaArrow}>→</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Add Platform Plan nudge if only artist plan active */}
+          {planSummary?.artistPlan && !planSummary?.platformPlan && (
+            <TouchableOpacity style={styles.nudgeCard} onPress={handleRenewPlatform}>
+              <Crown size={16} color="#4AA3FF" />
+              <Text style={styles.nudgeText}>
+                Upgrade to <Text style={{ color: '#4AA3FF', fontWeight: '900' }}>Platform Plan</Text> for HD streaming
+              </Text>
+              <Text style={styles.nudgeArrow}>→</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Account Status */}
@@ -697,6 +730,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '900',
   },
+  upgradeCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(74,163,255,0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(74,163,255,0.22)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 10,
+  },
+  upgradeCtaTitle: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  upgradeCtaSub: { color: 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: '600', marginTop: 2 },
+  upgradeCtaArrow: { color: '#4AA3FF', fontSize: 18, fontWeight: '900' },
+  nudgeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(74,163,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(74,163,255,0.18)',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 4,
+  },
+  nudgeText: { flex: 1, color: 'rgba(255,255,255,0.65)', fontSize: 12, fontWeight: '600', marginLeft: 8 },
+  nudgeArrow: { color: '#4AA3FF', fontSize: 16, fontWeight: '900' },
   secondaryButton: {
     flex: 1,
     backgroundColor: 'rgba(255,255,255,0.06)',

@@ -186,7 +186,9 @@ export async function ensureSubscriptionsSchema(): Promise<void> {
     "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'INACTIVE'",
     "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS start_date TIMESTAMPTZ DEFAULT now()",
     "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS auto_renew BOOLEAN DEFAULT true",
-    "CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_user_artist ON subscriptions(user_id, artist_id)"
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_user_artist ON subscriptions(user_id, artist_id)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_sub_active_platform ON subscriptions (user_id) WHERE type = 'PLATFORM' AND status = 'ACTIVE'",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_sub_active_artist ON subscriptions (user_id, artist_id) WHERE type = 'ARTIST' AND status = 'ACTIVE'"
   ];
 
   for (const q of subQueries) {
@@ -195,6 +197,7 @@ export async function ensureSubscriptionsSchema(): Promise<void> {
 }
 
 export async function ensureArtistStatsSchema(): Promise<void> {
+  // ── Artist Stats ──────────────────────────────────────────────────
   await pool.query(`
     CREATE TABLE IF NOT EXISTS artist_stats (
       artist_id INT PRIMARY KEY,
@@ -203,6 +206,27 @@ export async function ensureArtistStatsSchema(): Promise<void> {
       total_earnings NUMERIC NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `).catch(() => undefined);
+
+  // ── Webhook Idempotency (Processed Events) ──────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS processed_webhook_events (
+      event_id VARCHAR(100) PRIMARY KEY,
+      provider VARCHAR(50) NOT NULL DEFAULT 'razorpay',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `).catch(() => undefined);
+
+  // ── Subscription Audit Logs (Financial Ledger) ─────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS subscription_audit_logs (
+      id SERIAL PRIMARY KEY,
+      user_id INT NOT NULL,
+      subscription_id INT,
+      event_type VARCHAR(50) NOT NULL,
+      metadata JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `).catch(() => undefined);
 }

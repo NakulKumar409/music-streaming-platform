@@ -39,8 +39,6 @@ type MediaPlayerContextValue = {
   setPlaybackRate: (rate: number) => Promise<void>;
   setVolume: (volume: number) => Promise<void>;
   close: () => Promise<void>;
-  setExpanded: (expanded: boolean) => void;
-
   videoAudioOnlyMode: boolean;
   videoRestoreNonce: number;
   videoRestorePositionMs: number;
@@ -51,10 +49,11 @@ type MediaPlayerContextValue = {
   inlineAudioHostActive: boolean;
   setInlineAudioHostActive: (active: boolean) => void;
 
-  onVideoPlaybackStatusUpdate: (status: any) => void;
-
   videoPlayer: VideoPlayer | null;
   audioPlayer: null; isPlayerReady: boolean;
+  
+  preferredQuality: 'SD' | 'HD';
+  setPreferredQuality: (q: 'SD' | 'HD') => void;
 };
 
 const MediaPlayerContext = createContext<MediaPlayerContextValue | undefined>(undefined);
@@ -95,6 +94,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   const [videoSource, setVideoSource] = useState<string | null>(null);
   const videoPlayer = useVideoPlayer(videoSource);
+
+  const [preferredQuality, setPreferredQuality] = useState<'SD' | 'HD'>('HD');
 
   const audioLoadTokenRef = useRef(0);
   const hasStartedPlayingRef = useRef(false);
@@ -376,7 +377,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           if (!item?.id) return;
           console.log(`[MediaPlayer] Background refreshing ${type} URL...`);
           try {
-            const nextUrl = await getPlaybackUrl(item.contentId ?? item.id, type);
+            const nextUrl = await getPlaybackUrl(item.contentId ?? item.id, type, preferredQuality);
             if (type === 'audio') {
               setAudioSource(nextUrl);
               scheduleTokenRefresh(nextUrl, 'audio');
@@ -403,7 +404,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
     try {
       console.log('[MediaPlayer] Preloading next item', { id: item.id });
-      const url = await getPlaybackUrl(item.contentId ?? item.id, item.mediaType);
+      const url = await getPlaybackUrl(item.contentId ?? item.id, item.mediaType, preferredQuality);
       preloadedUrlRef.current = { id: item.id, url };
     } catch {
       // ignore
@@ -434,7 +435,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       // Do not reuse the `mediaUrl` populated by the initial list fetch because the JWT token might have expired.
       if (item.useStreamAccess) {
         try {
-          playbackUrl = await getPlaybackUrl(item.contentId ?? item.id, 'audio');
+          playbackUrl = await getPlaybackUrl(item.contentId ?? item.id, 'audio', preferredQuality);
         } catch (e) {
           console.warn('[MediaPlayer] getPlaybackUrl failed', e);
           Alert.alert('Playback Error', 'Could not get playback URL. Try again.');
@@ -446,7 +447,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       // This handles items (e.g. "Pizza Making") where useStreamAccess=false but mediaUrl is empty.
       if (!playbackUrl && (item.contentId || item.id)) {
         try {
-          const fallbackUrl = await getPlaybackUrl(item.contentId ?? item.id, 'audio');
+          const fallbackUrl = await getPlaybackUrl(item.contentId ?? item.id, 'audio', preferredQuality);
           if (fallbackUrl) {
             playbackUrl = normalizePlaybackUrl(fallbackUrl);
             console.log('[MediaPlayer] Used fallback stream URL for', item.title);
@@ -527,7 +528,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       if (item.mediaType === 'video' && item.useStreamAccess) {
         try {
-          const url = await getPlaybackUrl(item.contentId ?? item.id, 'video');
+          const url = await getPlaybackUrl(item.contentId ?? item.id, 'video', preferredQuality);
           if (!validatePlaybackUrl(url, 'video')) {
             Alert.alert('Playback Error', 'Received an invalid video source URL.');
             return;
@@ -844,7 +845,12 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       inlineAudioHostActive,
       setInlineAudioHostActive,
       onVideoPlaybackStatusUpdate,
-      videoPlayer, audioPlayer, isPlayerReady }),
+      videoPlayer,
+      audioPlayer,
+      isPlayerReady,
+      preferredQuality,
+      setPreferredQuality
+    }),
     [
       close,
       currentItem,
@@ -868,7 +874,12 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       togglePlayPause,
       videoAudioOnlyMode,
       videoRestoreNonce,
-      videoPlayer, audioPlayer, isPlayerReady ]
+      videoPlayer,
+      audioPlayer,
+      isPlayerReady,
+      preferredQuality,
+      setPreferredQuality
+    ]
   );
 
   return (

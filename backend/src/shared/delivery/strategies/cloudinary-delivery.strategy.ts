@@ -13,7 +13,7 @@ import { DeliveryFailedException } from "../../exceptions/delivery.exception";
 import { normalizePublicId, isValidPublicId, logPublicIdNormalization } from "../../utils/cloudinary.utils";
 
 interface CloudinaryPlaybackSigner {
-  generateSignedPlaybackUrl(providerAssetId: string, fileType: "audio" | "video"): Promise<{ playbackUrl: string }>;
+  generateSignedPlaybackUrl(providerAssetId: string, fileType: "audio" | "video", quality?: "SD" | "HD"): Promise<{ playbackUrl: string }>;
 }
 
 export class CloudinaryDeliveryStrategy implements IMediaDeliveryStrategy {
@@ -58,7 +58,7 @@ export class CloudinaryDeliveryStrategy implements IMediaDeliveryStrategy {
       }
       
       // Generate signed playback URL using the normalized publicId
-      const result = await signer.generateSignedPlaybackUrl(publicId, fileType);
+      const result = await signer.generateSignedPlaybackUrl(publicId, fileType, params.quality);
       
       console.log(`[cloudinary-delivery] URL generated for publicId=${publicId}`);
       

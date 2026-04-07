@@ -116,7 +116,8 @@ export class CloudinaryProvider implements MediaProvider {
    */
   async generateSignedPlaybackUrl(
     providerAssetId: string,
-    fileType: "audio" | "video"
+    fileType: "audio" | "video",
+    quality?: "SD" | "HD"
   ): Promise<PlayerUrlResult> {
     
     // CRITICAL: Normalize providerAssetId to valid public_id
@@ -136,17 +137,10 @@ export class CloudinaryProvider implements MediaProvider {
       throw new Error(`Invalid public_id format after normalization: ${publicId}`);
     }
     
-    console.log(`[CloudinaryProvider] Generating signed URL for public_id=${publicId}, type=${fileType}`);
+    console.log(`[CloudinaryProvider] Generating signed URL for public_id=${publicId}, type=${fileType}, quality=${quality || 'default'}`);
     
     // Determine the resource format needed
     const isVideo = fileType === "video";
-    
-    // We construct the options for the signed URL
-    // Signed URLs expire shortly. Cloudinary URL generation uses 'sign_url: true' 
-    // and requires type="authenticated".
-    
-    // Cloudinary's URL generator signature rules limit expiry, standard approach is via auth_token or signed URLs.
-    // In authenticated delivery, we can generate a signed URL specifying an expiration Unix timestamp.
     
     const expirySeconds = 5 * 60; // 5 minutes
     const expiresAt = Math.floor(Date.now() / 1000) + expirySeconds;
@@ -161,12 +155,29 @@ export class CloudinaryProvider implements MediaProvider {
     if (isVideo) {
       // For video, request HLS format with streaming profile
       urlOptions.format = "m3u8";
-      urlOptions.transformation = [
-        { streaming_profile: "auto" }
-      ];
+      
+      // QUALITY GATING: If SD is requested/forced, we apply a transformation to limit quality.
+      if (quality === 'SD') {
+        // Force a low-quality rendition (240p). Keep transformation minimal and valid for HLS.
+        // Avoid non-standard streaming_profile values that can cause Cloudinary to return an invalid playlist.
+        urlOptions.transformation = [
+          { width: 426, height: 240, crop: "scale", bit_rate: "200k", quality: "auto:eco" }
+        ];
+      } else {
+        // Allow full adaptive bitrate switching for HD/Premium users
+        urlOptions.transformation = [
+          { streaming_profile: "auto" }
+        ];
+      }
     } else {
       // For audio, specify mp3 format for compatibility
       urlOptions.format = "mp3";
+      // Optional: Add bitrate transformation for SD audio if needed
+      if (quality === 'SD') {
+        urlOptions.transformation = [
+          { bit_rate: "64k" }
+        ];
+      }
     }
 
     try {

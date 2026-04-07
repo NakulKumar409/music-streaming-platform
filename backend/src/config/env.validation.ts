@@ -48,9 +48,14 @@ export interface EnvValidationResult {
   maxUploadAudioMb: number;
   maxUploadVideoMb: number;
   maxUploadImageMb: number;
+  subscriptionEnabled: boolean;
 }
 
 let cached: EnvValidationResult | null = null;
+
+export function resetEnvCache() {
+  cached = null;
+}
 
 export function validateEnv(): EnvValidationResult {
   if (cached) return cached;
@@ -98,6 +103,7 @@ export function validateEnv(): EnvValidationResult {
   const maxUploadAudioMb = envInt("MAX_UPLOAD_AUDIO_MB", 50);
   const maxUploadVideoMb = envInt("MAX_UPLOAD_VIDEO_MB", 500);
   const maxUploadImageMb = envInt("MAX_UPLOAD_IMAGE_MB", 10);
+  const subscriptionEnabled = process.env.SUBSCRIPTION_ENABLED?.toLowerCase() !== "false";
 
   cached = {
     storageProvider,
@@ -117,7 +123,8 @@ export function validateEnv(): EnvValidationResult {
     mediaUrlTtlSeconds,
     maxUploadAudioMb,
     maxUploadVideoMb,
-    maxUploadImageMb
+    maxUploadImageMb,
+    subscriptionEnabled
   };
   return cached;
 }

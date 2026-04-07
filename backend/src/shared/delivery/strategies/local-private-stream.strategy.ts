@@ -15,9 +15,10 @@ export class LocalPrivateStreamStrategy implements IMediaDeliveryStrategy {
     const baseUrl = config.appBaseUrl.replace(/\/$/, "");
     const route = config.localPrivateStreamRoute.replace(/^\//, "");
     const kind = params.kind ? String(params.kind) : null;
-    const qs = kind
-      ? `token=${encodeURIComponent(token)}&kind=${encodeURIComponent(kind)}`
-      : `token=${encodeURIComponent(token)}`;
+    let qs = `token=${encodeURIComponent(token)}`;
+    if (kind) qs += `&kind=${encodeURIComponent(kind)}`;
+    if (params.quality) qs += `&quality=${encodeURIComponent(params.quality)}`;
+    
     const playbackUrl = `${baseUrl}/${route}/${mediaId}?${qs}`;
     return {
       playbackUrl,

@@ -9,6 +9,7 @@ import { requestPlaybackAccess } from "../../modules/media/media-access.service"
 import { getMediaConfig } from "../../config/media.config";
 import { resolveMediaIdentity } from "../../shared/media/media-asset-locator";
 import { mapStreamAccessError } from "./stream-access-error";
+import { logger } from "../../common/logger";
 
 const router = Router();
 
@@ -17,6 +18,9 @@ router.post("/access", async (req: any, res: any) => {
   const contentId = Number(req.body?.contentId);
   const kindRaw = (req.body?.kind ?? "").toString().toLowerCase();
   const kind = kindRaw === "video" ? "video" : kindRaw === "audio" ? "audio" : undefined;
+  
+  const qualityRaw = (req.body?.quality ?? "").toString().toUpperCase();
+  const quality = (qualityRaw === "HD" || qualityRaw === "SD") ? (qualityRaw as "HD" | "SD") : undefined;
 
   if (!Number.isFinite(contentId) || contentId <= 0) {
     return res.status(400).json({
@@ -30,7 +34,8 @@ router.post("/access", async (req: any, res: any) => {
     const result = await requestPlaybackAccess({
       contentId,
       userId: req.user?.id ?? null,
-      kind
+      kind,
+      quality
     });
 
     const mediaCfg = getMediaConfig();
@@ -88,6 +93,45 @@ router.post("/access", async (req: any, res: any) => {
       message: mapped.message,
       correlationId
     });
+  }
+});
+
+/**
+ * POST /api/v1/fan/stream/heartbeat
+ * Keeps a playback session alive. Client should call this every 30-60s.
+ */
+router.post("/heartbeat", async (req: any, res: any) => {
+  const userId = req.user?.id;
+  const contentId = Number(req.body?.contentId);
+  const correlationId = req?.correlationId || "-";
+
+  if (!userId) {
+    return res.status(401).json({ success: false, message: "Unauthorized" });
+  }
+
+  if (!Number.isFinite(contentId) || contentId <= 0) {
+    return res.status(400).json({ success: false, message: "contentId required" });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE playback_sessions 
+       SET heartbeat_at = now() 
+       WHERE user_id = $1 AND content_id = $2
+       RETURNING id`,
+      [userId, contentId]
+    );
+
+    if (result.rows.length === 0) {
+      // If session was pruned or not found, we could re-create it, 
+      // but usually access/ should be called first.
+      return res.status(404).json({ success: false, message: "Session not found or expired" });
+    }
+
+    return res.json({ success: true, correlationId });
+  } catch (err: any) {
+    logger.error({ userId, contentId, error: err.message, correlationId }, "[HEARTBEAT] Failed");
+    return res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
 

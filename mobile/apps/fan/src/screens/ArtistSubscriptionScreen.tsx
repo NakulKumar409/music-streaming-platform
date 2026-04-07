@@ -1,113 +1,203 @@
 import React, { useState, useEffect } from 'react';
 import {
+  ActivityIndicator,
   Image,
   Pressable,
   StyleSheet,
   Text,
   View,
-  ActivityIndicator
+  Platform,
+  Alert,
 } from 'react-native';
-
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { ArrowLeft, Lock, Pause, Play } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ArrowLeft, Lock } from 'lucide-react-native';
 import ErrorBoundary from '../ui/ErrorBoundary';
+import { apiV1 } from '../services/api';
 
-type Song = {
+type LockedSong = {
   id: string;
   title: string;
   artist: string;
-  duration: string;
+  artistId: string;
   thumbnail: string;
   locked: boolean;
+  reason?: string; // 'NO_SUBSCRIPTION' | 'EXPIRED'
 };
 
 export default function ArtistSubscriptionScreen({ navigation, route }: any) {
-  const tabBarHeight = useBottomTabBarHeight();
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [songData, setSongData] = useState<Song | null>(null);
+  const [songData, setSongData] = useState<LockedSong | null>(null);
+  const [accessStatus, setAccessStatus] = useState<string>('NO_SUBSCRIPTION');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const dummySong: Song = {
-      id: 'locked-101',
-      title: 'Secret Melody',
-      artist: 'Luna Ray',
-      duration: '3:12',
-      thumbnail: 'https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=1400&q=80',
-      locked: true,
-    };
-    
-    setSongData(route?.params?.song || dummySong);
-  }, [route.params]);
+    const init = async () => {
+      const paramSong = route?.params?.song;
+      const paramArtistId = route?.params?.artistId ?? paramSong?.artistId ?? '';
 
-  if (!songData) return <View style={styles.container}><ActivityIndicator color="#fff" /></View>;
+      if (paramSong) {
+        setSongData({
+          id: String(paramSong.id ?? ''),
+          title: paramSong.title ?? 'Exclusive Track',
+          artist: paramSong.artist ?? 'Artist',
+          artistId: String(paramArtistId),
+          thumbnail:
+            paramSong.thumbnail ??
+            'https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=1400&q=80',
+          locked: true,
+        });
+      } else {
+        setSongData({
+          id: 'locked-default',
+          title: 'Exclusive Content',
+          artist: route?.params?.artistName ?? 'Artist',
+          artistId: String(paramArtistId),
+          thumbnail:
+            route?.params?.artwork ??
+            'https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=1400&q=80',
+          locked: true,
+        });
+      }
+
+      // Check actual access status from backend
+      if (paramArtistId) {
+        try {
+          const contentId = paramSong?.id;
+          if (contentId) {
+            const res = await apiV1.get('/subscriptions/access-check', {
+              params: { contentId, artistId: paramArtistId },
+            });
+            setAccessStatus(res.data?.reason ?? 'NO_SUBSCRIPTION');
+          } else {
+            // Check if there's any subscription at all
+            const res = await apiV1.get('/subscriptions/me', {
+              params: { artistId: paramArtistId },
+            });
+            const status = (res.data?.subscription?.status ?? '').toUpperCase();
+            setAccessStatus(
+              status === 'ACTIVE' ? 'ACTIVE' :
+              status === 'GRACE' ? 'GRACE' :
+              status === 'EXPIRED' || status === 'CANCELLED' ? 'EXPIRED' :
+              'NO_SUBSCRIPTION'
+            );
+          }
+        } catch {
+          setAccessStatus('NO_SUBSCRIPTION');
+        }
+      }
+
+      setLoading(false);
+    };
+
+    init();
+  }, [route?.params]);
+
+  const handleSubscribe = () => {
+    if (Platform.OS === 'ios' || Platform.OS === 'android') {
+      Alert.alert(
+        'Billing Policy',
+        'Digital content purchases must be made via our website: music-platform.com. Please manage your plan online to maintain access.',
+        [{ text: 'Got it' }]
+      );
+      return;
+    }
+    navigation.navigate('SubscriptionFlow', {
+      artistId: songData?.artistId ?? '',
+      artistName: songData?.artist ?? 'Artist',
+      contentId: songData?.id,
+      artwork: songData?.thumbnail,
+      defaultPlan: 'ARTIST',
+    });
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator color="#FF7A18" size="large" />
+      </View>
+    );
+  }
+
+  if (!songData) return <View style={styles.container} />;
+
+  const isExpired = accessStatus === 'EXPIRED';
+  const lockLabel = isExpired ? '🔒 Subscription Expired' : '🔒 Premium Content';
+  const lockBody = isExpired
+    ? `Renew your subscription to ${songData.artist} to access this exclusive content.`
+    : `This content is available only for ${songData.artist} subscribers.\n\n10 sec free preview available.`;
+  const btnLabel = isExpired ? 'Renew Subscription' : 'Subscribe to Artist';
 
   return (
     <ErrorBoundary label="Payments: Artist Subscription">
       <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Background Hero */}
-      <View style={styles.heroWrap}>
-        <Image source={{ uri: songData.thumbnail }} style={styles.heroImg} />
-        <LinearGradient
-          colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.95)']}
-          style={styles.heroGradient}
-        />
-      </View>
-
-      {/* FIXED: Back Button moved outside heroWrap for absolute top priority */}
-      <Pressable 
-        onPress={() => navigation.goBack()} 
-        style={styles.backBtn}
-        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }} // Touch area increase karne ke liye
-      >
-        <ArrowLeft color="#fff" size={24} />
-      </Pressable>
-
-      {/* Requirement: Center Aligned Subscription Card */}
-      <View style={styles.centerContent}>
-        <View style={styles.heroTextWrap}>
-          <Text style={styles.songTitle}>{songData.title}</Text>
-          <Text style={styles.songArtist}>{songData.artist}</Text>
+        {/* Background hero */}
+        <View style={styles.heroWrap}>
+          <Image source={{ uri: songData.thumbnail }} style={styles.heroImg} />
+          <LinearGradient
+            colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.95)']}
+            style={styles.heroGradient}
+          />
         </View>
 
-        <View style={styles.cardOuter}>
-          <BlurView intensity={40} tint="dark" style={styles.card}>
-            <View style={styles.lockedHeaderRow}>
-              <Lock color="#FF6A00" size={20} />
-              <Text style={styles.lockedHeaderText}>LOCKED EARLY ACCESS</Text>
-            </View>
+        {/* Back button */}
+        <Pressable
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+        >
+          <ArrowLeft color="#fff" size={24} />
+        </Pressable>
 
-            <View style={styles.divider} />
+        {/* Center content */}
+        <View style={styles.centerContent}>
+          <View style={styles.heroTextWrap}>
+            <Text style={styles.songTitle}>{songData.title}</Text>
+            <Text style={styles.songArtist}>{songData.artist}</Text>
+          </View>
 
-            <Text style={styles.subscribeHint}>Subscribe to unlock this exclusive release</Text>
+          <View style={styles.cardOuter}>
+            <BlurView intensity={40} tint="dark" style={styles.card}>
+              <View style={styles.lockedHeaderRow}>
+                <Lock color="#FF6A00" size={20} />
+                <Text style={styles.lockedHeaderText}>
+                  {isExpired ? 'EXPIRED' : 'LOCKED EARLY ACCESS'}
+                </Text>
+              </View>
 
-            <Pressable 
-              style={styles.subscribeBtnWrap} 
-              onPress={() =>
-                navigation.navigate('SubscriptionFlow', {
-                  artistId: 'luna-ray',
-                  artistName: songData.artist,
-                  contentId: songData.id,
-                  artwork: songData.thumbnail,
-                })
-              }
-            >
-              <LinearGradient
-                colors={['#FF7A18', '#FF3D00']}
-                start={{x: 0, y: 0}}
-                end={{x: 1, y: 0}}
-                style={styles.subscribeBtn}
-              >
-                <Text style={styles.subscribeBtnText}>Subscribe</Text>
-              </LinearGradient>
-            </Pressable>
-          </BlurView>
+              <View style={styles.divider} />
+
+              <Text style={styles.lockBody}>{lockBody}</Text>
+
+              {/* Why subscribe */}
+              <View style={styles.benefitsWrap}>
+                {['Early access to new releases', 'Exclusive songs & content', 'Directly support the artist'].map((b, i) => (
+                  <View key={i} style={styles.benefitRow}>
+                    <Text style={styles.tick}>✓</Text>
+                    <Text style={styles.benefitText}>{b}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <Pressable style={styles.subscribeBtnWrap} onPress={handleSubscribe}>
+                <LinearGradient
+                  colors={['#FF7A18', '#FF3D00']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.subscribeBtn}
+                >
+                  <Text style={styles.subscribeBtnText}>{btnLabel}</Text>
+                </LinearGradient>
+              </Pressable>
+
+              <Text style={styles.secureNote}>
+                {Platform.OS === 'web' 
+                  ? '🔒 Secure payment via Razorpay' 
+                  : '👤 Manage subscription via website'}
+              </Text>
+            </BlurView>
+          </View>
         </View>
-      </View>
-
-
       </SafeAreaView>
     </ErrorBoundary>
   );
@@ -118,18 +208,17 @@ const styles = StyleSheet.create({
   heroWrap: { ...StyleSheet.absoluteFillObject, zIndex: 1 },
   heroImg: { width: '100%', height: '100%', resizeMode: 'cover' },
   heroGradient: { ...StyleSheet.absoluteFillObject },
-  
+
   centerContent: {
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 20,
-    zIndex: 2, // Hero Wrap ke upar
+    zIndex: 2,
   },
 
-  // FIXED STYLES FOR BACK BUTTON
   backBtn: {
     position: 'absolute',
-    top: 50, // SafeAreaView ke edges ke hisab se adjustment
+    top: 50,
     left: 20,
     width: 44,
     height: 44,
@@ -137,76 +226,47 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 999, // Sabse upar taaki touch hamesha mile
-    elevation: 10, // Android ke liye
+    zIndex: 999,
+    elevation: 10,
   },
 
-  heroTextWrap: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
+  heroTextWrap: { alignItems: 'center', marginBottom: 28 },
   songTitle: {
-    color: '#fff',
-    fontSize: 32,
-    fontWeight: '900',
-    textAlign: 'center',
+    color: '#fff', fontSize: 30, fontWeight: '900', textAlign: 'center',
   },
   songArtist: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 5,
+    color: 'rgba(255,255,255,0.7)', fontSize: 17, fontWeight: '600', marginTop: 5,
   },
 
-  cardOuter: {
-    width: '100%',
-  },
+  cardOuter: { width: '100%' },
   card: {
-    borderRadius: 24,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    backgroundColor: 'rgba(20,20,20,0.7)',
-    padding: 24,
+    borderRadius: 24, overflow: 'hidden',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(20,20,20,0.7)', padding: 22,
   },
   lockedHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
   },
   lockedHeaderText: {
-    marginLeft: 12,
-    color: '#FF6A00',
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: 1,
+    marginLeft: 10, color: '#FF6A00', fontSize: 13, fontWeight: '900', letterSpacing: 1,
   },
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    marginVertical: 20,
-  },
-  subscribeHint: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '500',
-    textAlign: 'center',
-    marginBottom: 25,
-    opacity: 0.8,
-  },
-  subscribeBtnWrap: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  subscribeBtn: {
-    height: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  subscribeBtnText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '800',
+  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.1)', marginVertical: 16 },
+  lockBody: {
+    color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '600',
+    textAlign: 'center', lineHeight: 20, marginBottom: 16,
   },
 
+  benefitsWrap: { marginBottom: 16 },
+  benefitRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  tick: { color: '#FF7A18', fontSize: 14, fontWeight: '900', width: 20 },
+  benefitText: { color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '600', flex: 1 },
+
+  subscribeBtnWrap: { borderRadius: 14, overflow: 'hidden' },
+  subscribeBtn: { height: 52, alignItems: 'center', justifyContent: 'center' },
+  subscribeBtnText: { color: '#fff', fontSize: 16, fontWeight: '900' },
+
+  secureNote: {
+    color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: '700',
+    textAlign: 'center', marginTop: 12,
+  },
 });

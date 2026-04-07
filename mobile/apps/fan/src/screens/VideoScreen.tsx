@@ -45,6 +45,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiV1 } from '../services/api';
 import { contentApi } from '../services/api';
 import * as streamService from '../services/streamService';
+import { userService } from '../services/userService';
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import { getOptimizedImageUrl } from '../utils/cloudinary';
@@ -285,9 +286,35 @@ export default function VideoScreen() {
   // Flag to distinguish quality-only URL changes from full video switches
   const isQualitySwitchRef = useRef(false);
 
+  const [maxAllowedResolution, setMaxAllowedResolution] = useState<string>('240p');
+  const [isStreamingHdAllowed, setIsStreamingHdAllowed] = useState(false);
+
   const [showMini, setShowMini] = useState(false);
   const scrollYRef = useRef(0);
   const deepScrollRef = useRef(false);
+
+  useEffect(() => {
+    (async () => {
+      const res = await userService.checkStreamingQuality();
+      const maxRes = (res?.maxResolution ?? '240p').toString();
+      setMaxAllowedResolution(maxRes);
+      setIsStreamingHdAllowed(res?.quality === 'HD');
+
+      // If user is not allowed HD, ensure UI doesn't get stuck in an HD selection.
+      if (res?.quality !== 'HD') {
+        setSelectedQuality((prev) => {
+          if (prev === '720p' || prev === '1080p' || prev === 'Auto') return maxRes;
+          return prev;
+        });
+        setIsHD(false);
+      }
+    })().catch(() => {
+      setMaxAllowedResolution('240p');
+      setIsStreamingHdAllowed(false);
+      setSelectedQuality('240p');
+      setIsHD(false);
+    });
+  }, []);
 
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportSubmitting, setReportSubmitting] = useState(false);
@@ -461,7 +488,7 @@ export default function VideoScreen() {
 
           console.log('[VideoScreen] Background refreshing video URL...');
           try {
-            const nextUrl = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video');
+            const nextUrl = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video', isStreamingHdAllowed ? 'HD' : 'SD');
             resumeAfterUrlChangeRef.current = pos;
             setActivePlaybackUrl(nextUrl);
           } catch {
@@ -470,7 +497,7 @@ export default function VideoScreen() {
         })().catch(() => undefined);
       }, delay);
     },
-    [activeVideoMeta?.id, videoPlayer]
+    [activeVideoMeta?.id, isStreamingHdAllowed, videoPlayer]
   );
 
   useEffect(() => {
@@ -735,7 +762,7 @@ export default function VideoScreen() {
         if (!activeVideoMeta?.id) return;
         const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
         try {
-          const nextUrl = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video');
+          const nextUrl = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video', isStreamingHdAllowed ? 'HD' : 'SD');
           resumeAfterUrlChangeRef.current = pos;
           setActivePlaybackUrl(nextUrl);
         } catch {
@@ -807,13 +834,13 @@ export default function VideoScreen() {
 
   const resolvePlaybackUrl = useCallback(async (video: VideoCard) => {
     try {
-      return await streamService.getPlaybackUrl(video.id, 'video');
+      return await streamService.getPlaybackUrl(video.id, 'video', isStreamingHdAllowed ? 'HD' : 'SD');
     } catch {
       const fallback = video.mediaUrl ? streamService.normalizePlaybackUrl(video.mediaUrl) : '';
       if (!fallback) return '';
       return streamService.validatePlaybackUrl(fallback, 'video') ? fallback : '';
     }
-  }, []);
+  }, [isStreamingHdAllowed]);
 
   const onPressVideo = useCallback(
     (video: VideoCard) => {
@@ -1029,6 +1056,37 @@ export default function VideoScreen() {
   // These match the HLS renditions triggered in the backend eager transforms.
   const QUALITY_LADDER = ['144p', '240p', '360p', '480p', '720p', '1080p', 'Auto'] as const;
 
+  const qualityRank = useCallback(
+    (q: string) => {
+      const idx = QUALITY_LADDER.findIndex((x) => x === (q as any));
+      return idx >= 0 ? idx : QUALITY_LADDER.length - 1;
+    },
+    [QUALITY_LADDER]
+  );
+
+  const isSelectionAllowed = useCallback(
+    (q: string) => {
+      // If user can't stream HD, cap them at maxAllowedResolution (usually 240p).
+      const maxRank = qualityRank(maxAllowedResolution);
+      if (!isStreamingHdAllowed) {
+        if (q === 'Auto') return false;
+        return qualityRank(q) <= maxRank;
+      }
+
+      // HD subscribers: allow everything.
+      return true;
+    },
+    [isStreamingHdAllowed, maxAllowedResolution, qualityRank]
+  );
+
+  const getStreamQualityParam = useCallback(
+    (q: string): 'SD' | 'HD' => {
+      void q;
+      return isStreamingHdAllowed ? 'HD' : 'SD';
+    },
+    [isStreamingHdAllowed]
+  );
+
   const availableQualities = useMemo(() => {
     // Always expose the full ladder so users can always see options.
     // The HLS adaptive stream handles serving the closest available rendition.
@@ -1037,10 +1095,19 @@ export default function VideoScreen() {
 
   const applyQualitySelection = useCallback(
     async (q: string) => {
-      setSelectedQuality(q);
-      setShowQualitySheet(false);
-      // Update HD badge state
-      setIsHD(q === '720p' || q === '1080p');
+      if (!isSelectionAllowed(q)) {
+        const allowed = maxAllowedResolution || '240p';
+        Alert.alert('Subscription required', `High quality is available for subscribers only. Max quality: ${allowed}.`);
+        setSelectedQuality(allowed);
+        setShowQualitySheet(false);
+        setIsHD(false);
+        q = allowed;
+      } else {
+        setSelectedQuality(q);
+        setShowQualitySheet(false);
+        // Update HD badge state
+        setIsHD(q === '720p' || q === '1080p');
+      }
       if (!activeVideoMeta) return;
 
       // ── Step 1: Pause immediately & capture exact position ──────────────────
@@ -1064,7 +1131,7 @@ export default function VideoScreen() {
       setIsBuffering(true);
 
       try {
-        const url = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video');
+        const url = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video', getStreamQualityParam(q));
         // Setting the URL causes useVideoPlayer to reload the source.
         // useEventListener('statusChange') above will fire seek+play atomically
         // as soon as status === 'readyToPlay' — no setTimeout needed.
@@ -1078,7 +1145,7 @@ export default function VideoScreen() {
         setLoadingPlaybackUrl(false);
       }
     },
-    [activeVideoMeta, videoPlayer]
+    [activeVideoMeta, getStreamQualityParam, isSelectionAllowed, maxAllowedResolution, videoPlayer]
   );
 
   const onDoubleTap = useCallback(

@@ -82,10 +82,11 @@ export function validatePlaybackUrl(url: string, kind?: "audio" | "video"): bool
   return true;
 }
 
-export async function getPlaybackUrl(contentId: string, kind?: 'audio' | 'video'): Promise<string> {
+export async function getPlaybackUrl(contentId: string, kind?: 'audio' | 'video', quality?: 'SD' | 'HD'): Promise<string> {
   const res = await apiV1.post<StreamAccessResponse>('/stream/access', {
     contentId: Number(contentId),
     kind,
+    quality,
   });
   const data = res.data;
   if (!data?.success || !data?.playbackUrl) {

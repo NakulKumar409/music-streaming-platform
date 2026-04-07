@@ -17,6 +17,7 @@ export interface GeneratePlaybackAccessParams {
   userId: number;
   expiresInSeconds: number;
   token: string;
+  quality?: 'SD' | 'HD';
 }
 
 export interface PlaybackAccessResult {

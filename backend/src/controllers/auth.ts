@@ -27,6 +27,13 @@ const isValidPhoneNumber = (phoneNumber: string) => {
 export const registerFan = async (req: Request, res: Response) => {
   const correlationId = (req as any)?.correlationId || "-";
 
+  // Log raw request body for debugging
+  console.error("[REGISTER_FAN] Request received", {
+    correlationId,
+    body: req.body,
+    keys: Object.keys(req.body || {})
+  });
+
   try {
     const {
       fullName,
@@ -35,8 +42,10 @@ export const registerFan = async (req: Request, res: Response) => {
       username,
       password,
       dob,
+      dateOfBirth,
       favoriteGenre,
-      location
+      location,
+      locationCity
     } = req.body as {
       fullName?: string;
       email?: string;
@@ -44,11 +53,28 @@ export const registerFan = async (req: Request, res: Response) => {
       username?: string;
       password?: string;
       dob?: string;
+      dateOfBirth?: string;
       favoriteGenre?: string;
       location?: string;
+      locationCity?: string;
     };
 
-    if (!fullName || !email || !phoneNumber || !username || !password || !dob) {
+    // Support both dob and dateOfBirth from different clients
+    const effectiveDob = dob || dateOfBirth;
+    // Support both location and locationCity from different clients
+    const effectiveLocation = location || locationCity;
+
+    if (!fullName || !email || !phoneNumber || !username || !password || !effectiveDob) {
+      console.error("[REGISTER_FAN] Validation failed - missing required fields", {
+        correlationId,
+        hasFullName: !!fullName,
+        hasEmail: !!email,
+        hasPhoneNumber: !!phoneNumber,
+        hasUsername: !!username,
+        hasPassword: !!password,
+        hasDob: !!effectiveDob,
+        dobValue: effectiveDob
+      });
       return res.status(400).json({
         success: false,
         message:
@@ -57,7 +83,11 @@ export const registerFan = async (req: Request, res: Response) => {
       });
     }
 
-    if (!isValidDob(dob)) {
+    if (!isValidDob(effectiveDob)) {
+      console.error("[REGISTER_FAN] Validation failed - invalid DOB format", {
+        correlationId,
+        dobValue: effectiveDob
+      });
       return res.status(400).json({
         success: false,
         message: "dob must be in YYYY-MM-DD format",
@@ -66,6 +96,10 @@ export const registerFan = async (req: Request, res: Response) => {
     }
 
     if (!isValidPhoneNumber(phoneNumber)) {
+      console.error("[REGISTER_FAN] Validation failed - invalid phone number", {
+        correlationId,
+        phoneNumber
+      });
       return res.status(400).json({
         success: false,
         message:
@@ -124,9 +158,9 @@ export const registerFan = async (req: Request, res: Response) => {
       phoneNumber.trim(),
       normalizedUsername,
       hashedPassword,
-      dob,
+      effectiveDob,
       favoriteGenre ? String(favoriteGenre).trim() : null,
-      location ? String(location).trim() : null,
+      effectiveLocation ? String(effectiveLocation).trim() : null,
       "FAN"
     ]);
 
@@ -155,14 +189,17 @@ export const registerFan = async (req: Request, res: Response) => {
       correlationId
     });
   } catch (err: any) {
-    console.error("[REGISTER_FAN] error", {
+    console.error("[REGISTER_FAN] CRITICAL ERROR", {
       correlationId,
-      message: err?.message || String(err)
+      message: err?.message,
+      code: err?.code,
+      stack: err?.stack,
+      error: String(err)
     });
 
     return res.status(500).json({
       success: false,
-      message: "Registration failed",
+      message: "Registration failed: " + (err?.message || "Unknown error"),
       correlationId
     });
   }

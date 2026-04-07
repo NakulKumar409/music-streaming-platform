@@ -1,4 +1,4 @@
-import { extractPublicIdFromUrl, isValidPublicId } from "../utils/cloudinary.utils";
+import { extractPublicIdFromUrl, isValidPublicId, normalizePublicId } from "../utils/cloudinary.utils";
 
 export type MediaAssetKind = "audio" | "video" | "thumbnail";
 
@@ -35,9 +35,21 @@ function normalizeCloudinaryId(candidate: string | null | undefined): string | n
   if (raw.startsWith("http://") || raw.startsWith("https://")) {
     const extracted = extractPublicIdFromUrl(raw);
     if (!extracted) return null;
-    return isValidPublicId(extracted) ? extracted : null;
+    try {
+      const normalized = normalizePublicId(extracted);
+      return isValidPublicId(normalized) ? normalized : null;
+    } catch {
+      return null;
+    }
   }
-  return isValidPublicId(raw) ? raw : null;
+  // Some rows store Cloudinary public_id with extension (e.g. foo/bar.mp4)
+  // or version prefix (e.g. v123/foo/bar). Normalize to a true public_id.
+  try {
+    const normalized = normalizePublicId(raw);
+    return isValidPublicId(normalized) ? normalized : null;
+  } catch {
+    return null;
+  }
 }
 
 function cloudinaryFallbackFromUrl(

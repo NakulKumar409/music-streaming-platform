@@ -1,405 +1,465 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Image,
+  ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
+  RefreshControl,
+  Platform,
 } from 'react-native';
-
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, BadgeCheck, Pause, Play } from 'lucide-react-native';
+import { ArrowLeft, BadgeCheck, Crown, Award, AlertTriangle, RefreshCw } from 'lucide-react-native';
 import ErrorBoundary from '../ui/ErrorBoundary';
+import { apiV1 } from '../services/api';
 
-type SubDetail = {
-  artistId: string;
-  name: string;
-  label: string;
-  verified: boolean;
-  banner: string;
-  status: 'Active' | 'Canceled';
-  renewDate: string;
+type SubData = {
+  type: 'ARTIST' | 'PLATFORM';
+  status: string;
+  plan_type: string;
+  start_date: string | null;
+  end_date: string | null;
+  next_billing_date: string | null;
+  grace_ends_at: string | null;
+  auto_renew: boolean;
+  artist_id?: string | null;
+  artist_name?: string;
 };
 
-type Mini = {
-  title: string;
-  artistName: string;
-  artwork: string;
+const STATUS_COLORS: Record<string, string> = {
+  ACTIVE: '#10B981',
+  GRACE: '#F59E0B',
+  PAST_DUE: '#F59E0B',
+  EXPIRED: '#EF4444',
+  CANCELLED: '#6B7280',
 };
+
+const STATUS_LABELS: Record<string, string> = {
+  ACTIVE: 'Active ✅',
+  GRACE: 'Grace Period ⚠️',
+  PAST_DUE: 'Payment Due ⚠️',
+  EXPIRED: 'Expired ❌',
+  CANCELLED: 'Cancelled',
+};
+
+function formatDate(raw: string | null | undefined): string {
+  if (!raw) return '—';
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return '—';
+  try {
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
+  } catch {
+    return d.toISOString().slice(0, 10);
+  }
+}
 
 export default function SubscriptionDetail({ navigation, route }: any) {
-  const tabBarHeight = useBottomTabBarHeight();
-  const artistId: string = String(route?.params?.artistId ?? 'luna-ray');
-  const incomingStatusRaw = route?.params?.status;
-  const incomingRenewDateRaw = route?.params?.renewDate;
-  const incomingStatus: SubDetail['status'] | null =
-    incomingStatusRaw === 'Active' || incomingStatusRaw === 'Canceled' ? incomingStatusRaw : null;
-  const incomingRenewDate = typeof incomingRenewDateRaw === 'string' ? incomingRenewDateRaw : null;
+  const artistId: string = String(route?.params?.artistId ?? '');
+  const planType: 'ARTIST' | 'PLATFORM' = route?.params?.type === 'PLATFORM' ? 'PLATFORM' : 'ARTIST';
 
-  const [detail, setDetail] = useState<SubDetail | null>(null);
+  const [sub, setSub] = useState<SubData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
-  const mini: Mini = useMemo(
-    () => ({
-      title: 'Secret Melody',
-      artistName: detail?.name ?? 'Luna Ray',
-      artwork:
-        'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=400&q=80',
-    }),
-    [detail?.name]
-  );
+  const fetchSub = async () => {
+    try {
+      setLoading(true);
+      if (planType === 'PLATFORM') {
+        const res = await apiV1.get('/subscriptions/platform');
+        setSub(res.data?.subscription ?? null);
+      } else {
+        const res = await apiV1.get('/subscriptions/me', {
+          params: { artistId: artistId || undefined },
+        });
+        setSub(res.data?.subscription ?? null);
+      }
+    } catch {
+      setSub(null);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
-  useEffect(() => {
-    const mockById: Record<string, SubDetail> = {
-      'luna-ray': {
-        artistId: 'luna-ray',
-        name: 'Luna Ray',
-        label: 'Dusian',
-        verified: true,
-        banner:
-          'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1400&q=80',
-        status: 'Active',
-        renewDate: 'May 24, 2024',
-      },
-      'david-stone': {
-        artistId: 'david-stone',
-        name: 'David Stone',
-        label: 'Dusian',
-        verified: false,
-        banner:
-          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=1400&q=80',
-        status: 'Active',
-        renewDate: 'Jun 02, 2024',
-      },
-      'kari-lucas': {
-        artistId: 'kari-lucas',
-        name: 'Kari Lucas',
-        label: 'Dusian',
-        verified: false,
-        banner:
-          'https://images.unsplash.com/photo-1524250502761-1ac6f2e30d43?auto=format&fit=crop&w=1400&q=80',
-        status: 'Active',
-        renewDate: 'Jun 11, 2024',
-      },
-    };
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchSub();
+  };
 
-    const base = mockById[artistId] ?? mockById['luna-ray'];
-    setDetail({
-      ...base,
-      status: incomingStatus ?? base.status,
-      renewDate: incomingRenewDate ?? base.renewDate,
+  useEffect(() => { fetchSub(); }, [artistId, planType]);
+
+  const status = (sub?.status ?? '').toUpperCase();
+  const statusColor = STATUS_COLORS[status] ?? '#6B7280';
+  const statusLabel = STATUS_LABELS[status] ?? status;
+  const isPlatform = sub?.type === 'PLATFORM';
+
+  // Compute days left
+  const endDate = sub?.end_date ?? sub?.next_billing_date;
+  const daysLeft = endDate
+    ? Math.ceil((new Date(endDate).getTime() - Date.now()) / (1000 * 86400))
+    : null;
+  const isExpiringSoon = daysLeft !== null && daysLeft <= 3 && daysLeft >= 0;
+
+  const handleRenew = () => {
+    if (Platform.OS === 'ios' || Platform.OS === 'android') {
+      Alert.alert(
+        'Billing Policy',
+        'Digital content purchases must be made via our website: music-platform.com. Please manage your plan online to maintain access.',
+        [{ text: 'Got it' }]
+      );
+      return;
+    }
+    navigation.navigate('SubscriptionFlow', {
+      artistId: sub?.artist_id ?? artistId,
+      artistName: sub?.artist_name,
+      defaultPlan: sub?.type ?? planType,
     });
-  }, [artistId]);
+  };
 
-  if (!detail) return <View style={styles.container} />;
+  const handleCancelConfirm = async () => {
+    setCancelling(true);
+    try {
+      // In a full impl this would call a cancel endpoint
+      Alert.alert(
+        'Cancellation Requested',
+        'Your subscription will remain active until the end of the billing period.',
+        [{ text: 'OK', onPress: () => { setCancelOpen(false); fetchSub(); } }]
+      );
+    } catch {
+      Alert.alert('Error', 'Failed to cancel. Please contact support.');
+    } finally {
+      setCancelling(false);
+    }
+  };
 
-  return (
-    <ErrorBoundary label="Payments: Subscription Detail">
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator color="#FF7A18" size="large" />
+      </View>
+    );
+  }
+
+  if (!sub) {
+    return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerRow}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
             <ArrowLeft color="#fff" size={22} />
           </Pressable>
-          <Text style={styles.headerTitle}>Subscription Detail</Text>
+          <Text style={styles.headerTitle}>Subscription</Text>
           <View style={{ width: 36 }} />
         </View>
-
-        <View style={styles.bannerWrap}>
-          <Image source={{ uri: detail.banner }} style={styles.bannerImg} />
-          <LinearGradient
-            colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.92)']}
-            style={styles.bannerGrad}
-          />
-
-          <View style={styles.bannerText}>
-            <View style={styles.nameRow}>
-              <Text style={styles.artistName}>{detail.name}</Text>
-              {detail.verified ? (
-                <View style={styles.verifiedWrap}>
-                  <BadgeCheck color="#4AA3FF" fill="#4AA3FF" size={18} />
-                </View>
-              ) : null}
-            </View>
-            <Text style={styles.labelText}>{detail.label}</Text>
-          </View>
+        <View style={styles.centered}>
+          <Text style={styles.emptyText}>No active subscription found.</Text>
+          <Text style={styles.complianceText}>To subscribe, please visit music-platform.com on your web browser.</Text>
+          <Pressable style={styles.renewBtn} onPress={handleRenew}>
+            <LinearGradient colors={['#FF7A18', '#FF3D00']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.renewBtnInner}>
+              <Text style={styles.renewBtnText}>Learn More</Text>
+            </LinearGradient>
+          </Pressable>
         </View>
+      </SafeAreaView>
+    );
+  }
 
-        <View style={styles.cardOuter}>
-          <BlurView intensity={22} tint="dark" style={styles.card}>
-            <View style={styles.row}>
-              <Text style={styles.leftLabel}>Status</Text>
-              <View style={styles.statusRight}>
-                <View style={styles.greenDot} />
-                <Text style={styles.rightValue}>{detail.status}</Text>
-              </View>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.row}>
-              <Text style={styles.leftLabel}>Renews</Text>
-              <Text style={styles.rightValue}>{detail.renewDate}</Text>
-            </View>
-
-            <Pressable style={styles.cancelBtn} onPress={() => setCancelOpen(true)}>
-              <LinearGradient
-                colors={['rgba(255,122,24,0.28)', 'rgba(255,122,24,0.12)']}
-                style={styles.cancelBtnInner}
-              >
-                <Text style={styles.cancelBtnText}>Cancel Subscription</Text>
-              </LinearGradient>
-            </Pressable>
-          </BlurView>
-
-          <Pressable onPress={() => {}} style={styles.supportRow}>
-            <Text style={styles.supportText}>Need help?  Contact Support  &gt;</Text>
+  return (
+    <ErrorBoundary label="Subscription Detail">
+      <SafeAreaView style={styles.container} edges={['top']}>
+        {/* Header */}
+        <View style={styles.headerRow}>
+          <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <ArrowLeft color="#fff" size={22} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Subscription Detail</Text>
+          <Pressable onPress={onRefresh} style={styles.refreshBtn}>
+            <RefreshCw color="#fff" size={16} />
           </Pressable>
         </View>
 
-      <Modal
-        visible={cancelOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCancelOpen(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <BlurView intensity={18} tint="dark" style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Cancel subscription?</Text>
-            <Text style={styles.modalSub}>You will lose early access when your billing period ends.</Text>
-
-            <View style={styles.modalBtns}>
-              <Pressable style={styles.modalBtnGhost} onPress={() => setCancelOpen(false)}>
-                <Text style={styles.modalBtnGhostText}>Keep</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalBtnDanger}
-                onPress={() => {
-                  setCancelOpen(false);
-                }}
-              >
-                <Text style={styles.modalBtnDangerText}>Cancel</Text>
-              </Pressable>
+        <ScrollView 
+          style={{ flex: 1 }} 
+          contentContainerStyle={styles.scrollContent} 
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF7A18" />
+          }
+        >
+          {/* Plan header banner */}
+          <LinearGradient
+            colors={isPlatform ? ['#1a2a4a', '#0d1b2a'] : ['#2a1a0a', '#1a0d00']}
+            style={styles.planBanner}
+          >
+            <View style={styles.planBannerIcon}>
+              {isPlatform ? <Crown color="#4AA3FF" size={32} /> : <Award color="#FF7A18" size={32} />}
             </View>
-          </BlurView>
-        </View>
-      </Modal>
+            <Text style={styles.planBannerTitle}>
+              {isPlatform ? 'Platform Plan' : 'Artist Plan'}
+            </Text>
+            {!isPlatform && sub.artist_name ? (
+              <View style={styles.artistNameRow}>
+                <BadgeCheck color="#4AA3FF" fill="#4AA3FF" size={16} />
+                <Text style={styles.artistNameText}>{sub.artist_name}</Text>
+              </View>
+            ) : null}
+            <View style={[styles.statusPill, { backgroundColor: `${statusColor}22`, borderColor: `${statusColor}55` }]}>
+              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+              <Text style={[styles.statusPillText, { color: statusColor }]}>{statusLabel}</Text>
+            </View>
+          </LinearGradient>
 
+          {/* Details card */}
+          <BlurView intensity={22} tint="dark" style={styles.card}>
+            <InfoRow label="Plan Type" value={sub.plan_type ?? 'MONTHLY'} />
+            <Divider />
+            <InfoRow label="Started" value={formatDate(sub.start_date)} />
+            <Divider />
+            <InfoRow label={status === 'ACTIVE' ? 'Renews On' : 'Expired On'} value={formatDate(endDate)} />
+            {sub.grace_ends_at && (status === 'GRACE' || status === 'PAST_DUE') && (
+              <>
+                <Divider />
+                <InfoRow label="Grace Ends" value={formatDate(sub.grace_ends_at)} color="#F59E0B" />
+              </>
+            )}
+            <Divider />
+            <InfoRow label="Auto-Renew" value={sub.auto_renew ? 'On' : 'Off'} />
+          </BlurView>
+
+          {/* Expiry warning */}
+          {isExpiringSoon && status === 'ACTIVE' && (
+            <View style={styles.warningCard}>
+              <AlertTriangle color="#F59E0B" size={16} />
+              <Text style={styles.warningText}>
+                Expires in {daysLeft} day{daysLeft === 1 ? '' : 's'}. Renew now to avoid interruption.
+              </Text>
+            </View>
+          )}
+
+          {/* Grace period notice */}
+          {(status === 'GRACE' || status === 'PAST_DUE') && (
+            <View style={styles.warningCard}>
+              <AlertTriangle color="#F59E0B" size={16} />
+              <Text style={styles.warningText}>
+                You're in grace period. Renew now to maintain access.
+              </Text>
+            </View>
+          )}
+
+          {/* What's included */}
+          <View style={styles.benefitsCard}>
+            <Text style={styles.benefitsTitle}>What's included</Text>
+            {(isPlatform
+              ? ['HD streaming (720p / 1080p)', 'No ads', 'Unlimited skips', 'Priority support']
+              : ['Early access to releases', 'Exclusive songs', 'Behind-the-scenes content', 'Fan community access']
+            ).map((b, i) => (
+              <View key={i} style={styles.benefitRow}>
+                <Text style={styles.tick}>✓</Text>
+                <Text style={styles.benefitText}>{b}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Renew / Cancel actions */}
+          {(status !== 'ACTIVE' || isExpiringSoon) && (
+            <Pressable style={styles.renewBtn} onPress={handleRenew}>
+              <LinearGradient colors={['#FF7A18', '#FF3D00']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.renewBtnInner}>
+                <RefreshCw color="#fff" size={16} style={{ marginRight: 8 }} />
+                <Text style={styles.renewBtnText}>{isExpiringSoon ? 'Renew Early' : 'Renew Now'}</Text>
+              </LinearGradient>
+            </Pressable>
+          )}
+
+          {status === 'ACTIVE' && (
+            <Pressable style={styles.cancelBtn} onPress={() => setCancelOpen(true)}>
+              <Text style={styles.cancelBtnText}>Cancel Subscription</Text>
+            </Pressable>
+          )}
+
+          <Pressable style={styles.supportRow}>
+            <Text style={styles.supportText}>Need help? Contact Support &gt;</Text>
+          </Pressable>
+        </ScrollView>
+
+        {/* Cancel modal */}
+        <Modal visible={cancelOpen} transparent animationType="fade" onRequestClose={() => setCancelOpen(false)}>
+          <View style={styles.modalBackdrop}>
+            <BlurView intensity={18} tint="dark" style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Cancel subscription?</Text>
+              <Text style={styles.modalSub}>
+                You'll keep access until the end of your billing period on {formatDate(endDate)}.
+              </Text>
+              <View style={styles.modalBtns}>
+                <Pressable style={styles.modalBtnGhost} onPress={() => setCancelOpen(false)}>
+                  <Text style={styles.modalBtnGhostText}>Keep Plan</Text>
+                </Pressable>
+                <Pressable style={styles.modalBtnDanger} onPress={handleCancelConfirm} disabled={cancelling}>
+                  <Text style={styles.modalBtnDangerText}>{cancelling ? 'Cancelling…' : 'Yes, Cancel'}</Text>
+                </Pressable>
+              </View>
+            </BlurView>
+          </View>
+        </Modal>
       </SafeAreaView>
     </ErrorBoundary>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
+function InfoRow({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <View style={infoStyles.row}>
+      <Text style={infoStyles.label}>{label}</Text>
+      <Text style={[infoStyles.value, color ? { color } : {}]}>{value}</Text>
+    </View>
+  );
+}
+
+function Divider() {
+  return <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.07)' }} />;
+}
+
+const infoStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
   },
+  label: { color: 'rgba(255,255,255,0.55)', fontSize: 13, fontWeight: '600' },
+  value: { color: '#fff', fontSize: 13, fontWeight: '800' },
+});
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#000' },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  emptyText: { color: 'rgba(255,255,255,0.6)', fontSize: 15, fontWeight: '600', marginBottom: 8, textAlign: 'center' },
+  complianceText: { color: 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: '500', marginBottom: 20, textAlign: 'center' },
+
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: 10,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.07)',
   },
   backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    width: 36, height: 36, borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
   },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-
-  bannerWrap: {
-    height: 310,
-    marginHorizontal: 16,
-    borderRadius: 24,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  bannerImg: {
-    width: '100%',
-    height: '100%',
-  },
-  bannerGrad: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  bannerText: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 16,
-    alignItems: 'center',
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  artistName: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '900',
-    letterSpacing: 0.2,
-  },
-  verifiedWrap: {
-    marginLeft: 10,
-    marginTop: 2,
-  },
-  labelText: {
-    marginTop: 6,
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 14,
-    fontWeight: '700',
+  headerTitle: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  refreshBtn: {
+    width: 36, height: 36, borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
   },
 
-  cardOuter: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-  },
-  card: {
+  scrollContent: { padding: 16, paddingBottom: 40 },
+
+  planBanner: {
     borderRadius: 20,
-    overflow: 'hidden',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-  },
-  row: {
-    flexDirection: 'row',
+    padding: 24,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
+    marginBottom: 16,
   },
-  leftLabel: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  rightValue: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  statusRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  greenDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#20C15A',
-    marginRight: 8,
-  },
-  divider: {
-    height: 1,
+  planBannerIcon: {
+    width: 64, height: 64, borderRadius: 32,
     backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
   },
+  planBannerTitle: { color: '#fff', fontSize: 22, fontWeight: '900', marginBottom: 6 },
+  artistNameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  artistNameText: { color: 'rgba(255,255,255,0.7)', fontSize: 14, fontWeight: '700', marginLeft: 6 },
+  statusPill: {
+    flexDirection: 'row', alignItems: 'center',
+    borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1,
+  },
+  statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
+  statusPillText: { fontSize: 13, fontWeight: '800' },
+
+  card: {
+    borderRadius: 18, overflow: 'hidden',
+    paddingHorizontal: 16, paddingVertical: 4,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+    marginBottom: 16,
+  },
+
+  warningCard: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(245,158,11,0.09)',
+    borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)',
+    borderRadius: 14, padding: 12, marginBottom: 12,
+  },
+  warningText: { color: '#F59E0B', fontSize: 13, fontWeight: '700', marginLeft: 10, flex: 1 },
+
+  benefitsCard: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 16, padding: 16, marginBottom: 16,
+  },
+  benefitsTitle: { color: '#fff', fontSize: 14, fontWeight: '800', marginBottom: 12 },
+  benefitRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  tick: { color: '#FF7A18', fontSize: 16, fontWeight: '900', width: 22 },
+  benefitText: { color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '600', flex: 1 },
+
+  renewBtn: {
+    height: 52, borderRadius: 14, overflow: 'hidden', marginBottom: 10,
+  },
+  renewBtnInner: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+  },
+  renewBtnText: { color: '#fff', fontSize: 15, fontWeight: '900' },
+
   cancelBtn: {
-    marginTop: 16,
-    height: 52,
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,122,24,0.30)',
+    height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+    marginBottom: 10,
   },
-  cancelBtnInner: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelBtnText: {
-    color: 'rgba(255,255,255,0.82)',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  supportRow: {
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  supportText: {
-    color: 'rgba(255,255,255,0.45)',
-    fontSize: 13,
-    fontWeight: '700',
-  },
+  cancelBtnText: { color: 'rgba(255,255,255,0.6)', fontSize: 14, fontWeight: '700' },
+
+  supportRow: { alignItems: 'center', paddingVertical: 16 },
+  supportText: { color: 'rgba(255,255,255,0.40)', fontSize: 13, fontWeight: '700' },
 
   modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 22,
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22,
   },
   modalCard: {
-    width: '100%',
-    borderRadius: 18,
-    overflow: 'hidden',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    width: '100%', borderRadius: 18, overflow: 'hidden',
+    paddingHorizontal: 18, paddingVertical: 20,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
     backgroundColor: 'rgba(255,255,255,0.03)',
   },
-  modalTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  modalSub: {
-    marginTop: 10,
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 13,
-    fontWeight: '600',
-    lineHeight: 18,
-  },
-  modalBtns: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 16,
-  },
+  modalTitle: { color: '#fff', fontSize: 17, fontWeight: '900', marginBottom: 8 },
+  modalSub: { color: 'rgba(255,255,255,0.55)', fontSize: 13, fontWeight: '600', lineHeight: 18, marginBottom: 18 },
+  modalBtns: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
   modalBtnGhost: {
-    height: 44,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    height: 44, paddingHorizontal: 16, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
   },
-  modalBtnGhostText: {
-    color: 'rgba(255,255,255,0.78)',
-    fontWeight: '800',
-  },
+  modalBtnGhostText: { color: 'rgba(255,255,255,0.78)', fontWeight: '800', fontSize: 13 },
   modalBtnDanger: {
-    marginLeft: 10,
-    height: 44,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,122,24,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,122,24,0.35)',
+    height: 44, paddingHorizontal: 16, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(239,68,68,0.14)',
+    borderWidth: 1, borderColor: 'rgba(239,68,68,0.35)',
   },
-  modalBtnDangerText: {
-    color: '#FF7A18',
-    fontWeight: '900',
-  },
-
+  modalBtnDangerText: { color: '#EF4444', fontWeight: '900', fontSize: 13 },
 });

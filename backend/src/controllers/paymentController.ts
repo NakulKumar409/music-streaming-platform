@@ -1,6 +1,7 @@
 import { Response } from "express";
 import crypto from "crypto";
 import { pool } from "../common/db";
+import { logger } from "../common/logger";
 import Razorpay from "razorpay";
 
 const getRazorpayClient = () => {
@@ -201,44 +202,135 @@ export const confirmPayment = async (req: any, res: Response) => {
   }
 };
 
+/**
+ * Helper to credit artist earnings after a successful payment.
+ * @param artistId The ID of the artist being subscribed to
+ * @param amountPaise Total amount paid in paise/cents
+ */
+export async function creditArtistEarnings(artistId: number, amountPaise: number) {
+  if (!artistId || artistId <= 0) return;
+  try {
+    // Get artist revenue share (default 80%)
+    const artistRow = await pool.query(
+      `SELECT COALESCE(NULLIF(revenue_share_percentage, 0), 80) as share FROM users WHERE id = $1`,
+      [artistId]
+    );
+    const share = Number(artistRow.rows[0]?.share || 80);
+    const earnings = (amountPaise / 100) * (share / 100);
+
+    await pool.query(
+      `INSERT INTO artist_stats (artist_id, total_earnings, updated_at)
+       VALUES ($1, $2, now())
+       ON CONFLICT (artist_id) 
+       DO UPDATE SET total_earnings = artist_stats.total_earnings + $2, updated_at = now()`,
+      [artistId, earnings]
+    );
+    console.log(`[EARNINGS] Credited ${earnings} to artist ${artistId} (${share}% share)`);
+  } catch (err) {
+    console.error("[EARNINGS] Failed to credit earnings", { artistId, amountPaise }, err);
+  }
+}
+
+/**
+ * Helper to reverse artist earnings after a refund.
+ */
+export async function reverseArtistEarnings(artistId: number, amountPaise: number) {
+  if (!artistId || artistId <= 0) return;
+  try {
+    const artistRow = await pool.query(
+      `SELECT COALESCE(NULLIF(revenue_share_percentage, 0), 80) as share FROM users WHERE id = $1`,
+      [artistId]
+    );
+    const share = Number(artistRow.rows[0]?.share || 80);
+    const earnings = (amountPaise / 100) * (share / 100);
+
+    await pool.query(
+      `UPDATE artist_stats SET total_earnings = total_earnings - $2, updated_at = now() WHERE artist_id = $1`,
+      [artistId, earnings]
+    );
+    console.log(`[EARNINGS] Reversed ${earnings} from artist ${artistId} (Refund)`);
+  } catch (err) {
+    console.error("[EARNINGS] Failed to reverse earnings", { artistId, amountPaise }, err);
+  }
+}
+
+/**
+ * Helper to log subscription audit events.
+ */
+async function logSubscriptionAudit(userId: number, subId: number | null, event: string, metadata: any, client?: any) {
+  const db = client || pool;
+  try {
+    await db.query(
+      `INSERT INTO subscription_audit_logs (user_id, subscription_id, event_type, metadata, created_at)
+       VALUES ($1, $2, $3, $4, now())`,
+      [userId, subId, event, metadata]
+    );
+  } catch (err) {
+    console.error("[AUDIT] Failed to log event", { userId, subId, event }, err);
+  }
+}
+
 export const razorpayWebhook = async (req: any, res: Response) => {
+  const client = await pool.connect();
   try {
     const signatureHeader = (req.headers["x-razorpay-signature"] ?? "").toString();
-    if (!signatureHeader) {
-      return res.status(400).json({ success: false, message: "Missing x-razorpay-signature" });
+    const body = JSON.stringify(req.body);
+    const secret = process.env.RAZORPAY_WEBHOOK_SECRET || "";
+
+    const expectedSignature = crypto
+      .createHmac("sha256", secret)
+      .update(body)
+      .digest("hex");
+
+    if (signatureHeader !== expectedSignature) {
+      logger.error({
+        remoteIP: req.ip,
+        userAgent: req.headers['user-agent'],
+        receivedSig: signatureHeader,
+        expectedSig: expectedSignature,
+        tags: ['ALERT', 'SECURITY']
+      }, "[MONITOR] Webhook Signature Mismatch!");
+      return res.status(400).send("Invalid signature");
     }
 
-    const webhookSecret = (process.env.RAZORPAY_WEBHOOK_SECRET ?? process.env.RAZORPAY_KEY_SECRET ?? "")
-      .toString()
-      .trim();
-    if (!webhookSecret) {
-      return res.status(500).json({ success: false, message: "Webhook secret missing" });
+    const payload = req.body;
+    const eventId = payload?.id;
+
+    if (!eventId) {
+       return res.status(400).send("Missing event ID");
     }
 
-    const rawBody: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || "");
-    const expected = crypto.createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
-
-    const sigA = expected;
-    const sigB = signatureHeader;
-    if (!safeEqualHex(sigA, sigB)) {
-      return res.status(400).json({ success: false, message: "Invalid webhook signature" });
+    // ── Idempotency Check ──────────────────────────────────────────
+    const existingEvent = await pool.query(
+      `SELECT event_id FROM processed_webhook_events WHERE event_id = $1`,
+      [eventId]
+    );
+    if (existingEvent.rows.length > 0) {
+      console.log(`[WEBHOOK] Event ${eventId} already processed. Skipping.`);
+      return res.json({ success: true, duplicated: true });
     }
 
-    const payload = JSON.parse(rawBody.toString("utf8") || "{}");
-    const event = (payload?.event ?? "").toString();
+    const eventType = payload?.event;
+    logger.info({ eventType, eventId }, "[WEBHOOK] Received event");
 
-    // Log the event concisely
-    console.log(`[Webhook] Received event: ${event}`);
+    // Start transaction for critical events
+    await client.query('BEGIN');
 
-    switch (event) {
+    // Mark event as processed
+    await client.query(
+      `INSERT INTO processed_webhook_events (event_id, provider) VALUES ($1, 'razorpay')`,
+      [eventId]
+    );
+
+    switch (eventType) {
       case "payment.captured": {
         const paymentEntity = payload?.payload?.payment?.entity ?? null;
         const orderId = (paymentEntity?.order_id ?? "").toString();
         const paymentId = (paymentEntity?.id ?? "").toString();
 
         if (orderId && paymentId) {
-          const client = getRazorpayClient();
-          const order = await client.orders.fetch(orderId).catch(() => null);
+          const razorpayClient = getRazorpayClient();
+          const order = await razorpayClient.orders.fetch(orderId).catch(() => null);
           if (order) {
             const notes = (order as any).notes || {};
             const userIdFromNotes = Number(notes?.user_id);
@@ -246,9 +338,8 @@ export const razorpayWebhook = async (req: any, res: Response) => {
 
             if (userIdFromNotes > 0 && artistIdFromNotes > 0) {
               const now = new Date();
-              const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-              await pool.query(
+              await client.query(
                 `UPDATE transactions
                  SET status = 'SUCCESS', payment_confirmed_at = $2, razorpay_payment_id = $3
                  WHERE razorpay_order_id = $1`,
@@ -265,15 +356,64 @@ export const razorpayWebhook = async (req: any, res: Response) => {
         const subEntity = payload?.payload?.subscription?.entity;
         if (!subEntity) break;
         const subId = subEntity.id;
-        const nextBillingAt = subEntity.charge_at ? new Date(subEntity.charge_at * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-        
-        await pool.query(
-          `UPDATE subscriptions 
-           SET status = 'ACTIVE', next_billing_date = $2, updated_at = now()
-           WHERE razorpay_subscription_id = $1`,
-          [subId, nextBillingAt]
+        const nextBillingAt = subEntity.charge_at
+          ? new Date(subEntity.charge_at * 1000)
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        const graceEndsAt = new Date(nextBillingAt.getTime() + 2 * 24 * 60 * 60 * 1000);
+
+        const subRow = await client.query(
+          `UPDATE subscriptions
+           SET status = 'ACTIVE', next_billing_date = $2, grace_ends_at = $3, updated_at = now()
+           WHERE razorpay_subscription_id = $1
+           RETURNING id, user_id`,
+          [subId, nextBillingAt, graceEndsAt]
         );
-        console.log(`[SUCCESS] Subscription activated/charged: ${subId}`);
+        const sub = subRow.rows?.[0];
+
+        const paymentEntity = payload?.payload?.payment?.entity ?? null;
+        const paymentId = (paymentEntity?.id ?? "").toString();
+        const amountPaise = Number(paymentEntity?.amount ?? 0);
+        
+        if (sub && paymentId) {
+          await client.query(
+            `INSERT INTO payments (user_id, subscription_id, amount, status, razorpay_payment_id, created_at)
+             VALUES ($1, $2, $3, 'SUCCESS', $4, now())
+             ON CONFLICT (razorpay_payment_id) DO NOTHING`,
+            [sub.user_id, sub.id, amountPaise, paymentId]
+          );
+
+          const subInfo = await client.query(`SELECT type, artist_id FROM subscriptions WHERE id = $1`, [sub.id]);
+          if (subInfo.rows[0]?.type === 'ARTIST') {
+             await creditArtistEarnings(subInfo.rows[0].artist_id, amountPaise);
+          }
+          
+          await logSubscriptionAudit(sub.user_id, sub.id, 'subscription_activated', { payment_id: paymentId, amount: amountPaise }, client);
+        }
+        break;
+      }
+
+      case "refund.processed": {
+        const refundEntity = payload?.payload?.refund?.entity;
+        const paymentId = refundEntity?.payment_id;
+        const amountPaise = refundEntity?.amount;
+
+        if (paymentId) {
+          const payRow = await client.query(`SELECT user_id, subscription_id FROM payments WHERE razorpay_payment_id = $1`, [paymentId]);
+          const payment = payRow.rows[0];
+          if (payment) {
+             await client.query(
+               `UPDATE subscriptions SET status = 'REFUNDED', updated_at = now() WHERE id = $1`,
+               [payment.subscription_id]
+             );
+             
+             const subRow = await client.query(`SELECT type, artist_id FROM subscriptions WHERE id = $1`, [payment.subscription_id]);
+             if (subRow.rows[0]?.type === 'ARTIST') {
+                await reverseArtistEarnings(subRow.rows[0].artist_id, amountPaise);
+             }
+
+             await logSubscriptionAudit(payment.user_id, payment.subscription_id, 'refund_processed', { payment_id: paymentId, amount: amountPaise }, client);
+          }
+        }
         break;
       }
 
@@ -281,11 +421,13 @@ export const razorpayWebhook = async (req: any, res: Response) => {
         const paymentEntity = payload?.payload?.payment?.entity;
         const subId = paymentEntity?.subscription_id;
         if (!subId) break;
-        await pool.query(
-          `UPDATE subscriptions SET status = 'PAST_DUE', updated_at = now() WHERE razorpay_subscription_id = $1`,
-          [subId]
+        const graceEnd = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+        await client.query(
+          `UPDATE subscriptions
+           SET status = 'PAST_DUE', grace_ends_at = $2, updated_at = now()
+           WHERE razorpay_subscription_id = $1`,
+          [subId, graceEnd]
         );
-        console.log(`[ERROR] Payment failed for sub: ${subId}`);
         break;
       }
 
@@ -293,20 +435,44 @@ export const razorpayWebhook = async (req: any, res: Response) => {
         const subEntity = payload?.payload?.subscription?.entity;
         const subId = subEntity?.id;
         if (!subId) break;
-        await pool.query(
-          `UPDATE subscriptions SET status = 'CANCELLED', auto_renew = false, updated_at = now() WHERE razorpay_subscription_id = $1`,
+        await client.query(
+          `UPDATE subscriptions
+           SET status = 'CANCELLED', auto_renew = false, grace_ends_at = now(), updated_at = now()
+           WHERE razorpay_subscription_id = $1
+           RETURNING id, user_id`,
           [subId]
         );
-        console.log(`[INFO] Subscription cancelled: ${subId}`);
+        const sub = (await client.query(`SELECT id, user_id FROM subscriptions WHERE razorpay_subscription_id = $1`, [subId])).rows[0];
+        if (sub) {
+           await logSubscriptionAudit(sub.user_id, sub.id, 'subscription_cancelled', { sub_id: subId }, client);
+        }
         break;
       }
+
+      case "subscription.expired": {
+        const subEntity = payload?.payload?.subscription?.entity;
+        const subId = subEntity?.id;
+        if (!subId) break;
+        await client.query(
+          `UPDATE subscriptions
+           SET status = 'EXPIRED', auto_renew = false, updated_at = now()
+           WHERE razorpay_subscription_id = $1`,
+          [subId]
+        );
+        break;
+      }
+
+      default:
+        console.log(`[WEBHOOK] Unhandled event type: ${eventType}`);
     }
 
-    return res.json({ success: true, received: true });
+    await client.query('COMMIT');
+    return res.json({ success: true });
   } catch (err: any) {
-    return res.status(500).json({
-      success: false,
-      message: err?.message || "Webhook handling failed",
-    });
+    if (client) await client.query('ROLLBACK');
+    logger.error({ error: err.message, stack: err.stack, eventId: req.body?.id, tags: ['ALERT', 'PAYMENT_FAILURE'] }, "[WEBHOOK] Error handling event");
+    return res.status(500).send("Internal Server Error");
+  } finally {
+    if (client) client.release();
   }
 };

@@ -33,7 +33,8 @@ export interface MediaProvider {
    */
   generateSignedPlaybackUrl(
     providerAssetId: string,
-    fileType: "audio" | "video"
+    fileType: "audio" | "video",
+    quality?: "SD" | "HD"
   ): Promise<PlayerUrlResult>;
 
   generatePublicAssetUrl?(

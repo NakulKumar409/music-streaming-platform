@@ -1,5 +1,4 @@
-import React, {} from 'react';
-
+import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import AccountScreen from '../screens/AccountScreen';
@@ -7,7 +6,7 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 import MyLibraryScreen from '../screens/MyLibraryScreen';
 import SubscriptionDetail from '../screens/SubscriptionDetail';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
-
+import SubscriptionFlowScreen from '../screens/SubscriptionFlowScreen';
 
 export type AccountStackParamList = {
   AccountIndex: undefined;
@@ -15,7 +14,15 @@ export type AccountStackParamList = {
   MyLibrary: undefined;
   ChangePassword: undefined;
   SubscriptionDetail: {
-    artistId: string;
+    artistId?: string;
+    type?: 'ARTIST' | 'PLATFORM';
+  };
+  SubscriptionFlow: {
+    artistId?: string;
+    artistName?: string;
+    contentId?: string;
+    artwork?: string;
+    defaultPlan?: 'ARTIST' | 'PLATFORM';
   };
 };
 
@@ -29,6 +36,11 @@ export default function AccountStackNavigator() {
       <Stack.Screen name="MyLibrary" component={MyLibraryScreen} />
       <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
       <Stack.Screen name="SubscriptionDetail" component={SubscriptionDetail} />
+      <Stack.Screen
+        name="SubscriptionFlow"
+        component={SubscriptionFlowScreen}
+        options={{ presentation: 'modal' }}
+      />
     </Stack.Navigator>
   );
 }

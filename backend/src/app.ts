@@ -300,6 +300,32 @@ const PORT = process.env.PORT || 8000;
     await ensureSubscriptionsSchema();
     await ensureArtistStatsSchema();
     console.log("[Startup] Database schema ensured ✅");
+
+    // ── Subscription Lifecycle Management ────────────────────────────────
+    // Sweeps for subscriptions where grace_ends_at < now() and updates to EXPIRED.
+    // Runs every 6 hours.
+    const sweepExpiredSubscriptions = async () => {
+      console.log("[Sweeper] Running subscription expiry sweep...");
+      try {
+        const result = await pool.query(`
+          UPDATE subscriptions
+          SET status = 'EXPIRED', updated_at = now()
+          WHERE status IN ('ACTIVE', 'GRACE', 'PAST_DUE')
+            AND grace_ends_at < now()
+          RETURNING id
+        `);
+        if (result.rowCount && result.rowCount > 0) {
+          console.log(`[Sweeper] Expired ${result.rowCount} stale subscriptions.`);
+        }
+      } catch (err) {
+        console.error("[Sweeper] Failed to sweep subscriptions:", err);
+      }
+    };
+
+    // Run immediately on boot then every 6 hours
+    sweepExpiredSubscriptions();
+    setInterval(sweepExpiredSubscriptions, 6 * 60 * 60 * 1000);
+
   } catch (err) {
     console.error("[Startup] WARNING: DB schema migration failed — check DATABASE_URL:", (err as any)?.message ?? err);
     console.error("[Startup] The server is still running but some features may not work until the DB is reachable.");

@@ -16,12 +16,29 @@ export type UserProfile = {
   audioQuality: AudioQualityPref;
 };
 
+export type SubscriptionRecord = {
+  type: 'ARTIST' | 'PLATFORM';
+  status: string;
+  planType: string;
+  endDate: string | null;
+  nextBillingDate: string | null;
+  graceEndsAt: string | null;
+  daysLeft: number | null;
+  isExpiringSoon: boolean;
+  artistId?: string | null;
+  artistName?: string;
+};
+
 export type SubscriptionPlanSummary = {
   status: string;
   planType: string;
   endDate: string | null;
   artistId: string | null;
   artistName?: string;
+  // Extended fields
+  artistPlan: SubscriptionRecord | null;
+  platformPlan: SubscriptionRecord | null;
+  artistSubCount: number;
 };
 
 export type Transaction = {
@@ -55,15 +72,45 @@ export type UpdateSettingsInput = {
   audioQuality?: AudioQualityPref;
 };
 
+export type AccessCheckResult = {
+  allowed: boolean;
+  reason: string;
+  graceEndsAt?: string;
+};
+
+export type QualityResult = {
+  quality: 'HD' | 'SD';
+  maxResolution: string;
+  isGrace?: boolean;
+};
+
 export interface UserService {
   getUserProfile(): Promise<UserProfile>;
   getTransactions(): Promise<Transaction[]>;
   getListenTime(): Promise<ListenTime>;
   getSubscriptionPlanSummary(): Promise<SubscriptionPlanSummary | null>;
+  checkContentAccess(contentId: number, artistId: string): Promise<AccessCheckResult>;
+  checkStreamingQuality(): Promise<QualityResult>;
   updateProfile(input: UpdateProfileInput): Promise<any>;
   updatePassword(input: UpdatePasswordInput): Promise<any>;
   uploadProfileImage(uri: string, mimeType: string, fileName: string): Promise<string>;
   updateSettings(input: UpdateSettingsInput): Promise<any>;
+}
+
+function mapSubRecord(raw: any): SubscriptionRecord | null {
+  if (!raw) return null;
+  return {
+    type: (raw.type ?? 'ARTIST') as 'ARTIST' | 'PLATFORM',
+    status: (raw.status ?? '').toString(),
+    planType: (raw.plan_type ?? raw.planType ?? 'MONTHLY').toString(),
+    endDate: raw.end_date ? String(raw.end_date) : null,
+    nextBillingDate: raw.next_billing_date ? String(raw.next_billing_date) : null,
+    graceEndsAt: raw.grace_ends_at ? String(raw.grace_ends_at) : null,
+    daysLeft: raw.daysLeft !== undefined ? Number(raw.daysLeft) : null,
+    isExpiringSoon: Boolean(raw.isExpiringSoon),
+    artistId: raw.artist_id !== undefined && raw.artist_id !== null ? String(raw.artist_id) : null,
+    artistName: (raw.artist_name ?? '').toString(),
+  };
 }
 
 export const userService: UserService = {
@@ -99,21 +146,59 @@ export const userService: UserService = {
   },
 
   async getListenTime() {
-    // Backend does not currently expose listen-time; keep a safe default.
     return { totalMinutes: 0, formattedTime: '—' };
   },
 
   async getSubscriptionPlanSummary() {
     const res = await apiV1.get('/subscriptions/summary');
-    const plan = res.data?.plan ?? null;
-    if (!plan) return null;
+    const data = res.data ?? {};
+    if (!data.success) return null;
+
+    const artistPlan = mapSubRecord(data.artistPlan);
+    const platformPlan = mapSubRecord(data.platformPlan);
+    const legacyPlan = mapSubRecord(data.plan);
+    const activePlan = artistPlan ?? legacyPlan;
+
     return {
-      status: (plan.status ?? '').toString(),
-      planType: (plan.plan_type ?? plan.planType ?? '').toString() || 'MONTHLY',
-      endDate: plan.end_date ? String(plan.end_date) : null,
-      artistId: plan.artist_id !== undefined && plan.artist_id !== null ? String(plan.artist_id) : null,
-      artistName: (plan.artist_name || '').toString(),
+      // Legacy fields (for backward compat)
+      status: (activePlan?.status ?? '').toString(),
+      planType: (activePlan?.planType ?? 'MONTHLY').toString(),
+      endDate: activePlan?.endDate ?? null,
+      artistId: activePlan?.artistId ?? null,
+      artistName: activePlan?.artistName,
+      // New fields
+      artistPlan,
+      platformPlan,
+      artistSubCount: Number(data.artistSubCount ?? 0),
     };
+  },
+
+  async checkContentAccess(contentId: number, artistId: string): Promise<AccessCheckResult> {
+    try {
+      const res = await apiV1.get('/subscriptions/access-check', {
+        params: { contentId, artistId },
+      });
+      return {
+        allowed: Boolean(res.data?.allowed),
+        reason: (res.data?.reason ?? '').toString(),
+        graceEndsAt: res.data?.graceEndsAt ? String(res.data.graceEndsAt) : undefined,
+      };
+    } catch {
+      return { allowed: false, reason: 'ERROR' };
+    }
+  },
+
+  async checkStreamingQuality(): Promise<QualityResult> {
+    try {
+      const res = await apiV1.get('/subscriptions/quality');
+      return {
+        quality: res.data?.quality === 'HD' ? 'HD' : 'SD',
+        maxResolution: (res.data?.maxResolution ?? '240p').toString(),
+        isGrace: Boolean(res.data?.isGrace),
+      };
+    } catch {
+      return { quality: 'SD', maxResolution: '240p' };
+    }
   },
 
   async updateProfile(input: UpdateProfileInput) {
@@ -135,9 +220,7 @@ export const userService: UserService = {
     } as any);
 
     const res = await apiV1.post('/user/profile-image', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
     return res.data?.profileImageUrl;
   },

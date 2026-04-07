@@ -69,16 +69,19 @@ router.get("/", (req, res) => {
              (SELECT COUNT(*)::int FROM content_plays WHERE content_id = c.id) as view_count,
              (SELECT COUNT(*)::int FROM content_reactions WHERE content_id = c.id AND reaction = 'like') as like_count,
              (SELECT COUNT(*)::int FROM content_reactions WHERE content_id = c.id AND reaction = 'dislike') as dislike_count,
-             (CASE 
-                WHEN $1::int IS NULL THEN false
-                ELSE EXISTS (
-                  SELECT 1 FROM subscriptions s 
-                  WHERE s.user_id = $1 
-                    AND s.artist_id = c.artist_id 
-                    AND UPPER(COALESCE(s.status, '')) = 'ACTIVE'
-                    AND (s.next_billing_date IS NULL OR s.next_billing_date > now() - interval '2 days')
-                )
-              END) as has_subscription
+                             (CASE 
+                   WHEN $1::int IS NULL THEN false
+                   ELSE EXISTS (
+                     SELECT 1 FROM subscriptions s 
+                     WHERE s.user_id = $1 
+                       AND (
+                         (s.type = 'ARTIST' AND s.artist_id = c.artist_id)
+                         OR (s.type = 'PLATFORM')
+                       )
+                       AND UPPER(COALESCE(s.status, '')) IN ('ACTIVE', 'GRACE_PERIOD')
+                       AND (COALESCE(s.grace_ends_at, s.next_billing_date) IS NULL OR COALESCE(s.grace_ends_at, s.next_billing_date) > now())
+                   )
+                 END) as has_subscription
            FROM content_items c
            LEFT JOIN users u ON u.id = c.artist_id
            WHERE ${baseWhere}
@@ -225,14 +228,17 @@ router.get("/artist/:artistId", (req, res) => {
                 (SELECT COUNT(*)::int FROM content_plays WHERE content_id = c.id) as view_count,
                 (SELECT COUNT(*)::int FROM content_reactions WHERE content_id = c.id AND reaction = 'like') as like_count,
                 (SELECT COUNT(*)::int FROM content_reactions WHERE content_id = c.id AND reaction = 'dislike') as dislike_count,
-                (CASE 
+                                (CASE 
                   WHEN $2::int IS NULL THEN false
                   ELSE EXISTS (
                     SELECT 1 FROM subscriptions s 
                     WHERE s.user_id = $2 
-                      AND s.artist_id = c.artist_id 
-                      AND UPPER(COALESCE(s.status, '')) = 'ACTIVE'
-                      AND (s.next_billing_date IS NULL OR s.next_billing_date > now() - interval '2 days')
+                      AND (
+                        (s.type = 'ARTIST' AND s.artist_id = c.artist_id)
+                        OR (s.type = 'PLATFORM')
+                      )
+                      AND UPPER(COALESCE(s.status, '')) IN ('ACTIVE', 'GRACE_PERIOD')
+                      AND (COALESCE(s.grace_ends_at, s.next_billing_date) IS NULL OR COALESCE(s.grace_ends_at, s.next_billing_date) > now())
                   )
                 END) as has_subscription
          FROM content_items c

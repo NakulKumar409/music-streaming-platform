@@ -6,7 +6,7 @@
 
 import { Router, Request, Response } from "express";
 import { verifyPlaybackToken } from "../../shared/security/signed-media-token.service";
-import { getContentForAccess } from "../../shared/security/media-authz.service";
+import { getContentForAccess, validateQualityAccess } from "../../shared/security/media-authz.service";
 import { getStorageService } from "../../shared/storage/services/storage.service";
 import { getStorageProviderByName } from "../../shared/storage/factory/storage-provider.factory";
 import { getStorageConfig } from "../../config/storage.config";
@@ -87,6 +87,14 @@ router.get("/:mediaId", async (req: Request, res: Response) => {
   // Old content with storage_provider='local' or NULL will use streaming below
   if (storageProvider === "cloudinary") {
     try {
+      const requestedQuality = (req.query.quality as string) || undefined;
+      const qCheck = await validateQualityAccess(payload.userId, requestedQuality);
+
+      if (requestedQuality === "HD" && !qCheck.authorized) {
+        console.warn("[media/stream] unauthorized HD redirect rejected", { mediaId, userId: payload.userId });
+        return res.status(403).json({ success: false, message: "Upgrade to Premium to watch in high quality." });
+      }
+
       const accessResult = await generatePlaybackAccess({
         mediaId,
         storageProvider: "cloudinary",
@@ -98,7 +106,8 @@ router.get("/:mediaId", async (req: Request, res: Response) => {
         visibility: (content.visibility || "PROTECTED") as any,
         userId: payload.userId,
         expiresInSeconds: 300,
-        token
+        token,
+        quality: qCheck.quality
       });
       
       if (accessResult?.playbackUrl) {
