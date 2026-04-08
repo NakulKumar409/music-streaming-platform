@@ -3,7 +3,7 @@ import axios, { AxiosHeaders } from 'axios';
 import * as Sentry from '@sentry/react-native';
 import { API_HOST_BASE_URL } from '../config/env';
 
-const API_BASE_URL = `${API_HOST_BASE_URL}/api/v1/fan`;
+export const API_BASE_URL = `${API_HOST_BASE_URL}/api/v1/fan`;
 export const JWT_STORAGE_KEY = 'jwt';
 export const USER_TOKEN_STORAGE_KEY = 'userToken';
 

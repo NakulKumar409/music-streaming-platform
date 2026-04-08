@@ -18,11 +18,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../store/authStore';
-import { CreditCard, HelpCircle, Library, LogOut, User, Camera, Crown, FileText, Download, ShieldCheck, Lock } from 'lucide-react-native';
+import { CreditCard, HelpCircle, Library, LogOut, User, Camera, Crown, ArrowDown, ShieldCheck, Lock } from 'lucide-react-native';
 import { SubscriptionStatusCard } from '../ui/SubscriptionUI';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+
 import { userService, type AudioQualityPref, type SubscriptionPlanSummary, type Transaction } from '../services/userService';
 import { JWT_STORAGE_KEY, API_BASE_URL } from '../services/api';
 import { resetToLogin } from '../navigation/rootNavigation';
@@ -297,6 +297,34 @@ export default function AccountScreen() {
     }
   };
 
+  const handleDownloadInvoice = async (transactionId: string) => {
+    try {
+      Alert.alert('Download', 'Preparing your invoice...');
+      
+      const fileUri = `${FileSystem.documentDirectory}invoice_${transactionId}.pdf`;
+      const downloadUrl = `${API_BASE_URL}/subscriptions/invoice/${transactionId}`;
+      
+      const downloadRes = await FileSystem.downloadAsync(
+        downloadUrl,
+        fileUri,
+        {
+          headers: {
+            'Authorization': `Bearer ${await AsyncStorage.getItem(JWT_STORAGE_KEY) || await AsyncStorage.getItem('userToken')}`
+          }
+        }
+      );
+
+      if (downloadRes.status === 200) {
+        Alert.alert('Downloaded', 'Invoice saved to device: ' + fileUri);
+      } else {
+        throw new Error('Download failed with status ' + downloadRes.status);
+      }
+    } catch (error: any) {
+      console.error('[AccountScreen] Invoice download error:', error);
+      Alert.alert('Error', 'Failed to download invoice. Please try again later.');
+    }
+  };
+
   return (
     <LinearGradient
       colors={Colors.backgroundGradient}
@@ -525,7 +553,7 @@ export default function AccountScreen() {
                     style={styles.downloadIcon} 
                     onPress={() => handleDownloadInvoice(tx.id)}
                   >
-                    <Download size={20} color={Colors.accent} />
+                    <ArrowDown size={20} color={Colors.accent} />
                   </TouchableOpacity>
                 </View>
               </View>

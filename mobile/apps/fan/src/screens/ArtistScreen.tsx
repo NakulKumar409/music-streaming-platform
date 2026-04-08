@@ -24,11 +24,11 @@ import { ArrowLeft, BadgeCheck, Settings } from 'lucide-react-native';
 import { VideoView } from 'expo-video';
 import { useIsFocused } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { 
-  LockedContentOverlay, 
-  SubscriptionStatusCard, 
-  RetentionBanner, 
-  StrongUpsellModal 
+import {
+  LockedContentOverlay,
+  SubscriptionStatusCard,
+  RetentionBanner,
+  StrongUpsellModal
 } from '../ui/SubscriptionUI';
 import SubscriptionExpiryScreen from './SubscriptionExpiryScreen';
 import { fetchArtistById, fetchArtistMedia, type ArtistDetail, type ArtistMediaItem } from '../services/artistService';
@@ -187,7 +187,7 @@ export default function ArtistScreen({ navigation, route }: any) {
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Subscription state
   const [isSubscribedToArtist, setIsSubscribedToArtist] = useState(false);
   const [isSubscriptionActive, setIsSubscriptionActive] = useState(true);
@@ -244,21 +244,21 @@ export default function ArtistScreen({ navigation, route }: any) {
             const targetArtistSub = status.artists?.find(s => s.artistId === artistIdS && s.status === 'ACTIVE');
             const platformSub = status.platform;
             const hasPlatformSub = platformSub?.status === 'ACTIVE';
-            
+
             const isSub = !!targetArtistSub || hasPlatformSub;
             setIsSubscribedToArtist(isSub);
 
             const activeSub = targetArtistSub || (hasPlatformSub ? platformSub : null);
-            
+
             if (activeSub) {
               setExpiryDate(activeSub.nextBillingDate || activeSub.endDate || null);
               setIsExpiringSoon(activeSub.isExpiringSoon || false);
-              
+
               if (activeSub.nextBillingDate) {
-                 const now = new Date();
-                 const end = new Date(activeSub.nextBillingDate);
-                 const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 86400));
-                 setDaysUntilExpiry(diff > 0 ? diff : 0);
+                const now = new Date();
+                const end = new Date(activeSub.nextBillingDate);
+                const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 86400));
+                setDaysUntilExpiry(diff > 0 ? diff : 0);
               }
             } else {
               setExpiryDate(null);
@@ -289,10 +289,10 @@ export default function ArtistScreen({ navigation, route }: any) {
           coverImage: a.coverImageUrl,
           bio: (a as any).bio ?? '',
           spotifyUrl: (a as any).spotifyUrl ?? null,
-           youtubeUrl: (a as any).youtubeUrl ?? null,
-           instagramUrl: (a as any).instagramUrl ?? null,
-           subscriptionPrice: a.subscriptionPrice,
-         };
+          youtubeUrl: (a as any).youtubeUrl ?? null,
+          instagramUrl: (a as any).instagramUrl ?? null,
+          subscriptionPrice: a.subscriptionPrice,
+        };
 
 
         const toSong = (it: ArtistMediaItem): Song => ({
@@ -444,13 +444,13 @@ export default function ArtistScreen({ navigation, route }: any) {
       // Tracking locked clicks for smart upsell
       const newCount = lockedClicks + 1;
       setLockedClicks(newCount);
-      
+
       if (newCount >= 3) {
         setShowStrongUpsell(true);
       }
       return; // Block all playback when subscription is expired
     }
-    
+
     if (song.mediaType === 'video') {
       navigation.navigate('VideoTab', {
         screen: 'VideoIndex',
@@ -497,147 +497,147 @@ export default function ArtistScreen({ navigation, route }: any) {
       style={styles.gradientBackground}
     >
       <StatusBar barStyle="light-content" />
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <View style={styles.container}>
-        {isVideoPlaying && currentItem?.mediaType === 'video' ? (
-          <View style={styles.stickyVideoHost}>
-            <InlineVideoPlayer
-              mediaUrl={currentItem.mediaUrl}
-              aspectRatio={inlineVideoAspectRatio}
-              onAspectRatio={(r) => setInlineVideoAspectRatio(r)}
-              videoPlayer={videoPlayer}
-              shouldPlay={playerState.isPlaying}
-              positionMs={playerState.positionMs}
-              durationMs={playerState.durationMs}
-              onTogglePlay={() => togglePlayPause().catch(() => undefined)}
-              onSeek={(pos) => seekTo(pos).catch(() => undefined)}
-              onToggleFullscreen={() => setExpanded(true)}
-              onBack={() => navigation.goBack()}
-              topInset={insets.top}
-            />
-          </View>
-        ) : null}
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.container}>
+          {isVideoPlaying && currentItem?.mediaType === 'video' ? (
+            <View style={styles.stickyVideoHost}>
+              <InlineVideoPlayer
+                mediaUrl={currentItem.mediaUrl}
+                aspectRatio={inlineVideoAspectRatio}
+                onAspectRatio={(r) => setInlineVideoAspectRatio(r)}
+                videoPlayer={videoPlayer}
+                shouldPlay={playerState.isPlaying}
+                positionMs={playerState.positionMs}
+                durationMs={playerState.durationMs}
+                onTogglePlay={() => togglePlayPause().catch(() => undefined)}
+                onSeek={(pos) => seekTo(pos).catch(() => undefined)}
+                onToggleFullscreen={() => setExpanded(true)}
+                onBack={() => navigation.goBack()}
+                topInset={insets.top}
+              />
+            </View>
+          ) : null}
 
 
-        {/* Subscription Expiry Guard Screen */}
-        {!isSubscriptionActive && artist ? (
-          <SubscriptionExpiryScreen artistName={artist.name} onRenewSubscription={handleRenewSubscription} />
-        ) : null}
+          {/* Subscription Expiry Guard Screen */}
+          {!isSubscriptionActive && artist ? (
+            <SubscriptionExpiryScreen artistName={artist.name} onRenewSubscription={handleRenewSubscription} />
+          ) : null}
 
-        {loading ? (
-          <View style={styles.loadingWrap}>
-            <ActivityIndicator color={Colors.accent} />
-          </View>
-        ) : error || !artist ? (
-          <View style={styles.loadingWrap}>
-            <Text style={styles.errorText}>{error || 'Unable to load artist.'}</Text>
-          </View>
-        ) : (
-          <>
-            <FlatList
-              key="list"
-              numColumns={1}
-              initialNumToRender={5}
-              windowSize={5}
-              removeClippedSubviews={true}
-              data={channelContent}
-              keyExtractor={(item) => item.id}
-              ListHeaderComponent={
-                <>
-                  {!isVideoPlaying ? (
-                    <ProfileHeaderSection
-                      bannerUrl={artist.coverImage}
-                      avatarUrl={artist.profileImage || artist.coverImage}
-                      name={artist.name}
-                      verified={artist.verified}
-                      subscribersLabel={artist.subscribers}
-                      bio={artist.bio}
-                      spotifyUrl={artist.spotifyUrl}
-                      youtubeUrl={artist.youtubeUrl}
-                      instagramUrl={artist.instagramUrl}
-                       onBack={() => navigation.goBack()}
-                       onSubscribe={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name, amount: artist.subscriptionPrice })}
-                       onJoin={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name, amount: artist.subscriptionPrice })}
-                       isSubscribed={isSubscribedToArtist}
-                       expiryDate={expiryDate}
-                       subscriptionPrice={artist.subscriptionPrice}
-                     />
+          {loading ? (
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator color={Colors.accent} />
+            </View>
+          ) : error || !artist ? (
+            <View style={styles.loadingWrap}>
+              <Text style={styles.errorText}>{error || 'Unable to load artist.'}</Text>
+            </View>
+          ) : (
+            <>
+              <FlatList
+                key="list"
+                numColumns={1}
+                initialNumToRender={5}
+                windowSize={5}
+                removeClippedSubviews={true}
+                data={channelContent}
+                keyExtractor={(item) => item.id}
+                ListHeaderComponent={
+                  <>
+                    {!isVideoPlaying ? (
+                      <ProfileHeaderSection
+                        bannerUrl={artist.coverImage}
+                        avatarUrl={artist.profileImage || artist.coverImage}
+                        name={artist.name}
+                        verified={artist.verified}
+                        subscribersLabel={artist.subscribers}
+                        bio={artist.bio}
+                        spotifyUrl={artist.spotifyUrl}
+                        youtubeUrl={artist.youtubeUrl}
+                        instagramUrl={artist.instagramUrl}
+                        onBack={() => navigation.goBack()}
+                        onSubscribe={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name, amount: artist.subscriptionPrice })}
+                        onJoin={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name, amount: artist.subscriptionPrice })}
+                        isSubscribed={isSubscribedToArtist}
+                        expiryDate={expiryDate}
+                        subscriptionPrice={artist.subscriptionPrice}
+                      />
 
-                  ) : (
-                    <InlineArtistMetaSection
-                      avatarUrl={artist.profileImage || artist.coverImage}
-                      name={artist.name}
-                      verified={artist.verified}
-                      subscribersLabel={artist.subscribers}
-                      videoTitle={currentItem?.title ?? currentSong?.title ?? ''}
-                      onSubscribe={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name, amount: artist.subscriptionPrice })}
-                      onJoin={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name, amount: artist.subscriptionPrice })}
-                      isSubscribed={isSubscribedToArtist}
-                      expiryDate={expiryDate}
+                    ) : (
+                      <InlineArtistMetaSection
+                        avatarUrl={artist.profileImage || artist.coverImage}
+                        name={artist.name}
+                        verified={artist.verified}
+                        subscribersLabel={artist.subscribers}
+                        videoTitle={currentItem?.title ?? currentSong?.title ?? ''}
+                        onSubscribe={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name, amount: artist.subscriptionPrice })}
+                        onJoin={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name, amount: artist.subscriptionPrice })}
+                        isSubscribed={isSubscribedToArtist}
+                        expiryDate={expiryDate}
+                      />
+
+                    )}
+
+                    <ChannelNavTabs
+                      active={activeChannelTab}
+                      onChange={(k) => {
+                        setActiveChannelTab(k);
+                        if (k === 'Home') setActiveTab('All');
+                        if (k === 'Videos') setActiveTab('Video');
+                      }}
                     />
 
-                  )}
+                    {isExpiringSoon && isSubscribedToArtist && (
+                      <RetentionBanner
+                        daysLeft={daysUntilExpiry}
+                        onRenew={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name })}
+                      />
+                    )}
 
-                  <ChannelNavTabs
-                    active={activeChannelTab}
-                    onChange={(k) => {
-                      setActiveChannelTab(k);
-                      if (k === 'Home') setActiveTab('All');
-                      if (k === 'Videos') setActiveTab('Video');
-                    }}
+                    <MediaFilterPills active={activeTab} onChange={setActiveTab} />
+                  </>
+                }
+                contentContainerStyle={{
+                  paddingTop: isVideoPlaying ? 220 : 0,
+                  paddingBottom: tabBarHeight + (hasActiveAudio ? 100 : 20),
+                }}
+                renderItem={({ item, index }) => (
+                  <MediaCard
+                    item={item}
+                    index={index}
+                    isGrid={false}
+                    onPress={() => handleSongPress(item)}
                   />
+                )}
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={
+                  <View style={styles.loadingWrap}>
+                    <Text style={styles.emptyText}>
+                      {activeChannelTab === 'Playlists'
+                        ? 'No playlists yet.'
+                        : activeChannelTab === 'Community'
+                          ? 'No community posts yet.'
+                          : 'No uploads yet.'}
+                    </Text>
+                  </View>
+                }
+              />
+            </>
+          )}
 
-                  {isExpiringSoon && isSubscribedToArtist && (
-                    <RetentionBanner 
-                      daysLeft={daysUntilExpiry} 
-                      onRenew={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name })} 
-                    />
-                  )}
+        </View>
 
-                  <MediaFilterPills active={activeTab} onChange={setActiveTab} />
-                </>
-              }
-              contentContainerStyle={{
-                paddingTop: isVideoPlaying ? 220 : 0,
-                paddingBottom: tabBarHeight + (hasActiveAudio ? 100 : 20),
-              }}
-              renderItem={({ item, index }) => (
-                <MediaCard
-                  item={item}
-                  index={index}
-                  isGrid={false}
-                  onPress={() => handleSongPress(item)}
-                />
-              )}
-              showsVerticalScrollIndicator={false}
-              ListEmptyComponent={
-                <View style={styles.loadingWrap}>
-                  <Text style={styles.emptyText}>
-                    {activeChannelTab === 'Playlists'
-                      ? 'No playlists yet.'
-                      : activeChannelTab === 'Community'
-                        ? 'No community posts yet.'
-                        : 'No uploads yet.'}
-                  </Text>
-                </View>
-              }
-            />
-          </>
+        {showStrongUpsell && (
+          <StrongUpsellModal
+            artistName={artist?.name || 'Artist'}
+            onSubscribe={() => {
+              setShowStrongUpsell(false);
+              setLockedClicks(0);
+              navigation.navigate('SubscriptionFlow', { artistId: artist?.id, artistName: artist?.name });
+            }}
+          />
         )}
-
-      </View>
-
-      {showStrongUpsell && (
-        <StrongUpsellModal 
-          artistName={artist?.name || 'Artist'} 
-          onSubscribe={() => {
-            setShowStrongUpsell(false);
-            setLockedClicks(0);
-            navigation.navigate('SubscriptionFlow', { artistId: artist?.id, artistName: artist?.name });
-          }} 
-        />
-      )}
-    </SafeAreaView>
+      </SafeAreaView>
     </LinearGradient>
   );
 }
@@ -782,60 +782,57 @@ function ProfileHeaderSection({
           </Text>
         ) : null}
 
-         {spotifyUrl || youtubeUrl || instagramUrl ? (
-           <View style={styles.socialWrap}>
-             <View style={styles.socialRow}>
-               {spotifyUrl ? (
-                 <Pressable
-                   onPress={() => openUrl(spotifyUrl)}
-                   style={styles.socialIconBtn}
-                 >
-                   <SpotifyIcon size={18} />
-                 </Pressable>
-               ) : null}
-               {youtubeUrl ? (
-                 <Pressable
-                   onPress={() => openUrl(youtubeUrl)}
-                   style={styles.socialIconBtn}
-                 >
-                   <YouTubeIcon size={18} />
-                 </Pressable>
-               ) : null}
-               {instagramUrl ? (
-                 <Pressable
-                   onPress={() => openUrl(instagramUrl)}
-                   style={styles.socialIconBtn}
-                 >
-                   <InstagramBrandIcon size={18} />
-                 </Pressable>
-               ) : null}
-             </View>
-           </View>
-         ) : null}
- 
-         <View style={styles.actionRow}>
-           {isSubscribed ? (
-             <View style={styles.subscribedBadge}>
-               <BadgeCheck color="#fff" size={14} />
-               <Text style={styles.subscribedText}>Subscribed</Text>
-             </View>
-           ) : (
-             <TouchableOpacity style={styles.subscribeBtn} onPress={onSubscribe}>
-               <Text style={styles.subscribeBtnText}>Subscribe • ₹{subscriptionPrice || '49'}</Text>
-             </TouchableOpacity>
-           )}
-           <TouchableOpacity style={styles.joinBtn} onPress={onJoin}>
-             <Text style={styles.joinBtnText}>{isSubscribed ? 'Membership' : 'Join'}</Text>
-             {expiryDate && (
-               <View style={styles.expiryBadge}>
-                 <Text style={styles.expiryBadgeText}>
-                   {isSubscribed ? `Expires: ${new Date(expiryDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}
-                 </Text>
-               </View>
-             )}
-           </TouchableOpacity>
-         </View>
-       </View>
+        {spotifyUrl || youtubeUrl || instagramUrl ? (
+          <View style={styles.socialWrap}>
+            <View style={styles.socialRow}>
+              {spotifyUrl ? (
+                <Pressable
+                  onPress={() => openUrl(spotifyUrl)}
+                  style={styles.socialIconBtn}
+                >
+                  <SpotifyIcon size={18} />
+                </Pressable>
+              ) : null}
+              {youtubeUrl ? (
+                <Pressable
+                  onPress={() => openUrl(youtubeUrl)}
+                  style={styles.socialIconBtn}
+                >
+                  <YouTubeIcon size={18} />
+                </Pressable>
+              ) : null}
+              {instagramUrl ? (
+                <Pressable
+                  onPress={() => openUrl(instagramUrl)}
+                  style={styles.socialIconBtn}
+                >
+                  <InstagramBrandIcon size={18} />
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
+        <View style={styles.actionRow}>
+          {isSubscribed ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={styles.subscribedBadge}>
+                <BadgeCheck color="#fff" size={14} />
+                <Text style={styles.subscribedText}>Subscribed</Text>
+              </View>
+              {expiryDate && (
+                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '500' }}>
+                  Expires: {new Date(expiryDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </Text>
+              )}
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.subscribeBtn} onPress={onSubscribe}>
+              <Text style={styles.subscribeBtnText}>Subscription</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
 
     </View>
   );
@@ -889,20 +886,21 @@ function InlineArtistMetaSection({
 
         </View>
         <View style={styles.inlineActionRow}>
-           {!isSubscribed && (
-             <TouchableOpacity style={styles.inlineSubscribeBtn} onPress={onSubscribe}>
-               <Text style={styles.inlineSubscribeText}>Subscribe</Text>
-             </TouchableOpacity>
-           )}
-           <TouchableOpacity style={[styles.inlineJoinBtn, isSubscribed ? styles.inlineJoinBtnSubscribed : null]} onPress={onJoin}>
-             <Text style={styles.inlineJoinText}>{isSubscribed ? 'Membership' : 'Join'}</Text>
-           </TouchableOpacity>
-           {isSubscribed && expiryDate && (
-             <Text style={styles.inlineExpiryText}>
-               Expires: {new Date(expiryDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-             </Text>
-           )}
-         </View>
+          {!isSubscribed ? (
+            <TouchableOpacity style={styles.inlineSubscribeBtn} onPress={onSubscribe}>
+              <Text style={styles.inlineSubscribeText}>Subscribe</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Subscribed</Text>
+              {expiryDate && (
+                <Text style={styles.inlineExpiryText}>
+                  Expires: {new Date(expiryDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </Text>
+              )}
+            </View>
+          )}
+        </View>
       </View>
     </View>
   );
