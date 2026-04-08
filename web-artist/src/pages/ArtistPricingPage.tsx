@@ -8,6 +8,7 @@ type PricingResponse = {
   yearlyPrice?: number;
   earlyAccessDays?: number;
   contentAccess?: "free" | "subscription";
+  subscriptionFeatures?: string[];
 };
 
 const EARLY_ACCESS_OPTIONS = [7, 14, 30];
@@ -49,6 +50,7 @@ export default function ArtistPricingPage() {
   const [discountPercent, setDiscountPercent] = useState<number>(20);
   const [earlyAccessDays, setEarlyAccessDays] = useState<number>(7);
   const [contentAccess, setContentAccess] = useState<"free" | "subscription">("free");
+  const [subscriptionFeatures, setSubscriptionFeatures] = useState<string[]>([]);
   const [activeTip, setActiveTip] = useState(0);
 
   const backgroundStyle = useMemo(() => ({
@@ -86,6 +88,7 @@ export default function ArtistPricingPage() {
       }
       setEarlyAccessDays(Number(res.data?.earlyAccessDays ?? 7));
       setContentAccess((res.data?.contentAccess as any) ?? "free");
+      setSubscriptionFeatures(res.data?.subscriptionFeatures ?? []);
     } catch {
       // Use defaults on first load
     }
@@ -130,7 +133,8 @@ export default function ArtistPricingPage() {
         yearlyPrice: yearlyNum,
         discountPercent,
         earlyAccessDays,
-        contentAccess
+        contentAccess,
+        subscriptionFeatures
       });
       setSaved(true);
       window.setTimeout(() => setSaved(false), 3000);
@@ -332,6 +336,62 @@ export default function ArtistPricingPage() {
                 </div>
               </div>
 
+              {/* Custom Features */}
+              <div className="rounded-[12px] border border-white/10 bg-[#0e0a0a]/35 px-5 py-5 mt-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[16px]">✨</span>
+                    <div className="text-[14px] font-medium text-[#e6d6d2]">Custom Features</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (subscriptionFeatures.length < 8) {
+                        setSubscriptionFeatures([...subscriptionFeatures, ""]);
+                      }
+                    }}
+                    disabled={subscriptionFeatures.length >= 8}
+                    className="text-[12px] font-medium text-[#c97a54] hover:text-[#e6d6d2] transition-colors disabled:opacity-50"
+                  >
+                    + Add Feature
+                  </button>
+                </div>
+                <div className="text-[12px] text-[#8d7b77] mb-4">Highlight the exclusive benefits fans get by subscribing to your plan.</div>
+                
+                <div className="space-y-3">
+                  {subscriptionFeatures.map((feature, i) => (
+                    <div key={i} className="flex items-center gap-3 bg-[#141010]/40 rounded-[8px] p-2 border border-white/5">
+                      <input
+                        type="text"
+                        value={feature}
+                        onChange={(e) => {
+                          const newFeatures = [...subscriptionFeatures];
+                          newFeatures[i] = e.target.value.substring(0, 100);
+                          setSubscriptionFeatures(newFeatures);
+                        }}
+                        className="flex-1 bg-transparent border-none text-[13px] text-[#e6d6d2] outline-none placeholder-[#8d7b77]"
+                        placeholder="e.g. Exclusive Behind The Scenes"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newFeatures = subscriptionFeatures.filter((_, idx) => idx !== i);
+                          setSubscriptionFeatures(newFeatures);
+                        }}
+                        className="text-[14px] text-[#8d7b77] hover:text-[#fca5a5] p-1"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  {subscriptionFeatures.length === 0 && (
+                    <div className="text-[12px] text-[#8d7b77] italic py-2 text-center border border-dashed border-white/10 rounded-[8px]">
+                      No custom features added yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+              
               {/* Save Button */}
               <div className="flex items-center gap-4 pt-2">
                 <button
@@ -430,6 +490,10 @@ export default function ArtistPricingPage() {
                   <div className="flex justify-between">
                     <span className="text-[#8d7b77]">Content</span>
                     <span className="text-[#e6d6d2] capitalize">{contentAccess === "free" ? "Free" : "Sub only"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[#8d7b77]">Features</span>
+                    <span className="text-[#e6d6d2]">{subscriptionFeatures.length} added</span>
                   </div>
                 </div>
               </div>

@@ -399,6 +399,7 @@ router.get("/me", requireAuth, requireArtist, async (req: any, res: any) => {
         accent_color,
         social_links,
         subscription_price,
+        COALESCE(subscription_features, '[]'::jsonb) as subscription_features,
         admin_remarks
        FROM users
        WHERE id = $1 AND UPPER(role) = 'ARTIST'
@@ -432,7 +433,8 @@ router.get("/me", requireAuth, requireArtist, async (req: any, res: any) => {
         adminNote: u.admin_remarks ?? null,
         accentColor: u.accent_color ?? null,
         socialLinks: u.social_links ?? null,
-        subscriptionPrice: Number(u.subscription_price ?? 0)
+        subscriptionPrice: Number(u.subscription_price ?? 0),
+        subscriptionFeatures: Array.isArray(u.subscription_features) ? u.subscription_features : []
       },
       earlyAccessDays: EARLY_ACCESS_DAYS,
       correlationId
@@ -512,7 +514,7 @@ router.get("/pricing", requireAuth, requireArtist, async (req: any, res: any) =>
   try {
 
     const rows = await safeRows<any>(
-      "SELECT COALESCE(subscription_price, 0) as subscription_price FROM users WHERE id = $1 AND UPPER(role) = 'ARTIST' LIMIT 1",
+      "SELECT COALESCE(subscription_price, 0) as subscription_price, COALESCE(subscription_features, '[]'::jsonb) as subscription_features FROM users WHERE id = $1 AND UPPER(role) = 'ARTIST' LIMIT 1",
       [artistUserId],
       []
     );
@@ -525,6 +527,7 @@ router.get("/pricing", requireAuth, requireArtist, async (req: any, res: any) =>
     return res.json({
       success: true,
       subscriptionPrice: Number(rows[0].subscription_price ?? 0),
+      subscriptionFeatures: Array.isArray(rows[0].subscription_features) ? rows[0].subscription_features : [],
       earlyAccessDays: EARLY_ACCESS_DAYS,
       correlationId
     });
@@ -540,7 +543,7 @@ router.patch("/pricing", requireAuth, requireArtist, async (req: any, res: any) 
 
   try {
 
-    const { subscriptionPrice } = req.body as { subscriptionPrice?: number | string };
+    const { subscriptionPrice, subscriptionFeatures } = req.body as { subscriptionPrice?: number | string; subscriptionFeatures?: string[] };
     const next = Number(subscriptionPrice);
     if (!Number.isFinite(next) || next < 0) {
       return res.status(400).json({
@@ -550,9 +553,13 @@ router.patch("/pricing", requireAuth, requireArtist, async (req: any, res: any) 
       });
     }
 
+    const nextFeatures = Array.isArray(subscriptionFeatures) 
+      ? subscriptionFeatures.map((s: string) => s.substring(0, 100)).slice(0, 8) 
+      : [];
+
     await pool.query(
-      "UPDATE users SET subscription_price = $2 WHERE id = $1 AND UPPER(role) = 'ARTIST'",
-      [artistUserId, next]
+      "UPDATE users SET subscription_price = $2, subscription_features = $3 WHERE id = $1 AND UPPER(role) = 'ARTIST'",
+      [artistUserId, next, JSON.stringify(nextFeatures)]
     );
 
     await invalidateArtistCache();

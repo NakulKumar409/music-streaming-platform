@@ -250,6 +250,7 @@ router.get("/:artistId", (req, res) => {
           social_links,
           COALESCE(status, 'ACTIVE') as status,
           COALESCE(subscription_price, 0) as subscription_price,
+          COALESCE(subscription_features, '[]'::jsonb) as subscription_features,
           COALESCE(genre, '') as genre
          FROM users
          WHERE id = $1
@@ -286,6 +287,7 @@ router.get("/:artistId", (req, res) => {
           instagramUrl,
           status: (row.status ?? 'ACTIVE').toString(),
           subscriptionPrice: Number(row.subscription_price ?? 0),
+          subscriptionFeatures: Array.isArray(row.subscription_features) ? row.subscription_features : [],
           genre: (row.genre ?? '').toString(),
         },
       });
@@ -299,6 +301,7 @@ router.get("/:artistId", (req, res) => {
           artist_bio,
           social_links,
           COALESCE(subscription_price, 0) as subscription_price,
+          COALESCE(subscription_features, '[]'::jsonb) as subscription_features,
           COALESCE(genre, '') as genre
          FROM users
          WHERE id = $1
@@ -334,6 +337,7 @@ router.get("/:artistId", (req, res) => {
           instagramUrl,
           status: 'ACTIVE',
           subscriptionPrice: Number(row.subscription_price ?? 0),
+          subscriptionFeatures: Array.isArray(row.subscription_features) ? row.subscription_features : [],
           genre: (row.genre ?? '').toString(),
         },
       });

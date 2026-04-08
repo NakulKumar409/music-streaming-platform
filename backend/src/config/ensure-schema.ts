@@ -61,6 +61,7 @@ export async function ensureUsersSchema(): Promise<void> {
     "ALTER TABLE users ALTER COLUMN is_deleted SET DEFAULT false",
     "ALTER TABLE users ALTER COLUMN trust_score SET DEFAULT 100",
     "ALTER TABLE users ALTER COLUMN strike_count SET DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_features JSONB NOT NULL DEFAULT '[]'",
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email)",
     "CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)",
     "CREATE INDEX IF NOT EXISTS idx_users_artist_status ON users(artist_status)",

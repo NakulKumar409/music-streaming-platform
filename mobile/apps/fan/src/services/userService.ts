@@ -106,6 +106,7 @@ export type ArtistProfile = {
   isVerified: boolean;
   profileImageUrl?: string;
   bio?: string;
+  subscriptionFeatures?: string[];
 };
 
 export interface UserService {
@@ -323,6 +324,7 @@ export const userService: UserService = {
           isVerified: Boolean(a.isVerified),
           profileImageUrl: a.profileImageUrl,
           bio: a.bio,
+          subscriptionFeatures: Array.isArray(a.subscriptionFeatures) ? a.subscriptionFeatures : [],
         };
       }
       return null;

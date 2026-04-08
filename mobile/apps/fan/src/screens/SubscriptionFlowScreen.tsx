@@ -188,7 +188,10 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
     ? platformFeaturesRaw.map((f, i) => ({ text: f, icon: PLATFORM_BENEFITS[i % PLATFORM_BENEFITS.length].icon }))
     : PLATFORM_BENEFITS;
 
-  const benefits = isPlatform ? mappedPlatformBenefits : ARTIST_BENEFITS;
+  const hasCustomFeatures = artistProfile?.subscriptionFeatures?.length && artistProfile.subscriptionFeatures.length > 0;
+  const mappedArtistBenefits = hasCustomFeatures
+    ? artistProfile!.subscriptionFeatures!.map((f, i) => ({ text: f, icon: ARTIST_BENEFITS[i % ARTIST_BENEFITS.length].icon }))
+    : ARTIST_BENEFITS;
 
   const startPayment = async () => {
     if (isCreatingOrder || isVerifyingPayment) return;
@@ -443,7 +446,7 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
                       />
 
                       {/* Benefits */}
-                      {benefits.map((b, i) => (
+                      {mappedPlatformBenefits.map((b, i) => (
                         <View key={i} style={s.benefitRow}>
                           <View style={[s.checkCircle, { backgroundColor: isPlatform ? 'rgba(108,99,255,0.2)' : 'rgba(255,122,24,0.2)' }]}>
                             <Check color={accentColor} size={12} strokeWidth={3} />
@@ -508,7 +511,7 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
                           style={s.cardDivider}
                         />
 
-                        {ARTIST_BENEFITS.map((b, i) => (
+                        {mappedArtistBenefits.map((b, i) => (
                           <View key={i} style={s.benefitRow}>
                             <View style={[s.checkCircle, { backgroundColor: 'rgba(255,122,24,0.2)' }]}>
                               <Check color="#FF7A18" size={12} strokeWidth={3} />
