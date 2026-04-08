@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { http } from "../services/http";
 
@@ -41,6 +41,137 @@ function buildObjectUrl(file: File | null) {
   } catch {
     return null;
   }
+}
+
+function GenreCombobox({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [inputValue, setInputValue] = useState(value);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Sync external value changes
+  useEffect(() => {
+    setInputValue(value);
+  }, [value]);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtered = useCallback(() => {
+    const q = (inputValue || "").trim().toLowerCase();
+    if (!q) return GENRES;
+    return GENRES.filter((g) => g.toLowerCase().includes(q));
+  }, [inputValue]);
+
+  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value;
+    setInputValue(v);
+    onChange(v);
+    setOpen(true);
+  };
+
+  const handleSelect = (g: string) => {
+    setInputValue(g);
+    onChange(g);
+    setOpen(false);
+    inputRef.current?.blur();
+  };
+
+  const suggestions = filtered();
+
+  return (
+    <div ref={containerRef} className="relative mt-2">
+      {/* Input row */}
+      <div className="flex h-[48px] w-full rounded-[8px] border border-white/10 bg-[#141010]/55 overflow-hidden focus-within:border-[#7a3f31]/60 transition-colors">
+        <input
+          ref={inputRef}
+          type="text"
+          value={inputValue}
+          onChange={handleInput}
+          onFocus={() => setOpen(true)}
+          placeholder="Type or select a genre…"
+          className="flex-1 h-full bg-transparent px-4 text-[14px] text-[#f0e5e2] placeholder-[#6b5b57] outline-none"
+        />
+        {/* Chevron toggle button */}
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => {
+            setOpen((prev) => !prev);
+            if (!open) inputRef.current?.focus();
+          }}
+          className="flex items-center justify-center px-3 text-[#8d7b77] hover:text-[#c9a89e] transition-colors"
+          aria-label="Toggle genre list"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Dropdown list */}
+      {open && (
+        <div className="absolute z-50 left-0 right-0 mt-1 rounded-[10px] border border-white/10 bg-[#1a0f0f] shadow-[0_12px_40px_rgba(0,0,0,0.6)] overflow-hidden">
+          {/* "Use custom" hint when typing something not in list */}
+          {inputValue.trim() && !GENRES.map(g => g.toLowerCase()).includes(inputValue.trim().toLowerCase()) && (
+            <button
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); handleSelect(inputValue.trim()); }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] text-[#c97a54] hover:bg-[#2a1210]/60 transition-colors border-b border-white/5"
+            >
+              <span className="text-[15px]">✏️</span>
+              Use &quot;<strong>{inputValue.trim()}</strong>&quot; as custom genre
+            </button>
+          )}
+
+          {suggestions.length > 0 ? (
+            <ul className="max-h-[220px] overflow-y-auto custom-scroll">
+              {suggestions.map((g) => (
+                <li key={g}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); handleSelect(g); }}
+                    className={`w-full text-left px-4 py-2.5 text-[14px] transition-colors hover:bg-[#2a1210]/60 ${
+                      inputValue === g ? "text-[#c97a54] bg-[#2a1210]/40" : "text-[#e6d6d2]"
+                    }`}
+                  >
+                    {g}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="px-4 py-3 text-[13px] text-[#6b5b57]">No matching genres — your custom genre will be used.</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function UnifiedUploadSection({
@@ -204,18 +335,13 @@ function UnifiedUploadSection({
 
           <div>
             <label className="block text-[13px] uppercase tracking-widest text-[#b8a6a1]">Genre</label>
-            <input
-              list="genre-options"
+            <GenreCombobox
               value={value.genre}
-              onChange={(e) => onChange({ ...value, genre: e.target.value })}
-              className="mt-2 w-full h-[48px] rounded-[8px] border border-white/10 bg-[#141010]/55 px-4 text-[14px] text-[#f0e5e2] outline-none focus:border-[#7a3f31]/60 transition-colors"
-              placeholder="Start typing or select a genre..."
+              onChange={(g) => onChange({ ...value, genre: g })}
             />
-            <datalist id="genre-options">
-              {GENRES.map((g) => (
-                <option key={g} value={g} />
-              ))}
-            </datalist>
+            <p className="mt-1.5 text-[11px] text-[#8d7b77]">
+              Type your own genre or choose from the list below.
+            </p>
           </div>
 
           <div>

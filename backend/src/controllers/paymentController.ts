@@ -26,10 +26,11 @@ const safeEqualHex = (aHex: string, bHex: string) => {
 export const createOrder = async (req: any, res: Response) => {
   try {
     const userId = Number(req.user?.id);
-    const { amount, artistId, artistName } = req.body as {
+    const { amount, artistId, artistName, billingCycle } = req.body as {
       amount?: number;
       artistId?: number | string;
       artistName?: string;
+      billingCycle?: 'monthly' | 'yearly';
     };
 
     if (!Number.isFinite(userId) || userId <= 0) {
@@ -45,9 +46,7 @@ export const createOrder = async (req: any, res: Response) => {
     let artistIdNumber = Number(artistIdRaw);
 
     // If artistId is '0', empty, or not a positive number — check if it's a username string
-    // For Platform plan: artistId will be '0' or '' — that's fine, skip lookup
     if (artistIdRaw && artistIdRaw !== '0' && (!Number.isFinite(artistIdNumber) || artistIdNumber <= 0)) {
-      // Probably a username string — try to resolve it
       const artistRow = await pool.query(
         `SELECT id FROM users WHERE username = $1 LIMIT 1`,
         [artistIdRaw]
@@ -63,21 +62,25 @@ export const createOrder = async (req: any, res: Response) => {
     // Normalize: 0 or NaN → 0 means Platform plan
     let amountPaise = Math.floor(amountInt);
     const isPlatform = !artistIdNumber || artistIdNumber <= 0;
+    const isYearly = billingCycle === 'yearly';
 
     // ── Dynamic Platform Price Lookup ──────────────────────────────────────────
     if (isPlatform) {
       try {
         const configRow = await pool.query(
-          "SELECT price FROM platform_subscription_configs WHERE is_active = true ORDER BY updated_at DESC LIMIT 1"
+          "SELECT price, yearly_price FROM platform_subscription_configs WHERE is_active = true ORDER BY updated_at DESC LIMIT 1"
         );
         if (configRow.rows.length > 0) {
-          const dbPrice = Number(configRow.rows[0].price);
-          // Standardise on Paise (multiply by 100)
-          amountPaise = Math.floor(dbPrice * 100);
-          logger.info({ userId, dbPrice, amountPaise }, "[PAYMENT] Using dynamic platform price");
+          const cfg = configRow.rows[0];
+          const dbPrice = isYearly && cfg.yearly_price ? Number(cfg.yearly_price) : Number(cfg.price);
+          
+          if (dbPrice > 0) {
+            amountPaise = Math.floor(dbPrice * 100);
+            logger.info({ userId, dbPrice, amountPaise, billingCycle }, "[PAYMENT] Using dynamic platform price");
+          }
         }
       } catch (err) {
-        logger.error({ err }, "[PAYMENT] Failed to fetch dynamic platform price, falling back to request amount");
+        logger.error({ err }, "[PAYMENT] Failed to fetch dynamic platform price");
       }
     }
 
@@ -102,14 +105,21 @@ export const createOrder = async (req: any, res: Response) => {
       // ── Dynamic Artist Price Lookup ──────────────────────────────────────────
       try {
         const artistRow = await pool.query(
-          "SELECT COALESCE(subscription_price, 0) as price FROM users WHERE id = $1 AND UPPER(role) = 'ARTIST'",
+          "SELECT COALESCE(subscription_price, 0) as price, COALESCE(yearly_subscription_price, 0) as yearly_price FROM users WHERE id = $1 AND UPPER(role) = 'ARTIST'",
           [artistIdNumber]
         );
         if (artistRow.rows.length > 0) {
-          const dbPrice = Number(artistRow.rows[0].price);
+          const cfg = artistRow.rows[0];
+          let dbPrice = isYearly && Number(cfg.yearly_price) > 0 ? Number(cfg.yearly_price) : Number(cfg.price);
+          
+          // Fallback: If yearly is requested but only monthly is set, auto-calculate 20% discount if yearly_price is 0
+          if (isYearly && (!cfg.yearly_price || Number(cfg.yearly_price) <= 0) && Number(cfg.price) > 0) {
+             dbPrice = Number(cfg.price) * 12 * 0.8;
+          }
+
           if (dbPrice > 0) {
             amountPaise = Math.floor(dbPrice * 100);
-            logger.info({ userId, artistId: artistIdNumber, dbPrice, amountPaise }, "[PAYMENT] Using dynamic artist price");
+            logger.info({ userId, artistId: artistIdNumber, dbPrice, amountPaise, billingCycle }, "[PAYMENT] Using dynamic artist price");
           }
         }
       } catch (err) {
@@ -128,16 +138,17 @@ export const createOrder = async (req: any, res: Response) => {
         user_id: String(userId),
         artist_id: String(artistIdNumber),
         artist_name: (artistName ?? "").toString() || "Unknown",
+        billing_cycle: billingCycle || 'monthly'
       },
     });
 
     await pool.query(
-      `INSERT INTO transactions (user_id, razorpay_order_id, amount, currency, status, artist_name)
-       VALUES ($1, $2, $3, 'INR', 'CREATED', $4)
+      `INSERT INTO transactions (user_id, razorpay_order_id, amount, currency, status, artist_name, billing_cycle)
+       VALUES ($1, $2, $3, 'INR', 'CREATED', $4, $5)
        ON CONFLICT (razorpay_order_id)
-       DO UPDATE SET amount = EXCLUDED.amount, artist_name = EXCLUDED.artist_name, status = 'CREATED'
+       DO UPDATE SET amount = EXCLUDED.amount, artist_name = EXCLUDED.artist_name, status = 'CREATED', billing_cycle = EXCLUDED.billing_cycle
       `,
-      [userId, order.id, amountPaise, (artistName ?? "").toString() || "Unknown"]
+      [userId, order.id, amountPaise, (artistName ?? "").toString() || "Unknown", billingCycle || 'monthly']
     );
 
     return res.json({
@@ -218,7 +229,7 @@ export const confirmPayment = async (req: any, res: Response) => {
 
     // ── Fetch transaction ──────────────────────────────────────────────────────
     const found = await pool.query(
-      `SELECT id, user_id, razorpay_order_id, amount, currency, status
+      `SELECT id, user_id, razorpay_order_id, amount, currency, status, billing_cycle
        FROM transactions
        WHERE razorpay_order_id = $1
        LIMIT 1`,
@@ -249,9 +260,13 @@ export const confirmPayment = async (req: any, res: Response) => {
     const planType = isPlatform ? "PLATFORM" : "ARTIST";
     const amountPaise = Number(tx.amount ?? 0);
 
-    // Subscription active for 30 days
+    // Subscription active for 30 days (monthly) or 365 days (yearly)
+    const isYearlyPlan = tx.billing_cycle === 'yearly';
+    const planDurationLabel = isYearlyPlan ? 'YEARLY' : 'MONTHLY';
+    const daysToAdd = isYearlyPlan ? 365 : 30;
+
     const startDate = new Date();
-    const endDate = new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const endDate = new Date(startDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
     const graceEndsAt = new Date(endDate.getTime() + 2 * 24 * 60 * 60 * 1000);
 
     if (isPlatform) {
@@ -267,8 +282,8 @@ export const confirmPayment = async (req: any, res: Response) => {
         // No existing row — insert fresh
         await pool.query(
           `INSERT INTO subscriptions (user_id, type, status, plan_type, start_date, end_date, next_billing_date, grace_ends_at, auto_renew, created_at, updated_at)
-           VALUES ($1, 'PLATFORM', 'ACTIVE', 'MONTHLY', $2, $3, $3, $4, true, now(), now())`,
-          [userId, startDate, endDate, graceEndsAt]
+           VALUES ($1, 'PLATFORM', 'ACTIVE', $5, $2, $3, $3, $4, true, now(), now())`,
+          [userId, startDate, endDate, graceEndsAt, planDurationLabel]
         );
       }
     } else {
@@ -284,8 +299,8 @@ export const confirmPayment = async (req: any, res: Response) => {
         // No existing row — insert fresh
         await pool.query(
           `INSERT INTO subscriptions (user_id, artist_id, type, status, plan_type, start_date, end_date, next_billing_date, grace_ends_at, auto_renew, created_at, updated_at)
-           VALUES ($1, $2, 'ARTIST', 'ACTIVE', 'MONTHLY', $3, $4, $4, $5, true, now(), now())`,
-          [userId, artistId, startDate, endDate, graceEndsAt]
+           VALUES ($1, $2, 'ARTIST', 'ACTIVE', $6, $3, $4, $4, $5, true, now(), now())`,
+          [userId, artistId, startDate, endDate, graceEndsAt, planDurationLabel]
         );
       }
 

@@ -5,7 +5,7 @@ import ErrorBoundary from "../components/ErrorBoundary";
 type PricingResponse = {
   success: boolean;
   subscriptionPrice?: number;
-  yearlyPrice?: number;
+  yearlySubscriptionPrice?: number;
   earlyAccessDays?: number;
   contentAccess?: "free" | "subscription";
   subscriptionFeatures?: string[];
@@ -79,7 +79,7 @@ export default function ArtistPricingPage() {
     try {
       const res = await http.get<PricingResponse>("/api/v1/artist/pricing");
       const p = Number(res.data?.subscriptionPrice ?? 9.99);
-      const y = Number(res.data?.yearlyPrice ?? 0);
+      const y = Number(res.data?.yearlySubscriptionPrice ?? 0);
       setMonthlyPrice(p.toFixed(2));
       // Derive discount from saved prices if available
       if (y > 0 && p > 0) {
@@ -130,7 +130,7 @@ export default function ArtistPricingPage() {
     try {
       await http.patch("/api/v1/artist/pricing", {
         subscriptionPrice: monthlyNum,
-        yearlyPrice: yearlyNum,
+        yearlySubscriptionPrice: yearlyNum,
         discountPercent,
         earlyAccessDays,
         contentAccess,
@@ -278,62 +278,32 @@ export default function ArtistPricingPage() {
                 </div>
               </div>
 
-              {/* Early Access + Content Access row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-                {/* Early Access */}
-                <div className="rounded-[12px] border border-white/10 bg-[#0e0a0a]/35 px-5 py-5">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[16px]">⏰</span>
-                    <div className="text-[14px] font-medium text-[#e6d6d2]">Early Access</div>
-                  </div>
-                  <div className="text-[12px] text-[#8d7b77] mb-4">How many days before public release subscribers get access.</div>
-                  <div className="flex gap-2">
-                    {EARLY_ACCESS_OPTIONS.map((days) => (
-                      <button
-                        key={days}
-                        type="button"
-                        onClick={() => setEarlyAccessDays(days)}
-                        className={`flex-1 h-[42px] rounded-[8px] border text-[13px] font-medium transition-all ${
-                          earlyAccessDays === days
-                            ? "border-[#c97a54]/50 bg-[#6a352c]/35 text-[#c97a54]"
-                            : "border-white/10 bg-[#141010]/40 text-[#8d7b77] hover:text-[#e6d6d2] hover:bg-white/5"
-                        }`}
-                      >
-                        {days}d
-                      </button>
-                    ))}
-                  </div>
-                  <p className="mt-3 text-[11px] text-[#8d7b77]">
-                    Subscribers get content <span className="text-[#e6d6d2]">{earlyAccessDays} days</span> before everyone else.
-                  </p>
+              {/* Early Access */}
+              <div className="rounded-[12px] border border-white/10 bg-[#0e0a0a]/35 px-5 py-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[16px]">⏰</span>
+                  <div className="text-[14px] font-medium text-[#e6d6d2]">Early Access</div>
                 </div>
-
-                {/* Content Access */}
-                <div className="rounded-[12px] border border-white/10 bg-[#0e0a0a]/35 px-5 py-5">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[16px]">🔐</span>
-                    <div className="text-[14px] font-medium text-[#e6d6d2]">Content Access</div>
-                  </div>
-                  <div className="text-[12px] text-[#8d7b77] mb-4">Control who can listen to your uploaded tracks.</div>
-                  <div className="flex flex-col gap-2">
-                    {(["free", "subscription"] as const).map((type) => (
-                      <button
-                        key={type}
-                        type="button"
-                        onClick={() => setContentAccess(type)}
-                        className={`h-[42px] rounded-[8px] border text-[13px] font-medium transition-all flex items-center gap-2 px-4 ${
-                          contentAccess === type
-                            ? "border-[#c97a54]/50 bg-[#6a352c]/35 text-[#c97a54]"
-                            : "border-white/10 bg-[#141010]/40 text-[#8d7b77] hover:text-white hover:bg-white/5"
-                        }`}
-                      >
-                        <span>{type === "free" ? "🌐" : "🔒"}</span>
-                        <span>{type === "free" ? "Free for Everyone" : "Subscribers Only"}</span>
-                      </button>
-                    ))}
-                  </div>
+                <div className="text-[12px] text-[#8d7b77] mb-4">How many days before public release subscribers get access.</div>
+                <div className="flex gap-2">
+                  {EARLY_ACCESS_OPTIONS.map((days) => (
+                    <button
+                      key={days}
+                      type="button"
+                      onClick={() => setEarlyAccessDays(days)}
+                      className={`flex-1 h-[42px] rounded-[8px] border text-[13px] font-medium transition-all ${
+                        earlyAccessDays === days
+                          ? "border-[#c97a54]/50 bg-[#6a352c]/35 text-[#c97a54]"
+                          : "border-white/10 bg-[#141010]/40 text-[#8d7b77] hover:text-[#e6d6d2] hover:bg-white/5"
+                      }`}
+                    >
+                      {days}d
+                    </button>
+                  ))}
                 </div>
+                <p className="mt-3 text-[11px] text-[#8d7b77]">
+                  Subscribers get content <span className="text-[#e6d6d2]">{earlyAccessDays} days</span> before everyone else.
+                </p>
               </div>
 
               {/* Custom Features */}
@@ -487,10 +457,7 @@ export default function ArtistPricingPage() {
                     <span className="text-[#8d7b77]">Early Access</span>
                     <span className="text-[#e6d6d2]">{earlyAccessDays} days</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-[#8d7b77]">Content</span>
-                    <span className="text-[#e6d6d2] capitalize">{contentAccess === "free" ? "Free" : "Sub only"}</span>
-                  </div>
+
                   <div className="flex justify-between">
                     <span className="text-[#8d7b77]">Features</span>
                     <span className="text-[#e6d6d2]">{subscriptionFeatures.length} added</span>

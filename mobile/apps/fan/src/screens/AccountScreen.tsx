@@ -18,7 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../store/authStore';
-import { CreditCard, HelpCircle, Library, LogOut, User, Camera, Crown, ArrowDown, ShieldCheck, Lock } from 'lucide-react-native';
+import { CreditCard, HelpCircle, Library, LogOut, User, Camera, Crown, ArrowDownToLine, ShieldCheck, Lock } from 'lucide-react-native';
 import { SubscriptionStatusCard } from '../ui/SubscriptionUI';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
@@ -553,7 +553,7 @@ export default function AccountScreen() {
                     style={styles.downloadIcon} 
                     onPress={() => handleDownloadInvoice(tx.id)}
                   >
-                    <ArrowDown size={20} color={Colors.accent} />
+                    <ArrowDownToLine size={20} color={Colors.accent} />
                   </TouchableOpacity>
                 </View>
               </View>

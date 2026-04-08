@@ -1191,15 +1191,9 @@ export default function VideoScreen() {
 
   const isSelectionAllowed = useCallback(
     (q: string) => {
-      // If user can't stream HD, cap them at maxAllowedResolution (usually 240p).
-      const maxRank = qualityRank(maxAllowedResolution);
-      if (!isStreamingHdAllowed) {
-        if (q === 'Auto') return false;
-        return qualityRank(q) <= maxRank;
-      }
-
-      // HD subscribers: allow everything.
-      return true;
+      if (isStreamingHdAllowed) return true;
+      // If user can't stream HD, only 144p and 240p are allowed.
+      return q === '144p' || q === '240p';
     },
     [isStreamingHdAllowed, maxAllowedResolution, qualityRank]
   );
@@ -1225,8 +1219,8 @@ export default function VideoScreen() {
         return;
       }
 
-      const isRequestedHD = q === '720p' || q === '1080p' || q === 'Auto';
-      if (isRequestedHD && !isStreamingHdAllowed) {
+      const isLockedQuality = (q !== '144p' && q !== '240p');
+      if (isLockedQuality && !isStreamingHdAllowed) {
         setLastAttemptedHdQuality(q);
         setShowQualitySheet(false);
         setShowHdLockModal(true);
@@ -1786,7 +1780,7 @@ export default function VideoScreen() {
                     >
                       {availableQualities.map((q) => {
                         const active = q === selectedQuality;
-                        const isHdOption = q === '720p' || q === '1080p';
+                        const isLockedForFree = !isStreamingHdAllowed && (q !== '144p' && q !== '240p');
                         return (
                           <Pressable
                             key={q}
@@ -1798,9 +1792,9 @@ export default function VideoScreen() {
                             <Text style={[styles.qualityText, active ? styles.qualityTextActive : null]}>
                               {q}
                             </Text>
-                            {isHdOption ? (
-                              <View style={styles.qualityHdTag}>
-                                <Text style={styles.qualityHdTagText}>HD</Text>
+                            {isLockedForFree ? (
+                              <View style={[styles.qualityHdTag, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+                                <Lock color="#FFA500" size={12} />
                               </View>
                             ) : null}
                             {active ? (

@@ -25,6 +25,7 @@ const { width: SW, height: SH } = Dimensions.get('window');
 
 type PaymentStep = 'PLAN_SELECT' | 'PROCESSING' | 'SUCCESS';
 type PlanType = 'ARTIST' | 'PLATFORM';
+type BillingCycle = 'monthly' | 'yearly';
 
 type RouteParams = {
   artistId?: string;
@@ -54,39 +55,6 @@ const ARTIST_BENEFITS = [
   { text: 'Behind-the-scenes access', icon: '🎭' },
 ];
 
-// ─── Decorative floating orbs ──────────────────────────────────────────────────
-function FloatingOrbs() {
-  const anim1 = useRef(new Animated.Value(0)).current;
-  const anim2 = useRef(new Animated.Value(0)).current;
-  const anim3 = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const loop = (anim: Animated.Value, duration: number, delay: number) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
-          Animated.timing(anim, { toValue: 0, duration, useNativeDriver: true }),
-        ])
-      ).start();
-    loop(anim1, 3400, 0);
-    loop(anim2, 4200, 700);
-    loop(anim3, 3800, 1400);
-  }, []);
-
-  const translateY1 = anim1.interpolate({ inputRange: [0, 1], outputRange: [0, -20] });
-  const translateY2 = anim2.interpolate({ inputRange: [0, 1], outputRange: [0, -16] });
-  const translateY3 = anim3.interpolate({ inputRange: [0, 1], outputRange: [0, -24] });
-
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Animated.View style={[s.orb, s.orb1, { transform: [{ translateY: translateY1 }] }]} />
-      <Animated.View style={[s.orb, s.orb2, { transform: [{ translateY: translateY2 }] }]} />
-      <Animated.View style={[s.orb, s.orb3, { transform: [{ translateY: translateY3 }] }]} />
-    </View>
-  );
-}
-
 // ─── Main Component ─────────────────────────────────────────────────────────────
 export default function SubscriptionFlowScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
@@ -109,6 +77,7 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
   const [upsellStatus, setUpsellStatus] = useState<any>(null);
   const [artistProfile, setArtistProfile] = useState<any>(null);
   const [isArtistProfileLoading, setIsArtistProfileLoading] = useState(false);
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
 
 
   // Fade-in on mount
@@ -169,29 +138,55 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
   const hasDiscount = Boolean(discountPrice && discountPrice < rawPrice);
   const finalPrice = hasDiscount ? Number(discountPrice) : rawPrice;
 
-  // Artist Price logic
-  const artistPrice = artistProfile?.subscriptionPrice ?? 49;
-  const artistPriceDisplay = `₹${artistPrice}`;
+  // ── Billing cycle derived prices ──────────────────────────────────────────
+  // Platform — yearly uses a ~20% annual discount
+  const platformMonthlyPrice = finalPrice;
+  const platformYearlyPrice = (() => {
+    if (platformConfig?.yearly_price && platformConfig.yearly_price > 0) return Number(platformConfig.yearly_price);
+    if (hasDiscount && discountPrice) return Number(discountPrice) * 12;
+    return parseFloat((finalPrice * 12 * 0.8).toFixed(2));
+  })();
+  const platformDisplayPrice =
+    billingCycle === 'yearly' ? platformYearlyPrice : platformMonthlyPrice;
+  const platformPriceDisplay =
+    isPlatformConfigLoading || finalPrice === 0
+      ? '—'
+      : `₹${billingCycle === 'yearly' ? platformYearlyPrice.toFixed(0) : platformMonthlyPrice}`;
 
-  const amountPaise = isPlatform ? (finalPrice * 100) : (artistPrice * 100);
-  const platformPriceDisplay = isPlatformConfigLoading || finalPrice === 0 ? '—' : `₹${finalPrice}`;
-  const priceDisplay = isPlatform 
-    ? platformPriceDisplay
-    : artistPriceDisplay;
-  const durationLabel = platformDuration === 'yearly' ? '/yr' : '/mo';
+  // Artist — yearly uses artistProfile.yearlyPrice if available, else 20% off
+  const artistMonthlyPrice: number = artistProfile?.subscriptionPrice ?? 49;
+  const artistYearlyPrice: number = (() => {
+    if (artistProfile?.yearlyPrice && artistProfile.yearlyPrice > 0)
+      return Number(artistProfile.yearlyPrice);
+    return parseFloat((artistMonthlyPrice * 12 * 0.8).toFixed(2));
+  })();
+  const artistPriceDisplay =
+    `₹${billingCycle === 'yearly' ? artistYearlyPrice.toFixed(0) : artistMonthlyPrice}`;
+
+  const cycleSuffix = billingCycle === 'yearly' ? '/yr' : '/mo';
+  const durationLabel = cycleSuffix;
+
+  // Amount sent to Razorpay (in paise)
+  const amountPaise = isPlatform
+    ? Math.round(platformDisplayPrice * 100)
+    : Math.round((billingCycle === 'yearly' ? artistYearlyPrice : artistMonthlyPrice) * 100);
+
+  const priceDisplay = isPlatform ? platformPriceDisplay : artistPriceDisplay;
 
   const planLabel = isPlatform ? 'Platform Plan' : `${artistName} Plan`;
   const accentColor = isPlatform ? '#6C63FF' : '#FF7A18';
   const accentAlt = isPlatform ? '#4AA3FF' : '#FF3D00';
 
-  const mappedPlatformBenefits = platformFeaturesRaw.length > 0 
+  const mappedPlatformBenefits = platformFeaturesRaw.length > 0
     ? platformFeaturesRaw.map((f, i) => ({ text: f, icon: PLATFORM_BENEFITS[i % PLATFORM_BENEFITS.length].icon }))
     : PLATFORM_BENEFITS;
 
   const hasCustomFeatures = artistProfile?.subscriptionFeatures?.length && artistProfile.subscriptionFeatures.length > 0;
   const mappedArtistBenefits = hasCustomFeatures
-    ? artistProfile!.subscriptionFeatures!.map((f, i) => ({ text: f, icon: ARTIST_BENEFITS[i % ARTIST_BENEFITS.length].icon }))
+    ? artistProfile!.subscriptionFeatures!.map((f: string, i: number) => ({ text: f, icon: ARTIST_BENEFITS[i % ARTIST_BENEFITS.length].icon }))
     : ARTIST_BENEFITS;
+
+
 
   const startPayment = async () => {
     if (isCreatingOrder || isVerifyingPayment) return;
@@ -219,8 +214,9 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
       try {
         res = await apiV1.post('/subscriptions/order', {
           amount: amountPaise,
-          artistId: artistIdValue || '0',
-          artistName,
+          artistId: selectedPlan === 'PLATFORM' ? '0' : (artistIdValue || '0'),
+          artistName: selectedPlan === 'PLATFORM' ? 'Platform' : artistName,
+          billingCycle: billingCycle,
         });
       } catch (orderErr: any) {
         const status = orderErr?.response?.status;
@@ -333,19 +329,6 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
   return (
     <ErrorBoundary label="Payments: Subscription Flow">
       <View style={s.root}>
-        {/* ── Rich gradient background ── */}
-        <LinearGradient
-          colors={['#0A0A1A', '#0F0A2E', '#130820', '#0A0A1A']}
-          locations={[0, 0.3, 0.7, 1]}
-          style={StyleSheet.absoluteFill}
-        />
-
-        {/* Decorative floating orbs */}
-        <FloatingOrbs />
-
-        {/* Subtle mesh overlay */}
-        <View style={s.meshOverlay} pointerEvents="none" />
-
         <SafeAreaView style={s.safe}>
           {/* ══════════════════════════════════════════════════
               PLAN SELECT SCREEN
@@ -381,6 +364,29 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
                     </LinearGradient>
                   </View>
                 )}
+
+                {/* ── Billing Cycle Toggle ── */}
+                <View style={s.billingToggleWrap}>
+                  <Pressable
+                    style={[s.billingToggleBtn, billingCycle === 'monthly' && s.billingToggleBtnActive]}
+                    onPress={() => setBillingCycle('monthly')}
+                  >
+                    <Text style={[s.billingToggleText, billingCycle === 'monthly' && s.billingToggleTextActive]}>
+                      Monthly
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[s.billingToggleBtn, billingCycle === 'yearly' && s.billingToggleBtnActive]}
+                    onPress={() => setBillingCycle('yearly')}
+                  >
+                    <Text style={[s.billingToggleText, billingCycle === 'yearly' && s.billingToggleTextActive]}>
+                      Yearly
+                    </Text>
+                    <View style={s.saveBadge}>
+                      <Text style={s.saveBadgeText}>Save 20%</Text>
+                    </View>
+                  </Pressable>
+                </View>
 
                 {/* ── Plan Cards ── */}
                 <View style={s.plansWrap}>
@@ -421,11 +427,14 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
                             <ActivityIndicator color="#6C63FF" size="small" />
                           ) : (
                             <>
-                              {hasDiscount && (
+                              {billingCycle === 'yearly' && (
+                                <Text style={s.priceOriginal}>₹{(platformMonthlyPrice * 12).toFixed(0)}</Text>
+                              )}
+                              {billingCycle === 'monthly' && hasDiscount && (
                                 <Text style={s.priceOriginal}>₹{rawPrice}</Text>
                               )}
                               <Text style={s.priceMain}>{platformPriceDisplay}</Text>
-                              <Text style={s.priceSub}>{durationLabel}</Text>
+                              <Text style={s.priceSub}>{cycleSuffix}</Text>
                             </>
                           )}
                         </View>
@@ -498,8 +507,11 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
                               <ActivityIndicator color="#FF7A18" size="small" />
                             ) : (
                               <>
+                                {billingCycle === 'yearly' && (
+                                  <Text style={s.priceOriginal}>₹{(artistMonthlyPrice * 12).toFixed(0)}</Text>
+                                )}
                                 <Text style={s.priceMain}>{artistPriceDisplay}</Text>
-                                <Text style={s.priceSub}>/mo</Text>
+                                <Text style={s.priceSub}>{cycleSuffix}</Text>
                               </>
                             )}
                           </View>
@@ -585,7 +597,7 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
                 </View>
 
                 <Text style={s.disclaimer}>
-                  Secure payment via Razorpay · Cancel anytime · Auto-renews monthly
+                  Secure payment via Razorpay · Cancel anytime ·{billingCycle === 'yearly' ? ' Auto-renews yearly' : ' Auto-renews monthly'}
                 </Text>
               </Animated.View>
             </ScrollView>
@@ -663,7 +675,7 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0A0A1A' },
+  root: { flex: 1, backgroundColor: '#000000' },
   safe: { flex: 1 },
 
   meshOverlay: {
@@ -755,9 +767,9 @@ const s = StyleSheet.create({
   plansWrap: { gap: 16, marginBottom: 24 },
   planCard: {
     borderRadius: 28,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.15)',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#111111',
     overflow: 'hidden',
     position: 'relative',
     marginBottom: 8,
@@ -1110,5 +1122,55 @@ const s = StyleSheet.create({
     color: '#6C63FF',
     fontSize: 12,
     fontWeight: '800',
+  },
+
+  // ── Billing cycle toggle ──────────────────────────────────────────────────
+  billingToggleWrap: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 50,
+    padding: 4,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    alignSelf: 'center',
+  },
+  billingToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 22,
+    borderRadius: 50,
+  },
+  billingToggleBtnActive: {
+    backgroundColor: 'rgba(108,99,255,0.85)',
+    shadowColor: '#6C63FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  billingToggleText: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  billingToggleTextActive: {
+    color: '#fff',
+  },
+  saveBadge: {
+    backgroundColor: 'rgba(16,185,129,0.25)',
+    borderRadius: 20,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.4)',
+  },
+  saveBadgeText: {
+    color: '#10B981',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.4,
   },
 });
