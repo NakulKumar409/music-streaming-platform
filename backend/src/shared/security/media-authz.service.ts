@@ -13,6 +13,7 @@ export interface MediaAccessCheckResult {
   allowed: boolean;
   reason?: string;
   tier?: 'FREE' | 'ARTIST' | 'PLATFORM';
+  isPreview?: boolean;
 }
 
 /**
@@ -69,7 +70,8 @@ export async function checkMediaEntitlement(
   userId: number | null,
   artistId: number,
   visibility: VisibilityType,
-  subscriptionRequired: boolean
+  subscriptionRequired: boolean,
+  allowPreview: boolean = false
 ): Promise<MediaAccessCheckResult> {
   if (visibility === "PRIVATE_INTERNAL") {
     return { allowed: false, reason: "Content is internal only", tier: 'FREE' };
@@ -93,6 +95,10 @@ export async function checkMediaEntitlement(
 
     const hasArtistAccess = await checkAccess(userId, artistId);
     if (!hasArtistAccess) {
+      if (allowPreview) {
+         logger.info({ userId, artistId, tier: 'FREE' }, "[AUTHZ] Access granted via PREVIEW");
+         return { allowed: true, tier: 'FREE', isPreview: true };
+      }
       logger.info({ userId, artistId, tier: 'FREE' }, "[AUTHZ] Access denied: Subscription required");
       return { allowed: false, reason: "Subscription required", tier: 'FREE' };
     }

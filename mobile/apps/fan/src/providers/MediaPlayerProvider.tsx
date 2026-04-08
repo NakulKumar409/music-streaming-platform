@@ -54,6 +54,7 @@ type MediaPlayerContextValue = {
   
   preferredQuality: 'SD' | 'HD';
   setPreferredQuality: (q: 'SD' | 'HD') => void;
+  setExpanded: (expanded: boolean) => void;
 };
 
 const MediaPlayerContext = createContext<MediaPlayerContextValue | undefined>(undefined);
@@ -849,7 +850,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       audioPlayer,
       isPlayerReady,
       preferredQuality,
-      setPreferredQuality
+      setPreferredQuality,
     }),
     [
       close,

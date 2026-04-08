@@ -4,6 +4,7 @@ import { pool } from "../common/db";
 import { razorpayClient } from "../config/razorpay";
 import { logger } from "../common/logger";
 import { creditArtistEarnings } from "./paymentController";
+import { NotificationService } from "../shared/notifications/notification.service";
 
 const safeEqualHex = (aHex: string, bHex: string) => {
   const a = Buffer.from(aHex, "hex");
@@ -328,6 +329,14 @@ export const verifySubscription = async (req: any, res: Response) => {
 
       await client.query('COMMIT');
       logger.info({ userId, razorpay_subscription_id, correlationId }, "[VERIFY] Subscription activated successfully");
+
+      // Send success notification
+      NotificationService.sendToUser({
+        userId: String(userId),
+        title: "Subscription Confirmed! 🎸",
+        body: `You are now subscribed to ${sub.type === 'PLATFORM' ? 'the Platform' : 'the Artist'}. Enjoy HD streaming!`,
+        data: { type: "subscription_success", subId: sub.id }
+      }).catch(e => logger.error(e, "[VERIFY] Notification failed"));
 
       return res.json({
         success: true,

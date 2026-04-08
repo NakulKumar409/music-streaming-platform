@@ -5,6 +5,7 @@ import { pool } from "../common/db";
 import { invalidateCachePattern, invalidateContentCache } from "../common/cache";
 import { logger } from "../common/logger";
 import * as Sentry from "@sentry/node";
+import { NotificationService } from "../shared/notifications/notification.service";
 
 // Ensure we don't fail immediately inside the worker loop if DB reconnects
 export const uploadWorker = new Worker(
@@ -75,6 +76,41 @@ export const uploadWorker = new Worker(
       }
 
       await invalidateContentCache();
+
+      // 6. Notify Subscribers
+      try {
+        const itemRes = await pool.query(
+          "SELECT title, artist_id, subscription_required FROM content_items WHERE id = $1",
+          [contentId]
+        );
+        const item = itemRes.rows[0];
+        if (item) {
+          const artistRes = await pool.query("SELECT name FROM users WHERE id = $1", [item.artist_id]);
+          const artistName = artistRes.rows[0]?.name || "Your favorite artist";
+
+          // Find subscribers
+          const subscribersRes = await pool.query(
+            `SELECT DISTINCT user_id FROM subscriptions 
+             WHERE (status = 'ACTIVE' OR status = 'GRACE') 
+             AND (
+               (type = 'ARTIST' AND artist_id = $1)
+               OR type = 'PLATFORM'
+             )`,
+            [item.artist_id]
+          );
+
+          const subscriberIds = subscribersRes.rows.map(r => String(r.user_id));
+          if (subscriberIds.length > 0) {
+            await NotificationService.sendToMultipleUsers(subscriberIds, {
+              title: "New Exclusive Release! 💎",
+              body: `${artistName} just dropped a new ${item.subscription_required ? 'exclusive' : 'track'}: "${item.title}"`,
+              data: { type: "new_content", contentId, artistId: item.artist_id }
+            });
+          }
+        }
+      } catch (notifyErr) {
+        logger.error({ error: notifyErr, contentId }, "[Worker] New content notification failed");
+      }
 
       return { success: true, contentId };
     } catch (err: any) {

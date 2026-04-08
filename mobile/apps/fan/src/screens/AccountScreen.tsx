@@ -12,16 +12,19 @@ import {
   View,
   Linking,
   Image,
+  RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../store/authStore';
-import { CreditCard, HelpCircle, Library, LogOut, User, Camera, Crown } from 'lucide-react-native';
+import { CreditCard, HelpCircle, Library, LogOut, User, Camera, Crown, FileText, Download, ShieldCheck, Lock } from 'lucide-react-native';
 import { SubscriptionStatusCard } from '../ui/SubscriptionUI';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { userService, type AudioQualityPref, type SubscriptionPlanSummary, type Transaction } from '../services/userService';
-import { JWT_STORAGE_KEY } from '../services/api';
+import { JWT_STORAGE_KEY, API_BASE_URL } from '../services/api';
 import { resetToLogin } from '../navigation/rootNavigation';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../theme';
@@ -73,11 +76,15 @@ export default function AccountScreen() {
   }, [logout, navigation]);
 
   const [isLoading, setIsLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
   const [profileName, setProfileName] = React.useState<string>('');
   const [profileImageUrl, setProfileImageUrl] = React.useState<string>('');
   const [isPremium, setIsPremium] = React.useState(false);
   const [subscriptionCount, setSubscriptionCount] = React.useState(0);
   const [planSummary, setPlanSummary] = React.useState<SubscriptionPlanSummary | null>(null);
+  const [artistSubs, setArtistSubs] = React.useState<any[]>([]);
+  const [platformPlan, setPlatformPlan] = React.useState<any | null>(null);
+
 
   const [listenTime, setListenTime] = React.useState<string>('');
   const [transactions, setTransactions] = React.useState<Transaction[]>([]);
@@ -90,11 +97,12 @@ export default function AccountScreen() {
   const refresh = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [p, t, l, plan] = await Promise.all([
+      const [p, t, l, plan, fullStatus] = await Promise.all([
         userService.getUserProfile(),
         userService.getTransactions(),
         userService.getListenTime(),
         userService.getSubscriptionPlanSummary(),
+        userService.getFullSubscriptionStatus(),
       ]);
 
       setProfileName(p.name);
@@ -104,10 +112,22 @@ export default function AccountScreen() {
       setTransactions(t);
       setListenTime(l.formattedTime);
       setPlanSummary(plan);
+      
+      if (fullStatus) {
+        setPlatformPlan(fullStatus.platform);
+        setArtistSubs(fullStatus.artists || []);
+      }
+
     } finally {
       setIsLoading(false);
+      setRefreshing(false);
     }
   }, []);
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    refresh();
+  }, [refresh]);
 
   const planStatusText = React.useMemo(() => {
     const raw = (planSummary?.status ?? '').toString().toUpperCase();
@@ -289,6 +309,14 @@ export default function AccountScreen() {
           style={styles.scrollView}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollContentPaddingBottom }]}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#4AA3FF"
+              colors={['#4AA3FF']}
+            />
+          }
         >
           <View style={styles.header}>
             <Text style={styles.title}>Account</Text>
@@ -337,29 +365,41 @@ export default function AccountScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>My Subscriptions</Text>
 
-          {/* Artist Plan card */}
-          {planSummary?.artistPlan ? (
-            <SubscriptionStatusCard
-              plan={planSummary.artistPlan}
-              onRenew={handleRenewArtist}
-              onManage={() =>
-                navigation.navigate('SubscriptionDetail', {
-                  artistId: planSummary.artistPlan?.artistId ?? '',
-                })
-              }
-            />
-          ) : null}
-
           {/* Platform Plan card */}
-          {planSummary?.platformPlan ? (
+          {platformPlan ? (
             <SubscriptionStatusCard
-              plan={planSummary.platformPlan}
+              plan={platformPlan}
               onRenew={handleRenewPlatform}
             />
           ) : null}
 
+          {/* Artist Plans list */}
+          {artistSubs.length > 0 ? (
+            <View style={{ marginTop: platformPlan ? 16 : 0 }}>
+              {artistSubs.map((sub, idx) => (
+                <View key={sub.artistId || idx} style={{ marginBottom: 12 }}>
+                  <SubscriptionStatusCard
+                    plan={sub}
+                    onRenew={() => {
+                      navigation.navigate('SubscriptionFlow', {
+                        artistId: sub.artistId,
+                        artistName: sub.artistName,
+                        defaultPlan: 'ARTIST',
+                      });
+                    }}
+                    onManage={() =>
+                      navigation.navigate('SubscriptionDetail', {
+                        artistId: sub.artistId,
+                      })
+                    }
+                  />
+                </View>
+              ))}
+            </View>
+          ) : null}
+
           {/* No subscriptions → show upgrade CTA */}
-          {!planSummary?.artistPlan && !planSummary?.platformPlan && !isLoading && (
+          {!platformPlan && artistSubs.length === 0 && !isLoading && (
             <TouchableOpacity
               style={styles.upgradeCta}
               onPress={handleUpgrade}
@@ -373,8 +413,8 @@ export default function AccountScreen() {
             </TouchableOpacity>
           )}
 
-          {/* Add Platform Plan nudge if only artist plan active */}
-          {planSummary?.artistPlan && !planSummary?.platformPlan && (
+          {/* Add Platform Plan nudge if only artist plans active */}
+          {artistSubs.length > 0 && !platformPlan && (
             <TouchableOpacity style={styles.nudgeCard} onPress={handleRenewPlatform}>
               <Crown size={16} color="#4AA3FF" />
               <Text style={styles.nudgeText}>
@@ -471,18 +511,45 @@ export default function AccountScreen() {
             {transactions.map((tx) => (
               <View key={tx.id} style={styles.txRow}>
                 <View style={styles.txLeft}>
-                  <Text style={styles.txArtist}>{tx.artistName}</Text>
-                  <Text style={styles.txDate}>{tx.date}</Text>
+                  <Text style={styles.txArtist}>{tx.artistName || 'Platform Plan'}</Text>
+                  <Text style={styles.txDate}>{new Date(tx.date).toLocaleDateString()}</Text>
                 </View>
-                <View style={styles.txRight}>
-                  <Text style={styles.txAmount}>${tx.amount.toFixed(2)}</Text>
-                  <Text style={styles.txStatus}>{tx.status ?? ''}</Text>
+                <View style={[styles.txRight, { flexDirection: 'row', alignItems: 'center' }]}>
+                  <View style={{ alignItems: 'flex-end', marginRight: 16 }}>
+                    <Text style={styles.txAmount}>₹{(tx.amount / 100).toFixed(2)}</Text>
+                    <Text style={[styles.txStatus, { color: tx.status === 'CAPTURED' || tx.status === 'SUCCESS' ? '#10B981' : '#FFA500' }]}>
+                      {tx.status ?? 'PENDING'}
+                    </Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.downloadIcon} 
+                    onPress={() => handleDownloadInvoice(tx.id)}
+                  >
+                    <Download size={20} color={Colors.accent} />
+                  </TouchableOpacity>
                 </View>
               </View>
             ))}
             {transactions.length === 0 ? (
-              <Text style={styles.emptyText}>No transactions yet.</Text>
+              <View style={styles.modalEmptyWrap}>
+                <CreditCard size={48} color="rgba(255,255,255,0.15)" />
+                <Text style={styles.modalEmptyText}>No transactions found.</Text>
+                <Text style={styles.modalEmptySub}>Your billing history will appear here once you subscribe to an artist or platform plan.</Text>
+              </View>
             ) : null}
+
+            {transactions.length > 0 && (
+              <View style={styles.trustFooter}>
+                <View style={styles.trustItem}>
+                  <ShieldCheck size={16} color="rgba(255,255,255,0.4)" />
+                  <Text style={styles.trustText}>Razorpay Secure</Text>
+                </View>
+                <View style={styles.trustItem}>
+                  <Lock size={16} color="rgba(255,255,255,0.4)" />
+                  <Text style={styles.trustText}>SSL Encrypted</Text>
+                </View>
+              </View>
+            )}
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -858,16 +925,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 12,
   },
+  modalEmptyWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 100,
+    paddingHorizontal: 40,
+  },
+  modalEmptyText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  modalEmptySub: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 14,
+    fontWeight: '500',
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
   txRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
   },
   txLeft: {
     flex: 1,
@@ -878,25 +967,51 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   txDate: {
-    marginTop: 4,
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.5)',
     fontSize: 12,
     fontWeight: '600',
+    marginTop: 4,
   },
   txRight: {
     alignItems: 'flex-end',
-    marginLeft: 12,
   },
   txAmount: {
-    color: '#fff',
-    fontSize: 15,
+    color: '#4AA3FF',
+    fontSize: 16,
     fontWeight: '900',
   },
   txStatus: {
+    color: '#10B981',
+    fontSize: 10,
+    fontWeight: '800',
     marginTop: 4,
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 11,
-    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  downloadIcon: {
+    padding: 8,
+    backgroundColor: 'rgba(255,106,0,0.1)',
+    borderRadius: 8,
+  },
+  trustFooter: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+    marginTop: 24,
+    marginBottom: 40,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
+  },
+  trustItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  trustText: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 12,
+    fontWeight: '600',
   },
   emptyText: {
     marginTop: 20,

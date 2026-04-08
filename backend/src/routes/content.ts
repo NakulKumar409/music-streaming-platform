@@ -115,11 +115,14 @@ router.post(
         });
       }
 
-      const { title, genre, type } = req.body as {
+      const { title, genre, type, isSubscriberOnly } = req.body as {
         title?: string;
         genre?: string;
         type?: string;
+        isSubscriberOnly?: string | boolean;
       };
+
+      const isSubOnly = isSubscriberOnly === 'true' || isSubscriberOnly === true;
 
       const trimmedTitle = (title || "").trim();
       const trimmedGenre = (genre || "").trim();
@@ -219,9 +222,9 @@ router.post(
         `INSERT INTO public.content_items (
           title, type, artist_id, genre, lifecycle_state, is_approved,
           storage_provider, storage_key, thumbnail_storage_key, video_storage_key, visibility, status,
-          mime_type, file_size_bytes, original_file_name, uploaded_at
-        ) VALUES ($1, $2, $3, $4, 'PUBLISHED', true, $5, $6, $7, $8, 'PROTECTED', 'PROCESSING', $9, $10, $11, $12)
-        RETURNING id, title, type, artist_id, storage_key, thumbnail_storage_key, storage_provider, visibility, status, created_at`,
+          mime_type, file_size_bytes, original_file_name, uploaded_at, subscription_required
+        ) VALUES ($1, $2, $3, $4, 'PUBLISHED', true, $5, $6, $7, $8, 'PROTECTED', 'PROCESSING', $9, $10, $11, $12, $13)
+        RETURNING id, title, type, artist_id, storage_key, thumbnail_storage_key, storage_provider, visibility, status, created_at, subscription_required`,
         [
           trimmedTitle,
           normalizedType,
@@ -234,9 +237,11 @@ router.post(
           audioMime,
           audio.size ?? null,
           audio.originalname || null,
-          now
+          now,
+          isSubOnly
         ]
         );
+
       } catch (dbErr: any) {
         // DB failed, wipe the local disk temp files immediately!
         fs.promises.unlink(thumb.path).catch(e => e);
@@ -456,12 +461,14 @@ router.post("/upload-metadata", uploadLimiter, requireAuth, requireArtist, async
       });
     }
 
-    const { title, type, thumbnailUrl } = req.body as {
+    const { title, type, thumbnailUrl, isSubscriberOnly } = req.body as {
       title?: string;
       type?: string;
       thumbnailUrl?: string | null;
+      isSubscriberOnly?: string | boolean;
     };
 
+    const isSubOnly = isSubscriberOnly === 'true' || isSubscriberOnly === true;
     const trimmedTitle = (title || "").trim();
     const normalizedType = (type || "").trim().toUpperCase();
 
@@ -474,11 +481,12 @@ router.post("/upload-metadata", uploadLimiter, requireAuth, requireArtist, async
     }
 
     const insert = await pool.query(
-      `INSERT INTO public.content_items (title, type, artist_id, thumbnail_url, lifecycle_state, is_approved, published_at, status)
-       VALUES ($1, $2, $3, $4, 'PUBLISHED', true, now(), 'APPROVED')
-       RETURNING id, title, type, artist_id, thumbnail_url, lifecycle_state, is_approved, created_at`,
-      [trimmedTitle, normalizedType, artistId, thumbnailUrl ?? null]
+      `INSERT INTO public.content_items (title, type, artist_id, thumbnail_url, lifecycle_state, is_approved, published_at, status, subscription_required)
+       VALUES ($1, $2, $3, $4, 'PUBLISHED', true, now(), 'APPROVED', $5)
+       RETURNING id, title, type, artist_id, thumbnail_url, lifecycle_state, is_approved, created_at, subscription_required`,
+      [trimmedTitle, normalizedType, artistId, thumbnailUrl ?? null, isSubOnly]
     );
+
 
     await invalidateContentCache();
 

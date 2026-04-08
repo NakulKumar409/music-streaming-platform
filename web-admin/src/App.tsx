@@ -11,6 +11,7 @@ const AdminArtistDetailPage = lazy(() => import("./pages/AdminArtistDetailPage")
 const AdminContentApprovalQueuePage = lazy(() => import("./pages/AdminContentApprovalQueuePage"));
 const AdminArtistApplicationsPage = lazy(() => import("./pages/AdminArtistApplicationsPage"));
 const AdminFeaturedArtistsPage = lazy(() => import("./pages/AdminFeaturedArtistsPage"));
+const AdminSubscriptionSettingsPage = lazy(() => import("./pages/AdminSubscriptionSettingsPage"));
 
 const PageFallback = () => (
   <div className="p-8">
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/admin/artists/:id" element={<AdminArtistDetailPage />} />
           <Route path="/admin/moderation" element={<AdminContentApprovalQueuePage />} />
           <Route path="/admin/featured-artists" element={<AdminFeaturedArtistsPage />} />
+          <Route path="/admin/subscription-settings" element={<AdminSubscriptionSettingsPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/admin/login" replace />} />

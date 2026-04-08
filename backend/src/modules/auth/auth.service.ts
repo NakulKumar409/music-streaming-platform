@@ -99,4 +99,57 @@ export class AuthService {
       }
     };
   }
+
+  async checkAndRegisterSession(userId: number, deviceId: string, deviceName?: string) {
+    try {
+      // 1. Check existing sessions for this user
+      const sessions = await pool.query(
+        "SELECT id, device_id FROM user_sessions WHERE user_id = $1 ORDER BY last_active_at DESC",
+        [userId]
+      );
+
+      const existingSession = sessions.rows.find(s => s.device_id === deviceId);
+
+      if (existingSession) {
+        // Update last_active_at
+        await pool.query(
+          "UPDATE user_sessions SET last_active_at = now(), device_name = $1 WHERE id = $2",
+          [deviceName || "Unknown Device", existingSession.id]
+        );
+        return { success: true };
+      }
+
+      // 2. Enforce limit (max 2)
+      if (sessions.rows.length >= 2) {
+        return { 
+          success: false, 
+          message: "DEVICE_LIMIT_REACHED",
+          activeDevices: sessions.rows.map(s => s.device_id)
+        };
+      }
+
+      // 3. Register new session
+      await pool.query(
+        "INSERT INTO user_sessions (user_id, device_id, device_name) VALUES ($1, $2, $3)",
+        [userId, deviceId, deviceName || "Unknown Device"]
+      );
+
+      return { success: true };
+    } catch (error) {
+      console.error("[AUTH] Session registration failed", error);
+      return { success: false, message: "Session registration failed" };
+    }
+  }
+
+  async removeSession(userId: number, deviceId: string) {
+    try {
+      await pool.query(
+        "DELETE FROM user_sessions WHERE user_id = $1 AND device_id = $2",
+        [userId, deviceId]
+      );
+      return { success: true };
+    } catch (error) {
+      return { success: false, message: "Failed to remove session" };
+    }
+  }
 }

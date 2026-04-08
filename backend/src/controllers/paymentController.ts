@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { pool } from "../common/db";
 import { logger } from "../common/logger";
 import Razorpay from "razorpay";
+import { NotificationService } from "../shared/notifications/notification.service";
 
 const getRazorpayClient = () => {
   const key_id = (process.env.RAZORPAY_KEY_ID ?? "").toString().trim();
@@ -42,22 +43,80 @@ export const createOrder = async (req: any, res: Response) => {
 
     const artistIdRaw = (artistId ?? "").toString().trim();
     let artistIdNumber = Number(artistIdRaw);
-    if (!Number.isFinite(artistIdNumber) || artistIdNumber <= 0) {
+
+    // If artistId is '0', empty, or not a positive number — check if it's a username string
+    // For Platform plan: artistId will be '0' or '' — that's fine, skip lookup
+    if (artistIdRaw && artistIdRaw !== '0' && (!Number.isFinite(artistIdNumber) || artistIdNumber <= 0)) {
+      // Probably a username string — try to resolve it
       const artistRow = await pool.query(
-        `SELECT id
-         FROM users
-         WHERE username = $1
-         LIMIT 1`,
+        `SELECT id FROM users WHERE username = $1 LIMIT 1`,
         [artistIdRaw]
       );
       const resolved = Number(artistRow.rows?.[0]?.id);
-      if (!Number.isFinite(resolved) || resolved <= 0) {
+      if (Number.isFinite(resolved) && resolved > 0) {
+        artistIdNumber = resolved;
+      } else {
         return res.status(400).json({ success: false, message: "artistId is invalid" });
       }
-      artistIdNumber = resolved;
     }
 
-    const amountPaise = Math.floor(amountInt);
+    // Normalize: 0 or NaN → 0 means Platform plan
+    let amountPaise = Math.floor(amountInt);
+    const isPlatform = !artistIdNumber || artistIdNumber <= 0;
+
+    // ── Dynamic Platform Price Lookup ──────────────────────────────────────────
+    if (isPlatform) {
+      try {
+        const configRow = await pool.query(
+          "SELECT price FROM platform_subscription_configs WHERE is_active = true ORDER BY updated_at DESC LIMIT 1"
+        );
+        if (configRow.rows.length > 0) {
+          const dbPrice = Number(configRow.rows[0].price);
+          // Standardise on Paise (multiply by 100)
+          amountPaise = Math.floor(dbPrice * 100);
+          logger.info({ userId, dbPrice, amountPaise }, "[PAYMENT] Using dynamic platform price");
+        }
+      } catch (err) {
+        logger.error({ err }, "[PAYMENT] Failed to fetch dynamic platform price, falling back to request amount");
+      }
+    }
+
+    // ── Duplicate Subscription Check ───────────────────────────────────────────
+    if (isPlatform) {
+      const dupCheck = await pool.query(
+        `SELECT id FROM subscriptions WHERE user_id = $1 AND type = 'PLATFORM' AND status = 'ACTIVE' LIMIT 1`,
+        [userId]
+      );
+      if (dupCheck.rows.length > 0) {
+        return res.status(409).json({ success: false, message: "You already have an active Platform subscription." });
+      }
+    } else {
+      const dupCheck = await pool.query(
+        `SELECT id FROM subscriptions WHERE user_id = $1 AND artist_id = $2 AND type = 'ARTIST' AND status = 'ACTIVE' LIMIT 1`,
+        [userId, artistIdNumber]
+      );
+      if (dupCheck.rows.length > 0) {
+        return res.status(409).json({ success: false, message: "You already have an active subscription for this artist." });
+      }
+
+      // ── Dynamic Artist Price Lookup ──────────────────────────────────────────
+      try {
+        const artistRow = await pool.query(
+          "SELECT COALESCE(subscription_price, 0) as price FROM users WHERE id = $1 AND UPPER(role) = 'ARTIST'",
+          [artistIdNumber]
+        );
+        if (artistRow.rows.length > 0) {
+          const dbPrice = Number(artistRow.rows[0].price);
+          if (dbPrice > 0) {
+            amountPaise = Math.floor(dbPrice * 100);
+            logger.info({ userId, artistId: artistIdNumber, dbPrice, amountPaise }, "[PAYMENT] Using dynamic artist price");
+          }
+        }
+      } catch (err) {
+        logger.error({ err }, "[PAYMENT] Failed to fetch dynamic artist price");
+      }
+    }
+
     const client = getRazorpayClient();
 
     const receipt = `sub_${userId}_${artistIdNumber}_${Date.now()}`;
@@ -129,18 +188,17 @@ export const confirmPayment = async (req: any, res: Response) => {
     const artistIdRaw = (artist_id ?? "").toString().trim();
     let artistId = Number(artistIdRaw);
     if (!Number.isFinite(artistId) || artistId <= 0) {
-      const artistRow = await pool.query(
-        `SELECT id
-         FROM users
-         WHERE username = $1
-         LIMIT 1`,
-        [artistIdRaw]
-      );
-      const resolved = Number(artistRow.rows?.[0]?.id);
-      if (!Number.isFinite(resolved) || resolved <= 0) {
-        return res.status(400).json({ success: false, message: "artist_id is invalid" });
+      if (artistIdRaw && artistIdRaw !== "0") {
+        const artistRow = await pool.query(
+          `SELECT id FROM users WHERE username = $1 LIMIT 1`,
+          [artistIdRaw]
+        );
+        const resolved = Number(artistRow.rows?.[0]?.id);
+        if (Number.isFinite(resolved) && resolved > 0) {
+          artistId = resolved;
+        }
       }
-      artistId = resolved;
+      // artistId = 0 or invalid means PLATFORM plan
     }
 
     const keySecret = (process.env.RAZORPAY_KEY_SECRET ?? "").toString().trim();
@@ -148,6 +206,7 @@ export const confirmPayment = async (req: any, res: Response) => {
       return res.status(500).json({ success: false, message: "RAZORPAY_KEY_SECRET is missing" });
     }
 
+    // ── Verify Razorpay Signature ──────────────────────────────────────────────
     const expectedSig = crypto
       .createHmac("sha256", keySecret)
       .update(`${orderId}|${paymentId}`)
@@ -157,6 +216,7 @@ export const confirmPayment = async (req: any, res: Response) => {
       return res.status(400).json({ success: false, message: "Invalid Razorpay signature" });
     }
 
+    // ── Fetch transaction ──────────────────────────────────────────────────────
     const found = await pool.query(
       `SELECT id, user_id, razorpay_order_id, amount, currency, status
        FROM transactions
@@ -171,6 +231,7 @@ export const confirmPayment = async (req: any, res: Response) => {
       return res.status(404).json({ success: false, message: "Transaction not found" });
     }
 
+    // ── Mark transaction as CAPTURED ──────────────────────────────────────────
     const paymentConfirmedAt = new Date();
     const updated = await pool.query(
       `UPDATE transactions
@@ -182,9 +243,70 @@ export const confirmPayment = async (req: any, res: Response) => {
 
     const updatedTx = updated.rows?.[0] ?? null;
 
+    // ── Determine plan type and immediately activate subscription ──────────────
+    // PLATFORM plan if artistId is missing/0, ARTIST plan otherwise
+    const isPlatform = !artistId || artistId <= 0;
+    const planType = isPlatform ? "PLATFORM" : "ARTIST";
+    const amountPaise = Number(tx.amount ?? 0);
+
+    // Subscription active for 30 days
+    const startDate = new Date();
+    const endDate = new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const graceEndsAt = new Date(endDate.getTime() + 2 * 24 * 60 * 60 * 1000);
+
+    if (isPlatform) {
+      // Try to update existing platform subscription first
+      const updateResult = await pool.query(
+        `UPDATE subscriptions
+         SET status = 'ACTIVE', start_date = $2, end_date = $3, next_billing_date = $3, grace_ends_at = $4, updated_at = now()
+         WHERE user_id = $1 AND type = 'PLATFORM'
+         RETURNING id`,
+        [userId, startDate, endDate, graceEndsAt]
+      );
+      if (updateResult.rowCount === 0) {
+        // No existing row — insert fresh
+        await pool.query(
+          `INSERT INTO subscriptions (user_id, type, status, plan_type, start_date, end_date, next_billing_date, grace_ends_at, auto_renew, created_at, updated_at)
+           VALUES ($1, 'PLATFORM', 'ACTIVE', 'MONTHLY', $2, $3, $3, $4, true, now(), now())`,
+          [userId, startDate, endDate, graceEndsAt]
+        );
+      }
+    } else {
+      // Try to update existing artist subscription first
+      const updateResult = await pool.query(
+        `UPDATE subscriptions
+         SET status = 'ACTIVE', start_date = $3, end_date = $4, next_billing_date = $4, grace_ends_at = $5, updated_at = now()
+         WHERE user_id = $1 AND artist_id = $2 AND type = 'ARTIST'
+         RETURNING id`,
+        [userId, artistId, startDate, endDate, graceEndsAt]
+      );
+      if (updateResult.rowCount === 0) {
+        // No existing row — insert fresh
+        await pool.query(
+          `INSERT INTO subscriptions (user_id, artist_id, type, status, plan_type, start_date, end_date, next_billing_date, grace_ends_at, auto_renew, created_at, updated_at)
+           VALUES ($1, $2, 'ARTIST', 'ACTIVE', 'MONTHLY', $3, $4, $4, $5, true, now(), now())`,
+          [userId, artistId, startDate, endDate, graceEndsAt]
+        );
+      }
+
+      // Credit artist earnings asynchronously
+      creditArtistEarnings(artistId, amountPaise).catch(() => undefined);
+    }
+
+    // Send success notification
+    NotificationService.sendToUser({
+      userId: String(userId),
+      title: "Payment Successful! ✅",
+      body: `Your payment was successful. Enjoy your ${planType === 'PLATFORM' ? 'Platform' : 'Artist'} subscription.`,
+      data: { type: "payment_success", plan: planType }
+    }).catch(e => logger.error(e, "[PAYMENT] Notification failed"));
+
+    logger.info({ userId, planType, isPlatform, artistId, paymentId }, "[PAYMENT] Subscription activated after confirm");
+
     return res.json({
       success: true,
-      message: "Payment submitted. Waiting for confirmation",
+      message: "Payment confirmed. Subscription activated.",
+      plan: planType,
       transaction: {
         razorpay_order_id: updatedTx?.razorpay_order_id ?? orderId,
         razorpay_payment_id: updatedTx?.razorpay_payment_id ?? paymentId,
@@ -201,6 +323,7 @@ export const confirmPayment = async (req: any, res: Response) => {
     });
   }
 };
+
 
 /**
  * Helper to credit artist earnings after a successful payment.
@@ -388,6 +511,14 @@ export const razorpayWebhook = async (req: any, res: Response) => {
           }
           
           await logSubscriptionAudit(sub.user_id, sub.id, 'subscription_activated', { payment_id: paymentId, amount: amountPaise }, client);
+
+          // Notify user
+          NotificationService.sendToUser({
+            userId: String(sub.user_id),
+            title: "Plan Activated! ✨",
+            body: "Your subscription has been successfully activated. Open the app to start streaming!",
+            data: { type: "subscription_activated", subId: sub.id }
+          }).catch(e => logger.error(e, "[WEBHOOK] Notification failed"));
         }
         break;
       }
@@ -428,6 +559,17 @@ export const razorpayWebhook = async (req: any, res: Response) => {
            WHERE razorpay_subscription_id = $1`,
           [subId, graceEnd]
         );
+
+        // Fetch user_id for notification
+        const subRow = await client.query(`SELECT user_id FROM subscriptions WHERE razorpay_subscription_id = $1`, [subId]);
+        if (subRow.rows[0]) {
+          NotificationService.sendToUser({
+            userId: String(subRow.rows[0].user_id),
+            title: "Payment Failed ⚠️",
+            body: "Your subscription payment failed. Please check your payment method to avoid losing access.",
+            data: { type: "payment_failed", subId }
+          }).catch(e => logger.error(e, "[WEBHOOK] Failure notification failed"));
+        }
         break;
       }
 

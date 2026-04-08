@@ -33,9 +33,28 @@ export class AuthController {
 
   async login(req: Request, res: Response) {
     try {
-      const { email, password } = req.body;
-
+      const { email, password, deviceId, deviceName } = req.body;
       const result = await authService.login(email, password);
+
+      // Device Limit Enforcement
+      if (result.success && result.user) {
+        const sessionResult = await authService.checkAndRegisterSession(
+          result.user.id,
+          deviceId || "Unknown-ID",
+          deviceName || req.headers["user-agent"]
+        );
+
+        if (!sessionResult.success) {
+          if (sessionResult.message === "DEVICE_LIMIT_REACHED") {
+            return res.status(403).json({
+              success: false,
+              message: "Device limit reached. Please log out from another device first.",
+              code: "DEVICE_LIMIT_REACHED"
+            });
+          }
+          return res.status(500).json({ success: false, message: "Session registration failed" });
+        }
+      }
 
       const correlationId = (req as any)?.correlationId || "-";
       const role = (result as any)?.user?.role ?? null;

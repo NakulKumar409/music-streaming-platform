@@ -131,6 +131,7 @@ export default function AdminAnalyticsPage() {
   const [revenue, setRevenue] = useState<SeriesPoint[]>([]);
   const [topArtists, setTopArtists] = useState<TopArtist[]>([]);
   const [topCategories, setTopCategories] = useState<TopCategory[]>([]);
+  const [subMetrics, setSubMetrics] = useState<any>(null);
 
   const backgroundStyle = useMemo(() => {
     return {
@@ -147,11 +148,12 @@ export default function AdminAnalyticsPage() {
     const run = async () => {
       setLoading(true);
       try {
-        const [g, r, a, c] = await Promise.all([
+        const [g, r, a, c, m] = await Promise.all([
           http.get<GlobalSummary>("/api/v1/admin/analytics/global-summary"),
           http.get<RevenueTrendsResponse>("/api/v1/admin/analytics/revenue-trends"),
           http.get<TopArtistsResponse>("/api/v1/admin/analytics/top-artists"),
-          http.get<TopCategoriesResponse>("/api/v1/admin/analytics/top-categories")
+          http.get<TopCategoriesResponse>("/api/v1/admin/analytics/top-categories"),
+          http.get<any>("/api/v1/admin/analytics/metrics")
         ]);
 
         if (!mounted) return;
@@ -160,6 +162,7 @@ export default function AdminAnalyticsPage() {
         setRevenue((r.data?.data ?? []) as SeriesPoint[]);
         setTopArtists((a.data?.items ?? []) as TopArtist[]);
         setTopCategories((c.data?.items ?? []) as TopCategory[]);
+        setSubMetrics(m.data?.metrics);
       } catch (e: any) {
         const status = e?.response?.status;
         if (status === 401 || status === 403) {
@@ -236,6 +239,12 @@ export default function AdminAnalyticsPage() {
               title="Total Artists"
               value={loading ? "—" : formatCompact(global?.totalArtists ?? 0)}
               accent="purple"
+            />
+            <StatCard
+              title="Conversion Rate"
+              value={loading ? "—" : (subMetrics?.conversionRate || "0%")}
+              sub="Subs vs Total Fans"
+              accent="orange"
             />
           </div>
 
@@ -340,6 +349,39 @@ export default function AdminAnalyticsPage() {
             <div className="relative px-5 py-4">
               <div className="flex items-center justify-between">
                 <div className="text-[14px] tracking-wide text-[#e6d6d2]">Top Performing Artists</div>
+                <div className="text-[12px] text-[#8d7b77]">Direct Revenue</div>
+              </div>
+
+              <div className="mt-4">
+                {loading ? (
+                  <div className="text-[13px] text-[#a99792]">Loading...</div>
+                ) : !subMetrics?.revenuePerArtist?.length ? (
+                  <div className="text-[13px] text-[#a99792]">No revenue data yet.</div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2">
+                    {subMetrics.revenuePerArtist.map((a: any, i: number) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between rounded-[6px] border border-white/5 bg-[#141010]/35 px-4 py-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                           <div className="h-[8px] w-[8px] rounded-full bg-[#c9853b]" />
+                           <div className="text-[13px] text-[#e6d6d2] truncate">{a.name}</div>
+                        </div>
+                        <div className="text-[12px] text-[#cdbdb8] font-bold">{formatCurrency(a.revenue)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 relative overflow-hidden rounded-[6px] border border-white/10 bg-[#1a1414]/45 shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
+            <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent" />
+            <div className="relative px-5 py-4">
+              <div className="flex items-center justify-between">
+                <div className="text-[14px] tracking-wide text-[#e6d6d2]">Popular Artists (Activity)</div>
                 <div className="text-[12px] text-[#8d7b77]">Subscribers + Plays</div>
               </div>
 

@@ -24,8 +24,15 @@ import { ArrowLeft, BadgeCheck, Settings } from 'lucide-react-native';
 import { VideoView } from 'expo-video';
 import { useIsFocused } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { 
+  LockedContentOverlay, 
+  SubscriptionStatusCard, 
+  RetentionBanner, 
+  StrongUpsellModal 
+} from '../ui/SubscriptionUI';
 import SubscriptionExpiryScreen from './SubscriptionExpiryScreen';
 import { fetchArtistById, fetchArtistMedia, type ArtistDetail, type ArtistMediaItem } from '../services/artistService';
+import { userService } from '../services/userService';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import YouTubeVideoControlsOverlay from '../ui/YouTubeVideoControlsOverlay';
 import { Colors } from '../theme';
@@ -130,7 +137,9 @@ type Artist = {
   spotifyUrl: string | null;
   youtubeUrl: string | null;
   instagramUrl: string | null;
+  subscriptionPrice: number;
 };
+
 
 type TabKey = 'All' | 'Audio' | 'Video';
 
@@ -179,8 +188,15 @@ export default function ArtistScreen({ navigation, route }: any) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Subscription expiry state with debug toggle
+  // Subscription state
+  const [isSubscribedToArtist, setIsSubscribedToArtist] = useState(false);
   const [isSubscriptionActive, setIsSubscriptionActive] = useState(true);
+  const [expiryDate, setExpiryDate] = useState<string | null>(null);
+  const [isExpiringSoon, setIsExpiringSoon] = useState(false);
+  const [daysUntilExpiry, setDaysUntilExpiry] = useState<number>(0);
+  const [lockedClicks, setLockedClicks] = useState(0);
+  const [showStrongUpsell, setShowStrongUpsell] = useState(false);
+
   const [showDebugToggle, setShowDebugToggle] = useState(__DEV__);
 
   const handleRenewSubscription = () => {
@@ -220,7 +236,39 @@ export default function ArtistScreen({ navigation, route }: any) {
         setLoading(true);
         setError(null);
 
+        // Fetch subscription status
+        userService.getFullSubscriptionStatus().then(status => {
+          if (status) {
+            const artistIdS = String(artistId);
+            // Check specific artist sub
+            const targetArtistSub = status.artists?.find(s => s.artistId === artistIdS && s.status === 'ACTIVE');
+            const platformSub = status.platform;
+            const hasPlatformSub = platformSub?.status === 'ACTIVE';
+            
+            const isSub = !!targetArtistSub || hasPlatformSub;
+            setIsSubscribedToArtist(isSub);
+
+            const activeSub = targetArtistSub || (hasPlatformSub ? platformSub : null);
+            
+            if (activeSub) {
+              setExpiryDate(activeSub.nextBillingDate || activeSub.endDate || null);
+              setIsExpiringSoon(activeSub.isExpiringSoon || false);
+              
+              if (activeSub.nextBillingDate) {
+                 const now = new Date();
+                 const end = new Date(activeSub.nextBillingDate);
+                 const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 86400));
+                 setDaysUntilExpiry(diff > 0 ? diff : 0);
+              }
+            } else {
+              setExpiryDate(null);
+              setIsExpiringSoon(false);
+            }
+          }
+        }).catch(() => undefined);
+
         const artistRes = await fetchArtistById(artistId);
+
 
         if (!mounted) return;
 
@@ -241,9 +289,11 @@ export default function ArtistScreen({ navigation, route }: any) {
           coverImage: a.coverImageUrl,
           bio: (a as any).bio ?? '',
           spotifyUrl: (a as any).spotifyUrl ?? null,
-          youtubeUrl: (a as any).youtubeUrl ?? null,
-          instagramUrl: (a as any).instagramUrl ?? null,
-        };
+           youtubeUrl: (a as any).youtubeUrl ?? null,
+           instagramUrl: (a as any).instagramUrl ?? null,
+           subscriptionPrice: a.subscriptionPrice,
+         };
+
 
         const toSong = (it: ArtistMediaItem): Song => ({
           id: it.id,
@@ -338,7 +388,7 @@ export default function ArtistScreen({ navigation, route }: any) {
   }, [currentItem?.mediaType, isVideoPlaying]);
 
   const isUnlocked = Boolean(route?.params?.unlocked);
-  const isTemporarilyUnlocked = true;
+  const isTemporarilyUnlocked = isUnlocked;
 
   const filteredSongs = useMemo(() => {
     const baseSongs = isTemporarilyUnlocked ? songs.map((s) => ({ ...s, locked: false })) : songs;
@@ -391,6 +441,13 @@ export default function ArtistScreen({ navigation, route }: any) {
   const handleSongPress = (song: Song) => {
     if (!artist) return;
     if (!isSubscriptionActive) {
+      // Tracking locked clicks for smart upsell
+      const newCount = lockedClicks + 1;
+      setLockedClicks(newCount);
+      
+      if (newCount >= 3) {
+        setShowStrongUpsell(true);
+      }
       return; // Block all playback when subscription is expired
     }
     
@@ -498,10 +555,14 @@ export default function ArtistScreen({ navigation, route }: any) {
                       spotifyUrl={artist.spotifyUrl}
                       youtubeUrl={artist.youtubeUrl}
                       instagramUrl={artist.instagramUrl}
-                      onBack={() => navigation.goBack()}
-                      onSubscribe={() => navigation.navigate('SubscriptionFlow')}
-                      onJoin={() => navigation.navigate('SubscriptionFlow')}
-                    />
+                       onBack={() => navigation.goBack()}
+                       onSubscribe={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name, amount: artist.subscriptionPrice })}
+                       onJoin={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name, amount: artist.subscriptionPrice })}
+                       isSubscribed={isSubscribedToArtist}
+                       expiryDate={expiryDate}
+                       subscriptionPrice={artist.subscriptionPrice}
+                     />
+
                   ) : (
                     <InlineArtistMetaSection
                       avatarUrl={artist.profileImage || artist.coverImage}
@@ -509,9 +570,12 @@ export default function ArtistScreen({ navigation, route }: any) {
                       verified={artist.verified}
                       subscribersLabel={artist.subscribers}
                       videoTitle={currentItem?.title ?? currentSong?.title ?? ''}
-                      onSubscribe={() => navigation.navigate('SubscriptionFlow')}
-                      onJoin={() => navigation.navigate('SubscriptionFlow')}
+                      onSubscribe={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name, amount: artist.subscriptionPrice })}
+                      onJoin={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name, amount: artist.subscriptionPrice })}
+                      isSubscribed={isSubscribedToArtist}
+                      expiryDate={expiryDate}
                     />
+
                   )}
 
                   <ChannelNavTabs
@@ -522,6 +586,13 @@ export default function ArtistScreen({ navigation, route }: any) {
                       if (k === 'Videos') setActiveTab('Video');
                     }}
                   />
+
+                  {isExpiringSoon && isSubscribedToArtist && (
+                    <RetentionBanner 
+                      daysLeft={daysUntilExpiry} 
+                      onRenew={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name })} 
+                    />
+                  )}
 
                   <MediaFilterPills active={activeTab} onChange={setActiveTab} />
                 </>
@@ -555,6 +626,17 @@ export default function ArtistScreen({ navigation, route }: any) {
         )}
 
       </View>
+
+      {showStrongUpsell && (
+        <StrongUpsellModal 
+          artistName={artist?.name || 'Artist'} 
+          onSubscribe={() => {
+            setShowStrongUpsell(false);
+            setLockedClicks(0);
+            navigation.navigate('SubscriptionFlow', { artistId: artist?.id, artistName: artist?.name });
+          }} 
+        />
+      )}
     </SafeAreaView>
     </LinearGradient>
   );
@@ -630,6 +712,9 @@ function ProfileHeaderSection({
   onBack,
   onSubscribe,
   onJoin,
+  isSubscribed,
+  expiryDate,
+  subscriptionPrice,
 }: {
   bannerUrl: string;
   avatarUrl: string;
@@ -643,6 +728,9 @@ function ProfileHeaderSection({
   onBack: () => void;
   onSubscribe: () => void;
   onJoin: () => void;
+  isSubscribed: boolean;
+  expiryDate: string | null;
+  subscriptionPrice: number;
 }) {
   const openUrl = async (raw: string) => {
     const trimmed = (raw || '').toString().trim();
@@ -694,37 +782,61 @@ function ProfileHeaderSection({
           </Text>
         ) : null}
 
-        {spotifyUrl || youtubeUrl || instagramUrl ? (
-          <View style={styles.socialWrap}>
-            <View style={styles.socialRow}>
-              {spotifyUrl ? (
-                <Pressable
-                  onPress={() => openUrl(spotifyUrl)}
-                  style={styles.socialIconBtn}
-                >
-                  <SpotifyIcon size={18} />
-                </Pressable>
-              ) : null}
-              {youtubeUrl ? (
-                <Pressable
-                  onPress={() => openUrl(youtubeUrl)}
-                  style={styles.socialIconBtn}
-                >
-                  <YouTubeIcon size={18} />
-                </Pressable>
-              ) : null}
-              {instagramUrl ? (
-                <Pressable
-                  onPress={() => openUrl(instagramUrl)}
-                  style={styles.socialIconBtn}
-                >
-                  <InstagramBrandIcon size={18} />
-                </Pressable>
-              ) : null}
-            </View>
-          </View>
-        ) : null}
-      </View>
+         {spotifyUrl || youtubeUrl || instagramUrl ? (
+           <View style={styles.socialWrap}>
+             <View style={styles.socialRow}>
+               {spotifyUrl ? (
+                 <Pressable
+                   onPress={() => openUrl(spotifyUrl)}
+                   style={styles.socialIconBtn}
+                 >
+                   <SpotifyIcon size={18} />
+                 </Pressable>
+               ) : null}
+               {youtubeUrl ? (
+                 <Pressable
+                   onPress={() => openUrl(youtubeUrl)}
+                   style={styles.socialIconBtn}
+                 >
+                   <YouTubeIcon size={18} />
+                 </Pressable>
+               ) : null}
+               {instagramUrl ? (
+                 <Pressable
+                   onPress={() => openUrl(instagramUrl)}
+                   style={styles.socialIconBtn}
+                 >
+                   <InstagramBrandIcon size={18} />
+                 </Pressable>
+               ) : null}
+             </View>
+           </View>
+         ) : null}
+ 
+         <View style={styles.actionRow}>
+           {isSubscribed ? (
+             <View style={styles.subscribedBadge}>
+               <BadgeCheck color="#fff" size={14} />
+               <Text style={styles.subscribedText}>Subscribed</Text>
+             </View>
+           ) : (
+             <TouchableOpacity style={styles.subscribeBtn} onPress={onSubscribe}>
+               <Text style={styles.subscribeBtnText}>Subscribe • ₹{subscriptionPrice || '49'}</Text>
+             </TouchableOpacity>
+           )}
+           <TouchableOpacity style={styles.joinBtn} onPress={onJoin}>
+             <Text style={styles.joinBtnText}>{isSubscribed ? 'Membership' : 'Join'}</Text>
+             {expiryDate && (
+               <View style={styles.expiryBadge}>
+                 <Text style={styles.expiryBadgeText}>
+                   {isSubscribed ? `Expires: ${new Date(expiryDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}
+                 </Text>
+               </View>
+             )}
+           </TouchableOpacity>
+         </View>
+       </View>
+
     </View>
   );
 }
@@ -737,6 +849,8 @@ function InlineArtistMetaSection({
   videoTitle,
   onSubscribe,
   onJoin,
+  isSubscribed,
+  expiryDate,
 }: {
   avatarUrl: string;
   name: string;
@@ -745,6 +859,8 @@ function InlineArtistMetaSection({
   videoTitle: string;
   onSubscribe: () => void;
   onJoin: () => void;
+  isSubscribed: boolean;
+  expiryDate: string | null;
 }) {
   return (
     <View style={styles.inlineMetaWrap}>
@@ -772,6 +888,21 @@ function InlineArtistMetaSection({
           </View>
 
         </View>
+        <View style={styles.inlineActionRow}>
+           {!isSubscribed && (
+             <TouchableOpacity style={styles.inlineSubscribeBtn} onPress={onSubscribe}>
+               <Text style={styles.inlineSubscribeText}>Subscribe</Text>
+             </TouchableOpacity>
+           )}
+           <TouchableOpacity style={[styles.inlineJoinBtn, isSubscribed ? styles.inlineJoinBtnSubscribed : null]} onPress={onJoin}>
+             <Text style={styles.inlineJoinText}>{isSubscribed ? 'Membership' : 'Join'}</Text>
+           </TouchableOpacity>
+           {isSubscribed && expiryDate && (
+             <Text style={styles.inlineExpiryText}>
+               Expires: {new Date(expiryDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+             </Text>
+           )}
+         </View>
       </View>
     </View>
   );
@@ -1094,41 +1225,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
     backgroundColor: 'rgba(255,255,255,0.10)',
   },
-  actionsRow: {
-    marginTop: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  subscribeBtn: {
-    paddingHorizontal: 18,
-    height: 40,
-    borderRadius: 999,
-    backgroundColor: '#FF2D2D',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  subscribeBtnText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: 0.2,
-  },
-  joinBtn: {
-    marginLeft: 12,
-    paddingHorizontal: 18,
-    height: 40,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  joinBtnText: {
-    color: 'rgba(255,255,255,0.92)',
-    fontSize: 14,
-    fontWeight: '800',
-  },
+
 
   channelTabsWrap: {
     marginTop: 14,
@@ -1242,22 +1339,86 @@ const styles = StyleSheet.create({
     maxWidth: 180,
   },
   inlineSubs: {
-    marginTop: 2,
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 12,
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '600',
   },
-  inlineActionsRow: {
+  subscribedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 10,
+    backgroundColor: '#1DB954',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  subscribedText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 16,
+  },
+  subscribeBtn: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    minWidth: 140,
+    alignItems: 'center',
+  },
+  subscribeBtnText: {
+    color: '#000',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  joinBtn: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  joinBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  inlineJoinBtnSubscribed: {
+    backgroundColor: 'rgba(255,106,0,0.15)',
+    borderColor: 'rgba(255,106,0,0.5)',
+  },
+  expiryBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 4,
+    marginTop: 2,
+  },
+  expiryBadgeText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  inlineExpiryText: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  inlineActionRow: {
+
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   inlineSubscribeBtn: {
-    paddingHorizontal: 14,
-    height: 34,
-    borderRadius: 999,
-    backgroundColor: '#FF2D2D',
-    alignItems: 'center',
     justifyContent: 'center',
   },
   inlineSubscribeText: {

@@ -1,8 +1,10 @@
 import { Router } from "express";
 import { requireAuth } from "../../common/auth/requireAuth";
 import { pool } from "../../common/db";
+import { getAdminDashboardMetrics } from "../../controllers/adminAnalyticsController";
 
 const router = Router();
+router.get("/metrics", requireAuth, getAdminDashboardMetrics);
 
 const requireAdmin = (req: any, res: any, next: any) => {
   const role = (req.user?.role || "").toUpperCase();

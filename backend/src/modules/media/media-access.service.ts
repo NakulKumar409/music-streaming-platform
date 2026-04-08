@@ -30,6 +30,7 @@ export interface RequestPlaybackInput {
   userId: number | null;
   kind?: "audio" | "video";
   quality?: "SD" | "HD";
+  allowPreview?: boolean;
 }
 
 /**
@@ -87,7 +88,8 @@ export async function requestPlaybackAccess(input: RequestPlaybackInput): Promis
     userId ?? null,
     content.artist_id,
     visibility,
-    subscriptionRequired
+    subscriptionRequired,
+    input.allowPreview ?? false
   );
 
   if (!entitlement.allowed) {

@@ -18,6 +18,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -41,6 +42,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import Slider from '@react-native-community/slider';
 import Svg, { Path } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Crown, Star, Lock, BadgeCheck, ShieldCheck } from 'lucide-react-native';
 
 import { apiV1 } from '../services/api';
 import { contentApi } from '../services/api';
@@ -249,6 +251,9 @@ export default function VideoScreen() {
   const [items, setItems] = useState<VideoCard[]>([]);
 
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+  const [lastAttemptedHdQuality, setLastAttemptedHdQuality] = useState<string | null>(null);
+  const [lastAttemptedVideo, setLastAttemptedVideo] = useState<VideoCard | null>(null);
+
   const [activeVideoMeta, setActiveVideoMeta] = useState<VideoCard | null>(null);
   const [activePlaybackUrl, setActivePlaybackUrl] = useState<string | null>(null);
   const [loadingPlaybackUrl, setLoadingPlaybackUrl] = useState(false);
@@ -288,6 +293,10 @@ export default function VideoScreen() {
 
   const [maxAllowedResolution, setMaxAllowedResolution] = useState<string>('240p');
   const [isStreamingHdAllowed, setIsStreamingHdAllowed] = useState(false);
+
+  const [showHdLockModal, setShowHdLockModal] = useState(false);
+  const [showArtistLockModal, setShowArtistLockModal] = useState<{ visible: boolean; video: VideoCard | null; isPreviewEnded?: boolean }>({ visible: false, video: null });
+  const [isLockedPreview, setIsLockedPreview] = useState(false);
 
   const [showMini, setShowMini] = useState(false);
   const scrollYRef = useRef(0);
@@ -643,6 +652,7 @@ export default function VideoScreen() {
       setShowControls(true);
       playedOnceRef.current = false;
       setShowQualitySheet(false);
+      setIsLockedPreview(false);
     }
   }, [videoPlayer]);
 
@@ -803,15 +813,9 @@ export default function VideoScreen() {
     return () => clearInterval(interval);
   }, [videoPlayer, isSeeking, isVideoPlaying]);
 
-  useFocusEffect(
-    useCallback(() => {
-      // Reload video list every time screen gains focus so new uploads appear.
-      load().catch(() => undefined);
-      return () => {
-        pauseInlineVideoIfNeeded().catch(() => undefined);
-      };
-    }, [load, pauseInlineVideoIfNeeded])
-  );
+
+
+
 
   useEffect(() => {
     // Pause inline video if global audio starts playing.
@@ -834,8 +838,12 @@ export default function VideoScreen() {
 
   const resolvePlaybackUrl = useCallback(async (video: VideoCard) => {
     try {
-      return await streamService.getPlaybackUrl(video.id, 'video', isStreamingHdAllowed ? 'HD' : 'SD');
-    } catch {
+      const q: 'SD' | 'HD' = isStreamingHdAllowed ? 'HD' : 'SD';
+      return await streamService.getPlaybackUrl(video.id, 'video', q);
+    } catch (err: any) {
+      if (err?.message && (err.message.toLowerCase().includes('subscription') || err.message.toLowerCase().includes('access denied'))) {
+        throw err; // Propagate subscription errors for UI handling
+      }
       const fallback = video.mediaUrl ? streamService.normalizePlaybackUrl(video.mediaUrl) : '';
       if (!fallback) return '';
       return streamService.validatePlaybackUrl(fallback, 'video') ? fallback : '';
@@ -878,7 +886,37 @@ export default function VideoScreen() {
 
         setLoadingPlaybackUrl(true);
         try {
+          // PROACTIVE CHECK: Check if content is locked before even hitting the stream service
+          const accessRes = await userService.checkContentAccess(Number(video.id), video.artistId || '');
+          
+          if (!accessRes.allowed) {
+            // New Preview Logic: Try to fetch a preview URL if fully locked
+            try {
+              const previewUrl = await streamService.getPlaybackUrl(video.id, 'video', 'SD', true);
+              if (previewUrl && sessionId === playbackSessionRef.current) {
+                 setIsLockedPreview(true);
+                 setActivePlaybackUrl(previewUrl);
+                 setIsVideoReady(false);
+                 setIsVideoPlaying(true);
+                 setLoadingPlaybackUrl(false);
+                 return;
+              }
+            } catch (pErr) {
+              console.warn('[VideoScreen] Preview fetch failed', pErr);
+            }
+
+            setLastAttemptedVideo(video);
+            setShowArtistLockModal({ visible: true, video });
+            setPlaybackError('Subscription Required');
+            setActivePlaybackUrl(null);
+            setLoadingPlaybackUrl(false);
+            return;
+          }
+
+          setIsLockedPreview(false);
+
           const playbackUrl = await resolvePlaybackUrl(video);
+
           if (sessionId !== playbackSessionRef.current) return;
           if (!streamService.validatePlaybackUrl(playbackUrl, 'video')) {
             setPlaybackError('Invalid playback source');
@@ -895,7 +933,15 @@ export default function VideoScreen() {
             shouldPlayInBackground: true,
             interruptionMode: 'doNotMix',
           });
-        } catch (err) {
+        } catch (err: any) {
+          const msg = (err?.message || '').toLowerCase();
+          if (msg.includes('subscription') || msg.includes('access denied')) {
+            setLastAttemptedVideo(video);
+            setShowArtistLockModal({ visible: true, video });
+            setPlaybackError('Subscription Required');
+            setActivePlaybackUrl(null);
+            return;
+          }
           console.warn('[VideoPlayer] Playback error', err);
           setPlaybackError('Could not load playback URL');
           setActivePlaybackUrl(null);
@@ -906,6 +952,75 @@ export default function VideoScreen() {
     },
     [pauseGlobalPlaybackIfNeeded, resolvePlaybackUrl, videoPlayer]
   );
+
+  const refreshSubscriptionAndRetry = useCallback(async () => {
+    try {
+      const res = await userService.checkStreamingQuality();
+      const maxRes = (res?.maxResolution ?? '240p').toString();
+      const isAllowedHD = res?.quality === 'HD';
+      
+      setMaxAllowedResolution(maxRes);
+      setIsStreamingHdAllowed(isAllowedHD);
+
+      // If we just got unlocked (e.g. from Platform purchase)
+      if (route.params?.unlocked) {
+        // Clear the param so we don't loop
+        navigation.setParams({ unlocked: false });
+
+        // 1. Dismiss all lock modals
+        setShowHdLockModal(false);
+        setShowArtistLockModal({ visible: false, video: null });
+
+        // 2. Resolve 'HD' upgrade if it was pending
+        if (isAllowedHD && lastAttemptedHdQuality) {
+          const q = lastAttemptedHdQuality;
+          setLastAttemptedHdQuality(null);
+          // Auto-apply the quality
+          setSelectedQuality(q);
+          const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
+          if (activeVideoMeta?.id) {
+            setLoadingPlaybackUrl(true);
+            try {
+              const qParam: 'SD' | 'HD' = (q === '720p' || q === '1080p' || q === 'Auto') ? 'HD' : 'SD';
+              const nextUrl = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video', qParam);
+              isQualitySwitchRef.current = true;
+              qualityResumePositionRef.current = pos / 1000;
+              setActivePlaybackUrl(nextUrl);
+            } catch (e) {
+              console.warn('[VideoScreen] Auto-retry quality switch failed', e);
+            } finally {
+              setLoadingPlaybackUrl(false);
+            }
+          }
+        }
+
+        // 3. Resolve 'Artist' content if it was blocked
+        if (lastAttemptedVideo) {
+          const v = lastAttemptedVideo;
+          setLastAttemptedVideo(null);
+          setIsLockedPreview(false); // Reset preview flag on real unlock
+          onPressVideo(v);
+        }
+      }
+    } catch (e) {
+      console.warn('[VideoScreen] Failed to refresh subscription status', e);
+    }
+  }, [route.params?.unlocked, navigation, lastAttemptedHdQuality, lastAttemptedVideo, videoPlayer, activeVideoMeta, onPressVideo]);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Refresh sub status on focus (essential for instant unlock)
+      refreshSubscriptionAndRetry();
+      
+      // Reload video list every time screen gains focus so new uploads appear.
+      load().catch(() => undefined);
+      return () => {
+        pauseInlineVideoIfNeeded().catch(() => undefined);
+      };
+    }, [load, pauseInlineVideoIfNeeded, refreshSubscriptionAndRetry])
+  );
+
+
 
   useEffect(() => {
     if (route.params?.autoplayVideo) {
@@ -1004,9 +1119,19 @@ export default function VideoScreen() {
 
   const onPlaybackStatusUpdate = useCallback(
     (status: any) => {
-      void status;
+      if (!status.isLoaded) return;
+      const pos = status.positionMillis || 0;
+      setPositionMs(pos);
+
+      // Enforce 10-second preview limit
+      if (isLockedPreview && pos > 10000) {
+        videoPlayer.pause();
+        setIsVideoPlaying(false);
+        setShowArtistLockModal({ visible: true, video: activeVideoMeta, isPreviewEnded: true });
+        return;
+      }
     },
-    []
+    [activeVideoMeta, isLockedPreview, videoPlayer]
   );
 
   useEffect(() => {
@@ -1095,13 +1220,16 @@ export default function VideoScreen() {
 
   const applyQualitySelection = useCallback(
     async (q: string) => {
-      if (!isSelectionAllowed(q)) {
-        const allowed = maxAllowedResolution || '240p';
-        Alert.alert('Subscription required', `High quality is available for subscribers only. Max quality: ${allowed}.`);
-        setSelectedQuality(allowed);
+      if (q === selectedQuality) {
         setShowQualitySheet(false);
-        setIsHD(false);
-        q = allowed;
+        return;
+      }
+
+      const isRequestedHD = q === '720p' || q === '1080p' || q === 'Auto';
+      if (isRequestedHD && !isStreamingHdAllowed) {
+        setLastAttemptedHdQuality(q);
+        setShowQualitySheet(false);
+        setShowHdLockModal(true);
       } else {
         setSelectedQuality(q);
         setShowQualitySheet(false);
@@ -1433,6 +1561,83 @@ export default function VideoScreen() {
     }
     return <Text style={styles.emptyText}>No videos found.</Text>;
   }, [normalizedQuery, searchLoading]);
+
+  // Refined Lock Modal for Artist Subscriptions
+  const renderArtistLockModal = () => (
+    <Modal
+      visible={showArtistLockModal.visible}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowArtistLockModal({ visible: false, video: null })}
+    >
+      <View style={styles.modalBackdrop}>
+        <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+        <View style={styles.modalContainer}>
+          <View style={[styles.modalIconWrap, { backgroundColor: 'rgba(255,122,24,0.15)', borderColor: 'rgba(255,122,24,0.3)' }]}>
+            <Lock color="#FF7A18" size={32} />
+          </View>
+          
+          <Text style={styles.modalTitle}>
+            {showArtistLockModal.isPreviewEnded ? "Preview Finished" : "Exclusive Content"}
+          </Text>
+          
+          <Text style={styles.modalMessage}>
+            Support <Text style={{ color: '#fff', fontWeight: '900' }}>{showArtistLockModal.video?.artistName || 'this artist'}</Text> to unlock full access and premium benefits.
+          </Text>
+
+          <View style={styles.benefitsList}>
+            <View style={styles.benefitItem}>
+              <BadgeCheck color="#10B981" size={16} />
+              <Text style={styles.benefitText}>Watch full exclusive releases</Text>
+            </View>
+            <View style={styles.benefitItem}>
+              <BadgeCheck color="#10B981" size={16} />
+              <Text style={styles.benefitText}>Support the artist directly</Text>
+            </View>
+            <View style={styles.benefitItem}>
+              <BadgeCheck color="#10B981" size={16} />
+              <Text style={styles.benefitText}>Instant activation</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.modalPrimaryBtn}
+            onPress={() => {
+              const video = showArtistLockModal.video;
+              setShowArtistLockModal({ visible: false, video: null });
+              navigation.navigate('SubscriptionFlow', {
+                artistId: video?.artistId,
+                artistName: video?.artistName,
+                defaultPlan: 'ARTIST',
+                contentId: video?.id
+              });
+            }}
+          >
+            <LinearGradient
+              colors={['#FF7A18', '#FF3D00']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.modalBtnGradient}
+            >
+              <Text style={styles.modalPrimaryBtnText}>Subscribe Now</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <View style={styles.trustBox}>
+            <ShieldCheck color="rgba(255,255,255,0.4)" size={14} />
+            <Text style={styles.trustText}>Secure payment via Razorpay • Cancel anytime</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.modalSecondaryBtn}
+            onPress={() => setShowArtistLockModal({ visible: false, video: null })}
+          >
+            <Text style={styles.modalSecondaryBtnText}>Maybe Later</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
 
   return (
     <View style={styles.root}>
@@ -1845,6 +2050,51 @@ export default function VideoScreen() {
           </Pressable>
         </View>
       </Modal>
+
+        {/* ── HD Quality Lock Modal ─────────────────────────────────────── */}
+        <Modal
+          visible={showHdLockModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowHdLockModal(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalContainer}>
+              <View style={styles.modalIconWrap}>
+                <Crown color="#4AA3FF" size={28} />
+              </View>
+              <Text style={styles.modalTitle}>HD Quality Locked</Text>
+              <Text style={styles.modalMessage}>
+                Upgrade to Premium to watch in high quality (720p/1080p).
+              </Text>
+              <Pressable
+                style={styles.modalPrimaryBtn}
+                onPress={() => {
+                  setShowHdLockModal(false);
+                  navigation.navigate('SubscriptionFlow', { defaultPlan: 'PLATFORM' });
+                }}
+              >
+                <LinearGradient
+                  colors={['#4AA3FF', '#0B7EE8']}
+                  style={styles.modalBtnGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Text style={styles.modalPrimaryBtnText}>Upgrade Now</Text>
+                </LinearGradient>
+              </Pressable>
+              <Pressable
+                style={styles.modalSecondaryBtn}
+                onPress={() => setShowHdLockModal(false)}
+              >
+                <Text style={styles.modalSecondaryBtnText}>Continue with {maxAllowedResolution}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ── Artist Lock Modal ─────────────────────────────────────────── */}
+        {renderArtistLockModal()}
     </View>
   );
 }
@@ -2429,5 +2679,118 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '900',
     letterSpacing: 0.5,
+  },
+  
+  // Custom Modal Styles for Lock Flow
+  modalBackdrop: { 
+    flex: 1, 
+    backgroundColor: 'rgba(5,5,15,0.92)', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    padding: 24 
+  },
+  modalContainer: { 
+    width: '100%', 
+    maxWidth: 360, 
+    backgroundColor: '#1C1C24', 
+    borderRadius: 32, 
+    padding: 30, 
+    alignItems: 'center', 
+    borderWidth: 1, 
+    borderColor: 'rgba(255,255,255,0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.6,
+    shadowRadius: 32,
+    elevation: 24,
+  },
+  modalIconWrap: { 
+    width: 76, 
+    height: 76, 
+    borderRadius: 38, 
+    backgroundColor: 'rgba(255,255,255,0.05)', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginBottom: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  modalTitle: { 
+    color: '#fff', 
+    fontSize: 26, 
+    fontWeight: '900', 
+    marginBottom: 12, 
+    textAlign: 'center', 
+    letterSpacing: -0.5 
+  },
+  modalMessage: { 
+    color: 'rgba(255,255,255,0.65)', 
+    fontSize: 15, 
+    textAlign: 'center', 
+    marginHorizontal: 4, 
+    marginBottom: 32, 
+    lineHeight: 24,
+    fontWeight: '600',
+  },
+  modalPrimaryBtn: { 
+    width: '100%', 
+    height: 60, 
+    borderRadius: 20, 
+    overflow: 'hidden', 
+    marginBottom: 14,
+    shadowColor: '#FF7A18',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+  },
+  modalBtnGradient: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  modalPrimaryBtnText: { 
+    color: '#fff', 
+    fontSize: 17, 
+    fontWeight: '900', 
+    letterSpacing: 0.5 
+  },
+  modalSecondaryBtn: { 
+    width: '100%', 
+    height: 52, 
+    borderRadius: 20, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  modalSecondaryBtnText: { 
+    color: 'rgba(255,255,255,0.5)', 
+    fontSize: 15, 
+    fontWeight: '700' 
+  },
+  benefitsList: {
+    width: '100%',
+    marginBottom: 24,
+    gap: 12,
+  },
+  benefitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  benefitText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  trustBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 16,
+    opacity: 0.6,
+  },
+  trustText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

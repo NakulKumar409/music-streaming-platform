@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../common/auth/requireAuth";
 import { revokeSubscription, adjustSubscription } from "../../controllers/admin/adminSubscriptionController";
+import { updatePlatformConfig } from "../../controllers/subscriptionConfigController";
 
 const router = Router();
 
@@ -20,5 +21,8 @@ router.post("/:id/revoke", requireAuth, requireAdmin, revokeSubscription);
 
 // Adjust any part of the subscription record
 router.patch("/:id", requireAuth, requireAdmin, adjustSubscription);
+
+// Update global platform subscription configuration
+router.put("/platform-config", requireAuth, requireAdmin, updatePlatformConfig);
 
 export default router;

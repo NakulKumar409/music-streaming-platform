@@ -35,7 +35,8 @@ router.post("/access", async (req: any, res: any) => {
       contentId,
       userId: req.user?.id ?? null,
       kind,
-      quality
+      quality,
+      allowPreview: Boolean(req.body?.allowPreview)
     });
 
     const mediaCfg = getMediaConfig();

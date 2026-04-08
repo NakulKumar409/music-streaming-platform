@@ -67,7 +67,8 @@ export default function LoginScreen({ navigation, route }: Props) {
     } catch (err: any) {
       const status = err?.response?.status;
       const serverMessage = err?.response?.data?.message;
-      const message =
+      
+      let message = 
         typeof serverMessage === 'string'
           ? serverMessage
           : status === 403
@@ -75,6 +76,12 @@ export default function LoginScreen({ navigation, route }: Props) {
             : status === 401
               ? 'Invalid credentials.'
               : err?.message || 'Login failed';
+
+      // Specific check for device limit
+      if (message.toLowerCase().includes('device limit')) {
+        message = 'Device Limit Reached: You can only have 2 active sessions. Please log out from another device.';
+      }
+
       setErrorText(message);
       if (isNative) Alert.alert('Login Error', message);
     }

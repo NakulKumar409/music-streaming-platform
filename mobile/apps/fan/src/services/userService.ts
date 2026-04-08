@@ -84,6 +84,30 @@ export type QualityResult = {
   isGrace?: boolean;
 };
 
+export type PlatformConfig = {
+  price: number;
+  discount_price?: number;
+  discount_months?: number;
+  currency: string;
+  duration: string;
+  features: string[];
+};
+
+export type UpsellStatus = {
+  success: boolean;
+  interactionCount: number;
+  showStrongUpsell: boolean;
+};
+
+export type ArtistProfile = {
+  id: number;
+  name: string;
+  subscriptionPrice: number;
+  isVerified: boolean;
+  profileImageUrl?: string;
+  bio?: string;
+};
+
 export interface UserService {
   getUserProfile(): Promise<UserProfile>;
   getTransactions(): Promise<Transaction[]>;
@@ -95,6 +119,15 @@ export interface UserService {
   updatePassword(input: UpdatePasswordInput): Promise<any>;
   uploadProfileImage(uri: string, mimeType: string, fileName: string): Promise<string>;
   updateSettings(input: UpdateSettingsInput): Promise<any>;
+  getPlatformConfig(): Promise<PlatformConfig | null>;
+  getFullSubscriptionStatus(): Promise<{
+    platform: SubscriptionRecord | null;
+    artists: SubscriptionRecord[];
+    count: number;
+  } | null>;
+  trackUpsellAttempt(): Promise<void>;
+  getUpsellStatus(): Promise<UpsellStatus | null>;
+  getArtistProfile(artistId: number): Promise<ArtistProfile | null>;
 }
 
 function mapSubRecord(raw: any): SubscriptionRecord | null {
@@ -231,5 +264,70 @@ export const userService: UserService = {
       audioQualityPref: input.audioQuality,
     });
     return res.data;
+  },
+
+  async getPlatformConfig() {
+    try {
+      const res = await apiV1.get('/subscriptions/platform-config');
+      if (res.data?.success && res.data.config) {
+        return res.data.config as PlatformConfig;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
+  async getFullSubscriptionStatus() {
+    try {
+      const res = await apiV1.get('/subscriptions/status');
+      if (res.data?.success) {
+        return {
+          platform: mapSubRecord(res.data.platform),
+          artists: (res.data.artists || []).map((a: any) => mapSubRecord(a)),
+          count: Number(res.data.count || 0)
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
+  async trackUpsellAttempt() {
+    try {
+      await apiV1.post('/subscriptions/upsell/track');
+    } catch (err) {
+      console.warn('[Upsell] Track attempt failed', err);
+    }
+  },
+
+  async getUpsellStatus() {
+    try {
+      const res = await apiV1.get('/subscriptions/upsell/status');
+      return res.data as UpsellStatus;
+    } catch {
+      return null;
+    }
+  },
+
+  async getArtistProfile(artistId: number): Promise<ArtistProfile | null> {
+    try {
+      const res = await apiV1.get(`/artists/${artistId}`);
+      if (res.data?.success && res.data.artist) {
+        const a = res.data.artist;
+        return {
+          id: Number(a.id),
+          name: (a.name ?? '').toString(),
+          subscriptionPrice: Number(a.subscriptionPrice ?? 0),
+          isVerified: Boolean(a.isVerified),
+          profileImageUrl: a.profileImageUrl,
+          bio: a.bio,
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
   },
 };

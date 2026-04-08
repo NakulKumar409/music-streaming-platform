@@ -166,6 +166,21 @@ export async function ensureReactionsSchema(): Promise<void> {
   await pool.query("CREATE INDEX IF NOT EXISTS idx_content_reactions_content_id ON content_reactions(content_id)").catch(() => undefined);
 }
 
+export async function ensureSessionsSchema(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      id SERIAL PRIMARY KEY,
+      user_id INT NOT NULL,
+      device_id VARCHAR(255) NOT NULL,
+      device_name VARCHAR(255),
+      last_active_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id)").catch(() => undefined);
+  await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_user_sessions_device ON user_sessions(user_id, device_id)").catch(() => undefined);
+}
+
 export async function ensureSubscriptionsSchema(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS subscriptions (
@@ -229,6 +244,45 @@ export async function ensureArtistStatsSchema(): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `).catch(() => undefined);
+}
+
+export async function ensureUpsellSchema(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS upsell_metrics (
+      user_id INT PRIMARY KEY,
+      interaction_count INT NOT NULL DEFAULT 0,
+      last_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+}
+
+export async function ensurePlatformConfigSchema(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS platform_subscription_configs (
+      id SERIAL PRIMARY KEY,
+      price NUMERIC NOT NULL,
+      currency VARCHAR(10) NOT NULL DEFAULT 'INR',
+      duration VARCHAR(20) NOT NULL DEFAULT 'monthly',
+      features JSONB NOT NULL DEFAULT '[]',
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      discount_price NUMERIC,
+      discount_months INT DEFAULT 1,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+
+  await pool.query("ALTER TABLE platform_subscription_configs ADD COLUMN IF NOT EXISTS discount_price NUMERIC").catch(() => undefined);
+  await pool.query("ALTER TABLE platform_subscription_configs ADD COLUMN IF NOT EXISTS discount_months INT DEFAULT 1").catch(() => undefined);
+
+  // Seed default if empty
+  const count = await pool.query("SELECT COUNT(*)::int as c FROM platform_subscription_configs");
+  if (count.rows[0].c === 0) {
+    await pool.query(`
+      INSERT INTO platform_subscription_configs (price, currency, duration, features, is_active)
+      VALUES (99, 'INR', 'monthly', '["HD streaming (720p / 1080p)", "Crystal clear audio quality", "Works across all content", "Ad-free experience"]'::jsonb, true)
+    `);
+  }
 }
 
 // Deprecated alias for backward compatibility during cleanup if needed

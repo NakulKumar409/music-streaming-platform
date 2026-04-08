@@ -231,6 +231,66 @@ export function SmartUpsell({ featureText, planType, onUpgrade }: SmartUpsellPro
   );
 }
 
+// ─────────────────────────────────────────────────────
+// RetentionBanner — shown for expiring subscriptions
+// ─────────────────────────────────────────────────────
+type RetentionBannerProps = {
+  daysLeft: number;
+  onRenew: () => void;
+};
+
+export function RetentionBanner({ daysLeft, onRenew }: RetentionBannerProps) {
+  return (
+    <LinearGradient
+      colors={['#FFF5F5', '#FFF0F0']}
+      style={bannerStyles.container}
+    >
+      <AlertTriangle color="#EF4444" size={20} />
+      <View style={bannerStyles.textWrap}>
+        <Text style={bannerStyles.title}>Subscription expiring soon</Text>
+        <Text style={bannerStyles.sub}>
+          Your access ends in {daysLeft} day{daysLeft === 1 ? '' : 's'}. Renew now to avoid interruption.
+        </Text>
+      </View>
+      <Pressable style={bannerStyles.btn} onPress={onRenew}>
+        <Text style={bannerStyles.btnText}>Renew</Text>
+      </Pressable>
+    </LinearGradient>
+  );
+}
+
+// ─────────────────────────────────────────────────────
+// StrongUpsellModal — shown for persistent unlocked clicks
+// ─────────────────────────────────────────────────────
+export function StrongUpsellModal({ 
+  artistName, 
+  onSubscribe 
+}: { 
+  artistName: string; 
+  onSubscribe: () => void; 
+}) {
+  return (
+    <View style={strongUpsellStyles.backdrop}>
+      <View style={strongUpsellStyles.card}>
+        <Crown color="#FFD700" size={32} />
+        <Text style={strongUpsellStyles.title}>Special Access for You!</Text>
+        <Text style={strongUpsellStyles.body}>
+          We noticed you're interested in {artistName}'s premium content.
+          Subscribe now to unlock exclusive tracks, full HD videos, and early access!
+        </Text>
+        <View style={strongUpsellStyles.benefits}>
+          <Text style={strongUpsellStyles.benefitItem}>✅ Full HD Streaming</Text>
+          <Text style={strongUpsellStyles.benefitItem}>✅ Exclusive Behind-the-Scenes</Text>
+          <Text style={strongUpsellStyles.benefitItem}>✅ Direct Artist Support</Text>
+        </View>
+        <Pressable style={strongUpsellStyles.btn} onPress={onSubscribe}>
+          <Text style={strongUpsellStyles.btnText}>Unlock Everything</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 // ─── Styles ──────────────────────────────────────────
 
 const lockedStyles = StyleSheet.create({
@@ -400,4 +460,57 @@ const upsellStyles = StyleSheet.create({
   },
   highlight: { color: '#FF7A18', fontWeight: '800' },
   cta: { color: '#FF7A18', fontSize: 12, fontWeight: '900', marginLeft: 8 },
+});
+
+const bannerStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  textWrap: { flex: 1, marginLeft: 12 },
+  title: { color: '#1F2937', fontSize: 14, fontWeight: '800' },
+  sub: { color: '#4B5563', fontSize: 12, fontWeight: '500', marginTop: 2 },
+  btn: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  btnText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+});
+
+const strongUpsellStyles = StyleSheet.create({
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
+  card: {
+    width: '90%',
+    backgroundColor: '#1F2937',
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.3)',
+  },
+  title: { color: '#fff', fontSize: 24, fontWeight: '900', marginTop: 16, textAlign: 'center' },
+  body: { color: 'rgba(255,255,255,0.7)', fontSize: 14, textAlign: 'center', marginTop: 12, lineHeight: 22 },
+  benefits: { alignSelf: 'stretch', marginTop: 24, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 16 },
+  benefitItem: { color: '#fff', fontSize: 14, fontWeight: '700', marginVertical: 4 },
+  btn: { width: '100%', height: 56, backgroundColor: '#FF7A18', borderRadius: 16, alignItems: 'center', justifyCenter: 'center', marginTop: 24, justifyContent: 'center' },
+  btnText: { color: '#fff', fontSize: 16, fontWeight: '900' },
 });

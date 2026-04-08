@@ -16,7 +16,10 @@ import {
   ensurePlaysSchema,
   ensureReactionsSchema,
   ensureSubscriptionsSchema,
-  ensureArtistStatsSchema
+  ensureArtistStatsSchema,
+  ensurePlatformConfigSchema,
+  ensureSessionsSchema,
+  ensureUpsellSchema
 } from "./config/ensure-schema";
 import fanRoutes from "./routes/fan";
 import artistRoutes from "./routes/artist";
@@ -34,6 +37,7 @@ import { redis, connectRedisWithRetry } from "./common/redis";
 import { initSentry, captureError } from "./common/sentry";
 import { logger, httpLogger } from "./common/logger";
 import "./workers/upload.worker";
+import { NotificationService } from "./shared/notifications/notification.service";
 
 // Initialise Sentry as early as possible (no-op if SENTRY_DSN is unset)
 initSentry();
@@ -299,6 +303,9 @@ const PORT = process.env.PORT || 8000;
     await ensureReactionsSchema();
     await ensureSubscriptionsSchema();
     await ensureArtistStatsSchema();
+    await ensurePlatformConfigSchema();
+    await ensureSessionsSchema();
+    await ensureUpsellSchema();
     console.log("[Startup] Database schema ensured ✅");
 
     // ── Subscription Lifecycle Management ────────────────────────────────
@@ -322,9 +329,61 @@ const PORT = process.env.PORT || 8000;
       }
     };
 
+    const notifyExpiringSubscriptions = async () => {
+      console.log("[Notifier] Checking for expiring subscriptions...");
+      try {
+        // Find subscriptions expiring in precisely 48 hours (+/- 1 hour margin to avoid double notify if run slightly off)
+        // Or simpler: Find subs expiring in < 48 hours that haven't been notified yet.
+        // For simplicity here, we'll find subs arriving at exactly the 48h mark.
+        const result = await pool.query(`
+          SELECT s.user_id, s.type, s.artist_id, u.name as artist_name
+          FROM subscriptions s
+          LEFT JOIN users u ON u.id = s.artist_id
+          WHERE s.status = 'ACTIVE'
+            AND s.next_billing_date > now()
+            AND s.next_billing_date <= now() + interval '48 hours'
+            AND s.next_billing_date > now() + interval '47 hours'
+        `);
+
+        for (const row of result.rows) {
+          NotificationService.sendToUser({
+            userId: String(row.user_id),
+            title: "Subscription Expiring Soon! ⏳",
+            body: `Your subscription to ${row.type === 'PLATFORM' ? 'the Platform' : row.artist_name || 'your artist'} will expire in 2 days. Renew now to stay premium!`,
+            data: { type: "expiry_warning", artistId: row.artist_id }
+          }).catch(e => logger.error(e, "[Notifier] Expiry warning failed"));
+        }
+      } catch (err) {
+        console.error("[Notifier] Failed to send expiry notifications:", err);
+      }
+    };
+
+    const sweepStaleSessions = async () => {
+      console.log("[Sweeper] Running stale session cleanup...");
+      try {
+        const result = await pool.query(`
+          DELETE FROM user_sessions
+          WHERE last_active_at < now() - interval '30 days'
+        `);
+        if (result.rowCount && result.rowCount > 0) {
+          console.log(`[Sweeper] Removed ${result.rowCount} stale user sessions.`);
+        }
+      } catch (err) {
+        console.error("[Sweeper] Failed to sweep sessions:", err);
+      }
+    };
+
     // Run immediately on boot then every 6 hours
     sweepExpiredSubscriptions();
     setInterval(sweepExpiredSubscriptions, 6 * 60 * 60 * 1000);
+
+    // Run expiry notifications every hour (since it checks for a narrow window)
+    notifyExpiringSubscriptions();
+    setInterval(notifyExpiringSubscriptions, 60 * 60 * 1000);
+
+    // Run session cleanup every 24 hours
+    sweepStaleSessions();
+    setInterval(sweepStaleSessions, 24 * 60 * 60 * 1000);
 
   } catch (err) {
     console.error("[Startup] WARNING: DB schema migration failed — check DATABASE_URL:", (err as any)?.message ?? err);

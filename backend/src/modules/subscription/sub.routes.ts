@@ -2,7 +2,9 @@ import { Router } from "express";
 import { requireAuth } from "../../common/auth/requireAuth";
 import { confirmPayment, createOrder } from "../../controllers/paymentController";
 import { createSubscription, verifySubscription } from "../../controllers/subscriptionController";
+import { getPlatformConfig } from "../../controllers/subscriptionConfigController";
 import { pool } from "../../common/db";
+import { trackUpsellAttempt, getUpsellStatus } from "../../controllers/upsellController";
 
 const router = Router();
 
@@ -63,6 +65,8 @@ router.get("/me", requireAuth, (req, res) => {
           grace_ends_at: s.grace_ends_at,
           end_date: s.end_date ?? s.next_billing_date,
           auto_renew: s.auto_renew,
+          isExpiringSoon: s.next_billing_date ? (new Date(s.next_billing_date).getTime() - Date.now()) < (48 * 3600 * 1000) : false,
+          daysLeft: s.next_billing_date ? Math.ceil((new Date(s.next_billing_date).getTime() - Date.now()) / (1000 * 86400)) : null,
         }
       });
     } catch {
@@ -102,6 +106,8 @@ router.get("/platform", requireAuth, (req, res) => {
               grace_ends_at: s.grace_ends_at,
               end_date: s.end_date ?? s.next_billing_date,
               auto_renew: s.auto_renew,
+              isExpiringSoon: s.next_billing_date ? (new Date(s.next_billing_date).getTime() - Date.now()) < (48 * 3600 * 1000) : false,
+              daysLeft: s.next_billing_date ? Math.ceil((new Date(s.next_billing_date).getTime() - Date.now()) / (1000 * 86400)) : null,
             }
           : null,
       });
@@ -110,6 +116,11 @@ router.get("/platform", requireAuth, (req, res) => {
     }
   })();
 });
+
+// ────────────────────────────────────────────────────────
+//  GET /subscriptions/platform-config  — dynamic pricing
+// ────────────────────────────────────────────────────────
+router.get("/platform-config", getPlatformConfig);
 
 // ────────────────────────────────────────────────────────
 //  GET /subscriptions/access-check  — content access gate
@@ -377,6 +388,8 @@ router.get("/status", requireAuth, (req: any, res: any) => {
             expires_at: endDate,
             grace_ends_at: s.grace_ends_at,
             is_grace: !!isGrace,
+            isExpiringSoon: s.next_billing_date ? (new Date(s.next_billing_date).getTime() - Date.now()) < (48 * 3600 * 1000) : false,
+            daysLeft: s.next_billing_date ? Math.ceil((new Date(s.next_billing_date).getTime() - Date.now()) / (1000 * 86400)) : null,
             auto_renew: s.auto_renew
          };
       });
@@ -403,9 +416,13 @@ router.get("/status", requireAuth, (req: any, res: any) => {
 router.post("/order", requireAuth, (req, res) => createOrder(req as any, res));
 router.post("/confirm", requireAuth, (req, res) => confirmPayment(req as any, res));
 
-// Razorpay Subscription Endpoints
-router.post("/create", requireAuth, (req, res) => createSubscription(req as any, res));
 router.post("/verify", requireAuth, (req, res) => verifySubscription(req as any, res));
+
+// ────────────────────────────────────────────────────────
+//  Upsell & Conversion Tracking
+// ────────────────────────────────────────────────────────
+router.post("/upsell/track", requireAuth, trackUpsellAttempt);
+router.get("/upsell/status", requireAuth, getUpsellStatus);
 
 // Mock endpoints (dev only)
 router.post("/mock-order", requireAuth, (req, res) => createOrder(req as any, res));

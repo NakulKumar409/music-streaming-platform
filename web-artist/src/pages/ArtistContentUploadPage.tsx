@@ -17,7 +17,9 @@ type UploadFormState = {
   thumbnailFile: File | null;
   audioFile: File | null;
   videoFile: File | null;
+  isSubscriberOnly: boolean;
 };
+
 
 const GENRES = [
   "Pop",
@@ -305,7 +307,31 @@ function UnifiedUploadSection({
             </div>
           </div>
 
+          <div className="rounded-[10px] border border-[#c97a54]/20 bg-[#6a352c]/5 p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-[#6a352c]/20 border border-[#c97a54]/30 flex items-center justify-center text-[18px]">🔒</div>
+              <div>
+                <div className="text-[14px] font-medium text-[#e6d6d2]">Subscriber Only Content</div>
+                <div className="text-[12px] text-[#b8a6a1]">Only your active subscribers will be able to play this track.</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onChange({ ...value, isSubscriberOnly: !value.isSubscriberOnly })}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                value.isSubscriberOnly ? 'bg-[#c97a54]' : 'bg-[#141010]/80 border border-white/10'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  value.isSubscriberOnly ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
           <button
+
             type="button"
             disabled={busy || !canPost}
             onClick={onPost}
@@ -387,8 +413,10 @@ export default function ArtistContentUploadPage() {
     genre: "",
     thumbnailFile: null,
     audioFile: null,
-    videoFile: null
+    videoFile: null,
+    isSubscriberOnly: false
   });
+
 
   const backgroundStyle = useMemo(() => {
     return {
@@ -418,6 +446,8 @@ export default function ArtistContentUploadPage() {
       fd.append("thumbnail", form.thumbnailFile);
       fd.append("audio", form.audioFile);
       fd.append("video", form.videoFile);
+      fd.append("isSubscriberOnly", String(form.isSubscriberOnly));
+
 
       const res = await http.post<UploadResponse>("/api/v1/content/upload", fd, {
         headers: {
@@ -431,7 +461,8 @@ export default function ArtistContentUploadPage() {
 
       setSuccess("Your release has been uploaded and is currently Under Review!");
 
-      setForm({ title: "", genre: "", thumbnailFile: null, audioFile: null, videoFile: null });
+      setForm({ title: "", genre: "", thumbnailFile: null, audioFile: null, videoFile: null, isSubscriberOnly: false });
+
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || "Upload failed");
     } finally {

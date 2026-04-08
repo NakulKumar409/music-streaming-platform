@@ -337,4 +337,43 @@ export class UserController {
       return res.status(500).json({ success: false, message: "Server error: " + error.message });
     }
   }
+
+  async invoice(req: any, res: Response) {
+    try {
+      const userId = req.user?.id;
+      const txId = req.params.id;
+
+      if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+      const txRes = await pool.query(
+        `SELECT t.id, t.amount, t.currency, t.artist_name, t.status, t.date, u.name as customer_name, u.email as customer_email
+         FROM transactions t
+         JOIN users u ON u.id = t.user_id
+         WHERE t.id = $1 AND t.user_id = $2`,
+        [txId, userId]
+      );
+
+      const tx = txRes.rows[0];
+      if (!tx) return res.status(404).json({ success: false, message: "Transaction not found" });
+
+      const { InvoiceService } = require("../../shared/financials/invoice.service");
+      const pdfBuffer = await InvoiceService.generateInvoiceBuffer({
+        invoiceNumber: `INV-${tx.id}`,
+        date: new Date(tx.date).toLocaleDateString(),
+        customerName: tx.customer_name || "Valued Customer",
+        customerEmail: tx.customer_email,
+        artistName: tx.artist_name,
+        amount: Number(tx.amount) / 100, // Convert paise to INR
+        currency: tx.currency || "INR",
+        status: tx.status
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=invoice-${txId}.pdf`);
+      return res.send(pdfBuffer);
+    } catch (error: any) {
+      console.error("[UserController.invoice] error:", error);
+      return res.status(500).json({ success: false, message: "Server error" });
+    }
+  }
 }
