@@ -17,6 +17,7 @@ export type UserProfile = {
 };
 
 export type SubscriptionRecord = {
+  id: string | number;
   type: 'ARTIST' | 'PLATFORM';
   status: string;
   planType: string;
@@ -148,6 +149,7 @@ export interface UserService {
 function mapSubRecord(raw: any): SubscriptionRecord | null {
   if (!raw) return null;
   return {
+    id: raw.id !== undefined ? String(raw.id) : raw.artist_id !== undefined ? String(raw.artist_id) : '',
     type: (raw.type ?? 'ARTIST') as 'ARTIST' | 'PLATFORM',
     status: (raw.status ?? '').toString(),
     planType: (raw.plan_type ?? raw.planType ?? 'MONTHLY').toString(),

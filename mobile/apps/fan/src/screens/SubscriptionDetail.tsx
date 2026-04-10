@@ -11,6 +11,7 @@ import {
   RefreshControl,
   Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +21,7 @@ import * as Sharing from 'expo-sharing';
 import ErrorBoundary from '../ui/ErrorBoundary';
 import { userService, SubscriptionRecord, Transaction } from '../services/userService';
 import { TransactionRow, AutoRenewToggle, CancellationFlow } from '../ui/SubscriptionUI';
+import { JWT_STORAGE_KEY } from '../services/api';
 
 type SubData = {
   type: 'ARTIST' | 'PLATFORM';
@@ -152,9 +154,9 @@ export default function SubscriptionDetail({ navigation, route }: any) {
   };
 
   const handleCancelConfirm = async (reason: string, acceptedOffer: boolean) => {
-    if (!sub?.artistId) return;
+    if (!sub?.id) return;
     try {
-      const res = await userService.cancelSubscription(sub.artistId, {
+      const res = await userService.cancelSubscription(sub.id, {
         reason,
         accepted_retention_offer: acceptedOffer
       });
@@ -185,10 +187,13 @@ export default function SubscriptionDetail({ navigation, route }: any) {
       const fileUri = `${FileSystem.documentDirectory}${filename}`;
 
       console.log(`[DOWNLOAD] Starting download from ${url} to ${fileUri}`);
-      
+
+      // Get JWT token from AsyncStorage
+      const token = await AsyncStorage.getItem(JWT_STORAGE_KEY) || await AsyncStorage.getItem('userToken');
+
       const downloadRes = await FileSystem.downloadAsync(url, fileUri, {
         headers: {
-          'Authorization': (userService as any).apiV1?.defaults?.headers?.common?.['Authorization'] || ''
+          'Authorization': `Bearer ${token}`
         }
       });
 

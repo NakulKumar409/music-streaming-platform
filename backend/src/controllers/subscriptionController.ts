@@ -379,13 +379,25 @@ export const toggleAutoRenew = async (req: any, res: Response) => {
 
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
-    const result = await pool.query(
+    // Try to find subscription by ID first
+    let result = await pool.query(
       `UPDATE subscriptions 
        SET auto_renew = $1, updated_at = now()
        WHERE id = $2 AND user_id = $3
        RETURNING id, auto_renew`,
       [!!auto_renew, subId, userId]
     );
+
+    // If not found by ID, try by artist_id (fallback for mobile app compatibility)
+    if (result.rowCount === 0) {
+      result = await pool.query(
+        `UPDATE subscriptions 
+         SET auto_renew = $1, updated_at = now()
+         WHERE artist_id = $2 AND user_id = $3
+         RETURNING id, auto_renew`,
+        [!!auto_renew, subId, userId]
+      );
+    }
 
     if (result.rowCount === 0) {
       return res.status(404).json({ success: false, message: "Subscription not found" });
@@ -397,7 +409,7 @@ export const toggleAutoRenew = async (req: any, res: Response) => {
     await pool.query(
       `INSERT INTO subscription_audit_logs (user_id, subscription_id, event_type, metadata)
        VALUES ($1, $2, 'AUTO_RENEW_TOGGLE', $3)`,
-      [userId, subId, JSON.stringify({ auto_renew: !!auto_renew })]
+      [userId, result.rows[0].id, JSON.stringify({ auto_renew: !!auto_renew })]
     ).catch(e => logger.error(e, "[SUBSCRIPTION] Audit log failed"));
 
     return res.json({ success: true, auto_renew: result.rows[0].auto_renew });
