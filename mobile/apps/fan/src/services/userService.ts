@@ -27,6 +27,11 @@ export type SubscriptionRecord = {
   isExpiringSoon: boolean;
   artistId?: string | null;
   artistName?: string;
+  artistAvatar?: string;
+  price?: number;
+  currency?: string;
+  features?: string[];
+  autoRenew: boolean;
 };
 
 export type SubscriptionPlanSummary = {
@@ -47,6 +52,7 @@ export type Transaction = {
   artistName: string;
   date: string;
   status?: string;
+  billingCycle?: string;
 };
 
 export type ListenTime = {
@@ -121,6 +127,11 @@ export interface UserService {
   uploadProfileImage(uri: string, mimeType: string, fileName: string): Promise<string>;
   updateSettings(input: UpdateSettingsInput): Promise<any>;
   getPlatformConfig(): Promise<PlatformConfig | null>;
+  getSubscriptionDetails(): Promise<{
+    platform: SubscriptionRecord | null;
+    artists: SubscriptionRecord[];
+    transactions: Transaction[];
+  } | null>;
   getFullSubscriptionStatus(): Promise<{
     platform: SubscriptionRecord | null;
     artists: SubscriptionRecord[];
@@ -129,6 +140,9 @@ export interface UserService {
   trackUpsellAttempt(): Promise<void>;
   getUpsellStatus(): Promise<UpsellStatus | null>;
   getArtistProfile(artistId: number): Promise<ArtistProfile | null>;
+  toggleAutoRenew(subId: string | number, autoRenew: boolean): Promise<boolean>;
+  cancelSubscription(subId: string | number, input: { reason: string; feedback?: string; accepted_retention_offer?: boolean }): Promise<any>;
+  getInvoiceUrl(txId: string | number): string;
 }
 
 function mapSubRecord(raw: any): SubscriptionRecord | null {
@@ -143,7 +157,12 @@ function mapSubRecord(raw: any): SubscriptionRecord | null {
     daysLeft: raw.daysLeft !== undefined ? Number(raw.daysLeft) : null,
     isExpiringSoon: Boolean(raw.isExpiringSoon),
     artistId: raw.artist_id !== undefined && raw.artist_id !== null ? String(raw.artist_id) : null,
-    artistName: (raw.artist_name ?? '').toString(),
+    artistName: (raw.artist_name ?? raw.artist_display_name ?? '').toString(),
+    artistAvatar: raw.artist_avatar ? String(raw.artist_avatar) : undefined,
+    price: raw.price || raw.subscription_price ? Number(raw.price || raw.subscription_price) : undefined,
+    currency: (raw.currency ?? 'INR').toString(),
+    features: Array.isArray(raw.features) ? raw.features : undefined,
+    autoRenew: Boolean(raw.auto_renew ?? false),
   };
 }
 
@@ -180,7 +199,16 @@ export const userService: UserService = {
   },
 
   async getListenTime() {
-    return { totalMinutes: 0, formattedTime: '—' };
+    try {
+      const res = await apiV1.get('/user/listen-time');
+      return { 
+        totalMinutes: Number(res.data?.totalMinutes || 0), 
+        formattedTime: (res.data?.formattedTime || '0m').toString() 
+      };
+    } catch (err) {
+      console.warn('[Analytics] Failed to fetch listen time', err);
+      return { totalMinutes: 0, formattedTime: '—' };
+    }
   },
 
   async getSubscriptionPlanSummary() {
@@ -279,6 +307,31 @@ export const userService: UserService = {
     }
   },
 
+  async getSubscriptionDetails() {
+    try {
+      const res = await apiV1.get('/subscriptions/details');
+      if (res.data?.success) {
+        return {
+          platform: mapSubRecord(res.data.platform),
+          artists: (res.data.artists || []).map((a: any) => mapSubRecord(a)),
+          transactions: (res.data.transactions || []).map((tx: any) => ({
+            id: String(tx.id),
+            amount: Number(tx.amount ?? 0),
+            artistName: (tx.artistName ?? tx.artist_name ?? '').toString(),
+            date: (tx.date ?? '').toString(),
+            status: (tx.status ?? '').toString(),
+            artistId: tx.artist_id ? String(tx.artist_id) : undefined,
+            razorpayPaymentId: tx.razorpay_payment_id ? String(tx.razorpay_payment_id) : undefined,
+            billingCycle: (tx.billingCycle ?? tx.billing_cycle ?? 'monthly').toString(),
+          }))
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
   async getFullSubscriptionStatus() {
     try {
       const res = await apiV1.get('/subscriptions/status');
@@ -332,4 +385,24 @@ export const userService: UserService = {
       return null;
     }
   },
+
+  async toggleAutoRenew(subId: string | number, autoRenew: boolean) {
+    try {
+      const res = await apiV1.patch(`/subscriptions/${subId}/toggle-auto-renew`, { auto_renew: autoRenew });
+      return Boolean(res.data?.success);
+    } catch {
+      return false;
+    }
+  },
+
+  async cancelSubscription(subId: string | number, input: { reason: string; feedback?: string; accepted_retention_offer?: boolean }) {
+    const res = await apiV1.post(`/subscriptions/${subId}/cancel`, input);
+    return res.data;
+  },
+
+  getInvoiceUrl(txId: string | number) {
+    // Return absolute URL for PDF download
+    const baseURL = apiV1.defaults.baseURL || '';
+    return `${baseURL}/user/transactions/${txId}/invoice`;
+  }
 };

@@ -2,9 +2,11 @@ import { Router } from "express";
 import { requireAuth } from "../../common/auth/requireAuth";
 import { pool } from "../../common/db";
 import { getAdminDashboardMetrics } from "../../controllers/adminAnalyticsController";
+import { AnalyticsController } from "../../controllers/analyticsController";
 
 const router = Router();
 router.get("/metrics", requireAuth, getAdminDashboardMetrics);
+router.get("/subscription-health", requireAuth, AnalyticsController.getPlatformSubscriptionHealth);
 
 const requireAdmin = (req: any, res: any, next: any) => {
   const role = (req.user?.role || "").toUpperCase();

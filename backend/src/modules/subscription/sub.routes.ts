@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../common/auth/requireAuth";
 import { confirmPayment, createOrder } from "../../controllers/paymentController";
-import { createSubscription, verifySubscription } from "../../controllers/subscriptionController";
+import { createSubscription, verifySubscription, toggleAutoRenew, cancelSubscription } from "../../controllers/subscriptionController";
 import { getPlatformConfig } from "../../controllers/subscriptionConfigController";
 import { pool } from "../../common/db";
 import { trackUpsellAttempt, getUpsellStatus } from "../../controllers/upsellController";
@@ -319,27 +319,61 @@ router.get("/summary", requireAuth, (req: any, res: any) => {
 });
 
 // ────────────────────────────────────────────────────────
-//  GET /subscriptions/all  — list all subscriptions for user
+//  GET /subscriptions/details — comprehensive view for Account page
 // ────────────────────────────────────────────────────────
-router.get("/all", requireAuth, (req: any, res: any) => {
+router.get("/details", requireAuth, (req: any, res: any) => {
   (async () => {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
     try {
-      const rows = await pool.query(
-        `SELECT s.id, s.type, s.artist_id, s.status, s.plan_type,
-                s.start_date, s.next_billing_date, s.grace_ends_at, s.end_date, s.auto_renew,
-                u.full_name as artist_name, u.name as artist_display_name, u.profile_image_url as artist_avatar
+      // 1. Platform Subscription
+      const platformRow = await pool.query(
+        `SELECT s.id, s.type, s.status, s.plan_type, s.start_date, s.next_billing_date, 
+                s.grace_ends_at, s.end_date, s.auto_renew,
+                cfg.price, cfg.currency, cfg.features
          FROM subscriptions s
-         LEFT JOIN users u ON s.artist_id = u.id AND s.type = 'ARTIST'
-         WHERE s.user_id = $1
-         ORDER BY s.created_at DESC`,
+         LEFT JOIN platform_subscription_configs cfg ON cfg.is_active = true
+         WHERE s.user_id = $1 AND s.type = 'PLATFORM'
+         ORDER BY s.created_at DESC LIMIT 1`,
         [userId]
       );
-      return res.json({ success: true, subscriptions: rows.rows });
-    } catch {
-      return res.status(500).json({ success: false, message: "Failed to list subscriptions" });
+      const platform = platformRow.rows[0] || null;
+
+      // 2. Artist Subscriptions
+      const artistRows = await pool.query(
+        `SELECT s.id, s.type, s.artist_id, s.status, s.plan_type,
+                s.start_date, s.next_billing_date, s.grace_ends_at, s.end_date, s.auto_renew,
+                u.full_name as artist_name, u.name as artist_display_name, u.profile_image_url as artist_avatar,
+                u.subscription_price, u.subscription_features as features
+         FROM subscriptions s
+         LEFT JOIN users u ON s.artist_id = u.id
+         WHERE s.user_id = $1 AND s.type = 'ARTIST'
+         ORDER BY (CASE WHEN s.status = 'ACTIVE' THEN 1 ELSE 2 END), s.created_at DESC`,
+        [userId]
+      );
+
+      // 3. Complete Transaction History
+      const txRows = await pool.query(
+        `SELECT id, amount, currency, artist_name, status, date, artist_id, razorpay_payment_id
+         FROM transactions
+         WHERE user_id = $1
+         ORDER BY date DESC LIMIT 100`,
+        [userId]
+      );
+
+      return res.json({
+        success: true,
+        platform: platform ? {
+          ...platform,
+          features: platform.features || ["HD streaming", "Ad-free experience", "Unlimited skips"]
+        } : null,
+        artists: artistRows.rows,
+        transactions: txRows.rows
+      });
+    } catch (err) {
+      console.error("[DETAILS] Failed to fetch sub details", err);
+      return res.status(500).json({ success: false, message: "Failed to fetch subscription details" });
     }
   })();
 });
@@ -423,6 +457,10 @@ router.post("/verify", requireAuth, (req, res) => verifySubscription(req as any,
 // ────────────────────────────────────────────────────────
 router.post("/upsell/track", requireAuth, trackUpsellAttempt);
 router.get("/upsell/status", requireAuth, getUpsellStatus);
+
+// ── NEW: Governance & Retention (Phase 1) ──────────────────────────
+router.patch("/:id/toggle-auto-renew", requireAuth, toggleAutoRenew);
+router.post("/:id/cancel", requireAuth, cancelSubscription);
 
 // Mock endpoints (dev only)
 router.post("/mock-order", requireAuth, (req, res) => createOrder(req as any, res));

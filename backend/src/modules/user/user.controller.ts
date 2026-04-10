@@ -80,43 +80,80 @@ export class UserController {
   }
 
   async transactions(req: any, res: Response) {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
     try {
-      const userId = req.user?.id;
-
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Unauthorized"
-        });
-      }
-
-      try {
-        const rows = await pool.query(
-          `SELECT id, amount, artist_name, status, date
-           FROM transactions
-           WHERE user_id = $1
-           ORDER BY date DESC
-           LIMIT 50`,
-          [userId]
-        );
-
+      const rows = await pool.query(
+        `SELECT id, amount, currency, status, date, artist_name, razorpay_order_id, razorpay_payment_id
+         FROM transactions
+         WHERE user_id = $1
+         ORDER BY date DESC LIMIT 50`,
+        [userId]
+      );
+      if (rows.rows) {
         const transactions = (rows.rows ?? []).map((r: any) => ({
-          id: String(r.id),
-          amount: Number(r.amount ?? 0),
-          artistName: (r.artist_name ?? '').toString(),
+          id: r.id,
+          amount: Number(r.amount),
+          currency: r.currency,
+          status: r.status,
           date: r.date,
-          status: (r.status ?? '').toString(),
+          artist_name: r.artist_name,
+          razorpay_order_id: r.razorpay_order_id,
+          razorpay_payment_id: r.razorpay_payment_id
         }));
-
         return res.json({ success: true, transactions });
-      } catch {
+      } else {
         return res.json({ success: true, transactions: [] });
       }
-    } catch {
-      return res.status(500).json({
-        success: false,
-        message: "Server error"
+    } catch (err: any) {
+      console.error({ err, userId }, "[USER] Failed to fetch transactions");
+      return res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+  }
+
+  async downloadInvoice(req: any, res: Response) {
+    const userId = req.user?.id;
+    const txId = req.params.id;
+
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+    try {
+      // 1. Fetch transaction and validate ownership
+      const txRows = await pool.query(
+        `SELECT t.*, u.full_name, u.email
+         FROM transactions t
+         JOIN users u ON t.user_id = u.id
+         WHERE t.id = $1 AND t.user_id = $2`,
+        [txId, userId]
+      );
+
+      if (txRows.rowCount === 0) {
+        return res.status(404).json({ success: false, message: "Transaction not found or access denied" });
+      }
+
+      const tx = txRows.rows[0];
+      const { InvoiceService } = require("../../services/invoiceService");
+
+      // 2. Map data for PDF
+      const pdfBuffer = await InvoiceService.generateInvoicePDF({
+        invoiceNumber: (tx.razorpay_payment_id || tx.razorpay_order_id || tx.id).toString(),
+        date: new Date(tx.payment_confirmed_at || tx.date).toLocaleDateString(),
+        userName: tx.full_name || "User",
+        userEmail: tx.email,
+        planName: tx.artist_name ? `Artist Subscription: ${tx.artist_name}` : "Platform Plan",
+        amount: Number(tx.amount),
+        currency: tx.currency || "INR",
+        billingCycle: tx.billing_cycle || "monthly"
       });
+
+      // 3. Set headers and send
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=invoice_${txId}.pdf`);
+      return res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error({ err, userId, txId }, "[USER] Failed to generate invoice");
+      return res.status(500).json({ success: false, message: "Failed to generate invoice PDF" });
     }
   }
 
@@ -346,7 +383,7 @@ export class UserController {
       if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
       const txRes = await pool.query(
-        `SELECT t.id, t.amount, t.currency, t.artist_name, t.status, t.date, u.name as customer_name, u.email as customer_email
+        `SELECT t.id, t.amount, t.currency, t.artist_name, t.status, t.date, t.billing_cycle, u.full_name as customer_name, u.email as customer_email
          FROM transactions t
          JOIN users u ON u.id = t.user_id
          WHERE t.id = $1 AND t.user_id = $2`,
@@ -365,7 +402,8 @@ export class UserController {
         artistName: tx.artist_name,
         amount: Number(tx.amount) / 100, // Convert paise to INR
         currency: tx.currency || "INR",
-        status: tx.status
+        status: tx.status,
+        billingCycle: tx.billing_cycle || "monthly"
       });
 
       res.setHeader("Content-Type", "application/pdf");
@@ -373,6 +411,48 @@ export class UserController {
       return res.send(pdfBuffer);
     } catch (error: any) {
       console.error("[UserController.invoice] error:", error);
+      return res.status(500).json({ success: false, message: "Server error" });
+    }
+  }
+
+  async getListenTime(req: any, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+
+      const result = await pool.query(
+        `SELECT total_seconds 
+         FROM user_listening_stats 
+         WHERE user_id = $1 AND year = $2 AND month = $3`,
+        [userId, year, month]
+      );
+
+      const totalSeconds = Number(result.rows[0]?.total_seconds || 0);
+      const totalMinutes = Math.floor(totalSeconds / 60);
+
+      // Format time (e.g., "12h 45m" or "15m")
+      let formattedTime = "0m";
+      if (totalMinutes > 0) {
+        const hours = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+        if (hours > 0) {
+          formattedTime = `${hours}h ${mins}m`;
+        } else {
+          formattedTime = `${mins}m`;
+        }
+      }
+
+      return res.json({
+        success: true,
+        totalMinutes,
+        formattedTime
+      });
+    } catch (error: any) {
+      console.error("[UserController.getListenTime] error:", error);
       return res.status(500).json({ success: false, message: "Server error" });
     }
   }

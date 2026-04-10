@@ -7,7 +7,11 @@ import {
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Lock, Crown, Award, AlertTriangle, RefreshCw } from 'lucide-react-native';
+import { 
+  Lock, Crown, Award, AlertTriangle, RefreshCw, CheckCircle2, 
+  X, ChevronRight, MessageSquare, CreditCard, ShieldCheck 
+} from 'lucide-react-native';
+import { Modal, ScrollView, Switch } from 'react-native';
 import type { SubscriptionRecord } from '../services/userService';
 
 // ─────────────────────────────────────────────────────
@@ -206,6 +210,279 @@ export function SubscriptionStatusCard({ plan, onRenew, onManage }: Subscription
         )}
       </View>
     </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────
+// Redesign Components
+// ─────────────────────────────────────────────────────
+
+export function DetailedPlatformCard({ plan, onManage, onUpgrade }: { plan: SubscriptionRecord | null, onManage: () => void, onUpgrade: () => void }) {
+  if (!plan) return null;
+  const status = (plan.status ?? '').toUpperCase();
+  const statusColor = STATUS_COLORS[status] ?? '#6B7280';
+  const statusLabel = STATUS_LABELS[status] ?? plan.status;
+
+  const expiryDate = plan.endDate ?? plan.nextBillingDate;
+  const formattedExpiry = expiryDate ? new Date(expiryDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
+  
+  return (
+    <View style={cardStyles.container}>
+      <View style={cardStyles.headerRow}>
+        <View style={[cardStyles.planIconWrap, cardStyles.platformIconWrap]}>
+          <Crown color="#4AA3FF" size={24} />
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={[cardStyles.planTitle, { fontSize: 18 }]}>Platform Plan</Text>
+          <Text style={cardStyles.planType}>{plan.planType} • ₹{plan.price || 99}/month</Text>
+        </View>
+        <View style={[cardStyles.statusBadge, { backgroundColor: `${statusColor}22`, borderColor: `${statusColor}55` }]}>
+          <Text style={[cardStyles.statusText, { color: statusColor, fontSize: 11 }]}>{statusLabel}</Text>
+        </View>
+      </View>
+
+      <View style={cardStyles.detailsGrid}>
+        <View style={cardStyles.detailItem}>
+          <Text style={cardStyles.detailLabel}>Next Billing</Text>
+          <Text style={cardStyles.detailValue}>{formattedExpiry}</Text>
+        </View>
+        <View style={cardStyles.detailItem}>
+          <Text style={cardStyles.detailLabel}>Billing Cycle</Text>
+          <Text style={cardStyles.detailValue}>{plan.planType}</Text>
+        </View>
+      </View>
+
+      <View style={cardStyles.benefitsList}>
+        {(plan.features || ["HD streaming", "Ad-free experience", "Unlimited skips"]).slice(0, 3).map((f, i) => (
+          <View key={i} style={cardStyles.benefitListItem}>
+            <Text style={cardStyles.benefitTick}>✓</Text>
+            <Text style={cardStyles.benefitListText}>{f}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={cardStyles.btnRow}>
+        <Pressable style={[cardStyles.manageBtn, { flex: 1, height: 48 }]} onPress={onManage}>
+          <Text style={cardStyles.manageBtnText}>Manage Plan</Text>
+        </Pressable>
+        {status !== 'ACTIVE' && (
+          <Pressable style={[cardStyles.renewBtn, { flex: 1, height: 48 }]} onPress={onUpgrade}>
+             <LinearGradient colors={['#FF7A18', '#FF3D00']} style={cardStyles.renewBtnInner}>
+               <Text style={cardStyles.renewBtnText}>Upgrade</Text>
+             </LinearGradient>
+          </Pressable>
+        )}
+      </View>
+    </View>
+  );
+}
+
+export function ArtistSubscriptionItem({ sub, onPress }: { sub: SubscriptionRecord, onPress: () => void }) {
+  const status = (sub.status ?? '').toUpperCase();
+  const statusColor = STATUS_COLORS[status] ?? '#6B7280';
+  const expiryDate = sub.endDate ?? sub.nextBillingDate;
+  const formattedExpiry = expiryDate ? new Date(expiryDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—';
+
+  return (
+    <Pressable style={cardStyles.artistItem} onPress={onPress}>
+      <View style={cardStyles.artistAvatarWrap}>
+        <Award color="#FF7A18" size={20} />
+      </View>
+      <View style={{ flex: 1, marginLeft: 12 }}>
+        <Text style={cardStyles.artistName}>{sub.artistName || 'Artist'}</Text>
+        <Text style={cardStyles.artistSubInfo}>
+          {sub.planType} • ₹{sub.price}/mo
+        </Text>
+      </View>
+      <View style={{ alignItems: 'flex-end' }}>
+        <View style={[cardStyles.statusBadge, { paddingHorizontal: 8, paddingVertical: 3, marginBottom: 4, backgroundColor: `${statusColor}15`, borderColor: `${statusColor}40` }]}>
+          <Text style={[cardStyles.statusText, { color: statusColor, fontSize: 10 }]}>{status}</Text>
+        </View>
+        <Text style={cardStyles.artistExpiry}>Ends {formattedExpiry}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+export function EmptySubscriptionState({ onExplore }: { onExplore: () => void }) {
+  return (
+    <View style={cardStyles.emptyContainer}>
+      <View style={cardStyles.emptyIconWrap}>
+        <Crown color="rgba(255,255,255,0.2)" size={48} />
+      </View>
+      <Text style={cardStyles.emptyTitle}>You're not subscribed yet</Text>
+      <Text style={cardStyles.emptySub}>Unlock premium quality, exclusive artist content, and an ad-free experience.</Text>
+      <Pressable style={cardStyles.exploreBtn} onPress={onExplore}>
+        <LinearGradient colors={['#FF7A18', '#FF3D00']} style={cardStyles.exploreBtnInner}>
+          <Text style={cardStyles.exploreBtnText}>Explore Plans</Text>
+        </LinearGradient>
+      </Pressable>
+    </View>
+  );
+}
+
+export function TransactionRow({ tx, onDownload }: { tx: any, onDownload: () => void }) {
+  const date = new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
+  const isSuccess = tx.status?.toUpperCase() === 'CAPTURED' || tx.status?.toUpperCase() === 'SUCCESS';
+  
+  return (
+    <View style={cardStyles.txRow}>
+      <View style={cardStyles.txDateBlock}>
+        <Text style={cardStyles.txDay}>{new Date(tx.date).getDate()}</Text>
+        <Text style={cardStyles.txMonth}>{new Date(tx.date).toLocaleString('default', { month: 'short' })}</Text>
+      </View>
+      <View style={{ flex: 1, marginLeft: 16 }}>
+        <Text style={cardStyles.txTitle}>{tx.artistName || 'Platform Plan'}</Text>
+        <Text style={cardStyles.txId}>ID: {tx.razorpayPaymentId || tx.id}</Text>
+      </View>
+      <View style={{ alignItems: 'flex-end' }}>
+        <Text style={cardStyles.txAmount}>₹{tx.amount / 100}</Text>
+        <Pressable onPress={onDownload} style={cardStyles.txInvoice}>
+          <Text style={cardStyles.txInvoiceText}>Invoice ↓</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// ── NEW: Cancellation & Retention UI (Phase 1) ──────────────────────────
+
+export function AutoRenewToggle({ enabled, onToggle, loading }: { enabled: boolean, onToggle: (val: boolean) => void, loading?: boolean }) {
+  return (
+    <View style={mgStyles.toggleRow}>
+      <View style={{ flex: 1 }}>
+        <Text style={mgStyles.toggleTitle}>Auto-Renewal</Text>
+        <Text style={mgStyles.toggleSub}>
+          {enabled ? 'Your plan will automatically renew on the next billing date.' : 'Your plan will expire at the end of the current cycle.'}
+        </Text>
+      </View>
+      <Switch
+        value={enabled}
+        onValueChange={onToggle}
+        trackColor={{ false: '#333', true: '#10B981' }}
+        thumbColor={enabled ? '#fff' : '#888'}
+        disabled={loading}
+      />
+    </View>
+  );
+}
+
+const CANCEL_REASONS = [
+  { id: 'expensive', label: 'Too expensive', icon: 'CreditCard' },
+  { id: 'unused', label: 'Not using it enough', icon: 'RefreshCw' },
+  { id: 'content', label: 'Missing specific content', icon: 'MessageSquare' },
+  { id: 'other', label: 'Other reasons', icon: 'ChevronRight' },
+];
+
+export function CancellationFlow({
+  visible,
+  onClose,
+  onConfirm,
+  planName,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onConfirm: (reason: string, acceptedOffer: boolean) => void;
+  planName: string;
+}) {
+  const [step, setStep] = React.useState<1 | 2 | 3>(1);
+  const [reason, setReason] = React.useState('');
+
+  const handleNext = (r: string) => {
+    setReason(r);
+    setStep(2);
+  };
+
+  const handleConfirmCancel = () => {
+    onConfirm(reason, false);
+    onClose();
+  };
+
+  const handleAcceptOffer = () => {
+    onConfirm(reason, true);
+    onClose();
+  };
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={mgStyles.modalBackdrop}>
+        <View style={mgStyles.modalContent}>
+          {/* Header */}
+          <View style={mgStyles.modalHeader}>
+            <Text style={mgStyles.modalTitle}>Cancel Subscription</Text>
+            <Pressable onPress={onClose} style={mgStyles.closeBtn}>
+              <X color="#fff" size={20} />
+            </Pressable>
+          </View>
+
+          <ScrollView style={{ maxHeight: 500 }}>
+            {step === 1 && (
+              <View style={mgStyles.stepContainer}>
+                <Text style={mgStyles.stepHeading}>We're sorry to see you go</Text>
+                <Text style={mgStyles.stepSub}>Please let us know why you're cancelling {planName}:</Text>
+                {CANCEL_REASONS.map((r) => (
+                  <Pressable key={r.id} style={mgStyles.reasonBtn} onPress={() => handleNext(r.id)}>
+                    <View style={mgStyles.reasonIconWrap}>
+                      {r.id === 'expensive' && <CreditCard color="#FF7A18" size={18} />}
+                      {r.id === 'unused' && <RefreshCw color="#FF7A18" size={18} />}
+                      {r.id === 'content' && <MessageSquare color="#FF7A18" size={18} />}
+                      {r.id === 'other' && <ChevronRight color="#FF7A18" size={18} />}
+                    </View>
+                    <Text style={mgStyles.reasonLabel}>{r.label}</Text>
+                    <ChevronRight color="rgba(255,255,255,0.2)" size={16} />
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
+            {step === 2 && (
+              <View style={mgStyles.stepContainer}>
+                <View style={mgStyles.offerCard}>
+                  <LinearGradient colors={['#FF7A1833', '#FF3D0022']} style={StyleSheet.absoluteFill} />
+                  <Award color="#FF7A18" size={48} style={{ marginBottom: 16 }} />
+                  <Text style={mgStyles.offerTitle}>Wait! Don't miss out</Text>
+                  <Text style={mgStyles.offerSub}>
+                    Get <Text style={{ color: '#FF7A18', fontWeight: '900' }}>20% OFF</Text> your next month if you stay with us today!
+                  </Text>
+                  <Text style={mgStyles.offerBody}>
+                    You'll keep ad-free streaming, HD quality, and exclusive artist content.
+                  </Text>
+                  <Pressable style={mgStyles.offerBtn} onPress={handleAcceptOffer}>
+                    <Text style={mgStyles.offerBtnText}>Claim My 20% Discount</Text>
+                  </Pressable>
+                </View>
+
+                <Pressable style={mgStyles.offerBtn} onPress={() => setStep(3)} style={{ marginTop: 12, opacity: 0.6 }}>
+                  <Text style={mgStyles.offerBtnText}>Continue with cancellation</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {step === 3 && (
+              <View style={mgStyles.stepContainer}>
+                <View style={mgStyles.warningBox}>
+                  <AlertTriangle color="#EF4444" size={32} style={{ marginBottom: 12 }} />
+                  <Text style={mgStyles.warningTitle}>Are you sure?</Text>
+                  <Text style={mgStyles.warningContent}>
+                    Your premium benefits will stop at the end of the billing cycle. You will lose HD streaming and ad-free listening.
+                  </Text>
+                </View>
+
+                <Pressable style={mgStyles.confirmBtn} onPress={handleConfirmCancel}>
+                  <Text style={mgStyles.confirmBtnText}>Confirm Cancellation</Text>
+                </Pressable>
+                
+                <Pressable style={[mgStyles.manageBtn, { marginTop: 12, height: 52 }]} onPress={onClose}>
+                  <Text style={mgStyles.manageBtnText}>Actually, I'll stay</Text>
+                </Pressable>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -438,6 +715,43 @@ const cardStyles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.10)',
   },
   manageBtnText: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '800' },
+  
+  // New Styles
+  detailsGrid: { flexDirection: 'row', gap: 12, marginTop: 12, marginBottom: 16 },
+  detailItem: { flex: 1, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  detailLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', marginBottom: 4 },
+  detailValue: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  benefitsList: { marginBottom: 20, gap: 8 },
+  benefitListItem: { flexDirection: 'row', alignItems: 'center' },
+  benefitTick: { color: '#4AA3FF', fontSize: 14, fontWeight: '900', marginRight: 10, width: 16 },
+  benefitListText: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600' },
+
+  artistItem: { 
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', 
+    borderRadius: 16, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' 
+  },
+  artistAvatarWrap: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,122,24,0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,122,24,0.2)' },
+  artistName: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  artistSubInfo: { color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '600', marginTop: 2 },
+  artistExpiry: { color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '500' },
+
+  emptyContainer: { alignItems: 'center', paddingVertical: 40, paddingHorizontal: 20, backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 24, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.1)' },
+  emptyIconWrap: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.03)', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  emptyTitle: { color: '#fff', fontSize: 18, fontWeight: '900', marginBottom: 8, textAlign: 'center' },
+  emptySub: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '600', textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  exploreBtn: { width: 200, height: 52, borderRadius: 26, overflow: 'hidden' },
+  exploreBtnInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  exploreBtnText: { color: '#fff', fontSize: 15, fontWeight: '900' },
+
+  txRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  txDateBlock: { width: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, paddingVertical: 6 },
+  txDay: { color: '#fff', fontSize: 14, fontWeight: '900' },
+  txMonth: { color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
+  txTitle: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  txId: { color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '600', marginTop: 2 },
+  txAmount: { color: '#fff', fontSize: 15, fontWeight: '900' },
+  txInvoice: { marginTop: 4, paddingHorizontal: 8, paddingVertical: 2, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 6 },
+  txInvoiceText: { color: '#4AA3FF', fontSize: 11, fontWeight: '800' },
 });
 
 const upsellStyles = StyleSheet.create({
@@ -513,4 +827,52 @@ const strongUpsellStyles = StyleSheet.create({
   benefitItem: { color: '#fff', fontSize: 14, fontWeight: '700', marginVertical: 4 },
   btn: { width: '100%', height: 56, backgroundColor: '#FF7A18', borderRadius: 16, alignItems: 'center', justifyCenter: 'center', marginTop: 24, justifyContent: 'center' },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '900' },
+});
+
+const mgStyles = StyleSheet.create({
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 16,
+    padding: 16,
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  toggleTitle: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  toggleSub: { color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '600', marginTop: 4, lineHeight: 18 },
+
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#121212', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  modalTitle: { color: '#fff', fontSize: 18, fontWeight: '900' },
+  closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
+
+  stepContainer: { alignItems: 'center' },
+  stepHeading: { color: '#fff', fontSize: 20, fontWeight: '900', textAlign: 'center', marginBottom: 8 },
+  stepSub: { color: 'rgba(255,255,255,0.5)', fontSize: 14, textAlign: 'center', marginBottom: 24 },
+
+  reasonBtn: { flexDirection: 'row', alignItems: 'center', width: '100%', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: 16, marginBottom: 10 },
+  reasonIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,122,24,0.1)', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  reasonLabel: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '700' },
+
+  offerCard: { width: '100%', borderRadius: 20, padding: 24, alignItems: 'center', overflow: 'hidden', backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: 'rgba(255,122,24,0.3)' },
+  offerTitle: { color: '#fff', fontSize: 22, fontWeight: '900', textAlign: 'center', marginBottom: 12 },
+  offerSub: { color: 'rgba(255,255,255,0.8)', fontSize: 16, textAlign: 'center', marginBottom: 16 },
+  offerBody: { color: 'rgba(255,255,255,0.5)', fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  offerBtn: { backgroundColor: '#FF7A18', borderRadius: 14, width: '100%', height: 52, alignItems: 'center', justifyContent: 'center' },
+  offerBtnText: { color: '#fff', fontSize: 16, fontWeight: '900' },
+
+  linkBtn: { marginTop: 20, padding: 10 },
+  linkBtnText: { color: 'rgba(255,255,255,0.4)', fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
+
+  warningBox: { width: '100%', backgroundColor: 'rgba(239,68,68,0.08)', borderRadius: 16, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)' },
+  warningTitle: { color: '#EF4444', fontSize: 18, fontWeight: '900', marginBottom: 8 },
+  warningContent: { color: 'rgba(239,68,68,0.7)', fontSize: 14, textAlign: 'center', lineHeight: 22 },
+
+  confirmBtn: { width: '100%', height: 52, backgroundColor: '#EF4444', borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 24 },
+  confirmBtnText: { color: '#fff', fontSize: 15, fontWeight: '900' },
+  manageBtn: { width: '100%', height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  manageBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 });

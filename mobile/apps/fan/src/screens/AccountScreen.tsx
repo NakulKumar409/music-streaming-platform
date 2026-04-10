@@ -18,10 +18,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../store/authStore';
-import { CreditCard, HelpCircle, Library, LogOut, User, Camera, Crown, ArrowDownToLine, ShieldCheck, Lock } from 'lucide-react-native';
-import { SubscriptionStatusCard } from '../ui/SubscriptionUI';
+import { CreditCard, HelpCircle, Library, LogOut, User, Camera, Crown, Download, ShieldCheck, Lock, ArrowLeft, X } from 'lucide-react-native';
+import { SubscriptionStatusCard, DetailedPlatformCard, ArtistSubscriptionItem, EmptySubscriptionState } from '../ui/SubscriptionUI';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 import { userService, type AudioQualityPref, type SubscriptionPlanSummary, type Transaction } from '../services/userService';
 import { JWT_STORAGE_KEY, API_BASE_URL } from '../services/api';
@@ -97,25 +97,24 @@ export default function AccountScreen() {
   const refresh = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [p, t, l, plan, fullStatus] = await Promise.all([
+      const [p, details, l, plan] = await Promise.all([
         userService.getUserProfile(),
-        userService.getTransactions(),
+        userService.getSubscriptionDetails(),
         userService.getListenTime(),
         userService.getSubscriptionPlanSummary(),
-        userService.getFullSubscriptionStatus(),
       ]);
 
       setProfileName(p.name);
       setProfileImageUrl(p.profileImageUrl || '');
       setIsPremium(p.isPremium);
       setSubscriptionCount(p.subscriptionCount);
-      setTransactions(t);
       setListenTime(l.formattedTime);
       setPlanSummary(plan);
       
-      if (fullStatus) {
-        setPlatformPlan(fullStatus.platform);
-        setArtistSubs(fullStatus.artists || []);
+      if (details) {
+        setPlatformPlan(details.platform);
+        setArtistSubs(details.artists || []);
+        setTransactions(details.transactions || []);
       }
 
     } finally {
@@ -123,6 +122,8 @@ export default function AccountScreen() {
       setRefreshing(false);
     }
   }, []);
+
+  const [showArtistSubList, setShowArtistSubList] = React.useState(false);
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -301,18 +302,25 @@ export default function AccountScreen() {
     try {
       Alert.alert('Download', 'Preparing your invoice...');
       
-      const fileUri = `${FileSystem.documentDirectory}invoice_${transactionId}.pdf`;
-      const downloadUrl = `${API_BASE_URL}/subscriptions/invoice/${transactionId}`;
+      const fileUri = `${(FileSystem as any).documentDirectory}invoice_${transactionId}.pdf`;
+      const downloadUrl = `${API_BASE_URL}/user/transactions/${transactionId}/invoice`;
+      const token = await AsyncStorage.getItem(JWT_STORAGE_KEY) || await AsyncStorage.getItem('userToken');
+      
+      console.log('[AccountScreen] Download URL:', downloadUrl);
+      console.log('[AccountScreen] File URI:', fileUri);
+      console.log('[AccountScreen] Token exists:', !!token);
       
       const downloadRes = await FileSystem.downloadAsync(
         downloadUrl,
         fileUri,
         {
           headers: {
-            'Authorization': `Bearer ${await AsyncStorage.getItem(JWT_STORAGE_KEY) || await AsyncStorage.getItem('userToken')}`
+            'Authorization': `Bearer ${token}`
           }
         }
       );
+
+      console.log('[AccountScreen] Download response:', downloadRes);
 
       if (downloadRes.status === 200) {
         Alert.alert('Downloaded', 'Invoice saved to device: ' + fileUri);
@@ -321,6 +329,7 @@ export default function AccountScreen() {
       }
     } catch (error: any) {
       console.error('[AccountScreen] Invoice download error:', error);
+      console.error('[AccountScreen] Error details:', JSON.stringify(error, null, 2));
       Alert.alert('Error', 'Failed to download invoice. Please try again later.');
     }
   };
@@ -374,10 +383,14 @@ export default function AccountScreen() {
             <Text style={styles.profileEmail}>{user?.email || 'Not available'}</Text>
 
             <View style={styles.statsRow}>
-              <View style={styles.statBox}>
+              <TouchableOpacity 
+                style={styles.statBox} 
+                onPress={() => setShowArtistSubList(true)}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.statValue}>{subscriptionCount}</Text>
                 <Text style={styles.statLabel}>Subscribed Artists</Text>
-              </View>
+              </TouchableOpacity>
               <View style={styles.statBox}>
                 <Text style={styles.statValue}>{listenTime || '—'}</Text>
                 <Text style={styles.statLabel}>Monthly Listening</Text>
@@ -391,66 +404,63 @@ export default function AccountScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>My Subscriptions</Text>
+          {/* ────────────────────────────────────────────────────────── */}
+          {/*   MY SUBSCRIPTIONS SECTION (REDESIGNED)              */}
+          {/* ────────────────────────────────────────────────────────── */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>My Subscriptions</Text>
+            {isPremium && (
+              <TouchableOpacity onPress={() => navigation.navigate('SubscriptionFlow')}>
+                <Text style={styles.sectionAction}>Explore More</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
-          {/* Platform Plan card */}
-          {platformPlan ? (
-            <SubscriptionStatusCard
-              plan={platformPlan}
-              onRenew={handleRenewPlatform}
-            />
-          ) : null}
-
-          {/* Artist Plans list */}
-          {artistSubs.length > 0 ? (
-            <View style={{ marginTop: platformPlan ? 16 : 0 }}>
-              {artistSubs.map((sub, idx) => (
-                <View key={sub.artistId || idx} style={{ marginBottom: 12 }}>
-                  <SubscriptionStatusCard
-                    plan={sub}
-                    onRenew={() => {
-                      navigation.navigate('SubscriptionFlow', {
-                        artistId: sub.artistId,
-                        artistName: sub.artistName,
-                        defaultPlan: 'ARTIST',
-                      });
-                    }}
-                    onManage={() =>
-                      navigation.navigate('SubscriptionDetail', {
-                        artistId: sub.artistId,
-                      })
-                    }
+          {!isPremium && artistSubs.length === 0 && !platformPlan && !isLoading ? (
+            <EmptySubscriptionState onExplore={() => navigation.navigate('SubscriptionFlow')} />
+          ) : (
+            <View style={styles.subscriptionGroups}>
+              {/* Part A: Platform Subscription */}
+              {platformPlan && (
+                <View style={styles.subGroup}>
+                  <Text style={styles.subGroupTitle}>PLATFORM SUBSCRIPTION</Text>
+                  <DetailedPlatformCard 
+                    plan={platformPlan} 
+                    onManage={() => navigation.navigate('SubscriptionDetail', { type: 'PLATFORM' })}
+                    onUpgrade={() => navigation.navigate('SubscriptionFlow', { defaultPlan: 'PLATFORM' })}
                   />
                 </View>
-              ))}
+              )}
+
+              {/* Part B: Artist Subscriptions */}
+              {artistSubs.length > 0 && (
+                <View style={styles.subGroup}>
+                  <Text style={styles.subGroupTitle}>ARTIST SUBSCRIPTIONS</Text>
+                  {artistSubs.map(sub => (
+                    <ArtistSubscriptionItem 
+                      key={sub.artistId || sub.id} 
+                      sub={sub} 
+                      onPress={() => navigation.navigate('SubscriptionDetail', { artistId: sub.artistId, type: 'ARTIST' })}
+                    />
+                  ))}
+                </View>
+              )}
             </View>
-          ) : null}
+          )}
 
-          {/* No subscriptions → show upgrade CTA */}
-          {!platformPlan && artistSubs.length === 0 && !isLoading && (
-            <TouchableOpacity
-              style={styles.upgradeCta}
-              onPress={handleUpgrade}
+          {/* Upsell if no Platform sub */}
+          {!platformPlan && isPremium && (
+            <TouchableOpacity 
+              style={styles.upsellNudge}
+              onPress={() => navigation.navigate('SubscriptionFlow', { defaultPlan: 'PLATFORM' })}
             >
-              <Crown size={20} color="#4AA3FF" />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.upgradeCtaTitle}>No Active Plan</Text>
-                <Text style={styles.upgradeCtaSub}>Subscribe for HD streaming &amp; exclusive content</Text>
-              </View>
-              <Text style={styles.upgradeCtaArrow}>→</Text>
+              <Crown color={Colors.accent} size={20} />
+              <Text style={styles.upsellNudgeText}>Upgrade to <Text style={{fontWeight:'900', color: Colors.accent}}>Platform Plan</Text> for HD streaming</Text>
+              <ArrowLeft style={{transform: [{rotate: '180deg'}]}} color={Colors.accent} size={16} />
             </TouchableOpacity>
           )}
 
-          {/* Add Platform Plan nudge if only artist plans active */}
-          {artistSubs.length > 0 && !platformPlan && (
-            <TouchableOpacity style={styles.nudgeCard} onPress={handleRenewPlatform}>
-              <Crown size={16} color="#4AA3FF" />
-              <Text style={styles.nudgeText}>
-                Upgrade to <Text style={{ color: '#4AA3FF', fontWeight: '900' }}>Platform Plan</Text> for HD streaming
-              </Text>
-              <Text style={styles.nudgeArrow}>→</Text>
-            </TouchableOpacity>
-          )}
+          <View style={{ height: 20 }} />
         </View>
 
         {/* Account Status */}
@@ -528,10 +538,17 @@ export default function AccountScreen() {
 
       <Modal visible={showTransactions} animationType="slide" onRequestClose={() => setShowTransactions(false)}>
         <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Transaction History</Text>
-            <TouchableOpacity onPress={() => setShowTransactions(false)}>
-              <Text style={styles.modalClose}>Close</Text>
+          <View style={[styles.modalHeader, { paddingTop: Math.max(insets.top, 20) }]}>
+            <View style={styles.modalHeaderContent}>
+              <Text style={styles.modalTitle}>Billing History</Text>
+              <Text style={styles.modalSubTitle}>Track all your premium payments</Text>
+            </View>
+            <TouchableOpacity 
+              onPress={() => setShowTransactions(false)} 
+              style={styles.modalCloseBtn}
+              hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+            >
+              <X color="#fff" size={22} />
             </TouchableOpacity>
           </View>
 
@@ -553,16 +570,27 @@ export default function AccountScreen() {
                     style={styles.downloadIcon} 
                     onPress={() => handleDownloadInvoice(tx.id)}
                   >
-                    <ArrowDownToLine size={20} color={Colors.accent} />
+                    <Download size={20} color={Colors.accent} />
                   </TouchableOpacity>
                 </View>
               </View>
             ))}
             {transactions.length === 0 ? (
               <View style={styles.modalEmptyWrap}>
-                <CreditCard size={48} color="rgba(255,255,255,0.15)" />
-                <Text style={styles.modalEmptyText}>No transactions found.</Text>
-                <Text style={styles.modalEmptySub}>Your billing history will appear here once you subscribe to an artist or platform plan.</Text>
+                <View style={styles.modalEmptyIconCircle}>
+                  <CreditCard size={40} color="rgba(255,255,255,0.25)" />
+                </View>
+                <Text style={styles.modalEmptyText}>No Transactions Yet</Text>
+                <Text style={styles.modalEmptySub}>Your complete billing history will appear here once you subscribe to an artist or platform plan.</Text>
+                <TouchableOpacity 
+                  style={styles.modalEmptyBtn}
+                  onPress={() => {
+                    setShowTransactions(false);
+                    navigation.navigate('SubscriptionFlow');
+                  }}
+                >
+                  <Text style={styles.modalEmptyBtnText}>Explore Plans</Text>
+                </TouchableOpacity>
               </View>
             ) : null}
 
@@ -576,6 +604,60 @@ export default function AccountScreen() {
                   <Lock size={16} color="rgba(255,255,255,0.4)" />
                   <Text style={styles.trustText}>SSL Encrypted</Text>
                 </View>
+              </View>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal visible={showArtistSubList} animationType="slide" onRequestClose={() => setShowArtistSubList(false)}>
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={[styles.modalHeader, { paddingTop: Math.max(insets.top, 20) }]}>
+            <View style={styles.modalHeaderContent}>
+              <Text style={styles.modalTitle}>Your Artists</Text>
+              <Text style={styles.modalSubTitle}>Artists you are currently supporting</Text>
+            </View>
+            <TouchableOpacity 
+              onPress={() => setShowArtistSubList(false)} 
+              style={styles.modalCloseBtn}
+              hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+            >
+              <X color="#fff" size={22} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView 
+            style={styles.modalScroll} 
+            contentContainerStyle={{ paddingTop: 20, paddingBottom: 40 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {artistSubs.length > 0 ? (
+              artistSubs.map((sub) => (
+                <ArtistSubscriptionItem 
+                  key={sub.artistId || sub.id} 
+                  sub={sub} 
+                  onPress={() => {
+                    setShowArtistSubList(false);
+                    navigation.navigate('SubscriptionDetail', { artistId: sub.artistId, type: 'ARTIST' });
+                  }}
+                />
+              ))
+            ) : (
+              <View style={styles.modalEmptyWrap}>
+                <View style={styles.modalEmptyIconCircle}>
+                  <Library size={40} color="rgba(255,255,255,0.25)" />
+                </View>
+                <Text style={styles.modalEmptyText}>No Artist Plans</Text>
+                <Text style={styles.modalEmptySub}>Subscribe to your favorite artists to unlock exclusive content and support their work.</Text>
+                <TouchableOpacity 
+                  style={styles.modalEmptyBtn}
+                  onPress={() => {
+                    setShowArtistSubList(false);
+                    navigation.navigate('SubscriptionFlow');
+                  }}
+                >
+                  <Text style={styles.modalEmptyBtnText}>Find Artists</Text>
+                </TouchableOpacity>
               </View>
             )}
           </ScrollView>
@@ -630,6 +712,48 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 12,
     marginLeft: 4,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  sectionAction: {
+    color: Colors.accent,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  subscriptionGroups: {
+    gap: 16,
+  },
+  subGroup: {
+    marginBottom: 8,
+  },
+  subGroupTitle: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  upsellNudge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,181,8,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,181,8,0.15)',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 10,
+  },
+  upsellNudgeText: {
+    flex: 1,
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 10,
   },
   statusCard: {
     flexDirection: 'row',
@@ -931,49 +1055,87 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   modalHeader: {
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  modalHeaderContent: {
+    flex: 1,
   },
   modalTitle: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '900',
   },
-  modalClose: {
-    color: Colors.accent,
-    fontSize: 14,
-    fontWeight: '800',
+  modalSubTitle: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  modalCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 15,
   },
   modalScroll: {
-    paddingHorizontal: 18,
-    paddingTop: 12,
+    flex: 1,
+    paddingHorizontal: 20,
   },
   modalEmptyWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 100,
+    paddingVertical: 120,
     paddingHorizontal: 40,
+  },
+  modalEmptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
   modalEmptyText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: '800',
-    marginTop: 16,
+    fontSize: 20,
+    fontWeight: '900',
     textAlign: 'center',
   },
   modalEmptySub: {
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(255,255,255,0.45)',
     fontSize: 14,
     fontWeight: '500',
-    marginTop: 8,
+    marginTop: 10,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
+  },
+  modalEmptyBtn: {
+    marginTop: 30,
+    paddingHorizontal: 30,
+    paddingVertical: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  modalEmptyBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
   },
   txRow: {
     flexDirection: 'row',

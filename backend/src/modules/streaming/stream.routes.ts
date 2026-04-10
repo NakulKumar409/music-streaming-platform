@@ -124,10 +124,24 @@ router.post("/heartbeat", async (req: any, res: any) => {
     );
 
     if (result.rows.length === 0) {
-      // If session was pruned or not found, we could re-create it, 
-      // but usually access/ should be called first.
       return res.status(404).json({ success: false, message: "Session not found or expired" });
     }
+
+    // Increment monthly listening stats (30 seconds per heartbeat)
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+
+    await pool.query(
+      `INSERT INTO user_listening_stats (user_id, year, month, total_seconds)
+       VALUES ($1, $2, $3, 30)
+       ON CONFLICT (user_id, year, month)
+       DO UPDATE SET total_seconds = user_listening_stats.total_seconds + 30`,
+      [userId, year, month]
+    ).catch(err => {
+      logger.error({ userId, contentId, error: err.message }, "[HEARTBEAT] Failed to update stats");
+      // Don't fail the entire heartbeat if stats fails (non-critical)
+    });
 
     return res.json({ success: true, correlationId });
   } catch (err: any) {

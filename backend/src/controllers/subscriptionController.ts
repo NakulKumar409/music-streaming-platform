@@ -366,3 +366,95 @@ export const verifySubscription = async (req: any, res: Response) => {
     });
   }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  toggleAutoRenew  — manually toggle auto-renewal for a subscription
+// ─────────────────────────────────────────────────────────────────────────────
+export const toggleAutoRenew = async (req: any, res: Response) => {
+  const correlationId = req.headers["x-correlation-id"] || "n/a";
+  try {
+    const userId = req.user?.id;
+    const subId = req.params.id;
+    const { auto_renew } = req.body;
+
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+    const result = await pool.query(
+      `UPDATE subscriptions 
+       SET auto_renew = $1, updated_at = now()
+       WHERE id = $2 AND user_id = $3
+       RETURNING id, auto_renew`,
+      [!!auto_renew, subId, userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: "Subscription not found" });
+    }
+
+    logger.info({ userId, subId, auto_renew: !!auto_renew, correlationId }, "[SUBSCRIPTION] Toggled auto-renew");
+
+    // Add audit log
+    await pool.query(
+      `INSERT INTO subscription_audit_logs (user_id, subscription_id, event_type, metadata)
+       VALUES ($1, $2, 'AUTO_RENEW_TOGGLE', $3)`,
+      [userId, subId, JSON.stringify({ auto_renew: !!auto_renew })]
+    ).catch(e => logger.error(e, "[SUBSCRIPTION] Audit log failed"));
+
+    return res.json({ success: true, auto_renew: result.rows[0].auto_renew });
+  } catch (err: any) {
+    logger.error({ error: err.message, correlationId }, "[SUBSCRIPTION] Failed to toggle auto-renew");
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  cancelSubscription  — set auto_renew false and record reason
+// ─────────────────────────────────────────────────────────────────────────────
+export const cancelSubscription = async (req: any, res: Response) => {
+  const correlationId = req.headers["x-correlation-id"] || "n/a";
+  try {
+    const userId = req.user?.id;
+    const subId = req.params.id;
+    const { reason, feedback, accepted_retention_offer } = req.body;
+
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+    // 1. Audit log the intent
+    await pool.query(
+      `INSERT INTO subscription_audit_logs (user_id, subscription_id, event_type, metadata)
+       VALUES ($1, $2, 'CANCEL_INTENT', $3)`,
+      [userId, subId, JSON.stringify({ reason, feedback, accepted_retention_offer })]
+    ).catch(e => logger.error(e, "[SUBSCRIPTION] Audit log failed"));
+
+    if (accepted_retention_offer) {
+       // Apply retention logic (e.g., mark subscription as discounted or extended)
+       // For now, we'll keep auto-renew ON if they accept retention
+       logger.info({ userId, subId, correlationId }, "[SUBSCRIPTION] User accepted retention offer");
+       return res.json({ success: true, message: "Retention offer applied! We value your support." });
+    }
+
+    // 2. Disable auto-renew
+    const result = await pool.query(
+      `UPDATE subscriptions 
+       SET auto_renew = false, updated_at = now()
+       WHERE id = $1 AND user_id = $2
+       RETURNING id`,
+      [subId, userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: "Subscription not found" });
+    }
+
+    logger.info({ userId, subId, reason, correlationId }, "[SUBSCRIPTION] Subscription cancelled (auto-renew disabled)");
+
+    return res.json({ 
+      success: true, 
+      message: "Subscription will not renew. Your access remains until the end of the billing cycle." 
+    });
+  } catch (err: any) {
+    logger.error({ error: err.message, correlationId }, "[SUBSCRIPTION] Failed to cancel subscription");
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+

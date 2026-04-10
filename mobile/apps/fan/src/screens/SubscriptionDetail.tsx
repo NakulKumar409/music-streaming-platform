@@ -14,9 +14,12 @@ import {
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, BadgeCheck, Crown, Award, AlertTriangle, RefreshCw } from 'lucide-react-native';
+import { ArrowLeft, RefreshCw, Crown, Award, BadgeCheck, AlertTriangle, FileText } from 'lucide-react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import ErrorBoundary from '../ui/ErrorBoundary';
-import { apiV1 } from '../services/api';
+import { userService, SubscriptionRecord, Transaction } from '../services/userService';
+import { TransactionRow, AutoRenewToggle, CancellationFlow } from '../ui/SubscriptionUI';
 
 type SubData = {
   type: 'ARTIST' | 'PLATFORM';
@@ -62,23 +65,30 @@ export default function SubscriptionDetail({ navigation, route }: any) {
   const artistId: string = String(route?.params?.artistId ?? '');
   const planType: 'ARTIST' | 'PLATFORM' = route?.params?.type === 'PLATFORM' ? 'PLATFORM' : 'ARTIST';
 
-  const [sub, setSub] = useState<SubData | null>(null);
+  const [sub, setSub] = useState<SubscriptionRecord | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [cancelOpen, setCancelOpen] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [toggling, setToggling] = useState(false);
+  const [downloadingTxId, setDownloadingTxId] = useState<string | null>(null);
 
   const fetchSub = async () => {
     try {
       setLoading(true);
+      const details = await userService.getSubscriptionDetails();
+      if (!details) {
+        setSub(null);
+        return;
+      }
+
       if (planType === 'PLATFORM') {
-        const res = await apiV1.get('/subscriptions/platform');
-        setSub(res.data?.subscription ?? null);
+        setSub(details.platform);
+        setTransactions(details.transactions.filter(tx => !tx.artistId));
       } else {
-        const res = await apiV1.get('/subscriptions/me', {
-          params: { artistId: artistId || undefined },
-        });
-        setSub(res.data?.subscription ?? null);
+        const found = details.artists.find(a => String(a.artistId) === artistId);
+        setSub(found || null);
+        setTransactions(details.transactions.filter(tx => String(tx.artistId) === artistId));
       }
     } catch {
       setSub(null);
@@ -123,19 +133,81 @@ export default function SubscriptionDetail({ navigation, route }: any) {
     });
   };
 
-  const handleCancelConfirm = async () => {
-    setCancelling(true);
+  const handleToggleAutoRenew = async (enable: boolean) => {
+    if (!sub?.id) return;
+    setToggling(true);
     try {
-      // In a full impl this would call a cancel endpoint
-      Alert.alert(
-        'Cancellation Requested',
-        'Your subscription will remain active until the end of the billing period.',
-        [{ text: 'OK', onPress: () => { setCancelOpen(false); fetchSub(); } }]
-      );
+      const success = await userService.toggleAutoRenew(sub.id, enable);
+      if (success) {
+        setSub(prev => prev ? { ...prev, autoRenew: enable } : null);
+        Alert.alert('Success', `Auto-renew turned ${enable ? 'ON' : 'OFF'}.`);
+      } else {
+        Alert.alert('Error', 'Failed to update auto-renew settings.');
+      }
     } catch {
-      Alert.alert('Error', 'Failed to cancel. Please contact support.');
+      Alert.alert('Error', 'An unexpected error occurred.');
     } finally {
-      setCancelling(false);
+      setToggling(false);
+    }
+  };
+
+  const handleCancelConfirm = async (reason: string, acceptedOffer: boolean) => {
+    if (!sub?.id) return;
+    try {
+      const res = await userService.cancelSubscription(sub.id, {
+        reason,
+        accepted_retention_offer: acceptedOffer
+      });
+      if (res.success) {
+        if (acceptedOffer) {
+          Alert.alert('Offer Applied 🎁', 'Your 20% discount has been applied to your next cycle! Thank you for staying.');
+        } else {
+          Alert.alert('Cancelled', 'Your subscription will not renew.');
+        }
+        fetchSub();
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to process request.');
+    }
+  };
+
+  const handleDownloadInvoice = async (txId: string) => {
+    try {
+      // Safety check for native module availability
+      if (!FileSystem || !FileSystem.downloadAsync) {
+        Alert.alert('Module Missing', 'The download feature requires a newer version of the app. Please update your app.');
+        return;
+      }
+
+      setDownloadingTxId(txId);
+      const url = userService.getInvoiceUrl(txId);
+      const filename = `invoice_${txId}.pdf`;
+      const fileUri = `${FileSystem.documentDirectory}${filename}`;
+
+      console.log(`[DOWNLOAD] Starting download from ${url} to ${fileUri}`);
+      
+      const downloadRes = await FileSystem.downloadAsync(url, fileUri, {
+        headers: {
+          'Authorization': (userService as any).apiV1?.defaults?.headers?.common?.['Authorization'] || ''
+        }
+      });
+
+      if (downloadRes.status !== 200) {
+        Alert.alert('Error', 'Failed to download invoice PDF.');
+        return;
+      }
+
+      // Safe check for Sharing module
+      if (Sharing && await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri);
+      } else {
+        Alert.alert('Success', 'Invoice downloaded successfully.');
+      }
+    } catch (err) {
+      console.error('[INVOICE] Download failed', err);
+      Alert.alert('Error', 'Failed to retrieve invoice.');
+    } finally {
+      setDownloadingTxId(null);
     }
   };
 
@@ -230,6 +302,12 @@ export default function SubscriptionDetail({ navigation, route }: any) {
             )}
             <Divider />
             <InfoRow label="Auto-Renew" value={sub.auto_renew ? 'On' : 'Off'} />
+            <Divider />
+            <AutoRenewToggle 
+              enabled={sub.autoRenew} 
+              onToggle={handleToggleAutoRenew}
+              loading={toggling}
+            />
           </BlurView>
 
           {/* Expiry warning */}
@@ -276,8 +354,28 @@ export default function SubscriptionDetail({ navigation, route }: any) {
             </Pressable>
           )}
 
+          {/* Payment History */}
+          <View style={styles.historySection}>
+            <Text style={styles.historyTitle}>Payment History</Text>
+            {transactions.length === 0 ? (
+              <View style={styles.emptyHistory}>
+                <Text style={styles.emptyHistoryText}>No transactions found for this plan.</Text>
+              </View>
+            ) : (
+              transactions.map(tx => (
+                <TransactionRow 
+                  key={tx.id} 
+                  tx={tx} 
+                  onDownload={() => handleDownloadInvoice(tx.id)}
+                />
+              ))
+            )}
+          </View>
+
+          <View style={{ height: 24 }} />
+
           {status === 'ACTIVE' && (
-            <Pressable style={styles.cancelBtn} onPress={() => setCancelOpen(true)}>
+            <Pressable style={styles.cancelBtn} onPress={() => setCancelModalVisible(true)}>
               <Text style={styles.cancelBtnText}>Cancel Subscription</Text>
             </Pressable>
           )}
@@ -287,25 +385,13 @@ export default function SubscriptionDetail({ navigation, route }: any) {
           </Pressable>
         </ScrollView>
 
-        {/* Cancel modal */}
-        <Modal visible={cancelOpen} transparent animationType="fade" onRequestClose={() => setCancelOpen(false)}>
-          <View style={styles.modalBackdrop}>
-            <BlurView intensity={18} tint="dark" style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Cancel subscription?</Text>
-              <Text style={styles.modalSub}>
-                You'll keep access until the end of your billing period on {formatDate(endDate)}.
-              </Text>
-              <View style={styles.modalBtns}>
-                <Pressable style={styles.modalBtnGhost} onPress={() => setCancelOpen(false)}>
-                  <Text style={styles.modalBtnGhostText}>Keep Plan</Text>
-                </Pressable>
-                <Pressable style={styles.modalBtnDanger} onPress={handleCancelConfirm} disabled={cancelling}>
-                  <Text style={styles.modalBtnDangerText}>{cancelling ? 'Cancelling…' : 'Yes, Cancel'}</Text>
-                </Pressable>
-              </View>
-            </BlurView>
-          </View>
-        </Modal>
+        {/* Cancel Flow */}
+        <CancellationFlow 
+           visible={cancelModalVisible}
+           onClose={() => setCancelModalVisible(false)}
+           onConfirm={handleCancelConfirm}
+           planName={isPlatform ? 'Platform Plan' : `Artist Plan (${sub.artist_name})`}
+        />
       </SafeAreaView>
     </ErrorBoundary>
   );
@@ -462,4 +548,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(239,68,68,0.35)',
   },
   modalBtnDangerText: { color: '#EF4444', fontWeight: '900', fontSize: 13 },
+
+  historySection: { marginTop: 8 },
+  historyTitle: { color: '#fff', fontSize: 16, fontWeight: '800', marginBottom: 12 },
+  emptyHistory: { paddingVertical: 20, alignItems: 'center' },
+  emptyHistoryText: { color: 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: '600' },
 });

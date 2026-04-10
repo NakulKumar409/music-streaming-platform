@@ -200,16 +200,30 @@ export async function ensureSubscriptionsSchema(): Promise<void> {
   
   const subQueries = [
     "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'INACTIVE'",
+    "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS type VARCHAR(20) NOT NULL DEFAULT 'ARTIST'",
     "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS start_date TIMESTAMPTZ DEFAULT now()",
     "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS auto_renew BOOLEAN DEFAULT true",
+    "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS canceled_at TIMESTAMPTZ",
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_user_artist ON subscriptions(user_id, artist_id)",
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_sub_active_platform ON subscriptions (user_id) WHERE type = 'PLATFORM' AND status = 'ACTIVE'",
-    "CREATE UNIQUE INDEX IF NOT EXISTS idx_sub_active_artist ON subscriptions (user_id, artist_id) WHERE type = 'ARTIST' AND status = 'ACTIVE'"
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_sub_active_artist ON subscriptions (user_id, artist_id) WHERE type = 'ARTIST' AND status = 'ACTIVE'",
+    "CREATE INDEX IF NOT EXISTS idx_subscriptions_composite_health ON subscriptions(status, type, next_billing_date)",
+    "CREATE INDEX IF NOT EXISTS idx_subscriptions_growth_trend ON subscriptions(start_date, status)"
   ];
 
   for (const q of subQueries) {
     await pool.query(q).catch(() => undefined);
   }
+
+  // Ensure transactions table columns (in case it wasn't created via ensureSubscriptionsSchema or elsewhere)
+  await pool.query(`
+    ALTER TABLE transactions 
+    ADD COLUMN IF NOT EXISTS artist_id INT,
+    ADD COLUMN IF NOT EXISTS billing_cycle VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'CAPTURED'
+  `).catch(() => undefined);
+
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_transactions_analytics ON transactions(status, artist_id, created_at)").catch(() => undefined);
 }
 
 export async function ensureArtistStatsSchema(): Promise<void> {
@@ -256,6 +270,19 @@ export async function ensureUpsellSchema(): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
+}
+
+export async function ensureUserStatsSchema(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_listening_stats (
+      user_id INT NOT NULL,
+      year INT NOT NULL,
+      month INT NOT NULL,
+      total_seconds BIGINT NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, year, month)
+    )
+  `);
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_user_listening_stats_lookup ON user_listening_stats(user_id, year, month)").catch(() => undefined);
 }
 
 export async function ensurePlatformConfigSchema(): Promise<void> {

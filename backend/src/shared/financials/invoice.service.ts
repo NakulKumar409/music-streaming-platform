@@ -6,10 +6,11 @@ export interface InvoiceData {
   date: string;
   customerName: string;
   customerEmail: string;
-  artistName: string;
+  artistName?: string;
   amount: number;
   currency: string;
   status: string;
+  billingCycle: string;
 }
 
 export class InvoiceService {
@@ -25,90 +26,82 @@ export class InvoiceService {
         doc.on("data", (chunk) => buffers.push(chunk));
         doc.on("end", () => resolve(Buffer.concat(buffers)));
 
-        // --- Header ---
+        // --- Header (Branded) ---
         doc
+          .fillColor("#FF7A18")
+          .fontSize(22)
+          .text("MUSIC PLATFORM", 50, 50)
           .fillColor("#444444")
-          .fontSize(20)
-          .text("PREMIUM PLAY", 110, 50)
           .fontSize(10)
-          .text("Music Streaming Platform", 110, 75)
-          .text("Secure Payment Verified", 110, 90)
+          .text("Premium Digital Music Experience", 50, 78)
+          .text("Securely processed via Razorpay", 50, 92)
           .moveDown();
 
-        // --- Invoice Info ---
         doc
-          .fillColor("#444444")
+          .fillColor("#000000")
           .fontSize(20)
-          .text("Invoice", 50, 160);
+          .text("Receipt", 0, 50, { align: "right" })
+          .fontSize(10)
+          .text(`Invoice #: ${data.invoiceNumber}`, 0, 75, { align: "right" })
+          .text(`Date: ${data.date}`, 0, 90, { align: "right" });
 
-        this.generateHr(doc, 185);
+        this.generateHr(doc, 115);
 
-        const customerInfoTop = 200;
+        // --- Bill To Grid ---
+        const infoTop = 140;
+        doc
+          .fillColor("#888888")
+          .fontSize(10)
+          .text("BILL TO", 50, infoTop)
+          .fillColor("#000000")
+          .font("Helvetica-Bold")
+          .text(data.customerName, 50, infoTop + 15)
+          .font("Helvetica")
+          .text(data.customerEmail, 50, infoTop + 30);
 
         doc
-          .fontSize(10)
-          .text("Invoice Number:", 50, customerInfoTop)
+          .fillColor("#888888")
+          .text("PAYMENT STATUS", 350, infoTop)
+          .fillColor(data.status.toUpperCase() === 'CAPTURED' ? '#10B981' : '#FF7A18')
           .font("Helvetica-Bold")
-          .text(data.invoiceNumber, 150, customerInfoTop)
-          .font("Helvetica")
-          .text("Invoice Date:", 50, customerInfoTop + 15)
-          .text(data.date, 150, customerInfoTop + 15)
-          .text("Payment Status:", 50, customerInfoTop + 30)
-          .font("Helvetica-Bold")
-          .text(data.status.toUpperCase(), 150, customerInfoTop + 30)
+          .text(data.status.toUpperCase(), 350, infoTop + 15);
 
-          .font("Helvetica-Bold")
-          .text(data.customerName, 300, customerInfoTop)
-          .font("Helvetica")
-          .text(data.customerEmail, 300, customerInfoTop + 15)
-          .moveDown();
+        doc.moveDown(4);
 
-        this.generateHr(doc, 252);
-
-        // --- Table ---
-        let i;
-        const invoiceTableTop = 330;
-
-        doc.font("Helvetica-Bold");
-        this.generateTableRow(
-          doc,
-          invoiceTableTop,
-          "Description",
-          "Units",
-          "Line Total"
-        );
-        this.generateHr(doc, invoiceTableTop + 20);
+        // --- Items Table ---
+        const tableTop = 240;
+        doc.font("Helvetica-Bold").fillColor("#000000");
+        this.generateTableRow(doc, tableTop, "Plan Description", "Cycle", "Total");
+        this.generateHr(doc, tableTop + 18);
+        
         doc.font("Helvetica");
-
-        const description = `Subscription to ${data.artistName}`;
+        const description = data.artistName ? `Artist Subscription: ${data.artistName}` : "Platform Premium Plan";
         this.generateTableRow(
-          doc,
-          invoiceTableTop + 30,
-          description,
-          "1",
+          doc, 
+          tableTop + 30, 
+          description, 
+          data.billingCycle.toUpperCase(), 
           `${data.currency} ${data.amount.toFixed(2)}`
         );
+        this.generateHr(doc, tableTop + 56);
 
-        this.generateHr(doc, invoiceTableTop + 56);
-
-        const subtotalPosition = invoiceTableTop + 70;
-        this.generateTableRow(
-          doc,
-          subtotalPosition,
-          "",
-          "Total Amount",
-          `${data.currency} ${data.amount.toFixed(2)}`
-        );
+        // --- Summary ---
+        const subtotalPosition = tableTop + 75;
+        doc.font("Helvetica-Bold");
+        this.generateTableRow(doc, subtotalPosition, "", "TOTAL PAID", `${data.currency} ${data.amount.toFixed(2)}`);
 
         // --- Footer ---
         doc
-          .fontSize(10)
+          .fontSize(9)
+          .fillColor("#aaaaaa")
           .text(
-            "Thank you for supporting your favorite artists on Premium Play.",
+            "This document confirms your premium access. Service is provided immediately upon payment confirmation. No physical signature is required.",
             50,
             700,
             { align: "center", width: 500 }
-          );
+          )
+          .moveDown(0.5)
+          .text("Thank you for choosing Music Platform!", { align: "center" });
 
         doc.end();
       } catch (error) {
@@ -120,7 +113,7 @@ export class InvoiceService {
 
   private static generateHr(doc: PDFKit.PDFDocument, y: number) {
     doc
-      .strokeColor("#aaaaaa")
+      .strokeColor("#eeeeee")
       .lineWidth(1)
       .moveTo(50, y)
       .lineTo(550, y)
@@ -137,7 +130,7 @@ export class InvoiceService {
     doc
       .fontSize(10)
       .text(item, 50, y)
-      .text(quantity, 280, y, { width: 90, align: "right" })
-      .text(lineTotal, 400, y, { width: 90, align: "right" });
+      .text(quantity, 300, y, { width: 90, align: "right" })
+      .text(lineTotal, 450, y, { width: 100, align: "right" });
   }
 }

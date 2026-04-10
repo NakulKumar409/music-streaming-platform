@@ -8,8 +8,10 @@ import { invalidateArtistCache } from "../common/cache";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { AnalyticsController } from "../controllers/analyticsController";
 
 const router = Router();
+router.get("/dashboard/subscription-insights", requireAuth, AnalyticsController.getArtistSubscriptionInsights);
 
 const requireArtist = (req: any, res: any, next: any) => {
   const role = (req.user?.role || "").toUpperCase();

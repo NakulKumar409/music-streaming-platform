@@ -143,12 +143,12 @@ export const createOrder = async (req: any, res: Response) => {
     });
 
     await pool.query(
-      `INSERT INTO transactions (user_id, razorpay_order_id, amount, currency, status, artist_name, billing_cycle)
-       VALUES ($1, $2, $3, 'INR', 'CREATED', $4, $5)
+      `INSERT INTO transactions (user_id, razorpay_order_id, amount, currency, status, artist_name, billing_cycle, artist_id)
+       VALUES ($1, $2, $3, 'INR', 'CREATED', $4, $5, $6)
        ON CONFLICT (razorpay_order_id)
-       DO UPDATE SET amount = EXCLUDED.amount, artist_name = EXCLUDED.artist_name, status = 'CREATED', billing_cycle = EXCLUDED.billing_cycle
+       DO UPDATE SET amount = EXCLUDED.amount, artist_name = EXCLUDED.artist_name, status = 'CREATED', billing_cycle = EXCLUDED.billing_cycle, artist_id = EXCLUDED.artist_id
       `,
-      [userId, order.id, amountPaise, (artistName ?? "").toString() || "Unknown", billingCycle || 'monthly']
+      [userId, order.id, amountPaise, (artistName ?? "").toString() || "Unknown", billingCycle || 'monthly', artistIdNumber || null]
     );
 
     return res.json({

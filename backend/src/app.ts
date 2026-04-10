@@ -11,15 +11,9 @@ import compression from "compression";
 import { globalLimiter } from "./common/security/rateLimit";
 import { validateEnv } from "./config/env.validation";
 import {
-  ensureUsersSchema,
-  ensureContentSchema,
-  ensurePlaysSchema,
-  ensureReactionsSchema,
-  ensureSubscriptionsSchema,
-  ensureArtistStatsSchema,
-  ensurePlatformConfigSchema,
   ensureSessionsSchema,
-  ensureUpsellSchema
+  ensureUpsellSchema,
+  ensureUserStatsSchema
 } from "./config/ensure-schema";
 import fanRoutes from "./routes/fan";
 import artistRoutes from "./routes/artist";
@@ -38,6 +32,7 @@ import { initSentry, captureError } from "./common/sentry";
 import { logger, httpLogger } from "./common/logger";
 import "./workers/upload.worker";
 import { NotificationService } from "./shared/notifications/notification.service";
+import { WinBackService } from "./shared/subscriptions/win-back.service";
 
 // Initialise Sentry as early as possible (no-op if SENTRY_DSN is unset)
 initSentry();
@@ -297,15 +292,8 @@ const PORT = process.env.PORT || 8000;
 
   // Run schema migrations after server is up (non-fatal on transient DB issues)
   try {
-    await ensureUsersSchema();
-    await ensureContentSchema();
-    await ensurePlaysSchema();
-    await ensureReactionsSchema();
-    await ensureSubscriptionsSchema();
-    await ensureArtistStatsSchema();
-    await ensurePlatformConfigSchema();
-    await ensureSessionsSchema();
     await ensureUpsellSchema();
+    await ensureUserStatsSchema();
     console.log("[Startup] Database schema ensured ✅");
 
     // ── Subscription Lifecycle Management ────────────────────────────────
@@ -319,10 +307,20 @@ const PORT = process.env.PORT || 8000;
           SET status = 'EXPIRED', updated_at = now()
           WHERE status IN ('ACTIVE', 'GRACE', 'PAST_DUE')
             AND grace_ends_at < now()
-          RETURNING id
+          RETURNING id, user_id, type, artist_id
         `);
         if (result.rowCount && result.rowCount > 0) {
           console.log(`[Sweeper] Expired ${result.rowCount} stale subscriptions.`);
+          
+          // Trigger Win-back offers for newly expired subs
+          for (const row of result.rows) {
+            WinBackService.processChurnedUser(
+              row.id, 
+              row.user_id, 
+              row.type, 
+              row.artist_id
+            ).catch(e => console.error("[WinBack] Failed to trigger offer:", e));
+          }
         }
       } catch (err) {
         console.error("[Sweeper] Failed to sweep subscriptions:", err);
