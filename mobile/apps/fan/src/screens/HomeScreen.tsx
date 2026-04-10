@@ -18,7 +18,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { useFocusEffect } from '@react-navigation/native';
 import { BadgeCheck, Play, Search } from 'lucide-react-native';
 import { apiV1 } from '../services/api';
 import { fetchVerifiedArtists, fetchFeaturedArtists, type ArtistListItem } from '../services/artistService';
@@ -98,10 +97,10 @@ export default function HomeScreen({ navigation }: any) {
   const hasActiveAudio = !!activeAudioMeta;
 
   const [loading, setLoading] = useState(true);
-  const [artistsLoading, setArtistsLoading] = useState(true);
   const [artistsError, setArtistsError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
+  const dataLoadedRef = useRef(false);
   const [featuredArtists, setFeaturedArtists] = useState<FeaturedArtistCard[]>([]);
   const [trendingArtists, setTrendingArtists] = useState<ArtistCard[]>([]);
   const [recentlyAdded, setRecentlyAdded] = useState<ContentCard[]>([]);
@@ -158,17 +157,22 @@ export default function HomeScreen({ navigation }: any) {
 
   const fetchContent = useCallback(async (opts?: { isRefresh?: boolean }) => {
     const isRefresh = Boolean(opts?.isRefresh);
+
+    // Skip if data already loaded and not refreshing
+    if (dataLoadedRef.current && !isRefresh) {
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isRefresh) setRefreshing(true);
-      setArtistsLoading(true);
+      if (!dataLoadedRef.current) setLoading(true);
       setArtistsError(null);
 
       const [featuredResult, artistsResult, contentRes] = await Promise.allSettled([
         fetchFeaturedArtists().catch(() => []),
         fetchVerifiedArtists().catch(() => []),
-        apiV1.get(`/content?ts=${Date.now()}`, {
-          headers: { 'Cache-Control': 'no-store', Pragma: 'no-cache' },
-        }).catch(() => null),
+        apiV1.get('/content').catch(() => null),
       ]);
 
       const featuredData = featuredResult.status === 'fulfilled' ? featuredResult.value : [];
@@ -229,6 +233,7 @@ export default function HomeScreen({ navigation }: any) {
       setFeaturedArtists(featuredData);
       setTrendingArtists(trending);
       setRecentlyAdded(recentFromApi);
+      dataLoadedRef.current = true;
 
       if (featuredResult.status === 'rejected' && artistsResult.status === 'rejected') {
         setArtistsError('Could not load artists. Please try again.');
@@ -238,25 +243,17 @@ export default function HomeScreen({ navigation }: any) {
       setArtistsError('Could not load artists. Please try again.');
     } finally {
       if (!mountedRef.current) return;
-      setArtistsLoading(false);
       setLoading(false);
       setRefreshing(false);
     }
   }, [toArtistCard]);
 
-  // Initial load on mount
+  // Initial load on mount only - data persists when returning to home
   useEffect(() => {
     mountedRef.current = true;
     fetchContent();
     return () => { mountedRef.current = false; };
   }, [fetchContent]);
-
-  // Reload content every time the screen comes into focus (catches new uploads)
-  useFocusEffect(
-    useCallback(() => {
-      fetchContent();
-    }, [fetchContent])
-  );
 
   const onPressArtist = (artistId: string) => {
     navigation.navigate('Artist', { artistId });
@@ -432,7 +429,7 @@ export default function HomeScreen({ navigation }: any) {
 
         {/* FEATURED ARTISTS */}
         <Text style={styles.sectionTitleTop}>Featured Artists</Text>
-        {artistsLoading ? (
+        {loading ? (
           <View style={styles.sectionLoadingRow}>
             <ActivityIndicator color={Colors.accent} />
           </View>
@@ -472,7 +469,7 @@ export default function HomeScreen({ navigation }: any) {
             <Text style={styles.seeAll}>See All  &gt;</Text>
           </TouchableOpacity>
         </View>
-        {artistsLoading ? (
+        {loading ? (
           <View style={styles.sectionLoadingRow}>
             <ActivityIndicator color={Colors.accent} />
           </View>
