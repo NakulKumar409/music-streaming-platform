@@ -142,7 +142,6 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
   // Platform — yearly uses a ~20% annual discount
   const platformMonthlyPrice = finalPrice;
   const platformYearlyPrice = (() => {
-    if (platformConfig?.yearly_price && platformConfig.yearly_price > 0) return Number(platformConfig.yearly_price);
     if (hasDiscount && discountPrice) return Number(discountPrice) * 12;
     return parseFloat((finalPrice * 12 * 0.8).toFixed(2));
   })();

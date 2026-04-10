@@ -14,7 +14,7 @@ import {
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, RefreshCw, Crown, Award, BadgeCheck, AlertTriangle, FileText } from 'lucide-react-native';
+import { ArrowLeft, RefreshCw, Crown, Award, BadgeCheck, AlertTriangle } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import ErrorBoundary from '../ui/ErrorBoundary';
@@ -24,14 +24,14 @@ import { TransactionRow, AutoRenewToggle, CancellationFlow } from '../ui/Subscri
 type SubData = {
   type: 'ARTIST' | 'PLATFORM';
   status: string;
-  plan_type: string;
-  start_date: string | null;
-  end_date: string | null;
-  next_billing_date: string | null;
-  grace_ends_at: string | null;
-  auto_renew: boolean;
-  artist_id?: string | null;
-  artist_name?: string;
+  planType: string;
+  startDate: string | null;
+  endDate: string | null;
+  nextBillingDate: string | null;
+  graceEndsAt: string | null;
+  autoRenew: boolean;
+  artistId?: string | null;
+  artistName?: string;
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -84,11 +84,11 @@ export default function SubscriptionDetail({ navigation, route }: any) {
 
       if (planType === 'PLATFORM') {
         setSub(details.platform);
-        setTransactions(details.transactions.filter(tx => !tx.artistId));
+        setTransactions(details.transactions);
       } else {
         const found = details.artists.find(a => String(a.artistId) === artistId);
         setSub(found || null);
-        setTransactions(details.transactions.filter(tx => String(tx.artistId) === artistId));
+        setTransactions(details.transactions);
       }
     } catch {
       setSub(null);
@@ -111,7 +111,7 @@ export default function SubscriptionDetail({ navigation, route }: any) {
   const isPlatform = sub?.type === 'PLATFORM';
 
   // Compute days left
-  const endDate = sub?.end_date ?? sub?.next_billing_date;
+  const endDate = sub?.endDate ?? sub?.nextBillingDate;
   const daysLeft = endDate
     ? Math.ceil((new Date(endDate).getTime() - Date.now()) / (1000 * 86400))
     : null;
@@ -127,17 +127,17 @@ export default function SubscriptionDetail({ navigation, route }: any) {
       return;
     }
     navigation.navigate('SubscriptionFlow', {
-      artistId: sub?.artist_id ?? artistId,
-      artistName: sub?.artist_name,
+      artistId: sub?.artistId ?? artistId,
+      artistName: sub?.artistName,
       defaultPlan: sub?.type ?? planType,
     });
   };
 
   const handleToggleAutoRenew = async (enable: boolean) => {
-    if (!sub?.id) return;
+    if (!sub?.artistId) return;
     setToggling(true);
     try {
-      const success = await userService.toggleAutoRenew(sub.id, enable);
+      const success = await userService.toggleAutoRenew(sub.artistId, enable);
       if (success) {
         setSub(prev => prev ? { ...prev, autoRenew: enable } : null);
         Alert.alert('Success', `Auto-renew turned ${enable ? 'ON' : 'OFF'}.`);
@@ -152,9 +152,9 @@ export default function SubscriptionDetail({ navigation, route }: any) {
   };
 
   const handleCancelConfirm = async (reason: string, acceptedOffer: boolean) => {
-    if (!sub?.id) return;
+    if (!sub?.artistId) return;
     try {
-      const res = await userService.cancelSubscription(sub.id, {
+      const res = await userService.cancelSubscription(sub.artistId, {
         reason,
         accepted_retention_offer: acceptedOffer
       });
@@ -275,10 +275,10 @@ export default function SubscriptionDetail({ navigation, route }: any) {
             <Text style={styles.planBannerTitle}>
               {isPlatform ? 'Platform Plan' : 'Artist Plan'}
             </Text>
-            {!isPlatform && sub.artist_name ? (
+            {!isPlatform && sub.artistName ? (
               <View style={styles.artistNameRow}>
                 <BadgeCheck color="#4AA3FF" fill="#4AA3FF" size={16} />
-                <Text style={styles.artistNameText}>{sub.artist_name}</Text>
+                <Text style={styles.artistNameText}>{sub.artistName}</Text>
               </View>
             ) : null}
             <View style={[styles.statusPill, { backgroundColor: `${statusColor}22`, borderColor: `${statusColor}55` }]}>
@@ -289,19 +289,17 @@ export default function SubscriptionDetail({ navigation, route }: any) {
 
           {/* Details card */}
           <BlurView intensity={22} tint="dark" style={styles.card}>
-            <InfoRow label="Plan Type" value={sub.plan_type ?? 'MONTHLY'} />
-            <Divider />
-            <InfoRow label="Started" value={formatDate(sub.start_date)} />
+            <InfoRow label="Plan Type" value={sub.planType ?? 'MONTHLY'} />
             <Divider />
             <InfoRow label={status === 'ACTIVE' ? 'Renews On' : 'Expired On'} value={formatDate(endDate)} />
-            {sub.grace_ends_at && (status === 'GRACE' || status === 'PAST_DUE') && (
+            {sub.graceEndsAt && (status === 'GRACE' || status === 'PAST_DUE') && (
               <>
                 <Divider />
-                <InfoRow label="Grace Ends" value={formatDate(sub.grace_ends_at)} color="#F59E0B" />
+                <InfoRow label="Grace Ends" value={formatDate(sub.graceEndsAt)} color="#F59E0B" />
               </>
             )}
             <Divider />
-            <InfoRow label="Auto-Renew" value={sub.auto_renew ? 'On' : 'Off'} />
+            <InfoRow label="Auto-Renew" value={sub.autoRenew ? 'On' : 'Off'} />
             <Divider />
             <AutoRenewToggle 
               enabled={sub.autoRenew} 
@@ -390,7 +388,7 @@ export default function SubscriptionDetail({ navigation, route }: any) {
            visible={cancelModalVisible}
            onClose={() => setCancelModalVisible(false)}
            onConfirm={handleCancelConfirm}
-           planName={isPlatform ? 'Platform Plan' : `Artist Plan (${sub.artist_name})`}
+           planName={isPlatform ? 'Platform Plan' : `Artist Plan (${sub.artistName || 'Unknown'})`}
         />
       </SafeAreaView>
     </ErrorBoundary>
