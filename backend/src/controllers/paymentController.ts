@@ -304,6 +304,27 @@ export const confirmPayment = async (req: any, res: Response) => {
         );
       }
 
+      // Get the subscription ID for payment recording
+      const subResult = await pool.query(
+        `SELECT id FROM subscriptions WHERE user_id = $1 AND artist_id = $2 AND type = 'ARTIST' AND status = 'ACTIVE' LIMIT 1`,
+        [userId, artistId]
+      );
+      const subscriptionId = subResult.rows?.[0]?.id;
+
+      // Record payment for analytics (CRITICAL: this enables earnings calculation)
+      if (subscriptionId) {
+        await pool.query(
+          `INSERT INTO payments (user_id, subscription_id, amount, status, razorpay_payment_id, created_at)
+           VALUES ($1, $2, $3, 'SUCCESS', $4, now())
+           ON CONFLICT (razorpay_payment_id) DO NOTHING`,
+          [userId, subscriptionId, amountPaise, paymentId]
+        ).then(() => {
+          logger.info({ userId, artistId, subscriptionId, amountPaise, paymentId }, "[PAYMENT] Payment recorded in payments table");
+        }).catch(err => {
+          logger.error({ userId, artistId, error: err.message }, "[PAYMENT] Failed to record payment");
+        });
+      }
+
       // Credit artist earnings asynchronously
       creditArtistEarnings(artistId, amountPaise).catch(() => undefined);
     }
@@ -483,6 +504,24 @@ export const razorpayWebhook = async (req: any, res: Response) => {
                  WHERE razorpay_order_id = $1`,
                 [orderId, now, paymentId]
               );
+
+              // Get subscription and record payment for analytics
+              const subRow = await client.query(
+                `SELECT id FROM subscriptions WHERE user_id = $1 AND artist_id = $2 AND type = 'ARTIST' LIMIT 1`,
+                [userIdFromNotes, artistIdFromNotes]
+              );
+              const subscriptionId = subRow.rows?.[0]?.id;
+              const amountPaise = Number(paymentEntity?.amount ?? 0);
+
+              if (subscriptionId) {
+                await client.query(
+                  `INSERT INTO payments (user_id, subscription_id, amount, status, razorpay_payment_id, created_at)
+                   VALUES ($1, $2, $3, 'SUCCESS', $4, now())
+                   ON CONFLICT (razorpay_payment_id) DO NOTHING`,
+                  [userIdFromNotes, subscriptionId, amountPaise, paymentId]
+                );
+                logger.info({ userId: userIdFromNotes, artistId: artistIdFromNotes, subscriptionId, amountPaise, paymentId }, "[WEBHOOK] Payment recorded in payments table");
+              }
             }
           }
         }

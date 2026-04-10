@@ -9,6 +9,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { AnalyticsController } from "../controllers/analyticsController";
+import { logger } from "../common/logger";
 
 const router = Router();
 router.get("/dashboard/subscription-insights", requireAuth, AnalyticsController.getArtistSubscriptionInsights);
@@ -607,16 +608,41 @@ router.get("/dashboard/summary", requireAuth, requireArtist, async (req: any, re
     })();
 
     const grossEarnings = await (async () => {
-      const n = await safeScalarNumber(
-        "SELECT COALESCE(SUM(amount), 0)::float as value FROM payments WHERE artist_id = $1 AND (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID')",
+      // JOIN with subscriptions to get artist_id since payments table doesn't have artist_id column
+      const rawAmountPaise = await safeScalarNumber(
+        `SELECT COALESCE(SUM(p.amount), 0)::float as value 
+         FROM payments p
+         JOIN subscriptions s ON s.id = p.subscription_id
+         WHERE s.artist_id = $1 
+         AND s.type = 'ARTIST'
+         AND (UPPER(p.status) = 'SUCCESS' OR UPPER(p.status) = 'PAID' OR UPPER(p.status) = 'CAPTURED')`,
         [artistUserId],
         NaN
       );
-      const gross = Number.isFinite(n) ? n : 0;
-      return Number((gross * 0.9).toFixed(2));
+      const grossPaise = Number.isFinite(rawAmountPaise) ? rawAmountPaise : 0;
+      // Convert from paise to rupees and apply 90% revenue share
+      const grossRupees = grossPaise / 100;
+      const artistEarnings = Number((grossRupees * 0.9).toFixed(2));
+      
+      logger.info({ 
+        artistId: artistUserId, 
+        rawAmountPaise: grossPaise,
+        grossRupees, 
+        artistEarnings,
+        calculation: `${grossPaise} paise → ${grossRupees} INR × 90% = ${artistEarnings} INR`
+      }, "[ANALYTICS] Earnings calculation");
+      
+      return artistEarnings;
     })();
 
     audit(req, { event: "artist_dashboard_summary", outcome: "success" });
+    logger.info({ 
+      artistId: artistUserId, 
+      subscribers, 
+      totalPlays, 
+      grossEarnings,
+      correlationId 
+    }, "[ANALYTICS] Dashboard summary generated");
     return res.json({
       success: true,
       stats: {
@@ -666,15 +692,19 @@ router.get("/dashboard/growth", requireAuth, requireArtist, async (req: any, res
         []
       );
     } else if (metric === "earnings") {
+      // JOIN with subscriptions to get artist_id since payments table doesn't have artist_id column
       const dbRows = await safeRows<{ date: string; value: number }>(
-        `SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, COALESCE(SUM(amount), 0)::float as value 
-         FROM payments 
-         WHERE artist_id = $1 AND created_at >= $2 AND (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID') 
+        `SELECT to_char(date_trunc('day', p.created_at), 'YYYY-MM-DD') as date, COALESCE(SUM(p.amount), 0)::float as value 
+         FROM payments p
+         JOIN subscriptions s ON s.id = p.subscription_id
+         WHERE s.artist_id = $1 AND s.type = 'ARTIST' AND p.created_at >= $2 
+         AND (UPPER(p.status) = 'SUCCESS' OR UPPER(p.status) = 'PAID' OR UPPER(p.status) = 'CAPTURED') 
          GROUP BY 1 ORDER BY 1 ASC`,
         [artistUserId, startIso],
         []
       );
-      rows = dbRows.map(r => ({ date: r.date, value: Number((r.value * 0.9).toFixed(2)) }));
+      // Convert from paise to rupees and apply 90% revenue share
+      rows = dbRows.map(r => ({ date: r.date, value: Number(((r.value / 100) * 0.9).toFixed(2)) }));
     } else {
       rows = await safeRows<{ date: string; value: number }>(
         `SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, COUNT(*)::int as value 

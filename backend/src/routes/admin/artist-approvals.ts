@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../../common/auth/requireAuth";
 import { pool } from "../../common/db";
 import { invalidateArtistCache } from "../../common/cache";
+import { logger } from "../../common/logger";
 
 const router = Router();
 
@@ -28,6 +29,21 @@ router.get("/pending-artists", requireAuth, requireAdmin, async (req: any, res: 
   const correlationId = req?.correlationId || "-";
 
   try {
+    // Debug: First check all ARTIST users and their status
+    // Note: artist_status is ENUM type, don't use UPPER() on it
+    const allArtists = await safeQuery<any>(
+      `SELECT id, email, name, role, artist_status::text as artist_status, created_at, onboarded_at
+       FROM users
+       WHERE role = 'ARTIST'`,
+      []
+    );
+    logger.info({ 
+      correlationId, 
+      totalArtistCount: allArtists.length,
+      artists: allArtists.map(a => ({ id: a.id, email: a.email, status: a.artist_status, role: a.role }))
+    }, "[ADMIN] All artists in system");
+
+    // Note: artist_status is ENUM type, cast to text for comparison
     const rows = await safeQuery<any>(
       `SELECT
          id,
@@ -35,17 +51,17 @@ router.get("/pending-artists", requireAuth, requireAdmin, async (req: any, res: 
          email,
          created_at,
          onboarded_at,
-         COALESCE(artist_status, 'PENDING') as artist_status,
+         COALESCE(artist_status::text, 'PENDING') as artist_status,
          COALESCE(artist_bio, bio, '') as artist_bio,
          portfolio_links,
          artist_appeal_message,
          admin_remarks
        FROM users
-       WHERE UPPER(role) = 'ARTIST'
+       WHERE role = 'ARTIST'
          AND (
-           UPPER(COALESCE(artist_status, 'PENDING')) = 'PENDING'
+           COALESCE(artist_status::text, 'PENDING') = 'PENDING'
            OR (
-             UPPER(COALESCE(artist_status, 'PENDING')) = 'REJECTED'
+             artist_status::text = 'REJECTED'
              AND NULLIF(TRIM(COALESCE(artist_appeal_message, '')), '') IS NOT NULL
            )
          )
@@ -53,6 +69,12 @@ router.get("/pending-artists", requireAuth, requireAdmin, async (req: any, res: 
        LIMIT 300`,
       []
     );
+
+    logger.info({ 
+      correlationId, 
+      pendingCount: rows.length,
+      pendingIds: rows.map(r => r.id)
+    }, "[ADMIN] Pending artists query result");
 
     const items = rows.map((u) => {
       const status = (u.artist_status ?? "PENDING").toString().toUpperCase();
@@ -73,7 +95,7 @@ router.get("/pending-artists", requireAuth, requireAdmin, async (req: any, res: 
 
     return res.json({ success: true, items, correlationId });
   } catch (err: any) {
-    console.error("[admin] pending-artists error", correlationId, err?.message);
+    logger.error({ correlationId, error: err?.message }, "[ADMIN] pending-artists error");
     return res.status(500).json({
       success: false,
       message: "Failed to fetch pending artists",
@@ -113,12 +135,12 @@ router.patch("/resolve-artist/:id", requireAuth, requireAdmin, async (req: any, 
     if (act === "APPROVE") {
       const r = await pool.query(
         `UPDATE users
-         SET artist_status = 'APPROVED',
+         SET artist_status = 'APPROVED'::"ArtistStatus",
              is_verified = true,
              verified = true,
              admin_remarks = NULL,
              updated_at = now()
-         WHERE id = $1 AND UPPER(role) = 'ARTIST'
+         WHERE id = $1 AND role = 'ARTIST'
          RETURNING id`,
         [id]
       );
@@ -141,12 +163,12 @@ router.patch("/resolve-artist/:id", requireAuth, requireAdmin, async (req: any, 
 
     const r = await pool.query(
       `UPDATE users
-       SET artist_status = 'REJECTED',
+       SET artist_status = 'REJECTED'::"ArtistStatus",
            is_verified = false,
            verified = false,
            admin_remarks = $2,
            updated_at = now()
-       WHERE id = $1 AND UPPER(role) = 'ARTIST'
+       WHERE id = $1 AND role = 'ARTIST'
        RETURNING id`,
       [id, note]
     );

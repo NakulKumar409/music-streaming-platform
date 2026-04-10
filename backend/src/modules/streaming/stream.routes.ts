@@ -132,6 +132,18 @@ router.post("/heartbeat", requireAuth, async (req: any, res: any) => {
          VALUES ($1, $2, now(), now())`,
         [userId, contentId]
       );
+
+      // Record a play for analytics (each new session = 1 play)
+      await pool.query(
+        `INSERT INTO content_plays (content_id, user_id, created_at)
+         VALUES ($1, $2, now())`,
+        [contentId, userId]
+      ).then(() => {
+        logger.info({ userId, contentId }, "[ANALYTICS] Play recorded successfully");
+      }).catch(err => {
+        logger.error({ userId, contentId, error: err.message }, "[ANALYTICS] Failed to record content play");
+        // Don't fail the heartbeat if play recording fails (non-critical)
+      });
     }
 
     // Increment monthly listening stats (30 seconds per heartbeat)
