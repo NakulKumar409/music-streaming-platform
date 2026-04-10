@@ -139,9 +139,10 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
   const finalPrice = hasDiscount ? Number(discountPrice) : rawPrice;
 
   // ── Billing cycle derived prices ──────────────────────────────────────────
-  // Platform — yearly uses a ~20% annual discount
+  // Platform — use actual yearly_price from config if available
   const platformMonthlyPrice = finalPrice;
   const platformYearlyPrice = (() => {
+    if (platformConfig?.yearly_price) return Number(platformConfig.yearly_price);
     if (hasDiscount && discountPrice) return Number(discountPrice) * 12;
     return parseFloat((finalPrice * 12 * 0.8).toFixed(2));
   })();

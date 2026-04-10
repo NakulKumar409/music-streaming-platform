@@ -93,6 +93,7 @@ export type QualityResult = {
 
 export type PlatformConfig = {
   price: number;
+  yearly_price?: number;
   discount_price?: number;
   discount_months?: number;
   currency: string;
