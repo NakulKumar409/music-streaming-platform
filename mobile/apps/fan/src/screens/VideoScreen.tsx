@@ -48,6 +48,7 @@ import { apiV1 } from '../services/api';
 import { contentApi } from '../services/api';
 import * as streamService from '../services/streamService';
 import { userService } from '../services/userService';
+import { startHeartbeat, stopHeartbeat } from '../services/heartbeatService';
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import { getOptimizedImageUrl } from '../utils/cloudinary';
@@ -812,6 +813,22 @@ export default function VideoScreen() {
     }, 500);
     return () => clearInterval(interval);
   }, [videoPlayer, isSeeking, isVideoPlaying]);
+
+  // ─── Heartbeat for listening time tracking ─────────────────
+  useEffect(() => {
+    if (!activeVideoMeta?.id) return;
+    if (!isVideoPlaying) {
+      stopHeartbeat();
+      return;
+    }
+
+    const contentId = String(activeVideoMeta.id);
+    startHeartbeat(contentId);
+
+    return () => {
+      stopHeartbeat();
+    };
+  }, [activeVideoMeta?.id, isVideoPlaying]);
 
 
 

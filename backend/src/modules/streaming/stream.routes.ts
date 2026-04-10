@@ -10,6 +10,7 @@ import { getMediaConfig } from "../../config/media.config";
 import { resolveMediaIdentity } from "../../shared/media/media-asset-locator";
 import { mapStreamAccessError } from "./stream-access-error";
 import { logger } from "../../common/logger";
+import { requireAuth } from "../../common/auth/requireAuth";
 
 const router = Router();
 
@@ -101,7 +102,7 @@ router.post("/access", async (req: any, res: any) => {
  * POST /api/v1/fan/stream/heartbeat
  * Keeps a playback session alive. Client should call this every 30-60s.
  */
-router.post("/heartbeat", async (req: any, res: any) => {
+router.post("/heartbeat", requireAuth, async (req: any, res: any) => {
   const userId = req.user?.id;
   const contentId = Number(req.body?.contentId);
   const correlationId = req?.correlationId || "-";
@@ -115,6 +116,7 @@ router.post("/heartbeat", async (req: any, res: any) => {
   }
 
   try {
+    // Try to update existing session first
     const result = await pool.query(
       `UPDATE playback_sessions 
        SET heartbeat_at = now() 
@@ -123,8 +125,13 @@ router.post("/heartbeat", async (req: any, res: any) => {
       [userId, contentId]
     );
 
+    // If no session exists, create one
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: "Session not found or expired" });
+      await pool.query(
+        `INSERT INTO playback_sessions (user_id, content_id, started_at, heartbeat_at)
+         VALUES ($1, $2, now(), now())`,
+        [userId, contentId]
+      );
     }
 
     // Increment monthly listening stats (30 seconds per heartbeat)

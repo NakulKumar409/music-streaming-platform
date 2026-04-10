@@ -19,6 +19,7 @@ import MediaPlayerOverlay from '../ui/MediaPlayerOverlay';
 import { recordPlayback } from '../services/libraryService';
 import { getPlaybackUrl, normalizePlaybackUrl, validatePlaybackUrl } from '../services/streamService';
 import { isStreamingUrlExpiringSoon, decodeJwtExpMsFromUrl } from '../utils/streaming';
+import { startHeartbeat, stopHeartbeat } from '../services/heartbeatService';
 
 import type { MediaItem, MediaType, PlayerState } from '../media.types';
 
@@ -208,7 +209,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!currentItem?.id) return;
-    if (!state.isPlaying) return;
+    if (!state.isPlaying) {
+      stopHeartbeat();
+      return;
+    }
 
     const key = `${currentItem.contentId ?? currentItem.id}`;
 
@@ -224,6 +228,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       lastRecordedRef.current = key;
       recordPlayback(key).catch(() => undefined);
     }, 500);
+
+    // Start heartbeat for listening time tracking
+    startHeartbeat(key);
 
     return () => {
       if (playbackRecordTimerRef.current) {
