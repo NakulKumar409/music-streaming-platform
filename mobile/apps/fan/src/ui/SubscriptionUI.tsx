@@ -8,8 +8,8 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
-  Lock, Crown, Award, AlertTriangle, RefreshCw, CheckCircle2, 
-  X, ChevronRight, MessageSquare, CreditCard, ShieldCheck 
+  Lock, Crown, Award, AlertTriangle, RefreshCw, 
+  X, CreditCard, ShieldCheck, Check, Star 
 } from 'lucide-react-native';
 import { Modal, ScrollView, Switch } from 'react-native';
 import type { SubscriptionRecord } from '../services/userService';
@@ -323,23 +323,43 @@ export function EmptySubscriptionState({ onExplore }: { onExplore: () => void })
 
 export function TransactionRow({ tx, onDownload }: { tx: any, onDownload: () => void }) {
   const date = new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
-  const isSuccess = tx.status?.toUpperCase() === 'CAPTURED' || tx.status?.toUpperCase() === 'SUCCESS';
+  const status = tx.status?.toUpperCase() || 'PENDING';
+  const isSuccess = status === 'CAPTURED' || status === 'SUCCESS';
+  const isFailed = status === 'FAILED' || status === 'CANCELLED';
+  const isPending = status === 'CREATED' || status === 'PENDING';
+  
+  // Status colors
+  const statusColor = isSuccess ? '#10B981' : isFailed ? '#EF4444' : '#F59E0B';
+  const statusLabel = isSuccess ? 'Success' : isFailed ? (status === 'CANCELLED' ? 'Cancelled' : 'Failed') : 'Pending';
   
   return (
-    <View style={cardStyles.txRow}>
+    <View style={[cardStyles.txRow, isFailed && { opacity: 0.7 }]}>
       <View style={cardStyles.txDateBlock}>
         <Text style={cardStyles.txDay}>{new Date(tx.date).getDate()}</Text>
         <Text style={cardStyles.txMonth}>{new Date(tx.date).toLocaleString('default', { month: 'short' })}</Text>
       </View>
       <View style={{ flex: 1, marginLeft: 16 }}>
-        <Text style={cardStyles.txTitle}>{tx.artistName || 'Platform Plan'}</Text>
+        <Text style={[cardStyles.txTitle, isFailed && { textDecorationLine: 'line-through' }]}>
+          {tx.artistName || 'Platform Plan'}
+        </Text>
         <Text style={cardStyles.txId}>ID: {tx.razorpayPaymentId || tx.id}</Text>
+        {/* Status Badge */}
+        <View style={[cardStyles.txStatusBadge, { backgroundColor: `${statusColor}22`, borderColor: `${statusColor}55` }]}>
+          <View style={[cardStyles.txStatusDot, { backgroundColor: statusColor }]} />
+          <Text style={[cardStyles.txStatusText, { color: statusColor }]}>{statusLabel}</Text>
+        </View>
       </View>
       <View style={{ alignItems: 'flex-end' }}>
-        <Text style={cardStyles.txAmount}>₹{tx.amount / 100}</Text>
-        <Pressable onPress={onDownload} style={cardStyles.txInvoice}>
-          <Text style={cardStyles.txInvoiceText}>Invoice ↓</Text>
-        </Pressable>
+        <Text style={[cardStyles.txAmount, isFailed && { textDecorationLine: 'line-through' }]}>₹{tx.amount / 100}</Text>
+        {/* Only show invoice for successful payments */}
+        {isSuccess && (
+          <Pressable onPress={onDownload} style={cardStyles.txInvoice}>
+            <Text style={cardStyles.txInvoiceText}>Invoice ↓</Text>
+          </Pressable>
+        )}
+        {isFailed && (
+          <Text style={[cardStyles.txFailedText, { color: statusColor }]}>Payment Failed</Text>
+        )}
       </View>
     </View>
   );
@@ -370,8 +390,8 @@ export function AutoRenewToggle({ enabled, onToggle, loading }: { enabled: boole
 const CANCEL_REASONS = [
   { id: 'expensive', label: 'Too expensive', icon: 'CreditCard' },
   { id: 'unused', label: 'Not using it enough', icon: 'RefreshCw' },
-  { id: 'content', label: 'Missing specific content', icon: 'MessageSquare' },
-  { id: 'other', label: 'Other reasons', icon: 'ChevronRight' },
+  { id: 'content', label: 'Missing specific content', icon: 'Star' },
+  { id: 'other', label: 'Other reasons', icon: 'Check' },
 ];
 
 export function CancellationFlow({
@@ -427,11 +447,11 @@ export function CancellationFlow({
                     <View style={mgStyles.reasonIconWrap}>
                       {r.id === 'expensive' && <CreditCard color="#FF7A18" size={18} />}
                       {r.id === 'unused' && <RefreshCw color="#FF7A18" size={18} />}
-                      {r.id === 'content' && <MessageSquare color="#FF7A18" size={18} />}
-                      {r.id === 'other' && <ChevronRight color="#FF7A18" size={18} />}
+                      {r.id === 'content' && <Star color="#FF7A18" size={18} />}
+                      {r.id === 'other' && <Check color="#FF7A18" size={18} />}
                     </View>
                     <Text style={mgStyles.reasonLabel}>{r.label}</Text>
-                    <ChevronRight color="rgba(255,255,255,0.2)" size={16} />
+                    <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 14 }}>›</Text>
                   </Pressable>
                 ))}
               </View>
@@ -454,7 +474,7 @@ export function CancellationFlow({
                   </Pressable>
                 </View>
 
-                <Pressable style={mgStyles.offerBtn} onPress={() => setStep(3)} style={{ marginTop: 12, opacity: 0.6 }}>
+                <Pressable style={[mgStyles.offerBtn, { marginTop: 12, opacity: 0.6 }]} onPress={() => setStep(3)}>
                   <Text style={mgStyles.offerBtnText}>Continue with cancellation</Text>
                 </Pressable>
               </View>
@@ -752,6 +772,19 @@ const cardStyles = StyleSheet.create({
   txAmount: { color: '#fff', fontSize: 15, fontWeight: '900' },
   txInvoice: { marginTop: 4, paddingHorizontal: 8, paddingVertical: 2, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 6 },
   txInvoiceText: { color: '#4AA3FF', fontSize: 11, fontWeight: '800' },
+  txStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    marginTop: 6,
+    alignSelf: 'flex-start',
+  },
+  txStatusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
+  txStatusText: { fontSize: 11, fontWeight: '800' },
+  txFailedText: { fontSize: 11, fontWeight: '700', marginTop: 4 },
 });
 
 const upsellStyles = StyleSheet.create({
@@ -825,7 +858,7 @@ const strongUpsellStyles = StyleSheet.create({
   body: { color: 'rgba(255,255,255,0.7)', fontSize: 14, textAlign: 'center', marginTop: 12, lineHeight: 22 },
   benefits: { alignSelf: 'stretch', marginTop: 24, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 16 },
   benefitItem: { color: '#fff', fontSize: 14, fontWeight: '700', marginVertical: 4 },
-  btn: { width: '100%', height: 56, backgroundColor: '#FF7A18', borderRadius: 16, alignItems: 'center', justifyCenter: 'center', marginTop: 24, justifyContent: 'center' },
+  btn: { width: '100%', height: 56, backgroundColor: '#FF7A18', borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 24 },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '900' },
 });
 

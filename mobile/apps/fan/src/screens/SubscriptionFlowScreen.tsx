@@ -255,7 +255,19 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
         paymentData = await RazorpayCheckout.open(options);
       } catch (e: any) {
         const msg = (e?.description ?? e?.error?.description ?? e?.message ?? '').toString();
-        if (/cancel/i.test(msg)) { setIsCreatingOrder(false); return; }
+        if (/cancel/i.test(msg)) {
+          // Notify backend that payment was cancelled
+          try {
+            await apiV1.post('/subscriptions/payment-failed', {
+              razorpay_order_id: nextOrderId,
+              reason: 'User cancelled'
+            });
+          } catch (err) {
+            console.warn('[Payment] Failed to record cancellation', err);
+          }
+          setIsCreatingOrder(false);
+          return;
+        }
         throw new Error(msg || 'Payment cancelled');
       }
 

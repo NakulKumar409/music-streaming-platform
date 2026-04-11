@@ -1,5 +1,6 @@
 import { Response } from "express";
 import crypto from "crypto";
+import { v4 as uuidv4 } from "uuid";
 import { pool } from "../common/db";
 import { logger } from "../common/logger";
 import Razorpay from "razorpay";
@@ -179,6 +180,8 @@ export const confirmPayment = async (req: any, res: Response) => {
       artist_id?: number | string;
     };
 
+    logger.info({ userId, artist_id, orderId: razorpay_order_id, paymentId: razorpay_payment_id }, "[PAYMENT] confirmPayment called");
+
     if (!Number.isFinite(userId) || userId <= 0) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
@@ -242,6 +245,14 @@ export const confirmPayment = async (req: any, res: Response) => {
       return res.status(404).json({ success: false, message: "Transaction not found" });
     }
 
+    // Check if transaction was already processed or failed
+    if (tx.status === 'CAPTURED') {
+      return res.status(409).json({ success: false, message: "Payment already processed" });
+    }
+    if (tx.status === 'FAILED') {
+      return res.status(409).json({ success: false, message: "Payment was cancelled or failed" });
+    }
+
     // ── Mark transaction as CAPTURED ──────────────────────────────────────────
     const paymentConfirmedAt = new Date();
     const updated = await pool.query(
@@ -259,6 +270,8 @@ export const confirmPayment = async (req: any, res: Response) => {
     const isPlatform = !artistId || artistId <= 0;
     const planType = isPlatform ? "PLATFORM" : "ARTIST";
     const amountPaise = Number(tx.amount ?? 0);
+    
+    logger.info({ userId, artistId, isPlatform, planType, amountPaise }, "[PAYMENT] Subscription type determined");
 
     // Subscription active for 30 days (monthly) or 365 days (yearly)
     const isYearlyPlan = tx.billing_cycle === 'yearly';
@@ -310,19 +323,28 @@ export const confirmPayment = async (req: any, res: Response) => {
         [userId, artistId]
       );
       const subscriptionId = subResult.rows?.[0]?.id;
+      
+      logger.info({ userId, artistId, subscriptionId, rowsFound: subResult.rowCount }, "[PAYMENT] Subscription lookup for payment recording");
 
       // Record payment for analytics (CRITICAL: this enables earnings calculation)
       if (subscriptionId) {
-        await pool.query(
-          `INSERT INTO payments (user_id, subscription_id, amount, status, razorpay_payment_id, created_at)
-           VALUES ($1, $2, $3, 'SUCCESS', $4, now())
-           ON CONFLICT (razorpay_payment_id) DO NOTHING`,
-          [userId, subscriptionId, amountPaise, paymentId]
-        ).then(() => {
+        const paymentUuid = uuidv4();
+        console.log(`[PAYMENT] Recording payment: user=${userId}, artist=${artistId}, sub=${subscriptionId}, amount=${amountPaise}, uuid=${paymentUuid}`);
+        try {
+          await pool.query(
+            `INSERT INTO payments (id, user_id, subscription_id, amount, status, razorpay_payment_id, created_at)
+             VALUES ($1, $2, $3, $4, 'SUCCESS', $5, now())
+             ON CONFLICT (razorpay_payment_id) DO NOTHING`,
+            [paymentUuid, userId, subscriptionId, amountPaise, paymentId]
+          );
+          console.log(`[PAYMENT] SUCCESS: Payment recorded - uuid=${paymentUuid}`);
           logger.info({ userId, artistId, subscriptionId, amountPaise, paymentId }, "[PAYMENT] Payment recorded in payments table");
-        }).catch(err => {
-          logger.error({ userId, artistId, error: err.message }, "[PAYMENT] Failed to record payment");
-        });
+        } catch (err: any) {
+          console.error(`[PAYMENT] FAILED: ${err.message}, uuid=${paymentUuid}`);
+          logger.error({ userId, artistId, subscriptionId, error: err.message, paymentUuid }, "[PAYMENT] Failed to record payment");
+        }
+      } else {
+        console.log(`[PAYMENT] SKIPPED: No subscriptionId found for user=${userId}, artist=${artistId}`);
       }
 
       // Credit artist earnings asynchronously
@@ -514,13 +536,23 @@ export const razorpayWebhook = async (req: any, res: Response) => {
               const amountPaise = Number(paymentEntity?.amount ?? 0);
 
               if (subscriptionId) {
-                await client.query(
-                  `INSERT INTO payments (user_id, subscription_id, amount, status, razorpay_payment_id, created_at)
-                   VALUES ($1, $2, $3, 'SUCCESS', $4, now())
-                   ON CONFLICT (razorpay_payment_id) DO NOTHING`,
-                  [userIdFromNotes, subscriptionId, amountPaise, paymentId]
-                );
-                logger.info({ userId: userIdFromNotes, artistId: artistIdFromNotes, subscriptionId, amountPaise, paymentId }, "[WEBHOOK] Payment recorded in payments table");
+                const paymentUuid = uuidv4();
+                console.log(`[WEBHOOK] Recording payment: user=${userIdFromNotes}, artist=${artistIdFromNotes}, sub=${subscriptionId}, amount=${amountPaise}`);
+                try {
+                  await client.query(
+                    `INSERT INTO payments (id, user_id, subscription_id, amount, status, razorpay_payment_id, created_at)
+                     VALUES ($1, $2, $3, $4, 'SUCCESS', $5, now())
+                     ON CONFLICT (razorpay_payment_id) DO NOTHING`,
+                    [paymentUuid, userIdFromNotes, subscriptionId, amountPaise, paymentId]
+                  );
+                  console.log(`[WEBHOOK] SUCCESS: Payment recorded`);
+                  logger.info({ userId: userIdFromNotes, artistId: artistIdFromNotes, subscriptionId, amountPaise, paymentId }, "[WEBHOOK] Payment recorded in payments table");
+                } catch (err: any) {
+                  console.error(`[WEBHOOK] FAILED: ${err.message}`);
+                  logger.error({ userId: userIdFromNotes, artistId: artistIdFromNotes, error: err.message }, "[WEBHOOK] Failed to record payment");
+                }
+              } else {
+                console.log(`[WEBHOOK] SKIPPED: No subscriptionId for user=${userIdFromNotes}, artist=${artistIdFromNotes}`);
               }
             }
           }

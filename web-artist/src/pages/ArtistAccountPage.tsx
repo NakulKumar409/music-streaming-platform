@@ -1,5 +1,63 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { http } from "../services/http";
+import ImageCropModal from "../components/ImageCropModal";
+
+// Icons as SVG components for consistent styling
+const CameraIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+    <circle cx="12" cy="13" r="4"/>
+  </svg>
+);
+
+const ImageIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+    <circle cx="8.5" cy="8.5" r="1.5"/>
+    <polyline points="21 15 16 10 5 21"/>
+  </svg>
+);
+
+const SpotifyIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+  </svg>
+);
+
+const YoutubeIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+  </svg>
+);
+
+const InstagramIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+);
+
+const AlertIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="12" y1="8" x2="12" y2="12"/>
+    <line x1="12" y1="16" x2="12.01" y2="16"/>
+  </svg>
+);
+
+const LinkIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+  </svg>
+);
 
 type MeResponse = {
   success: boolean;
@@ -25,6 +83,7 @@ export default function ArtistAccountPage() {
   const [imageUploading, setImageUploading] = useState<"profile" | "banner" | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"profile" | "socials">("profile");
 
   const [registeredEmail, setRegisteredEmail] = useState<string>("");
   const [artistStatus, setArtistStatus] = useState<string>("PENDING");
@@ -33,7 +92,6 @@ export default function ArtistAccountPage() {
   const [bio, setBio] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [bannerImageUrl, setBannerImageUrl] = useState<string | null>(null);
-
 
   const [spotify, setSpotify] = useState("");
   const [youtube, setYoutube] = useState("");
@@ -44,6 +102,12 @@ export default function ArtistAccountPage() {
 
   const profileInputRef = useRef<HTMLInputElement | null>(null);
   const bannerInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Image cropping state
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [cropType, setCropType] = useState<"profile" | "banner">("profile");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
 
 
@@ -107,24 +171,40 @@ export default function ArtistAccountPage() {
   };
 
   const onPickImage = async (kind: "profile" | "banner", file: File) => {
+    // Show crop modal instead of uploading directly
     const objectUrl = URL.createObjectURL(file);
-    if (kind === "profile") {
-      if (profileLocalPreview) URL.revokeObjectURL(profileLocalPreview);
-      setProfileLocalPreview(objectUrl);
-    }
-    if (kind === "banner") {
-      if (bannerLocalPreview) URL.revokeObjectURL(bannerLocalPreview);
-      setBannerLocalPreview(objectUrl);
-    }
+    setCropType(kind);
+    setCropImageSrc(objectUrl);
+    setPendingFile(file);
+    setCropModalOpen(true);
+  };
 
-    await uploadImage(kind, file);
+  const handleCropConfirm = async (croppedBlob: Blob) => {
+    if (!pendingFile || !cropImageSrc) return;
 
-    if (kind === "profile") {
-      setProfileLocalPreview(null);
+    // Create a new file from the cropped blob
+    const ext = pendingFile.name.split('.').pop() || 'jpg';
+    const croppedFile = new File([croppedBlob], `cropped-${cropType}-${Date.now()}.${ext}`, {
+      type: 'image/jpeg',
+    });
+
+    // Upload the cropped image
+    await uploadImage(cropType, croppedFile);
+
+    // Cleanup
+    URL.revokeObjectURL(cropImageSrc);
+    setCropModalOpen(false);
+    setCropImageSrc(null);
+    setPendingFile(null);
+  };
+
+  const handleCropCancel = () => {
+    if (cropImageSrc) {
+      URL.revokeObjectURL(cropImageSrc);
     }
-    if (kind === "banner") {
-      setBannerLocalPreview(null);
-    }
+    setCropModalOpen(false);
+    setCropImageSrc(null);
+    setPendingFile(null);
   };
 
   const onPasteImage = async (kind: "profile" | "banner", e: React.ClipboardEvent) => {
@@ -139,17 +219,33 @@ export default function ArtistAccountPage() {
 
     e.preventDefault();
 
+    // Use crop modal for pasted images too
     const ext = blob.type.split("/")[1] || "png";
     const file = new File([blob], `${kind}-${Date.now()}.${ext}`, { type: blob.type });
-    await uploadImage(kind, file);
+    const objectUrl = URL.createObjectURL(blob);
+    setCropType(kind);
+    setCropImageSrc(objectUrl);
+    setPendingFile(file);
+    setCropModalOpen(true);
   };
 
   const backgroundStyle = useMemo(() => {
     return {
       backgroundImage:
-        "radial-gradient(circle at 30% 10%, rgba(193,117,86,0.12) 0%, rgba(25,18,18,0.55) 45%, rgba(10,8,8,0.92) 100%)"
+        "radial-gradient(ellipse at top, rgba(193,117,86,0.15) 0%, rgba(20,16,16,0.8) 50%, rgba(10,8,8,0.95) 100%)"
     } as const;
   }, []);
+
+  const isVerified = artistStatus.toUpperCase() === "APPROVED";
+  const completionPercentage = useMemo(() => {
+    let score = 0;
+    if (name) score += 20;
+    if (bio) score += 20;
+    if (profileImageUrl) score += 20;
+    if (bannerImageUrl) score += 20;
+    if (spotify && youtube && instagram) score += 20;
+    return score;
+  }, [name, bio, profileImageUrl, bannerImageUrl, spotify, youtube, instagram]);
 
   const load = async () => {
     const res = await http.get<MeResponse>("/api/v1/artist/me");
@@ -221,24 +317,98 @@ export default function ArtistAccountPage() {
 
 
   return (
-    <div
-      className="relative overflow-hidden rounded-[10px] border border-white/10 bg-[#141010]/30 backdrop-blur shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
-      style={backgroundStyle}
-    >
-      <div className="absolute inset-0 opacity-60" />
+    <>
+      {/* Image Crop Modal */}
+      <ImageCropModal
+        isOpen={cropModalOpen}
+        imageSrc={cropImageSrc}
+        cropShape={cropType === "profile" ? "round" : "rect"}
+        aspect={cropType === "profile" ? 1 : 3}
+        onClose={handleCropCancel}
+        onConfirm={handleCropConfirm}
+      />
 
-      <div className="relative px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
-        <div className="text-[28px] font-light tracking-wide text-[#e6d6d2]">Artist Profile Center</div>
-        <div className="mt-2 text-[13px] text-[#b8a6a1]">Manage your public profile, socials, and account security.</div>
+      <div
+        className="relative min-h-screen overflow-hidden rounded-[16px] border border-white/10 bg-gradient-to-br from-[#1a1412] via-[#141010] to-[#0a0808] backdrop-blur-xl shadow-[0_30px_100px_rgba(0,0,0,0.6)]"
+        style={backgroundStyle}
+      >
+      {/* Ambient glow effects */}
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-[#c97a54]/5 rounded-full blur-[150px] pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-[#c97a54]/3 rounded-full blur-[120px] pointer-events-none" />
+      
+      <div className="relative px-6 py-8 sm:px-10 sm:py-10 lg:px-12 lg:py-12">
+        
+        {/* Header Section */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-[32px] font-bold tracking-tight text-white mb-1">Profile Settings</h1>
+            <p className="text-[14px] text-[#a99792]">Manage your artist identity and social presence</p>
+          </div>
+          
+          {/* Profile Completion Indicator */}
+          <div className="flex items-center gap-3 bg-white/5 rounded-xl px-4 py-3 border border-white/10">
+            <div className="relative w-12 h-12">
+              <svg className="w-12 h-12 -rotate-90" viewBox="0 0 36 36">
+                <path
+                  className="text-white/10"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                />
+                <path
+                  className="text-[#c97a54]"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeDasharray={`${completionPercentage}, 100`}
+                />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-white">
+                {completionPercentage}%
+              </span>
+            </div>
+            <div className="text-left">
+              <p className="text-[13px] font-medium text-white">Profile Completion</p>
+              <p className="text-[11px] text-[#8d7b77]">
+                {completionPercentage === 100 ? "All set! 🎉" : "Complete your profile"}
+              </p>
+            </div>
+          </div>
+        </div>
 
-        <div className="mt-8 rounded-[10px] border border-white/10 bg-[#0e0a0a]/35 overflow-hidden">
-          <div className="relative h-[220px] bg-[#0a0808]">
+        {/* Hero Card with Banner & Avatar */}
+        <div className="relative rounded-[20px] border border-white/10 bg-[#0e0a0a]/60 overflow-hidden mb-8 shadow-2xl">
+          {/* Banner Section */}
+          <div className="relative h-[240px] bg-gradient-to-br from-[#2a1f1a] to-[#0f0c0a] group">
             {bannerSrc ? (
-              <img src={bannerSrc} alt="" className="h-full w-full object-contain" />
+              <img 
+                src={bannerSrc} 
+                alt="Banner" 
+                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" 
+              />
             ) : (
-              <div className="h-full w-full bg-gradient-to-b from-[#241a1a] to-[#0a0808]" />
+              <div className="h-full w-full flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
+                    <ImageIcon />
+                  </div>
+                  <p className="text-[#8d7b77] text-sm">Add a banner image</p>
+                </div>
+              </div>
             )}
-            <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/25 to-black/60" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0e0a0a] via-transparent to-black/20" />
+            
+            {/* Banner Upload Button */}
+            <button
+              type="button"
+              onClick={() => bannerInputRef.current?.click()}
+              className="absolute top-4 right-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-black/60 backdrop-blur-md border border-white/10 text-[13px] text-white hover:bg-black/80 transition-all group/btn"
+            >
+              <CameraIcon />
+              <span className="hidden sm:inline">{bannerSrc ? "Change Banner" : "Add Banner"}</span>
+            </button>
 
             <input
               ref={bannerInputRef}
@@ -255,39 +425,51 @@ export default function ArtistAccountPage() {
             />
           </div>
 
-          <div className="px-4 pb-6 sm:px-8 sm:pb-8">
-            <div className="-mt-12 flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6">
+          {/* Profile Info Section */}
+          <div className="px-6 pb-6 sm:px-8 sm:pb-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-end gap-5 -mt-16 relative z-10">
+              {/* Avatar */}
               <div className="relative group">
+                <div className="w-[120px] h-[120px] rounded-full overflow-hidden border-4 border-[#0e0a0a] bg-[#141010] shadow-2xl">
+                  {profileSrc ? (
+                    <img src={profileSrc} alt="Profile" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="h-full w-full bg-gradient-to-br from-[#c97a54]/20 to-[#2a1a17] flex items-center justify-center">
+                      <span className="text-[40px] font-bold text-[#c97a54]">
+                        {name ? name[0].toUpperCase() : "A"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Avatar Upload Overlay */}
                 <button
                   type="button"
                   onClick={() => profileInputRef.current?.click()}
-                  className="relative h-[96px] w-[96px] rounded-full overflow-hidden border border-white/10 bg-[#141010] shadow-[0_14px_30px_rgba(0,0,0,0.55)]"
-                  aria-label="Change profile image"
+                  className="absolute inset-0 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all border-4 border-[#0e0a0a]"
                 >
-                  {profileSrc ? (
-                    <img src={profileSrc} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="h-full w-full bg-gradient-to-b from-[#2a1a17] to-[#0e0a0a]" />
-                  )}
-
-                  <div className="absolute inset-0 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100" />
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
-                    <div className="h-[34px] w-[34px] rounded-full border border-white/15 bg-[#0a0808]/55 backdrop-blur flex items-center justify-center">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path
-                          d="M4 7H7L9 4H15L17 7H20C21.1046 7 22 7.89543 22 9V19C22 20.1046 21.1046 21 20 21H4C2.89543 21 2 20.1046 2 19V9C2 7.89543 2.89543 7 4 7Z"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                        />
-                        <path
-                          d="M12 17C14.2091 17 16 15.2091 16 13C16 10.7909 14.2091 9 12 9C9.79086 9 8 10.7909 8 13C8 15.2091 9.79086 17 12 17Z"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                        />
-                      </svg>
-                    </div>
+                  <div className="text-center text-white">
+                    <CameraIcon />
+                    <span className="text-[11px] block mt-1">Change</span>
                   </div>
                 </button>
+
+                {/* Status Badge */}
+                <div className={`absolute -bottom-1 -right-1 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border-2 border-[#0e0a0a] ${
+                  isVerified
+                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                    : "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                }`}>
+                  {isVerified ? (
+                    <span className="flex items-center gap-1">
+                      <CheckIcon /> Verified
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      <AlertIcon /> Pending
+                    </span>
+                  )}
+                </div>
 
                 <input
                   ref={profileInputRef}
@@ -304,215 +486,374 @@ export default function ArtistAccountPage() {
                 />
               </div>
 
-              <div className="flex-1">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="text-[26px] font-light tracking-wide text-[#e6d6d2]">{name || "—"}</div>
-                  <div
-                    className={`inline-flex items-center rounded-full border px-3 py-[6px] text-[11px] uppercase tracking-widest ${
-                      artistStatus.toUpperCase() === "APPROVED"
-                        ? "border-[#3b5d45]/40 bg-[#0f1d14]/55 text-[#9ad0a7]"
-                        : "border-[#7a4b28]/45 bg-[#2a1a17]/55 text-[#e0c7c0]"
-                    }`}
-                  >
-                    {artistStatus.toUpperCase() === "APPROVED" ? "Verified" : "Pending"}
-                  </div>
-
-                  <div className="ml-auto text-[12px] text-[#8d7b77]">
-                    {imageUploading ? "Uploading image..." : loading ? "Loading..." : ""}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => bannerInputRef.current?.click()}
-                  className="mt-3 inline-flex items-center h-[34px] rounded-[8px] border border-white/10 bg-[#141010]/35 px-4 text-[13px] text-[#d8c7c3] hover:text-white hover:bg-white/5"
-                >
-                  Change banner
-                </button>
+              {/* Name & Email */}
+              <div className="flex-1 pb-2">
+                <h2 className="text-[24px] font-bold text-white tracking-tight">{name || "Your Name"}</h2>
+                <p className="text-[14px] text-[#a99792] flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#c97a54]"></span>
+                  {registeredEmail || "artist@example.com"}
+                </p>
               </div>
+
+              {/* Upload Status */}
+              {imageUploading && (
+                <div className="px-4 py-2 rounded-lg bg-[#c97a54]/10 border border-[#c97a54]/30 text-[13px] text-[#c97a54] flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-[#c97a54]/30 border-t-[#c97a54] rounded-full animate-spin" />
+                  Uploading {imageUploading} image...
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-[10px] border border-white/10 bg-[#0e0a0a]/35 px-5 py-5">
-            <div className="text-[14px] tracking-wide text-[#e6d6d2]">Basic Info</div>
-            <div className="mt-1 text-[12px] text-[#8d7b77]">Your public artist profile.</div>
+        {/* Error Messages */}
+        {imageError && (
+          <div className="mb-6 rounded-xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-rose-500/20 flex items-center justify-center text-rose-400">
+              <AlertIcon />
+            </div>
+            <p className="text-[14px] text-rose-300">{imageError}</p>
+          </div>
+        )}
+        
+        {saveError && (
+          <div className="mb-6 rounded-xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-rose-500/20 flex items-center justify-center text-rose-400">
+              <AlertIcon />
+            </div>
+            <p className="text-[14px] text-rose-300">{saveError}</p>
+          </div>
+        )}
 
-            {imageError ? (
-              <div className="mt-4 rounded-[8px] border border-white/10 bg-[#0e0a0a]/35 px-4 py-3 text-[13px] text-[#d7b2ab]">
-                {imageError}
-              </div>
-            ) : null}
-            {saveError ? (
-              <div className="mt-4 rounded-[8px] border border-[#e3a1a1]/25 bg-[#7a4b28]/30 px-4 py-3 text-[13px] text-[#e3a1a1]">
-                {saveError}
-              </div>
-            ) : null}
+        {/* Success Message */}
+        {saved && (
+          <div className="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+              <CheckIcon />
+            </div>
+            <p className="text-[14px] text-emerald-300">Profile saved successfully!</p>
+          </div>
+        )}
 
-            <div className="mt-5 grid grid-cols-1 gap-4">
-              <div>
-                <div className="text-[12px] uppercase tracking-widest text-[#8d7b77]">Registered Email</div>
-                <div className="mt-2 w-full h-[46px] rounded-[6px] bg-[#0e0a0a]/20 border border-white/10 px-4 flex items-center text-[14px] text-[#b8a6a1]">
-                  {registeredEmail || "—"}
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-2 mb-6">
+          <button
+            onClick={() => setActiveTab("profile")}
+            className={`px-6 py-3 rounded-xl text-[14px] font-medium transition-all ${
+              activeTab === "profile"
+                ? "bg-[#c97a54] text-white shadow-lg shadow-[#c97a54]/25"
+                : "bg-white/5 text-[#a99792] hover:bg-white/10 hover:text-white"
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              Profile Info
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab("socials")}
+            className={`px-6 py-3 rounded-xl text-[14px] font-medium transition-all ${
+              activeTab === "socials"
+                ? "bg-[#c97a54] text-white shadow-lg shadow-[#c97a54]/25"
+                : "bg-white/5 text-[#a99792] hover:bg-white/10 hover:text-white"
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+              Social Links
+            </span>
+          </button>
+        </div>
+
+        {/* Content Area */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
+          
+          {/* Main Form Area */}
+          <div className="space-y-6">
+            {activeTab === "profile" ? (
+              <div className="rounded-[20px] border border-white/10 bg-[#0e0a0a]/40 p-6 sm:p-8 backdrop-blur-sm">
+                <h3 className="text-[18px] font-semibold text-white mb-6 flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-lg bg-[#c97a54]/20 flex items-center justify-center text-[#c97a54]">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                  </span>
+                  Basic Information
+                </h3>
+
+                <div className="space-y-5">
+                  {/* Display Name */}
+                  <div>
+                    <label className="block text-[12px] uppercase tracking-wider text-[#8d7b77] mb-2 font-medium">
+                      Display Name <span className="text-[#c97a54]">*</span>
+                    </label>
+                    <input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full h-[52px] rounded-xl bg-white/5 border border-white/10 px-5 text-[15px] text-white placeholder-[#5a4a45] outline-none focus:border-[#c97a54]/50 focus:bg-white/[0.07] focus:ring-1 focus:ring-[#c97a54]/20 transition-all"
+                      placeholder="How fans will know you"
+                    />
+                  </div>
+
+                  {/* Bio */}
+                  <div>
+                    <label className="block text-[12px] uppercase tracking-wider text-[#8d7b77] mb-2 font-medium">
+                      Bio <span className="text-[#c97a54]">*</span>
+                    </label>
+                    <textarea
+                      value={bio}
+                      onChange={(e) => setBio(e.target.value)}
+                      rows={4}
+                      className="w-full rounded-xl bg-white/5 border border-white/10 px-5 py-4 text-[15px] text-white placeholder-[#5a4a45] outline-none focus:border-[#c97a54]/50 focus:bg-white/[0.07] focus:ring-1 focus:ring-[#c97a54]/20 transition-all resize-none"
+                      placeholder="Tell fans about your music, style, and story..."
+                    />
+                    <div className="flex justify-between mt-2">
+                      <span className="text-[12px] text-[#5a4a45]">Max 500 characters</span>
+                      <span className="text-[12px] text-[#5a4a45]">{bio.length}/500</span>
+                    </div>
+                  </div>
+
+                  {/* Image URLs */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                      <label className="block text-[12px] uppercase tracking-wider text-[#8d7b77] mb-2 font-medium">
+                        Profile Image URL
+                      </label>
+                      <div className="relative">
+                        <input
+                          value={profileImageUrl ?? ""}
+                          onChange={(e) => setProfileImageUrl(e.target.value || null)}
+                          className="w-full h-[48px] rounded-xl bg-white/5 border border-white/10 pl-11 pr-4 text-[14px] text-white placeholder-[#5a4a45] outline-none focus:border-[#c97a54]/50 focus:bg-white/[0.07] transition-all"
+                          placeholder="https://..."
+                        />
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5a4a45]">
+                          <LinkIcon />
+                        </div>
+                      </div>
+                      <div 
+                        className="mt-3 rounded-xl border border-dashed border-white/20 bg-white/[0.03] p-4 text-center cursor-pointer hover:border-[#c97a54]/40 hover:bg-white/[0.05] transition-all"
+                        tabIndex={0}
+                        onPaste={(e) => onPasteImage("profile", e)}
+                      >
+                        <div className="text-[#8d7b77] text-[13px]">
+                          <span className="text-[#c97a54]">Paste</span> image here or
+                          <button
+                            type="button"
+                            onClick={() => profileInputRef.current?.click()}
+                            className="ml-1 text-white hover:underline"
+                          >
+                            browse
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[12px] uppercase tracking-wider text-[#8d7b77] mb-2 font-medium">
+                        Banner Image URL
+                      </label>
+                      <div className="relative">
+                        <input
+                          value={bannerImageUrl ?? ""}
+                          onChange={(e) => setBannerImageUrl(e.target.value || null)}
+                          className="w-full h-[48px] rounded-xl bg-white/5 border border-white/10 pl-11 pr-4 text-[14px] text-white placeholder-[#5a4a45] outline-none focus:border-[#c97a54]/50 focus:bg-white/[0.07] transition-all"
+                          placeholder="https://..."
+                        />
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5a4a45]">
+                          <LinkIcon />
+                        </div>
+                      </div>
+                      <div 
+                        className="mt-3 rounded-xl border border-dashed border-white/20 bg-white/[0.03] p-4 text-center cursor-pointer hover:border-[#c97a54]/40 hover:bg-white/[0.05] transition-all"
+                        tabIndex={0}
+                        onPaste={(e) => onPasteImage("banner", e)}
+                      >
+                        <div className="text-[#8d7b77] text-[13px]">
+                          <span className="text-[#c97a54]">Paste</span> image here or
+                          <button
+                            type="button"
+                            onClick={() => bannerInputRef.current?.click()}
+                            className="ml-1 text-white hover:underline"
+                          >
+                            browse
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
+            ) : (
+              <div className="rounded-[20px] border border-white/10 bg-[#0e0a0a]/40 p-6 sm:p-8 backdrop-blur-sm">
+                <h3 className="text-[18px] font-semibold text-white mb-6 flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-lg bg-[#c97a54]/20 flex items-center justify-center text-[#c97a54]">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </svg>
+                  </span>
+                  Social Connections
+                </h3>
 
-              <div>
-                <div className="text-[12px] uppercase tracking-widest text-[#8d7b77]">Display name</div>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="mt-2 w-full h-[46px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-4 text-[14px] text-[#e6d6d2] outline-none focus:border-white/20"
-                  placeholder="Luna Ray"
-                />
+                <div className="space-y-5">
+                  {/* Spotify */}
+                  <div>
+                    <label className="flex items-center gap-2 text-[12px] uppercase tracking-wider text-[#8d7b77] mb-2 font-medium">
+                      <span className="text-[#1DB954]"><SpotifyIcon /></span>
+                      Spotify Profile <span className="text-[#c97a54]">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        value={spotify}
+                        onChange={(e) => setSpotify(e.target.value)}
+                        className="w-full h-[52px] rounded-xl bg-white/5 border border-white/10 pl-12 pr-5 text-[15px] text-white placeholder-[#5a4a45] outline-none focus:border-[#1DB954]/50 focus:bg-white/[0.07] transition-all"
+                        placeholder="https://open.spotify.com/artist/..."
+                      />
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                        <SpotifyIcon />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* YouTube */}
+                  <div>
+                    <label className="flex items-center gap-2 text-[12px] uppercase tracking-wider text-[#8d7b77] mb-2 font-medium">
+                      <span className="text-[#FF0000]"><YoutubeIcon /></span>
+                      YouTube Channel <span className="text-[#c97a54]">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        value={youtube}
+                        onChange={(e) => setYoutube(e.target.value)}
+                        className="w-full h-[52px] rounded-xl bg-white/5 border border-white/10 pl-12 pr-5 text-[15px] text-white placeholder-[#5a4a45] outline-none focus:border-[#FF0000]/50 focus:bg-white/[0.07] transition-all"
+                        placeholder="https://youtube.com/@..."
+                      />
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                        <YoutubeIcon />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Instagram */}
+                  <div>
+                    <label className="flex items-center gap-2 text-[12px] uppercase tracking-wider text-[#8d7b77] mb-2 font-medium">
+                      <span className="text-[#E4405F]"><InstagramIcon /></span>
+                      Instagram Profile <span className="text-[#c97a54]">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        value={instagram}
+                        onChange={(e) => setInstagram(e.target.value)}
+                        className="w-full h-[52px] rounded-xl bg-white/5 border border-white/10 pl-12 pr-5 text-[15px] text-white placeholder-[#5a4a45] outline-none focus:border-[#E4405F]/50 focus:bg-white/[0.07] transition-all"
+                        placeholder="https://instagram.com/..."
+                      />
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                        <InstagramIcon />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 p-4 rounded-xl bg-[#c97a54]/10 border border-[#c97a54]/20">
+                  <p className="text-[13px] text-[#c97a54] flex items-start gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 flex-shrink-0">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="12" y1="16" x2="12" y2="12"/>
+                      <line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                    All social links are required and will be displayed on your public artist profile for fans to connect with you.
+                  </p>
+                </div>
               </div>
+            )}
+          </div>
 
-              <div>
-                <div className="text-[12px] uppercase tracking-widest text-[#8d7b77]">Bio</div>
-                <textarea
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  rows={3}
-                  className="mt-2 w-full rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-4 py-3 text-[14px] text-[#e6d6d2] outline-none focus:border-white/20"
-                  placeholder="Describe your music..."
-                />
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <div className="text-[12px] uppercase tracking-widest text-[#8d7b77]">Profile Image URL</div>
-                  <div className="mt-2 flex items-center gap-3">
-                    <div className="h-[44px] w-[44px] rounded-full overflow-hidden border border-white/10 bg-[#141010]">
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Quick Preview Card */}
+            <div className="rounded-[20px] border border-white/10 bg-[#0e0a0a]/40 p-6 backdrop-blur-sm">
+              <h4 className="text-[14px] uppercase tracking-wider text-[#8d7b77] mb-4 font-semibold">Profile Preview</h4>
+              <div className="rounded-xl overflow-hidden border border-white/10 bg-[#141010]">
+                <div className="h-[80px] bg-gradient-to-br from-[#c97a54]/30 to-[#2a1a17] relative">
+                  {bannerSrc && <img src={bannerSrc} alt="" className="h-full w-full object-cover opacity-60" />}
+                </div>
+                <div className="px-4 pb-4">
+                  <div className="flex items-end gap-3 -mt-8 mb-3">
+                    <div className="w-16 h-16 rounded-full overflow-hidden border-3 border-[#141010] bg-[#0e0a0a]">
                       {profileSrc ? (
                         <img src={profileSrc} alt="" className="h-full w-full object-cover" />
                       ) : (
-                        <div className="h-full w-full bg-gradient-to-b from-[#2a1a17] to-[#0e0a0a]" />
+                        <div className="h-full w-full bg-gradient-to-br from-[#c97a54]/20 to-[#2a1a17] flex items-center justify-center text-[#c97a54] font-bold text-xl">
+                          {name ? name[0].toUpperCase() : "A"}
+                        </div>
                       )}
                     </div>
-                    <input
-                      value={profileImageUrl ?? ""}
-                      onChange={(e) => setProfileImageUrl(e.target.value || null)}
-                      className="flex-1 h-[46px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-4 text-[14px] text-[#e6d6d2] outline-none focus:border-white/20"
-                      placeholder="https://..."
-                    />
                   </div>
-
-                  <div
-                    className="mt-2 rounded-[8px] border border-white/10 bg-[#0e0a0a]/35 px-4 py-3"
-                    tabIndex={0}
-                    onPaste={(e) => onPasteImage("profile", e)}
-                    title="Paste an image here"
-                  >
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => profileInputRef.current?.click()}
-                        className="h-[32px] px-3 rounded-[6px] border border-white/10 bg-[#141010] text-[12px] text-[#e6d6d2]"
-                      >
-                        Choose file
-                      </button>
-                      <div className="text-[11px] text-[#8d7b77]">
-                        {imageUploading === "profile" ? "Uploading..." : "Select or paste"}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-[12px] uppercase tracking-widest text-[#8d7b77]">Banner Image URL</div>
-                  <div className="mt-2 flex items-center gap-3">
-                    <div className="h-[44px] w-[68px] rounded-[8px] overflow-hidden border border-white/10 bg-[#141010]">
-                      {bannerSrc ? (
-                        <img src={bannerSrc} alt="" className="h-full w-full object-contain" />
-                      ) : (
-                        <div className="h-full w-full bg-gradient-to-b from-[#241a1a] to-[#0a0808]" />
-                      )}
-                    </div>
-                    <input
-                      value={bannerImageUrl ?? ""}
-                      onChange={(e) => setBannerImageUrl(e.target.value || null)}
-                      className="flex-1 h-[46px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-4 text-[14px] text-[#e6d6d2] outline-none focus:border-white/20"
-                      placeholder="https://..."
-                    />
-                  </div>
-
-                  <div
-                    className="mt-2 rounded-[8px] border border-white/10 bg-[#0e0a0a]/35 px-4 py-3"
-                    tabIndex={0}
-                    onPaste={(e) => onPasteImage("banner", e)}
-                    title="Paste an image here"
-                  >
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => bannerInputRef.current?.click()}
-                        className="h-[32px] px-3 rounded-[6px] border border-white/10 bg-[#141010] text-[12px] text-[#e6d6d2]"
-                      >
-                        Choose file
-                      </button>
-                      <div className="text-[11px] text-[#8d7b77]">
-                        {imageUploading === "banner" ? "Uploading..." : "Select or paste"}
-                      </div>
-                    </div>
+                  <h5 className="text-white font-semibold truncate">{name || "Artist Name"}</h5>
+                  <p className="text-[12px] text-[#8d7b77] line-clamp-2 mt-1">{bio || "No bio yet"}</p>
+                  
+                  {/* Social Icons */}
+                  <div className="flex items-center gap-3 mt-3">
+                    {spotify && (
+                      <a href={spotify} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-[#1DB954]/20 flex items-center justify-center text-[#1DB954] hover:bg-[#1DB954]/30 transition-colors">
+                        <SpotifyIcon />
+                      </a>
+                    )}
+                    {youtube && (
+                      <a href={youtube} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-[#FF0000]/20 flex items-center justify-center text-[#FF0000] hover:bg-[#FF0000]/30 transition-colors">
+                        <YoutubeIcon />
+                      </a>
+                    )}
+                    {instagram && (
+                      <a href={instagram} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-[#E4405F]/20 flex items-center justify-center text-[#E4405F] hover:bg-[#E4405F]/30 transition-colors">
+                        <InstagramIcon />
+                      </a>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="space-y-4">
-            <div className="rounded-[10px] border border-white/10 bg-[#0e0a0a]/35 px-5 py-5">
-              <div className="text-[14px] tracking-wide text-[#e6d6d2]">Social Connections</div>
-              <div className="mt-1 text-[12px] text-[#8d7b77]">These links are required and shown to fans.</div>
-
-              <div className="mt-5 grid grid-cols-1 gap-4">
-                <div>
-                  <div className="text-[12px] uppercase tracking-widest text-[#8d7b77]">Spotify</div>
-                  <input
-                    value={spotify}
-                    onChange={(e) => setSpotify(e.target.value)}
-                    className="mt-2 w-full h-[46px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-4 text-[14px] text-[#e6d6d2] outline-none focus:border-white/20"
-                    placeholder="https://open.spotify.com/artist/..."
-                  />
-                </div>
-
-                <div>
-                  <div className="text-[12px] uppercase tracking-widest text-[#8d7b77]">YouTube</div>
-                  <input
-                    value={youtube}
-                    onChange={(e) => setYoutube(e.target.value)}
-                    className="mt-2 w-full h-[46px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-4 text-[14px] text-[#e6d6d2] outline-none focus:border-white/20"
-                    placeholder="https://youtube.com/@..."
-                  />
-                </div>
-
-                <div>
-                  <div className="text-[12px] uppercase tracking-widest text-[#8d7b77]">Instagram</div>
-                  <input
-                    value={instagram}
-                    onChange={(e) => setInstagram(e.target.value)}
-                    className="mt-2 w-full h-[46px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-4 text-[14px] text-[#e6d6d2] outline-none focus:border-white/20"
-                    placeholder="https://instagram.com/..."
-                  />
-                </div>
-              </div>
-
-              <div className="mt-5 flex items-center gap-4">
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={save}
-                  className="h-[46px] px-8 rounded-[7px] border border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] text-[15px] font-light tracking-wide text-[#e6d6d2] shadow-[0_10px_25px_rgba(0,0,0,0.35)] disabled:opacity-60"
-                >
-                  {saving ? "Saving..." : "Save changes"}
-                </button>
-                <div className="text-[13px] text-[#6e8f72]">{saved ? "✓ Saved changes" : ""}</div>
-              </div>
+            {/* Save Button Card */}
+            <div className="rounded-[20px] border border-white/10 bg-[#0e0a0a]/40 p-6 backdrop-blur-sm">
+              <h4 className="text-[14px] uppercase tracking-wider text-[#8d7b77] mb-4 font-semibold">Actions</h4>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={save}
+                className="w-full h-[52px] rounded-xl bg-gradient-to-r from-[#c97a54] to-[#a85d3c] text-white font-semibold text-[15px] shadow-lg shadow-[#c97a54]/25 hover:shadow-[#c97a54]/40 hover:from-[#d48a64] hover:to-[#b86d4c] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {saving ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <CheckIcon />
+                    Save Changes
+                  </>
+                )}
+              </button>
+              
+              {saved && (
+                <p className="text-center text-[13px] text-emerald-400 mt-3 flex items-center justify-center gap-1">
+                  <CheckIcon /> Saved successfully
+                </p>
+              )}
             </div>
           </div>
         </div>
       </div>
     </div>
+    </>
   );
 }

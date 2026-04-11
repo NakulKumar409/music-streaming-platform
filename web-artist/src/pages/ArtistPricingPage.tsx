@@ -14,7 +14,7 @@ type PricingResponse = {
 const EARLY_ACCESS_OPTIONS = [7, 14, 30];
 
 const PRICING_TIPS = [
-  "Artists charging $4–$8/month see the highest subscriber conversions.",
+  "Artists charging ₹4–₹8/month see the highest subscriber conversions.",
   "Yearly plans with ~20% discount retain fans 3x longer.",
   "Early access is your biggest hook — fans love being first.",
   "Free + subscription hybrid unlocks the widest audience."
@@ -32,8 +32,8 @@ function EarningsRow({ label, count, price }: { label: string; count: number; pr
         <div className="text-[13px] text-[#b8a6a1]">{label}</div>
       </div>
       <div className="text-right">
-        <div className="text-[14px] font-medium text-[#e6d6d2]">${monthly.toLocaleString()}<span className="text-[11px] text-[#8d7b77] font-normal">/mo</span></div>
-        <div className="text-[11px] text-[#8d7b77]">${yearly.toLocaleString()}/yr</div>
+        <div className="text-[14px] font-medium text-[#e6d6d2]">₹{monthly.toLocaleString()}<span className="text-[11px] text-[#8d7b77] font-normal">/mo</span></div>
+        <div className="text-[11px] text-[#8d7b77]">₹{yearly.toLocaleString()}/yr</div>
       </div>
     </div>
   );
@@ -111,7 +111,7 @@ export default function ArtistPricingPage() {
 
   const validate = () => {
     if (monthlyNum <= 0) {
-      setValidationError("Monthly price must be greater than $0.00");
+      setValidationError("Monthly price must be greater than ₹0.00");
       return false;
     }
     if (discountPercent < 0 || discountPercent > 70) {
@@ -189,7 +189,7 @@ export default function ArtistPricingPage() {
                 <div className="px-6 py-5">
                   <div className="text-[12px] uppercase tracking-widest text-[#8d7b77] mb-3">Price per month</div>
                   <div className="flex items-center gap-2">
-                    <div className="h-[52px] w-[44px] shrink-0 rounded-[10px] border border-white/10 bg-[#141010]/60 flex items-center justify-center text-[20px] font-light text-[#c97a54]">$</div>
+                    <div className="h-[52px] w-[44px] shrink-0 rounded-[10px] border border-white/10 bg-[#141010]/60 flex items-center justify-center text-[20px] font-light text-[#c97a54]">₹</div>
                     <input
                       value={monthlyPrice}
                       onChange={(e) => { setMonthlyPrice(e.target.value); setValidationError(null); }}
@@ -199,7 +199,7 @@ export default function ArtistPricingPage() {
                     />
                   </div>
                   <div className="mt-2 text-[12px] text-[#8d7b77]">
-                    per month &nbsp;·&nbsp; {monthlyNum > 0 ? `$${(monthlyNum * 12).toFixed(2)} billed yearly equivalent` : "Enter a price above"}
+                    per month &nbsp;·&nbsp; {monthlyNum > 0 ? `₹${(monthlyNum * 12).toFixed(2)} billed yearly equivalent` : "Enter a price above"}
                   </div>
                   <p className="mt-3 text-[12px] text-[#b8a6a1] leading-relaxed">
                     Fans can subscribe and cancel at any time. Best for attracting new listeners.

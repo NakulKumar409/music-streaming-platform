@@ -220,7 +220,8 @@ export async function ensureSubscriptionsSchema(): Promise<void> {
     ALTER TABLE transactions 
     ADD COLUMN IF NOT EXISTS artist_id INT,
     ADD COLUMN IF NOT EXISTS billing_cycle VARCHAR(50),
-    ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'CAPTURED'
+    ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'CAPTURED',
+    ADD COLUMN IF NOT EXISTS failure_reason TEXT
   `).catch(() => undefined);
 
   await pool.query("CREATE INDEX IF NOT EXISTS idx_transactions_analytics ON transactions(status, artist_id, created_at)").catch(() => undefined);

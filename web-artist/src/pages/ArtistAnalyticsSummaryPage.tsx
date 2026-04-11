@@ -6,7 +6,8 @@ import {
   ResponsiveContainer,
   Tooltip,
   XAxis,
-  YAxis
+  YAxis,
+  ReferenceLine
 } from "recharts";
 import { http } from "../services/http";
 import { useQuery } from "@tanstack/react-query";
@@ -17,18 +18,31 @@ import Skeleton from "../components/Skeleton";
 type MetricType = "plays" | "earnings";
 type TimeFilter = 7 | 30 | 90 | 365;
 
-function CustomTooltip({ active, payload, label, metric }: any) {
+function CustomTooltip({ active, payload, label, metric, growth }: any) {
   if (active && payload && payload.length) {
     const val = payload[0].value;
     const formattedVal =
       metric === "earnings"
-        ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(val)
-        : new Intl.NumberFormat("en-US").format(val);
+        ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(val)
+        : new Intl.NumberFormat("en-IN").format(val);
+    
+    const prevValue = payload[0].payload.prevValue;
+    const change = prevValue !== undefined ? val - prevValue : 0;
+    const percentChange = prevValue > 0 ? ((change / prevValue) * 100).toFixed(1) : '0';
+    const isPositive = change >= 0;
 
     return (
-      <div className="bg-[#141010]/95 border border-white/10 rounded-lg p-3 shadow-xl backdrop-blur-md">
-        <p className="text-[#a99792] text-xs font-medium uppercase font-mono tracking-wider mb-1">{label}</p>
-        <p className="text-white text-lg font-bold">{formattedVal}</p>
+      <div className="bg-[#1a1412]/98 border border-[#c97a54]/30 rounded-xl p-4 shadow-2xl backdrop-blur-xl">
+        <p className="text-[#a99792] text-xs font-medium uppercase tracking-wider mb-2">{label}</p>
+        <div className="flex items-baseline gap-2 mb-1">
+          <span className="text-white text-2xl font-bold">{formattedVal}</span>
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${isPositive ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+            {isPositive ? '↑' : '↓'} {Math.abs(Number(percentChange))}%
+          </span>
+        </div>
+        <p className="text-[#8d7b77] text-xs">
+          {metric === "earnings" ? "Earnings" : "Plays"} vs previous day
+        </p>
       </div>
     );
   }
@@ -75,13 +89,13 @@ export default function ArtistAnalyticsSummaryPage() {
 
   const formatCurrency = (amount: number) => {
     const v = Number(amount);
-    if (!Number.isFinite(v)) return "$0.00";
-    return v.toLocaleString(undefined, {
+    if (!Number.isFinite(v)) return "₹0.00";
+    return new Intl.NumberFormat("en-IN", {
       style: "currency",
-      currency: "USD",
+      currency: "INR",
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
-    });
+    }).format(v);
   };
 
   const formatCompact = (n: number) => {
@@ -90,10 +104,27 @@ export default function ArtistAnalyticsSummaryPage() {
     return v.toLocaleString();
   };
 
-  const growthChartData = useMemo(() => growth.map((p: any) => ({
-    name: p.date.slice(5),
-    value: p.value
-  })), [growth]);
+  const growthChartData = useMemo(() => {
+    return growth.map((p: any, idx: number) => ({
+      name: p.date.slice(5),
+      value: p.value,
+      prevValue: idx > 0 ? growth[idx - 1].value : p.value,
+      fullDate: new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    }));
+  }, [growth]);
+
+  // Calculate stats
+  const chartStats = useMemo(() => {
+    if (!growth.length) return { total: 0, avg: 0, max: 0, trend: 0 };
+    const values = growth.map((g: any) => g.value);
+    const total = values.reduce((a: number, b: number) => a + b, 0);
+    const avg = total / values.length;
+    const max = Math.max(...values);
+    const first = values[0] || 0;
+    const last = values[values.length - 1] || 0;
+    const trend = first > 0 ? ((last - first) / first) * 100 : 0;
+    return { total, avg: Math.round(avg), max, trend };
+  }, [growth]);
 
   const bestSong = contentPerformance.length > 0 ? contentPerformance[0] : null;
 
@@ -189,105 +220,214 @@ export default function ArtistAnalyticsSummaryPage() {
           </div>
         )}
 
-        {/* Main Interactive Graph */}
+        {/* Enhanced Performance Trend Card */}
         <div className="mb-8">
           <ErrorBoundary label="Artist Analytics: Growth Chart">
-            <div className="rounded-[16px] border border-white/5 bg-[#141010]/50 p-6 sm:p-8 shadow-2xl backdrop-blur-sm relative h-[450px] flex flex-col">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mb-8">
+            <div className="rounded-[20px] border border-[#c97a54]/20 bg-gradient-to-br from-[#1a1412] via-[#141010] to-[#1a1412] p-6 sm:p-8 shadow-2xl backdrop-blur-sm relative overflow-hidden">
+              {/* Ambient glow effect */}
+              <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-[#c97a54]/5 rounded-full blur-[100px] pointer-events-none" />
+              
+              {/* Header */}
+              <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 mb-6 relative z-10">
                 <div>
-                  <h3 className="text-xl font-bold tracking-tight text-white mb-1">Performance Trend</h3>
-                  <p className="text-[13px] text-[#a99792]">This graph shows your performance over time.</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex p-1 bg-black/40 rounded-lg border border-white/5">
-                    {(["plays", "earnings"] as MetricType[]).map((m) => (
-                      <button
-                        key={m}
-                        onClick={() => setMetricFilter(m)}
-                        className={`px-4 py-1.5 text-[13px] font-medium capitalize rounded-md transition-all ${metricFilter === m ? "bg-[#c97a54] text-white shadow-lg" : "text-[#8d7b77] hover:text-[#e6d6d2]"}`}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="relative">
-                    <select
-                      value={timeFilter}
-                      onChange={(e) => setTimeFilter(Number(e.target.value) as TimeFilter)}
-                      className="appearance-none bg-black/40 border border-white/5 rounded-lg text-[#e6d6d2] text-[13px] font-medium py-2 pl-4 pr-10 hover:border-white/10 focus:border-[#c97a54]/50 focus:ring-1 focus:ring-[#c97a54]/50 outline-none transition-all cursor-pointer"
-                    >
-                      <option value={7}>Last 7 Days</option>
-                      <option value={30}>Last 30 Days</option>
-                      <option value={90}>Last 3 Months</option>
-                      <option value={365}>Last 1 Year</option>
-                    </select>
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#8d7b77]">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M6 9l6 6 6-6" />
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 rounded-xl bg-[#c97a54]/20 flex items-center justify-center border border-[#c97a54]/30">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c97a54" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 3v18h18"/>
+                        <path d="M18 17V9"/>
+                        <path d="M13 17V5"/>
+                        <path d="M8 17v-3"/>
                       </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold tracking-tight text-white">Performance Trend</h3>
+                      <p className="text-[13px] text-[#a99792]">Track your {metricFilter === 'earnings' ? 'revenue' : 'plays'} growth over time</p>
                     </div>
                   </div>
                 </div>
+                
+                {/* Time Range Pills */}
+                <div className="flex items-center gap-2 bg-black/30 p-1.5 rounded-xl border border-white/5">
+                  {[
+                    { val: 7, label: '7D' },
+                    { val: 30, label: '30D' },
+                    { val: 90, label: '3M' },
+                    { val: 365, label: '1Y' }
+                  ].map((t) => (
+                    <button
+                      key={t.val}
+                      onClick={() => setTimeFilter(t.val as TimeFilter)}
+                      className={`px-4 py-2 text-[13px] font-semibold rounded-lg transition-all duration-200 ${
+                        timeFilter === t.val 
+                          ? 'bg-[#c97a54] text-white shadow-lg shadow-[#c97a54]/25' 
+                          : 'text-[#8d7b77] hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className={`flex-1 w-full relative transition-opacity duration-300 ${isFetching ? "opacity-50" : "opacity-100"}`}>
+              {/* Summary Stats Cards */}
+              {!loading && !isEmpty && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 relative z-10">
+                  <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                    <p className="text-[#a99792] text-xs uppercase tracking-wider mb-1">Total {metricFilter === 'earnings' ? 'Revenue' : 'Plays'}</p>
+                    <p className="text-white text-xl font-bold">
+                      {metricFilter === 'earnings' 
+                        ? formatCurrency(chartStats.total)
+                        : formatCompact(chartStats.total)
+                      }
+                    </p>
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                    <p className="text-[#a99792] text-xs uppercase tracking-wider mb-1">Daily Average</p>
+                    <p className="text-white text-xl font-bold">
+                      {metricFilter === 'earnings'
+                        ? formatCurrency(chartStats.avg)
+                        : formatCompact(chartStats.avg)
+                      }
+                    </p>
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                    <p className="text-[#a99792] text-xs uppercase tracking-wider mb-1">Peak Day</p>
+                    <p className="text-white text-xl font-bold">
+                      {metricFilter === 'earnings'
+                        ? formatCurrency(chartStats.max)
+                        : formatCompact(chartStats.max)
+                      }
+                    </p>
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                    <p className="text-[#a99792] text-xs uppercase tracking-wider mb-1">Trend</p>
+                    <div className="flex items-center gap-1">
+                      <span className={`text-xl font-bold ${chartStats.trend >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {chartStats.trend >= 0 ? '↑' : '↓'} {Math.abs(chartStats.trend).toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Metric Toggle */}
+              <div className="flex items-center gap-3 mb-6 relative z-10">
+                <span className="text-[#8d7b77] text-sm font-medium">Show:</span>
+                <div className="flex p-1 bg-black/40 rounded-lg border border-white/5">
+                  {(["plays", "earnings"] as MetricType[]).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setMetricFilter(m)}
+                      className={`flex items-center gap-2 px-4 py-2 text-[13px] font-medium capitalize rounded-md transition-all ${
+                        metricFilter === m 
+                          ? "bg-[#c97a54] text-white shadow-lg" 
+                          : "text-[#8d7b77] hover:text-[#e6d6d2]"
+                      }`}
+                    >
+                      {m === 'plays' ? (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 3l14 9-14 9V3z"/></svg>
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                      )}
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Chart Area */}
+              <div className={`h-[320px] relative z-10 transition-opacity duration-300 ${isFetching ? "opacity-50" : "opacity-100"}`}>
                 {loading ? (
                   <div className="h-full w-full flex flex-col justify-end pb-8 gap-4 px-12">
-                     <Skeleton className="h-[40%] w-full rounded-t-xl" />
+                     <Skeleton className="h-[50%] w-full rounded-t-xl" />
                      <div className="flex justify-between w-full">
-                       <Skeleton className="h-4 w-10" />
-                       <Skeleton className="h-4 w-10" />
-                       <Skeleton className="h-4 w-10" />
-                       <Skeleton className="h-4 w-10" />
+                       <Skeleton className="h-4 w-12" />
+                       <Skeleton className="h-4 w-12" />
+                       <Skeleton className="h-4 w-12" />
+                       <Skeleton className="h-4 w-12" />
                      </div>
                   </div>
                 ) : isEmpty ? (
-                  <div className="h-full w-full flex items-center justify-center">
-                      <p className="text-[#8d7b77] text-sm">Waiting for performance data to populate</p>
+                  <div className="h-full w-full flex flex-col items-center justify-center">
+                    <div className="w-16 h-16 rounded-full bg-[#c97a54]/10 flex items-center justify-center mb-4">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c97a54" strokeWidth="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                      </svg>
+                    </div>
+                    <p className="text-white font-medium mb-1">No data yet</p>
+                    <p className="text-[#8d7b77] text-sm">Start creating content to see your performance trend!</p>
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={growthChartData} margin={{ left: -20, right: 0, top: 10, bottom: 0 }}>
+                    <AreaChart data={growthChartData} margin={{ left: 0, right: 20, top: 20, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorAnalyticsMetric" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#c97a54" stopOpacity={0.3}/>
+                          <stop offset="5%" stopColor="#c97a54" stopOpacity={0.4}/>
+                          <stop offset="50%" stopColor="#c97a54" stopOpacity={0.15}/>
                           <stop offset="95%" stopColor="#c97a54" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
-                      <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false} strokeDasharray="4 4" />
+                      <CartesianGrid stroke="rgba(255,255,255,0.03)" vertical={true} horizontal={true} strokeDasharray="0" />
                       <XAxis 
                         dataKey="name" 
-                        tick={{ fill: "rgba(230,214,210,0.5)", fontSize: 11 }} 
-                        axisLine={false} 
-                        tickLine={false} 
-                        minTickGap={30}
+                        tick={{ fill: "#8d7b77", fontSize: 12, fontWeight: 500 }} 
+                        axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                        tickLine={false}
+                        minTickGap={40}
+                        dy={10}
                       />
                       <YAxis 
-                        tick={{ fill: "rgba(230,214,210,0.5)", fontSize: 11 }} 
-                        axisLine={false} 
-                        tickLine={false} 
+                        tick={{ fill: "#8d7b77", fontSize: 12, fontWeight: 500 }} 
+                        axisLine={false}
+                        tickLine={false}
+                        dx={-10}
                         tickFormatter={(val) => {
-                           if (val >= 1000 && metricFilter !== 'earnings') return `${(val/1000).toFixed(0)}k`;
-                           if (metricFilter === 'earnings') return `$${val}`;
+                           if (val >= 1000 && metricFilter !== 'earnings') return `${(val/1000).toFixed(1)}k`;
+                           if (metricFilter === 'earnings') return `₹${val >= 1000 ? (val/1000).toFixed(1) + 'k' : val}`;
                            return val;
                         }}
                       />
-                      <Tooltip content={<CustomTooltip metric={metricFilter} />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1, strokeDasharray: '4 4' }} />
+                      <Tooltip 
+                        content={<CustomTooltip metric={metricFilter} />} 
+                        cursor={{ stroke: '#c97a54', strokeWidth: 1, strokeDasharray: '4 4' }} 
+                      />
+                      <ReferenceLine y={chartStats.avg} stroke="#c97a54" strokeDasharray="4 4" strokeOpacity={0.5} />
                       <Area 
                         type="monotone" 
                         dataKey="value" 
                         stroke="#c97a54" 
-                        strokeWidth={3} 
+                        strokeWidth={3}
                         fillOpacity={1} 
                         fill="url(#colorAnalyticsMetric)" 
-                        activeDot={{ r: 6, fill: "#c97a54", stroke: "#141010", strokeWidth: 2 }}
-                        animationDuration={1200}
-                        animationEasing="ease-in-out"
+                        activeDot={{ 
+                          r: 8, 
+                          fill: "#c97a54", 
+                          stroke: "#fff", 
+                          strokeWidth: 3,
+                          fillOpacity: 1
+                        }}
+                        dot={{ r: 4, fill: "#c97a54", stroke: "#1a1412", strokeWidth: 2 }}
+                        animationDuration={1500}
+                        animationEasing="ease-out"
                       />
                     </AreaChart>
                   </ResponsiveContainer>
                 )}
               </div>
+              
+              {/* Legend */}
+              {!loading && !isEmpty && (
+                <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t border-white/5 relative z-10">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-[#c97a54]" />
+                    <span className="text-[#8d7b77] text-xs">{metricFilter === 'earnings' ? 'Daily Earnings' : 'Daily Plays'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-0 border-t border-dashed border-[#c97a54] opacity-50" />
+                    <span className="text-[#8d7b77] text-xs">Average</span>
+                  </div>
+                </div>
+              )}
             </div>
           </ErrorBoundary>
         </div>

@@ -1,11 +1,10 @@
 /**
  * Backfill Script: Create payment records for existing ARTIST subscriptions
  * Run this to populate the payments table for subscriptions that don't have payment records
- *
- * Run with: npx ts-node -r dotenv/config scripts/backfill-payments.ts
- * Or:       node -r dotenv/config dist/scripts/backfill-payments.js
  */
 
+import 'dotenv/config'; // Load env vars first
+import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../src/common/db';
 import { logger } from '../src/common/logger';
 
@@ -60,18 +59,23 @@ async function backfillPayments() {
           amountPaise = 10000;
         }
         
-        // Insert payment record
-        await client.query(`
-          INSERT INTO payments (user_id, subscription_id, amount, status, razorpay_payment_id, created_at)
-          VALUES ($1, $2, $3, 'SUCCESS', $4, $5)
-          ON CONFLICT (razorpay_payment_id) DO NOTHING
-        `, [
-          userId, 
-          subscriptionId, 
-          amountPaise, 
-          `backfill_${subscriptionId}_${Date.now()}`,
-          row.start_date || new Date()
-        ]);
+        // Record payment for analytics (CRITICAL: this enables earnings calculation)
+        if (subscriptionId) {
+          // Generate UUID for the payment id since it's a UUID type field
+          const paymentUuid = uuidv4();
+          const paymentId = `backfill_${subscriptionId}_${Date.now()}`;
+          
+          await client.query(
+            `INSERT INTO payments (id, user_id, subscription_id, amount, status, razorpay_payment_id, created_at)
+             VALUES ($1, $2, $3, $4, 'SUCCESS', $5, now())
+             ON CONFLICT (razorpay_payment_id) DO NOTHING`,
+            [paymentUuid, userId, subscriptionId, amountPaise, paymentId]
+          ).then(() => {
+            logger.info({ userId, artistId, subscriptionId, amountPaise, paymentId }, "[PAYMENT] Payment recorded in payments table");
+          }).catch(err => {
+            logger.error({ userId, artistId, error: err.message }, "[PAYMENT] Failed to record payment");
+          });
+        }
         
         successCount++;
         logger.info({ 

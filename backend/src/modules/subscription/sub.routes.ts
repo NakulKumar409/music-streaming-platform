@@ -450,6 +450,50 @@ router.get("/status", requireAuth, (req: any, res: any) => {
 router.post("/order", requireAuth, (req, res) => createOrder(req as any, res));
 router.post("/confirm", requireAuth, (req, res) => confirmPayment(req as any, res));
 
+// Handle payment failure/cancellation - updates transaction status
+router.post("/payment-failed", requireAuth, (req, res) => {
+  (async () => {
+    try {
+      const userId = req.user?.id;
+      const { razorpay_order_id, reason } = req.body;
+      
+      console.log(`[PAYMENT-FAILED] Received: userId=${userId}, orderId=${razorpay_order_id}, reason=${reason || 'User cancelled'}`);
+      
+      if (!userId || !razorpay_order_id) {
+        console.log(`[PAYMENT-FAILED] Missing fields: userId=${userId}, orderId=${razorpay_order_id}`);
+        return res.status(400).json({ success: false, message: "Missing required fields" });
+      }
+      
+      // Update transaction status to FAILED
+      const result = await pool.query(
+        `UPDATE transactions 
+         SET status = 'FAILED', failure_reason = $1, updated_at = now()
+         WHERE razorpay_order_id = $2 AND user_id = $3
+         RETURNING id, status`,
+        [reason || 'User cancelled', razorpay_order_id, userId]
+      );
+      
+      console.log(`[PAYMENT-FAILED] Updated ${result.rowCount} transaction(s)`);
+      
+      // Log the failure
+      await pool.query(
+        `INSERT INTO subscription_audit_logs (user_id, event_type, metadata, created_at)
+         VALUES ($1, 'PAYMENT_FAILED', $2, now())`,
+        [userId, JSON.stringify({ order_id: razorpay_order_id, reason: reason || 'User cancelled' })]
+      );
+      
+      console.log(`[PAYMENT-FAILED] Audit log created`);
+      
+      return res.json({ success: true, message: "Payment failure recorded" });
+    } catch (err: any) {
+      console.error(`[PAYMENT-FAILED] Error: ${err.message}`);
+      return res.status(500).json({ success: false, message: err?.message || "Failed to record payment failure" });
+    }
+  })();
+});
+
+// DEPRECATED: This endpoint is not used by mobile app - mobile uses /confirm
+// Kept for backward compatibility with any web clients
 router.post("/verify", requireAuth, (req, res) => verifySubscription(req as any, res));
 
 // ────────────────────────────────────────────────────────
