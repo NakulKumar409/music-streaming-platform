@@ -299,6 +299,33 @@ export const confirmPayment = async (req: any, res: Response) => {
           [userId, startDate, endDate, graceEndsAt, planDurationLabel]
         );
       }
+
+      // Record payment for PLATFORM subscription analytics (CRITICAL: this enables revenue calculation)
+      const platformSubResult = await pool.query(
+        `SELECT id FROM subscriptions WHERE user_id = $1 AND type = 'PLATFORM' AND status = 'ACTIVE' LIMIT 1`,
+        [userId]
+      );
+      const platformSubscriptionId = platformSubResult.rows?.[0]?.id;
+
+      if (platformSubscriptionId) {
+        const platformPaymentUuid = uuidv4();
+        console.log(`[PAYMENT] Recording PLATFORM payment: user=${userId}, sub=${platformSubscriptionId}, amount=${amountPaise}, uuid=${platformPaymentUuid}`);
+        try {
+          await pool.query(
+            `INSERT INTO payments (id, user_id, subscription_id, amount, status, razorpay_payment_id, created_at)
+             VALUES ($1, $2, $3, $4, 'SUCCESS', $5, now())
+             ON CONFLICT (razorpay_payment_id) DO NOTHING`,
+            [platformPaymentUuid, userId, platformSubscriptionId, amountPaise, paymentId]
+          );
+          console.log(`[PAYMENT] SUCCESS: PLATFORM payment recorded - uuid=${platformPaymentUuid}`);
+          logger.info({ userId, platformSubscriptionId, amountPaise, paymentId }, "[PAYMENT] PLATFORM payment recorded in payments table");
+        } catch (err: any) {
+          console.error(`[PAYMENT] FAILED: PLATFORM payment - ${err.message}, uuid=${platformPaymentUuid}`);
+          logger.error({ userId, platformSubscriptionId, error: err.message, platformPaymentUuid }, "[PAYMENT] Failed to record PLATFORM payment");
+        }
+      } else {
+        console.log(`[PAYMENT] SKIPPED: No platform subscriptionId found for user=${userId}`);
+      }
     } else {
       // Try to update existing artist subscription first
       const updateResult = await pool.query(
@@ -517,7 +544,7 @@ export const razorpayWebhook = async (req: any, res: Response) => {
             const userIdFromNotes = Number(notes?.user_id);
             const artistIdFromNotes = Number(notes?.artist_id);
 
-            if (userIdFromNotes > 0 && artistIdFromNotes > 0) {
+            if (userIdFromNotes > 0) {
               const now = new Date();
 
               await client.query(
@@ -527,17 +554,23 @@ export const razorpayWebhook = async (req: any, res: Response) => {
                 [orderId, now, paymentId]
               );
 
+              // Determine subscription type (PLATFORM if artistId is 0 or not present, ARTIST otherwise)
+              const isPlatformSub = !artistIdFromNotes || artistIdFromNotes <= 0;
+              const subscriptionType = isPlatformSub ? 'PLATFORM' : 'ARTIST';
+
               // Get subscription and record payment for analytics
               const subRow = await client.query(
-                `SELECT id FROM subscriptions WHERE user_id = $1 AND artist_id = $2 AND type = 'ARTIST' LIMIT 1`,
-                [userIdFromNotes, artistIdFromNotes]
+                isPlatformSub
+                  ? `SELECT id FROM subscriptions WHERE user_id = $1 AND type = 'PLATFORM' LIMIT 1`
+                  : `SELECT id FROM subscriptions WHERE user_id = $1 AND artist_id = $2 AND type = 'ARTIST' LIMIT 1`,
+                isPlatformSub ? [userIdFromNotes] : [userIdFromNotes, artistIdFromNotes]
               );
               const subscriptionId = subRow.rows?.[0]?.id;
               const amountPaise = Number(paymentEntity?.amount ?? 0);
 
               if (subscriptionId) {
                 const paymentUuid = uuidv4();
-                console.log(`[WEBHOOK] Recording payment: user=${userIdFromNotes}, artist=${artistIdFromNotes}, sub=${subscriptionId}, amount=${amountPaise}`);
+                console.log(`[WEBHOOK] Recording ${subscriptionType} payment: user=${userIdFromNotes}, artist=${artistIdFromNotes || 'N/A'}, sub=${subscriptionId}, amount=${amountPaise}`);
                 try {
                   await client.query(
                     `INSERT INTO payments (id, user_id, subscription_id, amount, status, razorpay_payment_id, created_at)
@@ -545,14 +578,14 @@ export const razorpayWebhook = async (req: any, res: Response) => {
                      ON CONFLICT (razorpay_payment_id) DO NOTHING`,
                     [paymentUuid, userIdFromNotes, subscriptionId, amountPaise, paymentId]
                   );
-                  console.log(`[WEBHOOK] SUCCESS: Payment recorded`);
-                  logger.info({ userId: userIdFromNotes, artistId: artistIdFromNotes, subscriptionId, amountPaise, paymentId }, "[WEBHOOK] Payment recorded in payments table");
+                  console.log(`[WEBHOOK] SUCCESS: ${subscriptionType} payment recorded`);
+                  logger.info({ userId: userIdFromNotes, artistId: artistIdFromNotes, subscriptionType, subscriptionId, amountPaise, paymentId }, "[WEBHOOK] Payment recorded in payments table");
                 } catch (err: any) {
                   console.error(`[WEBHOOK] FAILED: ${err.message}`);
-                  logger.error({ userId: userIdFromNotes, artistId: artistIdFromNotes, error: err.message }, "[WEBHOOK] Failed to record payment");
+                  logger.error({ userId: userIdFromNotes, artistId: artistIdFromNotes, subscriptionType, error: err.message }, "[WEBHOOK] Failed to record payment");
                 }
               } else {
-                console.log(`[WEBHOOK] SKIPPED: No subscriptionId for user=${userIdFromNotes}, artist=${artistIdFromNotes}`);
+                console.log(`[WEBHOOK] SKIPPED: No subscriptionId for user=${userIdFromNotes}, artist=${artistIdFromNotes || 'N/A'}, type=${subscriptionType}`);
               }
             }
           }

@@ -20,6 +20,11 @@ type SummaryData = {
   totalActiveSubscriptions: number;
   revenueToday: number;
   activeReports?: number;
+  subscriptionDetails?: {
+    newToday: number;
+    renewalsToday: number;
+    totalActiveValue: number;
+  };
   alerts?: {
     draftCount?: number;
     failedPaymentsCount?: number;
@@ -57,13 +62,15 @@ function DashboardCard({
   value,
   icon,
   accent,
-  className
+  className,
+  subtitle
 }: {
   title: string;
   value: string;
   icon: React.ReactNode;
   accent: "purple" | "brown" | "orange";
   className?: string;
+  subtitle?: React.ReactNode;
 }) {
   const accentColor =
     accent === "purple"
@@ -86,6 +93,7 @@ function DashboardCard({
             <div className="mt-2 text-[28px] leading-[30px] font-light tracking-wide text-[#e6d6d2]">
               {value}
             </div>
+            {subtitle && <div className="mt-1">{subtitle}</div>}
           </div>
           <div className={`mt-1 ${accentColor}`}>{icon}</div>
         </div>
@@ -99,10 +107,10 @@ export default function AdminHomePage() {
 
   const formatCurrency = useCallback((amount: number) => {
     const n = Number(amount);
-    if (!Number.isFinite(n)) return "$0.00";
-    return n.toLocaleString(undefined, {
+    if (!Number.isFinite(n)) return "₹0.00";
+    return n.toLocaleString("en-IN", {
       style: "currency",
-      currency: "USD",
+      currency: "INR",
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
@@ -383,6 +391,12 @@ export default function AdminHomePage() {
                 title="Revenue Today"
                 value={formatCurrency(summary?.revenueToday ?? 0)}
                 accent="brown"
+                subtitle={
+                  <div className="text-[11px] text-[#8d7b77]">
+                    <span className="text-[#a99792]">{summary?.subscriptionDetails?.newToday ?? 0}</span> new ·{" "}
+                    <span className="text-[#a99792]">{summary?.subscriptionDetails?.renewalsToday ?? 0}</span> renewals
+                  </div>
+                }
                 icon={
                   <svg
                     width="22"
@@ -410,36 +424,7 @@ export default function AdminHomePage() {
 
           </div>
 
-          <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="relative overflow-hidden rounded-[6px] border border-white/10 bg-[#1a1414]/45 shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
-              <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent" />
-              <div className="relative px-5 py-4">
-                <div className="text-[14px] tracking-wide text-[#e6d6d2]">Alerts</div>
-
-                <div className="mt-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 text-[13px] text-[#cdbdb8]">
-                      <div className="h-[14px] w-[10px] rounded-[2px] bg-rose-500/40 border border-white/10" />
-                      <div>
-                        {loading ? (
-                          <Skeleton className="h-[14px] w-[200px]" />
-                        ) : (
-                          <>
-                            <span className="text-[#e6d6d2]">{failedPaymentsCount}</span> subscription payments failed
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div className="rounded-[4px] bg-[#4a1d1d]/65 border border-[#a04a4a]/25 px-3 py-[3px] text-[12px] text-[#d19a9a]">
-                      Failed
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6 text-[13px] text-[#8d7b77]">View all alerts</div>
-              </div>
-            </div>
-
+          <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-1">
             <div className="relative overflow-hidden rounded-[6px] border border-white/10 bg-[#1a1414]/45 shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
               <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent" />
               <div className="relative px-5 py-4">

@@ -32,18 +32,18 @@ router.get("/flagged", requireAuth, requireAdmin, async (req: any, res: any) => 
 
   try {
 
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const mediaCfg = getMediaConfig();
+    const baseUrlFull = `${req.protocol}://${req.get("host")}`;
+
     const toAbsoluteUrl = (value: any) => {
       const raw = (value ?? "").toString().trim();
       if (!raw) return null;
       if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
-      if (raw.startsWith("/")) return `${baseUrl}${raw}`;
-      return `${baseUrl}/${raw}`;
+      if (raw.startsWith("/")) return `${baseUrlFull}${raw}`;
+      return `${baseUrlFull}/${raw}`;
     };
 
-    const mediaCfg = getMediaConfig();
     const streamRoute = (mediaCfg.localPrivateStreamRoute || "media/stream").replace(/^\//, "");
-    const baseUrlFull = `${req.protocol}://${req.get("host")}`;
 
     const issueStreamUrl = (contentId: number, userId: number, kind: "audio" | "video") => {
       const token = createPlaybackToken(contentId, userId, mediaCfg.mediaUrlTtlSeconds);
@@ -64,6 +64,7 @@ router.get("/flagged", requireAuth, requireAdmin, async (req: any, res: any) => 
          c.title,
          c.type,
          c.thumbnail_url,
+         c.thumbnail_storage_key,
          c.media_url,
          c.audio_url,
          c.video_url,
@@ -106,11 +107,24 @@ router.get("/flagged", requireAuth, requireAdmin, async (req: any, res: any) => 
       const finalAudioUrl = hasAudio ? (streamAudioUrl || toAbsoluteUrl(r.audio_url || r.media_url)) : null;
       const finalVideoUrl = hasVideo ? (streamVideoUrl || toAbsoluteUrl(r.video_url || r.media_url)) : null;
 
+      // Build thumbnail URL - use the stream thumbnail API like mobile app does
+      // This ensures proper thumbnail resolution for all storage providers (Cloudinary, local, etc.)
+      let thumbnailUrl = null;
+      
+      if (r.thumbnail_url && (r.thumbnail_url.startsWith("http://") || r.thumbnail_url.startsWith("https://"))) {
+        // Use existing full URL if available
+        thumbnailUrl = r.thumbnail_url;
+      } else if (r.id) {
+        // Use the stream thumbnail API endpoint (same as mobile app)
+        // This properly resolves thumbnails for Cloudinary and other providers
+        thumbnailUrl = `${baseUrlFull}/api/v1/fan/stream/thumbnail/${r.id}`;
+      }
+
       return {
         id: r.id,
         title: r.title,
         type: typeRaw || (hasAudio && hasVideo ? "AUDIO_VIDEO" : hasVideo ? "VIDEO" : "AUDIO"),
-        thumbnailUrl: toAbsoluteUrl(r.thumbnail_url),
+        thumbnailUrl,
         mediaUrl: typeRaw.toLowerCase() === "video" ? finalVideoUrl : finalAudioUrl,
         audioUrl: finalAudioUrl,
         videoUrl: finalVideoUrl,

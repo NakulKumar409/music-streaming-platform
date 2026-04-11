@@ -71,8 +71,9 @@ router.get("/dashboard-data", requireAuth, requireAdmin, async (req, res) => {
     []
   );
 
+  // Active reports: content with reports (either FLAGGED status or report_count > 0, not DELETED)
   const activeReports = await safeScalarNumber(
-    "SELECT COUNT(*)::int as value FROM content_items WHERE UPPER(COALESCE(status, '')) = 'FLAGGED'",
+    "SELECT COUNT(*)::int as value FROM content_items WHERE (UPPER(COALESCE(status, '')) = 'FLAGGED' OR report_count > 0) AND UPPER(COALESCE(status, '')) != 'DELETED'",
     []
   );
 
@@ -81,9 +82,31 @@ router.get("/dashboard-data", requireAuth, requireAdmin, async (req, res) => {
     []
   );
 
+  // Today's revenue from all successful payments (amount is in paise, divide by 100 for rupees)
   const revenueToday = await safeScalarNumber(
-    "SELECT COALESCE(SUM(amount), 0)::float as value FROM payments WHERE created_at >= $1 AND created_at < ($1::timestamptz + interval '1 day') AND (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID')",
+    "SELECT COALESCE(SUM(amount)/100, 0)::float as value FROM payments WHERE created_at >= $1 AND created_at < ($1::timestamptz + interval '1 day') AND (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID')",
     [startOfTodayUtc().toISOString()],
+    0
+  );
+
+  // New subscriptions today
+  const newSubscriptionsToday = await safeScalarNumber(
+    "SELECT COUNT(*)::int as value FROM subscriptions WHERE created_at >= $1 AND created_at < ($1::timestamptz + interval '1 day') AND (UPPER(COALESCE(type, 'NEW')) = 'NEW' OR type IS NULL)",
+    [startOfTodayUtc().toISOString()],
+    0
+  );
+
+  // Renewals today
+  const renewalsToday = await safeScalarNumber(
+    "SELECT COUNT(*)::int as value FROM subscriptions WHERE created_at >= $1 AND created_at < ($1::timestamptz + interval '1 day') AND UPPER(COALESCE(type, '')) = 'RENEWAL'",
+    [startOfTodayUtc().toISOString()],
+    0
+  );
+
+  // Total active subscription value (MRR - Monthly Recurring Revenue)
+  const totalActiveSubscriptionsValue = await safeScalarNumber(
+    "SELECT COALESCE(SUM(plan_amount), 0)::float as value FROM subscriptions WHERE UPPER(status) = 'ACTIVE'",
+    [],
     0
   );
 
@@ -102,6 +125,11 @@ router.get("/dashboard-data", requireAuth, requireAdmin, async (req, res) => {
     totalActiveSubscriptions,
     revenueToday,
     activeReports,
+    subscriptionDetails: {
+      newToday: newSubscriptionsToday,
+      renewalsToday: renewalsToday,
+      totalActiveValue: totalActiveSubscriptionsValue
+    },
     alerts: {
       draftCount,
       failedPaymentsCount
@@ -133,7 +161,7 @@ router.get("/dashboard-data", requireAuth, requireAdmin, async (req, res) => {
   }));
 
   const revenueRows = await safeRows<{ date: string; value: number }>(
-    "SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, COALESCE(SUM(amount), 0)::float as value FROM payments WHERE created_at >= $1 AND (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID') GROUP BY 1 ORDER BY 1 ASC",
+    "SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, COALESCE(SUM(amount)/100, 0)::float as value FROM payments WHERE created_at >= $1 AND (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID') GROUP BY 1 ORDER BY 1 ASC",
     [startIso],
     []
   );
@@ -188,8 +216,9 @@ router.get("/summary", requireAuth, requireAdmin, async (req, res) => {
     []
   );
 
+  // Active reports: content with reports (either FLAGGED status or report_count > 0, not DELETED)
   const activeReports = await safeScalarNumber(
-    "SELECT COUNT(*)::int as value FROM content_items WHERE UPPER(COALESCE(status, '')) = 'FLAGGED'",
+    "SELECT COUNT(*)::int as value FROM content_items WHERE (UPPER(COALESCE(status, '')) = 'FLAGGED' OR report_count > 0) AND UPPER(COALESCE(status, '')) != 'DELETED'",
     []
   );
 
@@ -199,7 +228,7 @@ router.get("/summary", requireAuth, requireAdmin, async (req, res) => {
   );
 
   const revenueToday = await safeScalarNumber(
-    "SELECT COALESCE(SUM(amount), 0)::float as value FROM payments WHERE created_at >= $1 AND created_at < ($1::timestamptz + interval '1 day') AND (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID')",
+    "SELECT COALESCE(SUM(amount)/100, 0)::float as value FROM payments WHERE created_at >= $1 AND created_at < ($1::timestamptz + interval '1 day') AND (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID')",
     [startOfTodayUtc().toISOString()],
     0
   );
@@ -229,7 +258,7 @@ router.get("/summary", requireAuth, requireAdmin, async (req, res) => {
 
 router.get("/global-summary", requireAuth, requireAdmin, async (req, res) => {
   const totalRevenue = await safeScalarNumber(
-    "SELECT COALESCE(SUM(amount), 0)::float as value FROM payments WHERE (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID')",
+    "SELECT COALESCE(SUM(amount)/100, 0)::float as value FROM payments WHERE (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID')",
     [],
     0
   );
@@ -321,7 +350,7 @@ router.get("/revenue-trends", requireAuth, requireAdmin, async (req, res) => {
   const startIso = days[0].date + "T00:00:00.000Z";
 
   const rows = await safeRows<{ date: string; value: number }>(
-    "SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, COALESCE(SUM(amount), 0)::float as value FROM payments WHERE created_at >= $1 AND (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID') GROUP BY 1 ORDER BY 1 ASC",
+    "SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, COALESCE(SUM(amount)/100, 0)::float as value FROM payments WHERE created_at >= $1 AND (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID') GROUP BY 1 ORDER BY 1 ASC",
     [startIso],
     []
   );
@@ -408,7 +437,7 @@ router.get("/revenue", requireAuth, requireAdmin, async (req, res) => {
 
   const startIso = days[0].date + "T00:00:00.000Z";
   const rows = await safeRows<{ date: string; value: number }>(
-    "SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, COALESCE(SUM(amount), 0)::float as value FROM payments WHERE created_at >= $1 AND (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID') GROUP BY 1 ORDER BY 1 ASC",
+    "SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, COALESCE(SUM(amount)/100, 0)::float as value FROM payments WHERE created_at >= $1 AND (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID') GROUP BY 1 ORDER BY 1 ASC",
     [startIso],
     []
   );
@@ -421,7 +450,10 @@ router.get("/revenue", requireAuth, requireAdmin, async (req, res) => {
     value: map.get(d.date) ?? 0
   }));
 
-  return res.json({ success: true, data });
+  return res.json({
+    success: true,
+    data
+  });
 });
 
 router.get("/alerts", requireAuth, requireAdmin, async (req, res) => {

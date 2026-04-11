@@ -284,9 +284,21 @@ export const verifySubscription = async (req: any, res: Response) => {
       );
 
       // 2. Record payment in payments table
-      const artistPriceRow = await client.query(`SELECT subscription_price FROM users WHERE id = $1`, [sub.artist_id]);
-      const price = Number(artistPriceRow.rows[0]?.subscription_price || 0);
-      const amountPaise = price * 100;
+      let amountPaise = 0;
+      if (sub.type === 'PLATFORM') {
+        // For PLATFORM subscriptions, get price from platform config
+        const platformPriceRow = await client.query(
+          `SELECT price FROM platform_subscription_configs WHERE is_active = true LIMIT 1`
+        );
+        amountPaise = Number(platformPriceRow.rows[0]?.price || 0) * 100;
+      } else {
+        // For ARTIST subscriptions, get price from artist's settings
+        const artistPriceRow = await client.query(
+          `SELECT subscription_price FROM users WHERE id = $1`,
+          [sub.artist_id]
+        );
+        amountPaise = Number(artistPriceRow.rows[0]?.subscription_price || 0) * 100;
+      }
 
       await client.query(
         `INSERT INTO payments (user_id, subscription_id, amount, status, razorpay_payment_id, created_at)
