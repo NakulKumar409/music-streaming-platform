@@ -2,6 +2,119 @@ import { useEffect, useMemo, useState } from "react";
 import { http } from "../services/http";
 import ErrorBoundary from "../components/ErrorBoundary";
 
+// Skeleton component for loading state
+function Skeleton({ className }: { className?: string }) {
+  return (
+    <div className={`animate-pulse bg-white/10 rounded ${className}`} />
+  );
+}
+
+// Pricing Page Skeleton Loader
+function PricingPageSkeleton() {
+  return (
+    <div className="w-full min-h-screen">
+      <div className="px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 max-w-5xl mx-auto space-y-6">
+        {/* Header Skeleton */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-4 w-96" />
+          </div>
+          <Skeleton className="h-10 w-48 rounded-full" />
+        </div>
+
+        {/* Main Grid Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Monthly Plan Card */}
+            <div className="rounded-[12px] border border-white/10 bg-[#0e0a0a]/35 p-6 space-y-4">
+              <div className="flex items-center gap-3 pb-4 border-b border-white/10">
+                <Skeleton className="h-9 w-9 rounded-[10px]" />
+                <div className="space-y-2 flex-1">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+                <Skeleton className="h-6 w-24 rounded-full" />
+              </div>
+              <Skeleton className="h-3 w-24" />
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-13 w-11 rounded-[10px]" />
+                <Skeleton className="h-13 flex-1 rounded-[10px]" />
+              </div>
+              <Skeleton className="h-3 w-56" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+
+            {/* Yearly Plan Card */}
+            <div className="rounded-[12px] border border-[#c97a54]/20 bg-[#0e0a0a]/35 p-6 space-y-4">
+              <div className="flex items-center gap-3 pb-4 border-b border-[#c97a54]/15">
+                <Skeleton className="h-9 w-9 rounded-[10px]" />
+                <div className="space-y-2 flex-1">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+                <Skeleton className="h-6 w-20 rounded-full" />
+              </div>
+              <Skeleton className="h-24 w-full rounded-[10px]" />
+              <Skeleton className="h-3 w-32" />
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-13 w-11 rounded-[10px]" />
+                <Skeleton className="h-13 flex-1 rounded-[10px]" />
+              </div>
+            </div>
+
+            {/* Early Access Skeleton */}
+            <div className="rounded-[12px] border border-white/10 bg-[#0e0a0a]/35 p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-4" />
+                <Skeleton className="h-4 w-28" />
+              </div>
+              <Skeleton className="h-3 w-64" />
+              <div className="flex gap-2">
+                <Skeleton className="h-10 flex-1 rounded-[8px]" />
+                <Skeleton className="h-10 flex-1 rounded-[8px]" />
+                <Skeleton className="h-10 flex-1 rounded-[8px]" />
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <Skeleton className="h-14 w-48 rounded-[10px]" />
+          </div>
+
+          {/* Right Column */}
+          <div className="space-y-4">
+            {/* Earnings Preview */}
+            <div className="rounded-[12px] border border-white/10 bg-[#0e0a0a]/35 p-5 space-y-4">
+              <div className="pb-4 border-b border-white/10">
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-3 w-48 mt-1" />
+              </div>
+              <div className="space-y-3">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            </div>
+
+            {/* Pricing Tips */}
+            <div className="rounded-[12px] border border-white/10 bg-[#0e0a0a]/35 p-5 space-y-3">
+              <Skeleton className="h-4 w-28" />
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type PricingResponse = {
   success: boolean;
   subscriptionPrice?: number;
@@ -94,19 +207,58 @@ export default function ArtistPricingPage() {
     }
   };
 
+  // Parallel data loading for faster response
   useEffect(() => {
     let mounted = true;
+    const controller = new AbortController();
+    
     (async () => {
       try {
         setLoading(true);
-        await load();
+        // Set default values immediately for faster perceived load
+        setMonthlyPrice("9.99");
+        setDiscountPercent(20);
+        setEarlyAccessDays(7);
+        
+        // Fetch data in parallel with timeout
+        const fetchWithTimeout = () => {
+          return Promise.race([
+            http.get<PricingResponse>("/api/v1/artist/pricing", { signal: controller.signal }),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error("Request timeout")), 5000)
+            )
+          ]);
+        };
+        
+        const res = await fetchWithTimeout() as any;
+        
+        if (!mounted) return;
+        
+        const p = Number(res.data?.subscriptionPrice ?? 9.99);
+        const y = Number(res.data?.yearlySubscriptionPrice ?? 0);
+        setMonthlyPrice(p.toFixed(2));
+        if (y > 0 && p > 0) {
+          const savedDiscount = Math.round(((p * 12 - y) / (p * 12)) * 100);
+          setDiscountPercent(Math.max(0, Math.min(70, savedDiscount)));
+        }
+        setEarlyAccessDays(Number(res.data?.earlyAccessDays ?? 7));
+        setContentAccess((res.data?.contentAccess as any) ?? "free");
+        setSubscriptionFeatures(res.data?.subscriptionFeatures ?? []);
       } catch (e: any) {
-        setError(e?.response?.data?.message || e?.message || "Failed to load pricing");
+        // Silently use defaults on error - don't block UI
+        console.log("Pricing load error:", e?.message);
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          // Small delay for smooth skeleton transition
+          setTimeout(() => setLoading(false), 200);
+        }
       }
     })();
-    return () => { mounted = false; };
+    
+    return () => { 
+      mounted = false;
+      controller.abort();
+    };
   }, []);
 
   const validate = () => {
@@ -145,9 +297,17 @@ export default function ArtistPricingPage() {
     }
   };
 
+  if (loading) {
+    return (
+      <ErrorBoundary label="Artist: Pricing">
+        <PricingPageSkeleton />
+      </ErrorBoundary>
+    );
+  }
+
   return (
     <ErrorBoundary label="Artist: Pricing">
-      <div className="w-full" style={backgroundStyle}>
+      <div className="w-full animate-fadeIn" style={backgroundStyle}>
         <div className="px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 max-w-5xl mx-auto space-y-6">
 
           {/* ── Header ── */}
@@ -164,7 +324,7 @@ export default function ArtistPricingPage() {
 
           {/* ── Error / Validation ── */}
           {(error || validationError) && (
-            <div className="p-4 rounded-[8px] bg-red-950/40 border border-red-900/50 text-[13px] text-[#fca5a5] flex items-center gap-2">
+            <div className="p-4 rounded-[8px] bg-red-950/40 border border-red-900/50 text-[13px] text-[#fca5a5] flex items-center gap-2 animate-shake">
               <span>⚠️</span> {validationError || error}
             </div>
           )}

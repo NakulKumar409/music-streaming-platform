@@ -16,15 +16,13 @@ type MeResponse = {
   };
 };
 
-function PremiumPlayLogo() {
+function BrandLogo() {
   return (
-    <div className="h-[44px] w-[44px] rounded-full bg-gradient-to-b from-[#7d4a41] to-[#2d1b18] p-[2px]">
-      <div className="h-full w-full rounded-full bg-[#1a1414]/80 border border-white/10 flex items-center justify-center">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M9 7.5V16.5L17 12L9 7.5Z" fill="#b16e5b" />
-        </svg>
-      </div>
-    </div>
+    <img 
+      src="/logo.png" 
+      alt="Brand Logo" 
+      className="h-[44px] w-[44px] rounded-full object-cover"
+    />
   );
 }
 
@@ -179,7 +177,7 @@ export default function ArtistShell() {
                 </svg>
               </button>
 
-              <PremiumPlayLogo />
+              <BrandLogo />
 
               <div className="hidden md:flex items-center gap-4">
                 {navItems.map((item) => (
