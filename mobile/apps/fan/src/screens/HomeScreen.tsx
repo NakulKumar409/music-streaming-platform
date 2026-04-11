@@ -380,6 +380,22 @@ export default function HomeScreen({ navigation }: any) {
       <StatusBar barStyle="light-content" />
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.pageWrap}>
+          {/* STATIC HEADER - outside ScrollView */}
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <Image 
+                source={require('../../assets/logo.png')} 
+                style={styles.headerLogo}
+                resizeMode="cover"
+              />
+              <Text style={styles.headerTitle}>Discover</Text>
+            </View>
+
+            <Pressable onPress={() => navigation.getParent()?.navigate('SearchTab')}>
+              <Search color="#fff" size={22} />
+            </Pressable>
+          </View>
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         bounces={false}
@@ -392,14 +408,6 @@ export default function HomeScreen({ navigation }: any) {
           />
         }
       >
-        {/* HEADER */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Discover</Text>
-
-          <Pressable onPress={() => navigation.getParent()?.navigate('SearchTab')}>
-            <Search color="#fff" size={22} />
-          </Pressable>
-        </View>
 
         {/* BECOME AN ARTIST BANNER */}
         <Pressable onPress={onPressBecomeArtist} style={styles.artistBannerContainer}>
@@ -577,6 +585,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 12,
     paddingBottom: 10,
+  },
+
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+
+  headerLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
   },
 
   headerTitle: {

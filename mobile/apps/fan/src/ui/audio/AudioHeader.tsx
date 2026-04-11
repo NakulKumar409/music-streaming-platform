@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Search as SearchIcon } from 'lucide-react-native';
 
@@ -11,17 +11,22 @@ interface AudioHeaderProps {
 export default function AudioHeader({ query, setQuery }: AudioHeaderProps) {
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning 🎧';
-    if (hour < 18) return 'Good Afternoon 🎧';
-    return 'Good Evening 🎧';
+    if (hour < 12) return 'Good Morning';
+    if (hour < 18) return 'Good Afternoon';
+    return 'Good Evening';
   }, []);
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerTextWrap}>
+      <View style={styles.headerTop}>
+        <Image 
+          source={require('../../assets/logo.png')} 
+          style={styles.headerLogo}
+          resizeMode="cover"
+        />
         <Text style={styles.greeting}>{greeting}</Text>
-        <Text style={styles.subtitle}>What do you want to hear today?</Text>
       </View>
+      <Text style={styles.subtitle}>What do you want to hear today?</Text>
 
       <View style={styles.searchWrap}>
         <BlurView intensity={24} tint="dark" style={styles.searchBlur}>
@@ -47,6 +52,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 18,
     paddingBottom: 8,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  headerLogo: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   headerTextWrap: {
     marginBottom: 16,
