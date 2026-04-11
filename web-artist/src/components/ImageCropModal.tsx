@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Cropper from 'react-easy-crop';
 
 interface ImageCropModalProps {
@@ -22,6 +22,16 @@ export function ImageCropModal({ isOpen, imageSrc, cropShape, aspect, onClose, o
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<CropArea | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [freeRatio, setFreeRatio] = useState(false);
+
+  // Reset free ratio when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setFreeRatio(false);
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+    }
+  }, [isOpen]);
 
   const onCropComplete = useCallback((_: any, croppedAreaPixels: CropArea) => {
     setCroppedAreaPixels(croppedAreaPixels);
@@ -122,9 +132,10 @@ export function ImageCropModal({ isOpen, imageSrc, cropShape, aspect, onClose, o
             image={imageSrc}
             crop={crop}
             zoom={zoom}
-            aspect={aspect}
+            aspect={freeRatio ? undefined : aspect}
             cropShape={cropShape}
             showGrid={true}
+            restrictPosition={false}
             onCropChange={setCrop}
             onZoomChange={setZoom}
             onCropComplete={onCropComplete}
@@ -142,6 +153,23 @@ export function ImageCropModal({ isOpen, imageSrc, cropShape, aspect, onClose, o
 
         {/* Controls */}
         <div className="px-6 py-4 border-t border-white/10 bg-[#141010]">
+          {/* Free Ratio Toggle for Banner */}
+          {cropShape === 'rect' && (
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/10">
+              <span className="text-[13px] text-[#8d7b77]">Free aspect ratio</span>
+              <button
+                onClick={() => setFreeRatio(!freeRatio)}
+                className={`relative w-12 h-6 rounded-full transition-colors ${
+                  freeRatio ? 'bg-[#c97a54]' : 'bg-white/20'
+                }`}
+              >
+                <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                  freeRatio ? 'left-7' : 'left-1'
+                }`} />
+              </button>
+            </div>
+          )}
+
           {/* Zoom Slider */}
           <div className="flex items-center gap-4 mb-4">
             <span className="text-[13px] text-[#8d7b77]">Zoom</span>
@@ -157,9 +185,10 @@ export function ImageCropModal({ isOpen, imageSrc, cropShape, aspect, onClose, o
           </div>
 
           {/* Instructions */}
-          <p className="text-[12px] text-[#5a4a45] text-center mb-4">
-            Drag to move • Scroll to zoom • Adjust to fit
-          </p>
+          <div className="text-[12px] text-[#5a4a45] text-center mb-4 space-y-1">
+            <p>🖱️ <strong>Drag anywhere</strong> to move the crop area (up, down, left, right)</p>
+            <p>🔍 <strong>Scroll or use slider</strong> to zoom in/out</p>
+          </div>
 
           {/* Actions */}
           <div className="flex items-center justify-end gap-3">

@@ -380,16 +380,16 @@ export default function ArtistAccountPage() {
 
         {/* Hero Card with Banner & Avatar */}
         <div className="relative rounded-[20px] border border-white/10 bg-[#0e0a0a]/60 overflow-hidden mb-8 shadow-2xl">
-          {/* Banner Section */}
-          <div className="relative h-[240px] bg-gradient-to-br from-[#2a1f1a] to-[#0f0c0a] group">
+          {/* Banner Section - using object-contain to show full image without cropping */}
+          <div className="relative min-h-[240px] max-h-[400px] bg-gradient-to-br from-[#2a1f1a] to-[#0f0c0a] group flex items-center justify-center">
             {bannerSrc ? (
               <img 
                 src={bannerSrc} 
                 alt="Banner" 
-                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" 
+                className="max-h-[400px] w-full object-contain transition-transform duration-700 group-hover:scale-[1.02]" 
               />
             ) : (
-              <div className="h-full w-full flex items-center justify-center">
+              <div className="h-[240px] w-full flex items-center justify-center">
                 <div className="text-center">
                   <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
                     <ImageIcon />
@@ -398,7 +398,7 @@ export default function ArtistAccountPage() {
                 </div>
               </div>
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0e0a0a] via-transparent to-black/20" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0e0a0a] via-transparent to-black/20 pointer-events-none" />
             
             {/* Banner Upload Button */}
             <button
@@ -454,11 +454,11 @@ export default function ArtistAccountPage() {
                   </div>
                 </button>
 
-                {/* Status Badge */}
-                <div className={`absolute -bottom-1 -right-1 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border-2 border-[#0e0a0a] ${
+                {/* Status Badge - repositioned to bottom center */}
+                <div className={`absolute -bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border-2 border-[#0e0a0a] whitespace-nowrap shadow-lg ${
                   isVerified
-                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                    : "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                    ? "bg-emerald-500 text-white border-emerald-600"
+                    : "bg-amber-500 text-white border-amber-600"
                 }`}>
                   {isVerified ? (
                     <span className="flex items-center gap-1">
@@ -782,12 +782,15 @@ export default function ArtistAccountPage() {
             <div className="rounded-[20px] border border-white/10 bg-[#0e0a0a]/40 p-6 backdrop-blur-sm">
               <h4 className="text-[14px] uppercase tracking-wider text-[#8d7b77] mb-4 font-semibold">Profile Preview</h4>
               <div className="rounded-xl overflow-hidden border border-white/10 bg-[#141010]">
-                <div className="h-[80px] bg-gradient-to-br from-[#c97a54]/30 to-[#2a1a17] relative">
-                  {bannerSrc && <img src={bannerSrc} alt="" className="h-full w-full object-cover opacity-60" />}
+                {/* Banner with gradient fallback - object-contain to show full image */}
+                <div className="h-[100px] bg-gradient-to-br from-[#c97a54]/30 to-[#2a1a17] relative flex items-center justify-center overflow-hidden">
+                  {bannerSrc && <img src={bannerSrc} alt="" className="h-full w-full object-contain" />}
                 </div>
-                <div className="px-4 pb-4">
-                  <div className="flex items-end gap-3 -mt-8 mb-3">
-                    <div className="w-16 h-16 rounded-full overflow-hidden border-3 border-[#141010] bg-[#0e0a0a]">
+                {/* Avatar section with proper spacing - no overlap */}
+                <div className="px-4 pb-4 relative">
+                  {/* Avatar positioned to overlap banner edge with background padding */}
+                  <div className="relative -mt-8 mb-2">
+                    <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-[#141010] bg-[#0e0a0a] shadow-xl">
                       {profileSrc ? (
                         <img src={profileSrc} alt="" className="h-full w-full object-cover" />
                       ) : (
@@ -797,7 +800,16 @@ export default function ArtistAccountPage() {
                       )}
                     </div>
                   </div>
-                  <h5 className="text-white font-semibold truncate">{name || "Artist Name"}</h5>
+                  <div className="flex items-center gap-2">
+                    <h5 className="text-white font-semibold truncate">{name || "Artist Name"}</h5>
+                    {isVerified && (
+                      <span className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[12px] text-[#8d7b77] line-clamp-2 mt-1">{bio || "No bio yet"}</p>
                   
                   {/* Social Icons */}
