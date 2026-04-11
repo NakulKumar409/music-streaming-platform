@@ -1,16 +1,14 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
-function PremiumPlayLogo() {
+function BrandLogo() {
   return (
     <div className="flex items-center gap-2">
-      <div className="h-[32px] w-[32px] rounded-full bg-gradient-to-b from-[#c97a54] to-[#7d4a41] p-[1px]">
-        <div className="h-full w-full rounded-full bg-[#141010] flex items-center justify-center">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M9 7V17L16 12L9 7Z" fill="#c97a54" />
-          </svg>
-        </div>
-      </div>
+      <img
+        src="/logo.png"
+        alt="Brand Logo"
+        className="h-[32px] w-[32px] object-contain"
+      />
       <span className="text-[16px] font-semibold tracking-wide text-white">Artist Studio</span>
     </div>
   );
@@ -50,7 +48,7 @@ export default function ArtistLandingPage() {
       {/* 1. HEADER */}
       <header className="sticky top-0 z-50  border-b border-white/5 bg-[#141010]/80 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
-          <PremiumPlayLogo />
+          <BrandLogo />
           <nav className="flex items-center gap-4">
             {/* Fan App Button — visible for listeners visiting the landing */}
             <a

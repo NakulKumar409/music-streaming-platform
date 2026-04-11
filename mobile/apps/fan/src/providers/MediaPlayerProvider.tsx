@@ -10,7 +10,7 @@ import React, {
 } from 'react';
 import { Alert, AppState, Platform } from 'react-native';
 
-import TrackPlayer, { State as TrackPlayerState, Event, Capability, AppKilledPlaybackBehavior, Track } from 'react-native-track-player';
+import TrackPlayer, { State as TrackPlayerState, Event, Capability, AppKilledPlaybackBehavior, Track, RepeatMode, PitchAlgorithm } from 'react-native-track-player';
 import { useVideoPlayer, VideoView, VideoPlayer } from 'expo-video';
 
 import { navigationRef } from '../navigation/rootNavigation';
@@ -52,6 +52,7 @@ type MediaPlayerContextValue = {
 
   videoPlayer: VideoPlayer | null;
   audioPlayer: null; isPlayerReady: boolean;
+  onVideoPlaybackStatusUpdate: (status: any) => void;
   
   preferredQuality: 'SD' | 'HD';
   setPreferredQuality: (q: 'SD' | 'HD') => void;
@@ -121,26 +122,53 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     const setup = async () => {
       let isSetup = false;
       try {
-        await TrackPlayer.getCurrentTrack();
+        await TrackPlayer.getActiveTrackIndex();
         isSetup = true;
       } catch {
-        await TrackPlayer.setupPlayer();
+        await TrackPlayer.setupPlayer({
+          autoHandleInterruptions: true,
+          autoUpdateMetadata: true,
+        });
         isSetup = true;
       }
 
       if (isSetup) {
         await TrackPlayer.updateOptions({
-          android: { appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification },
+          android: {
+            appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
+            alwaysPauseOnInterruption: false,
+            // Keep notification visible when paused
+            stopForegroundGracePeriod: 0,
+          },
+          // Main capabilities shown in notification/lock screen
           capabilities: [
             Capability.Play,
             Capability.Pause,
             Capability.SkipToNext,
             Capability.SkipToPrevious,
             Capability.SeekTo,
+            Capability.JumpForward,
+            Capability.JumpBackward,
           ],
-          compactCapabilities: [Capability.Play, Capability.Pause, Capability.SkipToNext],
+          // Compact capabilities (small notification view)
+          compactCapabilities: [
+            Capability.Play,
+            Capability.Pause,
+            Capability.SkipToNext,
+          ],
+          // Notification icon customization
+          notificationCapabilities: [
+            Capability.Play,
+            Capability.Pause,
+            Capability.SkipToNext,
+            Capability.SkipToPrevious,
+            Capability.SeekTo,
+          ],
+          // Progress bar on notification
+          progressUpdateEventInterval: 1,
         });
         if (!unmounted) setIsPlayerReady(true);
+        console.log('[MediaPlayer] TrackPlayer setup complete with background capabilities');
       }
     };
     setup();
@@ -483,24 +511,38 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
         hasStartedPlayingRef.current = false;
 
-        const track = {
+        // Build track metadata for notification/lock screen display
+        const track: Track = {
           id: item.id.toString(),
           url: playbackUrl,
-          title: item.title,
-          artist: item.artistName || 'Unknown',
-          artwork: (item as any).thumbnailUrl || (item as any).avatarUrl,
+          title: item.title || 'Unknown Title',
+          artist: item.artistName || 'Unknown Artist',
+          artwork: (item as any).thumbnailUrl || (item as any).avatarUrl || (item as any).coverUrl || undefined,
+          // Additional metadata for better lock screen display
+          album: (item as any).albumName || undefined,
+          duration: item.duration ? item.duration / 1000 : undefined, // Convert ms to seconds
+          // For proper notification styling
+          isLiveStream: false,
         };
 
-        TrackPlayer.reset().then(() => {
-          TrackPlayer.add([track]).then(() => {
-             TrackPlayer.play();
-             // Update state to playing immediately
-             setState((s) => ({
-               ...s,
-               isPlaying: true,
-             }));
-          });
+        console.log('[MediaPlayer] Adding track to TrackPlayer:', {
+          id: track.id,
+          title: track.title,
+          artist: track.artist,
+          hasArtwork: !!track.artwork,
         });
+
+        await TrackPlayer.reset();
+        await TrackPlayer.add([track]);
+        await TrackPlayer.play();
+        
+        // Update state to playing immediately
+        setState((s) => ({
+          ...s,
+          isPlaying: true,
+        }));
+        
+        console.log('[MediaPlayer] Audio playback started successfully');
       } catch (err) {
         console.warn('[MediaPlayer] Failed to create or play audio', err);
         Alert.alert(
@@ -824,6 +866,109 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       }
     };
   }, [stopVideo, unloadAudio]);
+
+  // TrackPlayer remote event listeners for background/lock screen control synchronization
+  useEffect(() => {
+    if (!isPlayerReady) return;
+
+    console.log('[MediaPlayer] Setting up TrackPlayer event listeners');
+
+    // Listen for remote play events from notification/lock screen
+    const remotePlaySubscription = TrackPlayer.addEventListener(Event.RemotePlay, () => {
+      console.log('[MediaPlayer] RemotePlay event received');
+      setState((s) => ({ ...s, isPlaying: true }));
+    });
+
+    // Listen for remote pause events from notification/lock screen
+    const remotePauseSubscription = TrackPlayer.addEventListener(Event.RemotePause, () => {
+      console.log('[MediaPlayer] RemotePause event received');
+      setState((s) => ({ ...s, isPlaying: false }));
+    });
+
+    // Listen for remote next events from notification/lock screen
+    const remoteNextSubscription = TrackPlayer.addEventListener(Event.RemoteNext, () => {
+      console.log('[MediaPlayer] RemoteNext event received');
+      const s = stateRef.current;
+      if (!s.queue.length) return;
+      const isLast = s.currentIndex >= Math.max(0, s.queue.length - 1);
+      if (!isLast || s.repeatMode !== 'off') {
+        const next = (s.currentIndex + 1) % s.queue.length;
+        skipToIndex(next).catch(() => undefined);
+      }
+    });
+
+    // Listen for remote previous events from notification/lock screen
+    const remotePrevSubscription = TrackPlayer.addEventListener(Event.RemotePrevious, () => {
+      console.log('[MediaPlayer] RemotePrevious event received');
+      const s = stateRef.current;
+      if (!s.queue.length) return;
+      const prev = (s.currentIndex - 1 + s.queue.length) % s.queue.length;
+      skipToIndex(prev).catch(() => undefined);
+    });
+
+    // Listen for remote seek events from notification progress bar
+    const remoteSeekSubscription = TrackPlayer.addEventListener(Event.RemoteSeek, (event) => {
+      console.log('[MediaPlayer] RemoteSeek event received:', event.position);
+      const pos = Math.round(event.position * 1000);
+      setState((s) => ({ ...s, positionMs: pos }));
+    });
+
+    // Handle audio ducking (interruptions like phone calls)
+    const remoteDuckSubscription = TrackPlayer.addEventListener(Event.RemoteDuck, async (event) => {
+      console.log('[MediaPlayer] RemoteDuck event:', event);
+      if (event.permanent) {
+        // Permanent interruption (phone call) - pause and update state
+        setState((s) => ({ ...s, isPlaying: false }));
+      } else if (event.paused) {
+        // Temporary interruption started
+        setState((s) => ({ ...s, isPlaying: false }));
+      } else {
+        // Temporary interruption ended - resume if we were playing
+        const wasPlaying = stateRef.current.isPlaying;
+        if (wasPlaying) {
+          setState((s) => ({ ...s, isPlaying: true }));
+        }
+      }
+    });
+
+    // Playback state change tracking
+    const playbackStateSubscription = TrackPlayer.addEventListener(Event.PlaybackState, (playbackState) => {
+      const isPlaying = playbackState.state === TrackPlayerState.Playing;
+      console.log('[MediaPlayer] PlaybackState changed:', playbackState.state, 'isPlaying:', isPlaying);
+      
+      // Sync state if different from current
+      if (stateRef.current.isPlaying !== isPlaying) {
+        setState((s) => ({ ...s, isPlaying }));
+      }
+    });
+
+    // Track changed event
+    const trackChangedSubscription = TrackPlayer.addEventListener(Event.PlaybackTrackChanged, (event) => {
+      console.log('[MediaPlayer] PlaybackTrackChanged:', event);
+    });
+
+    // Playback error handling
+    const playbackErrorSubscription = TrackPlayer.addEventListener(Event.PlaybackError, (error) => {
+      console.error('[MediaPlayer] PlaybackError:', error);
+      // Pause on error
+      setState((s) => ({ ...s, isPlaying: false }));
+    });
+
+    console.log('[MediaPlayer] TrackPlayer event listeners registered');
+
+    return () => {
+      console.log('[MediaPlayer] Cleaning up TrackPlayer event listeners');
+      remotePlaySubscription.remove();
+      remotePauseSubscription.remove();
+      remoteNextSubscription.remove();
+      remotePrevSubscription.remove();
+      remoteSeekSubscription.remove();
+      remoteDuckSubscription.remove();
+      playbackStateSubscription.remove();
+      trackChangedSubscription.remove();
+      playbackErrorSubscription.remove();
+    };
+  }, [isPlayerReady, skipToIndex]);
 
   const value = useMemo<MediaPlayerContextValue>(
     () => ({

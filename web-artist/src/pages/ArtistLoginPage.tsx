@@ -25,16 +25,14 @@ type MeResponse = {
   };
 };
 
-function PremiumPlayLogo() {
+function BrandLogo() {
   return (
     <div className="flex items-center gap-3">
-      <div className="h-[44px] w-[44px] rounded-[14px] bg-gradient-to-b from-[#c97a54] to-[#7d4a41] p-[1.5px] shadow-[0_4px_20px_rgba(201,122,84,0.3)]">
-        <div className="h-full w-full rounded-[12.5px] bg-[#141010] flex items-center justify-center">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M9 7.5V16.5L17 12L9 7.5Z" fill="#c97a54" />
-          </svg>
-        </div>
-      </div>
+      <img
+        src="/logo.png"
+        alt="Brand Logo"
+        className="h-[44px] w-[44px] object-contain"
+      />
       <span className="text-xl font-bold tracking-wide text-white lg:hidden">Artist Studio</span>
     </div>
   );
@@ -202,7 +200,7 @@ export default function ArtistLoginPage() {
           </Link>
           
           <div className="mb-10">
-            <PremiumPlayLogo />
+            <BrandLogo />
             <div className="mt-4 text-xl font-bold tracking-wide text-white">Artist Studio</div>
           </div>
           
@@ -247,25 +245,34 @@ export default function ArtistLoginPage() {
               Landing Page
             </Link>
             <div className="self-center">
-              <PremiumPlayLogo />
+              <BrandLogo />
             </div>
           </div>
 
-          <div className="text-center lg:text-left mb-10">
-            <h2 className="text-3xl font-bold tracking-tight text-white mb-3">Log in to Artist Studio</h2>
-            <p className="text-[#a99792] text-[15px]">Enter your credentials to access your dashboard.</p>
-          </div>
-          
-          <form 
-            onSubmit={(e) => { e.preventDefault(); onSubmit(); }}
-            className="space-y-6 bg-black/20 p-8 rounded-[20px] border border-white/5 backdrop-blur-xl shadow-2xl"
-          >
+          {/* Login Card with improved visibility */}
+          <div className="bg-[#1a1414]/90 backdrop-blur-md rounded-2xl p-8 shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/10">
+            <div className="text-center mb-8">
+              <div className="flex justify-center mb-4">
+                <img
+                  src="/logo.png"
+                  alt="Brand Logo"
+                  className="h-[60px] w-[60px] object-contain"
+                />
+              </div>
+              <h2 className="text-[28px] font-bold tracking-tight text-[#e8c4b8] mb-2">Artist Login</h2>
+              <p className="text-[#a08078] text-[14px]">Enter your credentials to access your dashboard</p>
+            </div>
+            
+            <form 
+              onSubmit={(e) => { e.preventDefault(); onSubmit(); }}
+              className="space-y-5"
+            >
             <div>
-              <label className="block text-[13px] font-medium text-[#b8a6a1] mb-2">Email Address</label>
+              <label className="block text-[12px] uppercase tracking-widest text-[#a08078] font-medium mb-2">Email Address</label>
               <input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full h-[50px] rounded-[10px] bg-white/5 border border-white/10 px-4 text-[15px] text-[#e6d6d2] outline-none hover:border-white/20 focus:border-[#c97a54]/50 focus:ring-2 focus:ring-[#c97a54]/20 transition-all placeholder:text-[#b8a6a1]/50"
+                className="w-full h-[50px] rounded-lg bg-[#241e1e]/90 border border-white/15 px-4 text-[15px] text-[#f0e0dc] outline-none hover:border-[#b16e5b]/30 focus:border-[#b16e5b]/50 focus:bg-[#2a2424]/90 transition-all placeholder:text-[#5a4a46]"
                 placeholder="artist@example.com"
                 autoComplete="email"
                 autoCapitalize="none"
@@ -274,13 +281,13 @@ export default function ArtistLoginPage() {
             </div>
 
             <div>
-              <label className="block text-[13px] font-medium text-[#b8a6a1] mb-2">Password</label>
+              <label className="block text-[12px] uppercase tracking-widest text-[#a08078] font-medium mb-2">Password</label>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full h-[50px] rounded-[10px] bg-white/5 border border-white/10 pl-4 pr-12 text-[15px] text-[#e6d6d2] outline-none hover:border-white/20 focus:border-[#c97a54]/50 focus:ring-2 focus:ring-[#c97a54]/20 transition-all placeholder:text-[#b8a6a1]/50"
+                  className="w-full h-[50px] rounded-lg bg-[#241e1e]/90 border border-white/15 pl-4 pr-12 text-[15px] text-[#f0e0dc] outline-none hover:border-[#b16e5b]/30 focus:border-[#b16e5b]/50 focus:bg-[#2a2424]/90 transition-all placeholder:text-[#5a4a46]"
                   placeholder="••••••"
                   autoComplete="current-password"
                   autoCapitalize="none"
@@ -321,9 +328,9 @@ export default function ArtistLoginPage() {
             <button
               type="submit"
               disabled={busy}
-              className="w-full h-[52px] mt-2 rounded-[12px] bg-gradient-to-b from-[#b16e5b] to-[#8c4836] text-[16px] font-bold tracking-wide text-white shadow-[0_8px_20px_rgba(201,122,84,0.25)] hover:shadow-[0_12px_25px_rgba(201,122,84,0.35)] hover:-translate-y-[1px] active:translate-y-[1px] disabled:opacity-70 disabled:hover:translate-y-0 disabled:hover:shadow-[0_8px_20px_rgba(201,122,84,0.25)] transition-all"
+              className="w-full h-[52px] rounded-lg text-[16px] font-medium text-white border border-[#b16e5b]/40 bg-gradient-to-r from-[#8b4a3a] to-[#6a352c] shadow-[0_4px_20px_rgba(139,74,58,0.3)] hover:from-[#9b5a4a] hover:to-[#7a453c] hover:shadow-[0_6px_25px_rgba(139,74,58,0.4)] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
             >
-              {busy ? "Authenticating..." : "Log In"}
+              {busy ? "Logging in..." : "Log In"}
             </button>
           </form>
 
@@ -334,16 +341,16 @@ export default function ArtistLoginPage() {
             </Link>
           </div>
 
-          <div className="mt-8 text-center">
+          <div className="mt-6 text-center">
             <a
               href="#"
               onClick={(e) => e.preventDefault()}
-              className="text-[13px] text-white/30 hover:text-white/60 transition-colors"
+              className="text-[13px] text-[#6a5a56] hover:text-[#a08078] transition-colors"
             >
               Contact Support
             </a>
           </div>
-          
+          </div>
         </div>
       </div>
     </div>

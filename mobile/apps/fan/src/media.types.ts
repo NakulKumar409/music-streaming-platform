@@ -12,6 +12,8 @@ export type MediaItem = {
   isLocked?: boolean;
   /** When true, resolve playback URL via POST /stream/access before playing */
   useStreamAccess?: boolean;
+  /** Duration in milliseconds */
+  duration?: number;
 };
 
 export type PlayerState = {

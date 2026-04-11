@@ -118,53 +118,46 @@ export default function AdminLoginPage() {
 343, 50, 20_100%)]" />
 
       <div className="relative min-h-screen flex items-center justify-center px-6">
-        <div className="w-full max-w-[560px]">
+        {/* Login card with better visibility */}
+        <div className="w-full max-w-[480px] bg-[#1a1414]/80 backdrop-blur-md rounded-2xl p-8 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-white/10">
           <div className="flex flex-col items-center">
-            <div className="mt-2 mb-6">
-              <div className="h-[72px] w-[72px] rounded-full bg-gradient-to-b from-[#7d4a41] to-[#2d1b18] p-[2px]">
-                <div className="h-full w-full rounded-full bg-[#1a1414] border border-white/5 flex items-center justify-center">
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path d="M9 7.5V16.5L17 12L9 7.5Z" fill="#b16e5b" />
-                  </svg>
-                </div>
-              </div>
+            <div className="mb-6">
+              <img
+                src="/logo.png"
+                alt="Brand Logo"
+                className="h-[100px] w-[100px] object-contain"
+              />
             </div>
 
-            <div className="mb-8 text-[34px] leading-[40px] font-light tracking-[2px] text-[#c49a8e]">
+            <div className="mb-8 text-[32px] leading-[38px] font-light tracking-[2px] text-[#e8c4b8]">
               Admin Login
             </div>
 
-            <form onSubmit={onSubmit} className="w-full max-w-[520px]">
-              <div className="mb-2 text-[11px] uppercase tracking-widest text-[#665552]">
+            <form onSubmit={onSubmit} className="w-full">
+              <div className="mb-2 text-[12px] uppercase tracking-widest text-[#a08078] font-medium">
                 Email
               </div>
-              <div className="mb-6">
+              <div className="mb-5">
                 <input
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@example.com"
                   type="email"
-                  className="w-full h-[52px] rounded-[3px] bg-[#161212]/80 border border-white/10 px-5 text-[16px] text-[#d3c2be] placeholder:text-[#3d3432] outline-none focus:border-white/20"
+                  className="w-full h-[50px] rounded-lg bg-[#241e1e]/90 border border-white/15 px-4 text-[15px] text-[#f0e0dc] placeholder:text-[#5a4a46] outline-none focus:border-[#b16e5b]/50 focus:bg-[#2a2424]/90 transition-all"
                   autoComplete="email"
                 />
               </div>
 
-              <div className="mb-2 text-[11px] uppercase tracking-widest text-[#665552]">
+              <div className="mb-2 text-[12px] uppercase tracking-widest text-[#a08078] font-medium">
                 Password
               </div>
-              <div className="mb-7 relative">
+              <div className="mb-6 relative">
                 <input
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••"
                   type={showPassword ? "text" : "password"}
-                  className="w-full h-[52px] rounded-[3px] bg-[#161212]/80 border border-white/10 pl-5 pr-12 text-[16px] text-[#d3c2be] placeholder:text-[#3d3432] outline-none focus:border-white/20"
+                  className="w-full h-[50px] rounded-lg bg-[#241e1e]/90 border border-white/15 pl-4 pr-12 text-[15px] text-[#f0e0dc] placeholder:text-[#5a4a46] outline-none focus:border-[#b16e5b]/50 focus:bg-[#2a2424]/90 transition-all"
                   autoComplete="current-password"
                 />
                 <button
@@ -180,16 +173,16 @@ export default function AdminLoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full h-[56px] rounded-[4px] text-[18px] font-light text-[#cfa99f] border border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] shadow-[0_10px_30px_rgba(0,0,0,0.5)] disabled:opacity-70"
+                className="w-full h-[52px] rounded-lg text-[16px] font-medium text-white border border-[#b16e5b]/40 bg-gradient-to-r from-[#8b4a3a] to-[#6a352c] shadow-[0_4px_20px_rgba(139,74,58,0.3)] hover:from-[#9b5a4a] hover:to-[#7a453c] hover:shadow-[0_6px_25px_rgba(139,74,58,0.4)] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
               >
                 {loading ? "Logging in..." : "Log in"}
               </button>
 
-              <div className="h-5 mt-4 text-center text-[12px] tracking-wide text-[#665552]">
+              <div className="h-5 mt-4 text-center text-[13px] tracking-wide text-[#ff8a8a] font-medium">
                 {error ? error : ""}
               </div>
 
-              <div className="mt-6 text-center text-[11px] uppercase tracking-[3px] text-[#4d3d3a]">
+              <div className="mt-5 text-center text-[11px] uppercase tracking-[2px] text-[#6a5a56]">
                 Authorized access only
               </div>
             </form>

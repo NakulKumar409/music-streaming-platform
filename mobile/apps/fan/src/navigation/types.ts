@@ -3,4 +3,5 @@ export type RootStackParamList = {
   Signup: undefined;
   MainTabs: undefined;
   ArtistOnboarding: undefined;
+  BackgroundPlaybackTest: undefined;
 };

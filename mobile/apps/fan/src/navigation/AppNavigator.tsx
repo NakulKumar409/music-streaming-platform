@@ -16,6 +16,7 @@ import SignupScreen from '../screens/SignupScreen';
 import MainTabsNavigator from './MainTabsNavigator';
 
 import ArtistOnboardingScreen from '../screens/ArtistOnboardingScreen';
+import BackgroundPlaybackTestScreen from '../screens/BackgroundPlaybackTestScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -65,6 +66,11 @@ export default function AppNavigator() {
               name="ArtistOnboarding"
               component={ArtistOnboardingScreen}
               options={{ headerShown: false, presentation: 'modal' }}
+            />
+            <Stack.Screen
+              name="BackgroundPlaybackTest"
+              component={BackgroundPlaybackTestScreen}
+              options={{ headerShown: false, title: 'Background Playback Test' }}
             />
           </>
         ) : (
