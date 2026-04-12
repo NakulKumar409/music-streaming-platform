@@ -39,9 +39,6 @@ type TopArtist = {
 
 type TopArtistsResponse = { success: boolean; items: TopArtist[] };
 
-type TopCategory = { category: string; value: number };
-
-type TopCategoriesResponse = { success: boolean; items: TopCategory[] };
 
 function PremiumPlayLogo() {
   return (
@@ -139,7 +136,6 @@ export default function AdminAnalyticsPage() {
   const [global, setGlobal] = useState<GlobalSummary | null>(null);
   const [revenue, setRevenue] = useState<SeriesPoint[]>([]);
   const [topArtists, setTopArtists] = useState<TopArtist[]>([]);
-  const [topCategories, setTopCategories] = useState<TopCategory[]>([]);
   const [subMetrics, setSubMetrics] = useState<any>(null);
   
   // Date range state
@@ -161,18 +157,16 @@ export default function AdminAnalyticsPage() {
     try {
       const dateParams = `?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
       
-      const [g, r, a, c, m] = await Promise.all([
+      const [g, r, a, m] = await Promise.all([
         http.get<GlobalSummary>(`/api/v1/admin/analytics/global-summary${dateParams}`),
         http.get<RevenueTrendsResponse>(`/api/v1/admin/analytics/revenue-trends${dateParams}`),
         http.get<TopArtistsResponse>("/api/v1/admin/analytics/top-artists"),
-        http.get<TopCategoriesResponse>("/api/v1/admin/analytics/top-categories"),
         http.get<any>("/api/v1/admin/analytics/metrics")
       ]);
 
       setGlobal(g.data);
       setRevenue((r.data?.data ?? []) as SeriesPoint[]);
       setTopArtists((a.data?.items ?? []) as TopArtist[]);
-      setTopCategories((c.data?.items ?? []) as TopCategory[]);
       setSubMetrics(m.data?.metrics);
       
       // Debug: Log metrics data
@@ -204,10 +198,6 @@ export default function AdminAnalyticsPage() {
     value: p.value
   }));
 
-  const categoriesChartData = topCategories.map((c) => ({
-    name: c.category,
-    value: c.value
-  }));
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[#4b1927] text-white">
@@ -311,9 +301,9 @@ export default function AdminAnalyticsPage() {
             />
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-4">
             <ErrorBoundary label="Admin Analytics: Revenue Chart">
-              <div className="relative overflow-hidden rounded-[6px] border border-white/10 bg-[#1a1414]/45 shadow-[0_20px_50px_rgba(0,0,0,0.35)] lg:col-span-2">
+              <div className="relative overflow-hidden rounded-[6px] border border-white/10 bg-[#1a1414]/45 shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
               <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent" />
               <div className="relative px-5 py-4">
                 <div className="flex items-center justify-between">
@@ -364,47 +354,6 @@ export default function AdminAnalyticsPage() {
               </div>
             </ErrorBoundary>
 
-            <ErrorBoundary label="Admin Analytics: Categories Chart">
-              <div className="relative overflow-hidden rounded-[6px] border border-white/10 bg-[#1a1414]/45 shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
-              <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent" />
-              <div className="relative px-5 py-4">
-                <div className="flex items-center justify-between">
-                  <div className="text-[14px] tracking-wide text-[#e6d6d2]">Top Content Categories</div>
-                  <div className="text-[12px] text-[#8d7b77]">Approved</div>
-                </div>
-
-                <div className="mt-4 h-[280px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={categoriesChartData} margin={{ left: 8, right: 18, top: 10, bottom: 10 }}>
-                      <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
-                      <XAxis
-                        dataKey="name"
-                        tick={{ fill: "#a99792", fontSize: 10 }}
-                        axisLine={{ stroke: "rgba(255,255,255,0.1)" }}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        tick={{ fill: "#a99792", fontSize: 11 }}
-                        axisLine={{ stroke: "rgba(255,255,255,0.1)" }}
-                        tickLine={false}
-                        allowDecimals={false}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          background: "rgba(20,16,16,0.92)",
-                          border: "1px solid rgba(255,255,255,0.12)",
-                          borderRadius: 8,
-                          color: "#e6d6d2"
-                        }}
-                        formatter={(v: any) => String(Number(v) || 0)}
-                      />
-                      <Bar dataKey="value" fill="#9a6bb1" radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-              </div>
-            </ErrorBoundary>
           </div>
 
           <div className="mt-4 relative overflow-hidden rounded-[6px] border border-white/10 bg-[#1a1414]/45 shadow-[0_20px_50px_rgba(0,0,0,0.35)]">

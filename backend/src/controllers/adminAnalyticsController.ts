@@ -58,7 +58,7 @@ export const getAdminDashboardMetrics = async (req: Request, res: Response) => {
        FROM payments p
        JOIN subscriptions s ON p.subscription_id = s.id
        JOIN users u ON s.artist_id = u.id
-       WHERE p.status = 'SUCCESS' AND s.type = 'ARTIST'`;
+       WHERE UPPER(p.status) IN ('SUCCESS', 'PAID', 'CAPTURED') AND s.type = 'ARTIST'`;
     
     const artistRevenueParams: any[] = [];
     if (startDate && endDate) {
@@ -72,6 +72,18 @@ export const getAdminDashboardMetrics = async (req: Request, res: Response) => {
       name: r.artist_name,
       revenue: Number(r.amount) / 100
     }));
+    console.log(`[ANALYTICS-DEBUG] Revenue per artist query returned ${revenuePerArtist.length} rows`);
+    console.log(`[ANALYTICS-DEBUG] Artist revenue data:`, revenuePerArtist);
+    
+    // Debug: Check what payment statuses exist for ARTIST subscriptions
+    const debugPayments = await pool.query(`
+      SELECT DISTINCT p.status, s.type, COUNT(*) as count 
+      FROM payments p 
+      JOIN subscriptions s ON p.subscription_id = s.id 
+      WHERE s.type = 'ARTIST' 
+      GROUP BY p.status, s.type
+    `);
+    console.log(`[ANALYTICS-DEBUG] Payments for ARTIST subscriptions:`, debugPayments.rows);
 
     // 4. Conversion Rate (Subscribers / Total Users)
     // Count all FAN users (those who can subscribe to platform)
