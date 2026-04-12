@@ -79,7 +79,7 @@ export default function SeeAllSongsScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
         renderItem={({ item }) => (
           <View style={styles.row}>
-            <Image source={require('../logo.jpg')} style={styles.art} />
+            <Image source={require('../logo.png')} style={styles.art} />
             <View style={{ flex: 1 }}>
               <Text style={styles.title} numberOfLines={1}>
                 {item.title ?? 'Untitled'}

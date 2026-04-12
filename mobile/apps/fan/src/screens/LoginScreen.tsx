@@ -117,28 +117,18 @@ export default function LoginScreen({ navigation, route }: Props) {
                     isDesktop ? styles.contentDesktop : styles.contentMobile,
                   ]}
                 >
-                  <Shadow
-                    distance={40}
-                    startColor="rgba(255, 69, 0, 0.25)"
-                    offset={[0, 0]}
+                  <View
+                    style={[
+                      styles.logoWrapper,
+                      isDesktop && styles.logoWrapperDesktop,
+                    ]}
                   >
-                    <View
-                      style={[
-                        styles.logoWrapper,
-                        isDesktop && styles.logoWrapperDesktop,
-                      ]}
-                    >
-                      <Image
-                        source={require('../logo.jpg')}
-                        style={styles.logoImage}
-                        resizeMode="cover"
-                      />
-                      <LinearGradient
-                        colors={['transparent', 'rgba(0,0,0,0.4)']}
-                        style={styles.logoInnerGradient}
-                      />
-                    </View>
-                  </Shadow>
+                    <Image
+                      source={require('../logo.png')}
+                      style={styles.logoImage}
+                      resizeMode="contain"
+                    />
+                  </View>
 
                   <BlurView intensity={25} tint="dark" style={[styles.cardBlur, isDesktop && styles.cardBlurDesktop]}>
                     <View style={[styles.cardInner, isDesktop && styles.cardInnerDesktop]}>
@@ -195,9 +185,7 @@ export default function LoginScreen({ navigation, route }: Props) {
                         </Pressable>
                       </View>
 
-                      <Pressable onPress={() => undefined} hitSlop={10} style={styles.forgotWrap}>
-                        <Text style={styles.forgotText}>Forgot Password?</Text>
-                      </Pressable>
+
 
                       <Pressable onPress={onSubmit} disabled={!canSubmit}>
                         <View style={styles.buttonGlass}>
@@ -231,28 +219,18 @@ export default function LoginScreen({ navigation, route }: Props) {
                   isDesktop ? styles.contentDesktop : styles.contentMobile,
                 ]}
               >
-                <Shadow
-                  distance={40}
-                  startColor="rgba(255, 69, 0, 0.25)"
-                  offset={[0, 0]}
+                <View
+                  style={[
+                    styles.logoWrapper,
+                    isDesktop && styles.logoWrapperDesktop,
+                  ]}
                 >
-                  <View
-                    style={[
-                      styles.logoWrapper,
-                      isDesktop && styles.logoWrapperDesktop,
-                    ]}
-                  >
-                    <Image
-                      source={require('../logo.jpg')}
-                      style={styles.logoImage}
-                      resizeMode="cover"
-                    />
-                    <LinearGradient
-                      colors={['transparent', 'rgba(0,0,0,0.4)']}
-                      style={styles.logoInnerGradient}
-                    />
-                  </View>
-                </Shadow>
+                  <Image
+                    source={require('../logo.png')}
+                    style={styles.logoImage}
+                    resizeMode="contain"
+                  />
+                </View>
 
                 <BlurView intensity={25} tint="dark" style={[styles.cardBlur, isDesktop && styles.cardBlurDesktop]}>
                   <View style={[styles.cardInner, isDesktop && styles.cardInnerDesktop]}>
@@ -309,9 +287,7 @@ export default function LoginScreen({ navigation, route }: Props) {
                       </Pressable>
                     </View>
 
-                    <Pressable onPress={() => undefined} hitSlop={10} style={styles.forgotWrap}>
-                      <Text style={styles.forgotText}>Forgot Password?</Text>
-                    </Pressable>
+
 
                     <Pressable onPress={onSubmit} disabled={!canSubmit}>
                       <View style={styles.buttonGlass}>
@@ -376,25 +352,18 @@ const styles = StyleSheet.create({
   logoWrapper: {
     width: 140,
     height: 140,
-    borderRadius: 30,
-    overflow: 'hidden',
-    backgroundColor: '#121212',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
     marginBottom: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   logoWrapperDesktop: {
     width: 120,
     height: 120,
-    borderRadius: 26,
     marginBottom: 24,
   },
   logoImage: {
     width: '100%',
     height: '100%',
-  },
-  logoInnerGradient: {
-    ...StyleSheet.absoluteFillObject,
   },
   cardBlur: {
     width: '100%',
