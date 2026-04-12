@@ -234,7 +234,7 @@ export function DetailedPlatformCard({ plan, onManage, onUpgrade }: { plan: Subs
         </View>
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={[cardStyles.planTitle, { fontSize: 18 }]}>Platform Plan</Text>
-          <Text style={cardStyles.planType}>{plan.planType} • ₹{plan.price || 99}/month</Text>
+          <Text style={cardStyles.planType}>{plan.planType} • ₹{plan.price || 99}/{plan.planType === 'YEARLY' ? 'year' : 'month'}</Text>
         </View>
         <View style={[cardStyles.statusBadge, { backgroundColor: `${statusColor}22`, borderColor: `${statusColor}55` }]}>
           <Text style={[cardStyles.statusText, { color: statusColor, fontSize: 11 }]}>{statusLabel}</Text>
@@ -291,7 +291,7 @@ export function ArtistSubscriptionItem({ sub, onPress }: { sub: SubscriptionReco
       <View style={{ flex: 1, marginLeft: 12 }}>
         <Text style={cardStyles.artistName}>{sub.artistName || 'Artist'}</Text>
         <Text style={cardStyles.artistSubInfo}>
-          {sub.planType} • ₹{sub.price}/mo
+          {sub.planType} • ₹{sub.price}/{sub.planType === 'YEARLY' ? 'yr' : 'mo'}
         </Text>
       </View>
       <View style={{ alignItems: 'flex-end' }}>

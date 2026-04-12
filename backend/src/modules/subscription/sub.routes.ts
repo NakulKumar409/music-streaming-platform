@@ -329,9 +329,9 @@ router.get("/details", requireAuth, (req: any, res: any) => {
     try {
       // 1. Platform Subscription
       const platformRow = await pool.query(
-        `SELECT s.id, s.type, s.status, s.plan_type, s.start_date, s.next_billing_date, 
+        `SELECT s.id, s.type, s.status, s.plan_type, s.start_date, s.next_billing_date,
                 s.grace_ends_at, s.end_date, s.auto_renew,
-                cfg.price, cfg.currency, cfg.features
+                cfg.price, cfg.yearly_price, cfg.currency, cfg.features
          FROM subscriptions s
          LEFT JOIN platform_subscription_configs cfg ON cfg.is_active = true
          WHERE s.user_id = $1 AND s.type = 'PLATFORM'
@@ -379,10 +379,18 @@ router.get("/details", requireAuth, (req: any, res: any) => {
         };
       });
 
+      // Determine correct price based on plan_type
+      const platformPrice = platform
+        ? (platform.plan_type === 'YEARLY'
+            ? (platform.yearly_price || platform.price)
+            : platform.price)
+        : null;
+
       return res.json({
         success: true,
         platform: platform ? {
           ...platform,
+          price: platformPrice,
           features: platform.features || ["HD streaming", "Ad-free experience", "Unlimited skips"]
         } : null,
         artists: processedArtistSubs,
