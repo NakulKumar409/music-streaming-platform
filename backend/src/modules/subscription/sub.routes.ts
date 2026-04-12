@@ -362,13 +362,30 @@ router.get("/details", requireAuth, (req: any, res: any) => {
         [userId]
       );
 
+      // Process artist subscriptions to add computed fields
+      const processedArtistSubs = artistRows.rows.map(s => {
+        const endDate = s.end_date ?? s.next_billing_date;
+        const now = new Date();
+        const daysLeft = s.next_billing_date 
+          ? Math.ceil((new Date(s.next_billing_date).getTime() - Date.now()) / (1000 * 86400))
+          : null;
+        
+        return {
+          ...s,
+          daysLeft,
+          isExpiringSoon: s.next_billing_date 
+            ? (new Date(s.next_billing_date).getTime() - Date.now()) < (48 * 3600 * 1000)
+            : false
+        };
+      });
+
       return res.json({
         success: true,
         platform: platform ? {
           ...platform,
           features: platform.features || ["HD streaming", "Ad-free experience", "Unlimited skips"]
         } : null,
-        artists: artistRows.rows,
+        artists: processedArtistSubs,
         transactions: txRows.rows
       });
     } catch (err) {

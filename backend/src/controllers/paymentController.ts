@@ -284,6 +284,7 @@ export const confirmPayment = async (req: any, res: Response) => {
 
     if (isPlatform) {
       // Try to update existing platform subscription first
+      console.log(`[PAYMENT] Looking for existing PLATFORM subscription for user=${userId}`);
       const updateResult = await pool.query(
         `UPDATE subscriptions
          SET status = 'ACTIVE', start_date = $2, end_date = $3, next_billing_date = $3, grace_ends_at = $4, updated_at = now()
@@ -291,21 +292,34 @@ export const confirmPayment = async (req: any, res: Response) => {
          RETURNING id`,
         [userId, startDate, endDate, graceEndsAt]
       );
+      
+      let platformSubscriptionId = updateResult.rows?.[0]?.id;
+      
       if (updateResult.rowCount === 0) {
         // No existing row — insert fresh
-        await pool.query(
+        console.log(`[PAYMENT] No existing PLATFORM subscription found for user=${userId}, creating new one`);
+        const insertResult = await pool.query(
           `INSERT INTO subscriptions (user_id, type, status, plan_type, start_date, end_date, next_billing_date, grace_ends_at, auto_renew, created_at, updated_at)
-           VALUES ($1, 'PLATFORM', 'ACTIVE', $5, $2, $3, $3, $4, true, now(), now())`,
+           VALUES ($1, 'PLATFORM', 'ACTIVE', $5, $2, $3, $3, $4, true, now(), now())
+           RETURNING id`,
           [userId, startDate, endDate, graceEndsAt, planDurationLabel]
         );
+        platformSubscriptionId = insertResult.rows?.[0]?.id;
+        console.log(`[PAYMENT] Created new PLATFORM subscription: id=${platformSubscriptionId}`);
+      } else {
+        console.log(`[PAYMENT] Updated existing PLATFORM subscription: id=${platformSubscriptionId}`);
       }
 
       // Record payment for PLATFORM subscription analytics (CRITICAL: this enables revenue calculation)
-      const platformSubResult = await pool.query(
-        `SELECT id FROM subscriptions WHERE user_id = $1 AND type = 'PLATFORM' AND status = 'ACTIVE' LIMIT 1`,
-        [userId]
-      );
-      const platformSubscriptionId = platformSubResult.rows?.[0]?.id;
+      if (!platformSubscriptionId) {
+        // Fallback: query for the subscription ID if we don't have it
+        console.log(`[PAYMENT] Fallback: querying for PLATFORM subscription ID for user=${userId}`);
+        const platformSubResult = await pool.query(
+          `SELECT id FROM subscriptions WHERE user_id = $1 AND type = 'PLATFORM' AND status = 'ACTIVE' LIMIT 1`,
+          [userId]
+        );
+        platformSubscriptionId = platformSubResult.rows?.[0]?.id;
+      }
 
       if (platformSubscriptionId) {
         const platformPaymentUuid = uuidv4();
@@ -617,12 +631,20 @@ export const razorpayWebhook = async (req: any, res: Response) => {
         const amountPaise = Number(paymentEntity?.amount ?? 0);
         
         if (sub && paymentId) {
-          await client.query(
-            `INSERT INTO payments (user_id, subscription_id, amount, status, razorpay_payment_id, created_at)
-             VALUES ($1, $2, $3, 'SUCCESS', $4, now())
-             ON CONFLICT (razorpay_payment_id) DO NOTHING`,
-            [sub.user_id, sub.id, amountPaise, paymentId]
-          );
+          const paymentUuid = uuidv4();
+          console.log(`[WEBHOOK] Recording payment for subscription ${sub.id}: amount=${amountPaise}, paymentId=${paymentId}, uuid=${paymentUuid}`);
+          try {
+            await client.query(
+              `INSERT INTO payments (id, user_id, subscription_id, amount, status, razorpay_payment_id, created_at)
+               VALUES ($1, $2, $3, $4, 'SUCCESS', $5, now())
+               ON CONFLICT (razorpay_payment_id) DO NOTHING`,
+              [paymentUuid, sub.user_id, sub.id, amountPaise, paymentId]
+            );
+            console.log(`[WEBHOOK] SUCCESS: Payment recorded for subscription ${sub.id}`);
+          } catch (err: any) {
+            console.error(`[WEBHOOK] FAILED to record payment: ${err.message}`);
+            logger.error({ subId: sub.id, paymentId, error: err.message }, "[WEBHOOK] Failed to record payment");
+          }
 
           const subInfo = await client.query(`SELECT type, artist_id FROM subscriptions WHERE id = $1`, [sub.id]);
           if (subInfo.rows[0]?.type === 'ARTIST') {

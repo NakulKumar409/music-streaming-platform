@@ -257,11 +257,39 @@ router.get("/summary", requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.get("/global-summary", requireAuth, requireAdmin, async (req, res) => {
-  const totalRevenue = await safeScalarNumber(
-    "SELECT COALESCE(SUM(amount)/100, 0)::float as value FROM payments WHERE (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID')",
-    [],
-    0
-  );
+  // Parse date range parameters (optional)
+  const startDateStr = String(req.query.startDate || '');
+  const endDateStr = String(req.query.endDate || '');
+  const startDate = startDateStr && startDateStr !== 'undefined' && !isNaN(Date.parse(startDateStr)) ? new Date(startDateStr) : null;
+  const endDate = endDateStr && endDateStr !== 'undefined' && !isNaN(Date.parse(endDateStr)) ? new Date(endDateStr) : null;
+  
+  // Build date filter conditions
+  const paymentsDateFilter = startDate && endDate 
+    ? "created_at >= $1 AND created_at <= $2 AND (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID')"
+    : "(UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID')";
+  
+  const transactionsDateFilter = startDate && endDate
+    ? "date >= $1 AND date <= $2 AND (UPPER(status) = 'CAPTURED' OR UPPER(status) = 'SUCCESS')"
+    : "(UPPER(status) = 'CAPTURED' OR UPPER(status) = 'SUCCESS')";
+  
+  const dateParams = startDate && endDate ? [startDate.toISOString(), endDate.toISOString()] : [];
+
+  // Total Revenue from payments table (convert paise -> INR)
+  const paymentsRevenueQuery = startDate && endDate
+    ? `SELECT COALESCE(SUM(amount)/100, 0)::float as value FROM payments WHERE ${paymentsDateFilter}`
+    : `SELECT COALESCE(SUM(amount)/100, 0)::float as value FROM payments WHERE ${paymentsDateFilter}`;
+    
+  const paymentsRevenue = await safeScalarNumber(paymentsRevenueQuery, dateParams, 0);
+  
+  // Also get revenue from transactions table as backup (for records that might not be in payments)
+  const transactionsRevenueQuery = startDate && endDate
+    ? `SELECT COALESCE(SUM(amount)/100, 0)::float as value FROM transactions WHERE ${transactionsDateFilter}`
+    : `SELECT COALESCE(SUM(amount)/100, 0)::float as value FROM transactions WHERE ${transactionsDateFilter}`;
+  
+  const transactionsRevenue = await safeScalarNumber(transactionsRevenueQuery, dateParams, 0);
+  
+  // Use the higher of the two values (in case one table has more complete data)
+  const totalRevenue = Math.max(paymentsRevenue, transactionsRevenue);
 
   const totalArtists = await safeScalarNumber(
     "SELECT COUNT(*)::int as value FROM users WHERE UPPER(role) = 'ARTIST'",
@@ -314,7 +342,14 @@ router.get("/global-summary", requireAuth, requireAdmin, async (req, res) => {
     totalArtists,
     totalFans,
     totalActiveUsers,
-    userGrowthRatePct: Number(growthRatePct.toFixed(2))
+    userGrowthRatePct: Number(growthRatePct.toFixed(2)),
+    currency: "INR",
+    // Debug info to help verify data sources
+    _debug: {
+      paymentsRevenue,
+      transactionsRevenue,
+      dateRange: startDate && endDate ? { startDate, endDate } : null
+    }
   });
 });
 
@@ -346,24 +381,67 @@ router.get("/growth", requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.get("/revenue-trends", requireAuth, requireAdmin, async (req, res) => {
-  const days = buildLastNDaysUtc(30);
-  const startIso = days[0].date + "T00:00:00.000Z";
+  // Parse optional date range parameters
+  const startDateStr = String(req.query.startDate || '');
+  const endDateStr = String(req.query.endDate || '');
+  const startDate = startDateStr && startDateStr !== 'undefined' && !isNaN(Date.parse(startDateStr)) ? new Date(startDateStr) : null;
+  const endDate = endDateStr && endDateStr !== 'undefined' && !isNaN(Date.parse(endDateStr)) ? new Date(endDateStr) : null;
+  
+  let days: { date: string }[];
+  let startIso: string;
+  
+  if (startDate && endDate) {
+    // Use provided date range
+    const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    const safeDayCount = Math.min(Math.max(dayCount, 1), 90); // Limit to 90 days max
+    days = [];
+    for (let i = safeDayCount - 1; i >= 0; i--) {
+      const d = new Date(endDate);
+      d.setUTCDate(d.getUTCDate() - i);
+      days.push({ date: toIsoDate(d) });
+    }
+    startIso = toIsoDate(startDate) + "T00:00:00.000Z";
+  } else {
+    // Default to last 30 days
+    days = buildLastNDaysUtc(30);
+    startIso = days[0].date + "T00:00:00.000Z";
+  }
 
-  const rows = await safeRows<{ date: string; value: number }>(
+  // Get revenue from payments table (convert paise to INR)
+  const paymentRows = await safeRows<{ date: string; value: number }>(
     "SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, COALESCE(SUM(amount)/100, 0)::float as value FROM payments WHERE created_at >= $1 AND (UPPER(status) = 'SUCCESS' OR UPPER(status) = 'PAID') GROUP BY 1 ORDER BY 1 ASC",
     [startIso],
     []
   );
+  
+  // Get revenue from transactions table (as backup for missing payments)
+  const transactionRows = await safeRows<{ date: string; value: number }>(
+    "SELECT to_char(date_trunc('day', date), 'YYYY-MM-DD') as date, COALESCE(SUM(amount)/100, 0)::float as value FROM transactions WHERE date >= $1 AND (UPPER(status) = 'CAPTURED' OR UPPER(status) = 'SUCCESS') GROUP BY 1 ORDER BY 1 ASC",
+    [startIso],
+    []
+  );
 
+  // Merge data from both sources (use max value if both have data for same date)
   const map = new Map<string, number>();
-  for (const r of rows) map.set(r.date, Number(r.value) || 0);
+  
+  // Add payments data
+  for (const r of paymentRows) {
+    map.set(r.date, Number(r.value) || 0);
+  }
+  
+  // Add transactions data (use higher value if date exists in both)
+  for (const r of transactionRows) {
+    const existingValue = map.get(r.date) || 0;
+    const transactionValue = Number(r.value) || 0;
+    map.set(r.date, Math.max(existingValue, transactionValue));
+  }
 
   const data = days.map((d) => ({
     date: d.date,
     value: map.get(d.date) ?? 0
   }));
 
-  return res.json({ success: true, data });
+  return res.json({ success: true, data, currency: "INR" });
 });
 
 router.get("/top-artists", requireAuth, requireAdmin, async (req, res) => {

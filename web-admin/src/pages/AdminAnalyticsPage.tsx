@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Bar,
@@ -57,10 +57,8 @@ function PremiumPlayLogo() {
 
 function formatCurrency(amount: number) {
   const n = Number(amount);
-  if (!Number.isFinite(n)) return "$0.00";
-  return n.toLocaleString(undefined, {
-    style: "currency",
-    currency: "USD",
+  if (!Number.isFinite(n)) return "₹0.00";
+  return "₹" + n.toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
@@ -123,6 +121,17 @@ function StatCard({
   );
 }
 
+function formatDateForInput(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
+function getDefaultDateRange() {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - 30); // Default to last 30 days
+  return { start, end };
+}
+
 export default function AdminAnalyticsPage() {
   const navigate = useNavigate();
 
@@ -132,6 +141,11 @@ export default function AdminAnalyticsPage() {
   const [topArtists, setTopArtists] = useState<TopArtist[]>([]);
   const [topCategories, setTopCategories] = useState<TopCategory[]>([]);
   const [subMetrics, setSubMetrics] = useState<any>(null);
+  
+  // Date range state
+  const defaultRange = getDefaultDateRange();
+  const [startDate, setStartDate] = useState<string>(formatDateForInput(defaultRange.start));
+  const [endDate, setEndDate] = useState<string>(formatDateForInput(defaultRange.end));
 
   const backgroundStyle = useMemo(() => {
     return {
@@ -142,45 +156,44 @@ export default function AdminAnalyticsPage() {
     } as const;
   }, []);
 
-  useEffect(() => {
-    let mounted = true;
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const dateParams = `?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
+      
+      const [g, r, a, c, m] = await Promise.all([
+        http.get<GlobalSummary>(`/api/v1/admin/analytics/global-summary${dateParams}`),
+        http.get<RevenueTrendsResponse>(`/api/v1/admin/analytics/revenue-trends${dateParams}`),
+        http.get<TopArtistsResponse>("/api/v1/admin/analytics/top-artists"),
+        http.get<TopCategoriesResponse>("/api/v1/admin/analytics/top-categories"),
+        http.get<any>("/api/v1/admin/analytics/metrics")
+      ]);
 
-    const run = async () => {
-      setLoading(true);
-      try {
-        const [g, r, a, c, m] = await Promise.all([
-          http.get<GlobalSummary>("/api/v1/admin/analytics/global-summary"),
-          http.get<RevenueTrendsResponse>("/api/v1/admin/analytics/revenue-trends"),
-          http.get<TopArtistsResponse>("/api/v1/admin/analytics/top-artists"),
-          http.get<TopCategoriesResponse>("/api/v1/admin/analytics/top-categories"),
-          http.get<any>("/api/v1/admin/analytics/metrics")
-        ]);
-
-        if (!mounted) return;
-
-        setGlobal(g.data);
-        setRevenue((r.data?.data ?? []) as SeriesPoint[]);
-        setTopArtists((a.data?.items ?? []) as TopArtist[]);
-        setTopCategories((c.data?.items ?? []) as TopCategory[]);
-        setSubMetrics(m.data?.metrics);
-      } catch (e: any) {
-        const status = e?.response?.status;
-        if (status === 401 || status === 403) {
-          localStorage.removeItem("adminToken");
-          navigate("/admin/login", { replace: true });
-          return;
-        }
-      } finally {
-        if (mounted) setLoading(false);
+      setGlobal(g.data);
+      setRevenue((r.data?.data ?? []) as SeriesPoint[]);
+      setTopArtists((a.data?.items ?? []) as TopArtist[]);
+      setTopCategories((c.data?.items ?? []) as TopCategory[]);
+      setSubMetrics(m.data?.metrics);
+      
+      // Debug: Log metrics data
+      console.log("[FRONTEND DEBUG] Metrics response:", m.data);
+      console.log("[FRONTEND DEBUG] Metrics object:", m.data?.metrics);
+      console.log("[FRONTEND DEBUG] Conversion rate:", m.data?.metrics?.conversionRate);
+    } catch (e: any) {
+      const status = e?.response?.status;
+      if (status === 401 || status === 403) {
+        localStorage.removeItem("adminToken");
+        navigate("/admin/login", { replace: true });
+        return;
       }
-    };
+    } finally {
+      setLoading(false);
+    }
+  }, [navigate, startDate, endDate]);
 
-    run();
-
-    return () => {
-      mounted = false;
-    };
-  }, [navigate]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const totalRevenue = global?.totalRevenue ?? 0;
   const platformFee = global?.platformFee ?? totalRevenue * 0.1;
@@ -217,7 +230,57 @@ export default function AdminAnalyticsPage() {
               : `User growth (last 30 days): ${Number(global?.userGrowthRatePct ?? 0).toFixed(2)}%`}
           </div>
 
-          <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {/* Date Range Selector */}
+          <div className="mt-6 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2 bg-[#1a1414]/60 border border-white/10 rounded-lg px-4 py-2">
+              <label className="text-[12px] text-[#8d7b77] uppercase tracking-wider">From</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-transparent text-[#e6d6d2] text-[14px] outline-none cursor-pointer"
+                style={{ colorScheme: 'dark' }}
+              />
+            </div>
+            <div className="flex items-center gap-2 bg-[#1a1414]/60 border border-white/10 rounded-lg px-4 py-2">
+              <label className="text-[12px] text-[#8d7b77] uppercase tracking-wider">To</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-transparent text-[#e6d6d2] text-[14px] outline-none cursor-pointer"
+                style={{ colorScheme: 'dark' }}
+              />
+            </div>
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              className="px-4 py-2 bg-[#c9853b] hover:bg-[#b8742a] text-white text-[13px] font-semibold rounded-lg transition-colors disabled:opacity-50"
+            >
+              {loading ? 'Loading...' : 'Apply'}
+            </button>
+            <button
+              onClick={() => {
+                const defaultRange = getDefaultDateRange();
+                setStartDate(formatDateForInput(defaultRange.start));
+                setEndDate(formatDateForInput(defaultRange.end));
+              }}
+              className="px-4 py-2 bg-transparent border border-white/20 hover:bg-white/10 text-[#b8a6a1] text-[13px] rounded-lg transition-colors"
+            >
+              Reset to Last 30 Days
+            </button>
+            <button
+              onClick={() => {
+                setStartDate('');
+                setEndDate('');
+              }}
+              className="px-4 py-2 bg-transparent border border-white/20 hover:bg-white/10 text-[#b8a6a1] text-[13px] rounded-lg transition-colors"
+            >
+              All Time
+            </button>
+          </div>
+
+          <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
             <StatCard
               title="Total Platform Revenue"
               value={loading ? "—" : formatCurrency(totalRevenue)}
@@ -225,15 +288,15 @@ export default function AdminAnalyticsPage() {
               accent="brown"
             />
             <StatCard
-              title="Platform Earnings"
-              value={loading ? "—" : formatCurrency(platformFee)}
-              sub={loading ? undefined : "10% commission"}
-              accent="orange"
-            />
-            <StatCard
               title="Total Fans"
               value={loading ? "—" : formatCompact(global?.totalFans ?? 0)}
               accent="purple"
+            />
+            <StatCard
+              title="Active Subscribers"
+              value={loading ? "—" : formatCompact(subMetrics?.activeSubscribers ?? 0)}
+              sub="Platform plan subscribers"
+              accent="brown"
             />
             <StatCard
               title="Total Artists"

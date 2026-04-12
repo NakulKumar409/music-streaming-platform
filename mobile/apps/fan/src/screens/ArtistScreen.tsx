@@ -1140,6 +1140,7 @@ const styles = StyleSheet.create({
   bannerImg: {
     width: '100%',
     height: '100%',
+    resizeMode: 'contain',
   },
   bannerGradient: {
     ...StyleSheet.absoluteFillObject,
