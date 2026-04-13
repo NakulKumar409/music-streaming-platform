@@ -2,6 +2,8 @@
  * Utility for parsing signed streaming URLs and extracting metadata like token expiry.
  */
 
+import logger from './logger';
+
 export const decodeJwtExpMsFromUrl = (url: string | null): number | null => {
   if (!url) return null;
   try {
@@ -23,7 +25,7 @@ export const decodeJwtExpMsFromUrl = (url: string | null): number | null => {
     if (!Number.isFinite(expSec) || expSec <= 0) return null;
     return expSec * 1000;
   } catch (e) {
-    console.warn('[StreamingUtils] Failed to decode JWT expiration from URL', e);
+    logger.warn('[StreamingUtils] Failed to decode JWT expiration from URL', e);
     return null;
   }
 };

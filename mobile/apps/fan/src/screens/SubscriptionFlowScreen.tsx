@@ -18,6 +18,7 @@ import { BadgeCheck, Check, Crown, Sparkles, Star, X, Zap, AlertTriangle, Shield
 import ErrorBoundary from '../ui/ErrorBoundary';
 import RazorpayCheckout from 'react-native-razorpay';
 import { apiV1 } from '../services/api';
+import logger from '../utils/logger';
 import { userService, UpsellStatus, PlatformConfig } from '../services/userService';
 // import * as Sharing from 'expo-sharing'; // Moved to dynamic require to prevent crash on boot
 
@@ -263,7 +264,7 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
               reason: 'User cancelled'
             });
           } catch (err) {
-            console.warn('[Payment] Failed to record cancellation', err);
+            logger.warn('[Payment] Failed to record cancellation', err);
           }
           setIsCreatingOrder(false);
           return;
@@ -333,7 +334,7 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
       // Note: shareAsync requires a file URI.
       Alert.alert('Success!', 'Ready to share your achievement!');
     } catch (e) {
-      console.log('Sharing error:', e);
+      logger.log('Sharing error:', e);
       Alert.alert('Sharing error', 'Failed to open sharing dialog. Rebuild your dev client to enable this.');
     }
   };

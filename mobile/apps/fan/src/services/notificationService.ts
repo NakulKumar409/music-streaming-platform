@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { apiV1 } from './api';
+import logger from '../utils/logger';
 
 // Configure how notifications appear when the app is in foreground
 Notifications.setNotificationHandler({
@@ -23,7 +24,7 @@ export type NotificationPermissionStatus = 'granted' | 'denied' | 'undetermined'
 export async function requestNotificationPermissions(): Promise<NotificationPermissionStatus> {
   if (!Device.isDevice) {
     // On iOS Simulator, we can still get a "granted" status but no real delivery
-    console.warn('[Notifications] Running on a simulator - push won\'t deliver on real device lock screen');
+    logger.warn('[Notifications] Running on a simulator - push won\'t deliver on real device lock screen');
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -61,10 +62,10 @@ export async function getExpoPushToken(): Promise<string | null> {
     if (!Device.isDevice) {
       // Mock for simulator so we can test the backend sync
       const mockToken = `ExponentPushToken[SIM_MOCK_${Math.random().toString(36).substring(7)}]`;
-      console.warn(`[Notifications] Real token failed on Simulator: ${err.message}. Using Mock: ${mockToken}`);
+      logger.warn(`[Notifications] Real token failed on Simulator: ${err.message}. Using Mock: ${mockToken}`);
       return mockToken;
     }
-    console.error('[Notifications] Failed to get push token:', err.message);
+    logger.error('[Notifications] Failed to get push token:', err.message);
     return null;
   }
 }
@@ -93,9 +94,9 @@ export async function registerForPushNotifications(): Promise<{
         pushNotifications: true,
         expoPushToken: token,
       });
-      console.log('[Notifications] Token registered with backend:', token);
+      logger.log('[Notifications] Token registered with backend:', token);
     } catch (err) {
-      console.error('[Notifications] Failed to sync token to backend:', err);
+      logger.error('[Notifications] Failed to sync token to backend:', err);
     }
   }
 
@@ -110,8 +111,8 @@ export async function disablePushNotifications(): Promise<void> {
     await apiV1.put('/user/settings', {
       pushNotifications: false,
     });
-    console.log('[Notifications] Push notifications disabled on backend');
+    logger.log('[Notifications] Push notifications disabled on backend');
   } catch (err) {
-    console.error('[Notifications] Failed to disable on backend:', err);
+    logger.error('[Notifications] Failed to disable on backend:', err);
   }
 }

@@ -165,7 +165,6 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
   let raw: ApiArtistContentItem[] = [];
   try {
     const url = `/content/artist/${encodeURIComponent(id)}`;
-    console.log(`[DEBUG] fetchArtistMedia - hitting: ${apiV1.defaults.baseURL}${url}`);
     const res = await apiV1.get(url);
     raw = Array.isArray(res.data?.items)
       ? (res.data.items as any)

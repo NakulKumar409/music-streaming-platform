@@ -131,13 +131,15 @@ export default function ContentPlayerScreen({ navigation, route }: any) {
         }
 
         // Future: POST /v1/stream/access to get signed URL before starting the audio.
-        const demoUrl =
-          (currentContent.mediaUrl ?? '').toString() ||
-          'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+        const mediaUrl = (currentContent.mediaUrl ?? '').toString();
+        if (!mediaUrl) {
+          if (mounted) setMediaError('No audio source available');
+          return;
+        }
 
         let player: AudioPlayer;
         try {
-          player = createAudioPlayer({ uri: demoUrl }, { updateInterval: 350 });
+          player = createAudioPlayer({ uri: mediaUrl }, { updateInterval: 350 });
           playerRef.current = player;
         } catch (e) {
           if (mounted) setMediaError('Failed to load audio');

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
 import NetInfo from '@react-native-community/netinfo';
 import OfflineScreen from '../screens/OfflineScreen';
+import logger from '../utils/logger';
 
 interface ConnectivityContextType {
   isConnected: boolean;
@@ -44,7 +45,7 @@ export const ConnectivityProvider: React.FC<ConnectivityProviderProps> = ({ chil
 
     if (!changed) return;
 
-    console.log('Network state changed:', { connected, reachable });
+    logger.log('Network state changed:', { connected, reachable });
 
     lastRef.current = {
       connected,
@@ -73,7 +74,7 @@ export const ConnectivityProvider: React.FC<ConnectivityProviderProps> = ({ chil
 
       applyConnectivity(connected, stableReachable);
     } catch (error) {
-      console.error('Error checking connection:', error);
+      logger.error('Error checking connection:', error);
       applyConnectivity(false, false);
     }
   };
@@ -103,7 +104,7 @@ export const ConnectivityProvider: React.FC<ConnectivityProviderProps> = ({ chil
   }, []);
 
   const handleRetry = () => {
-    console.log('Retry button pressed');
+    logger.log('Retry button pressed');
     checkConnection();
   };
 

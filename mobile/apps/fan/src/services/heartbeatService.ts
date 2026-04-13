@@ -1,4 +1,5 @@
 import { apiV1 } from './api';
+import logger from '../utils/logger';
 
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 let currentContentId: string | null = null;
@@ -18,14 +19,14 @@ export function startHeartbeat(contentId: string) {
       const response = await apiV1.post('/stream/heartbeat', { contentId });
 
       if (!response.data.success) {
-        console.warn('[Heartbeat] Failed to send heartbeat:', response.data.message);
+        logger.warn('[Heartbeat] Failed to send heartbeat:', response.data.message);
       }
     } catch (error: any) {
-      console.error('[Heartbeat] Error sending heartbeat:', error?.response?.status || error?.message);
+      logger.error('[Heartbeat] Error sending heartbeat:', error?.response?.status || error?.message);
     }
   }, 30000); // 30 seconds
 
-  console.log('[Heartbeat] Started for content:', contentId);
+  logger.log('[Heartbeat] Started for content:', contentId);
 }
 
 /**
@@ -36,7 +37,7 @@ export function stopHeartbeat() {
     clearInterval(heartbeatInterval);
     heartbeatInterval = null;
     currentContentId = null;
-    console.log('[Heartbeat] Stopped');
+    logger.log('[Heartbeat] Stopped');
   }
 }
 

@@ -7,4 +7,10 @@ if (!rawApiUrl) {
 }
 
 export const API_HOST_BASE_URL = rawApiUrl.replace(/\/+$/, '');
-export const ARTIST_WEB_URL = process.env.EXPO_PUBLIC_ARTIST_WEB_URL?.trim() || 'http://localhost:5175';
+const rawArtistWebUrl = process.env.EXPO_PUBLIC_ARTIST_WEB_URL?.trim();
+if (!rawArtistWebUrl) {
+  throw new Error(
+    'Missing EXPO_PUBLIC_ARTIST_WEB_URL. Define it in mobile/.env before running or building the app.'
+  );
+}
+export const ARTIST_WEB_URL = rawArtistWebUrl;

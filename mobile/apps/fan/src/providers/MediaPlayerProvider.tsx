@@ -13,6 +13,8 @@ import { Alert, AppState, Platform } from 'react-native';
 import TrackPlayer, { State as TrackPlayerState, Event, Capability, AppKilledPlaybackBehavior, Track, RepeatMode, PitchAlgorithm } from 'react-native-track-player';
 import { useVideoPlayer, VideoView, VideoPlayer } from 'expo-video';
 
+import { API_HOST_BASE_URL } from '../config/env';
+import logger from '../utils/logger';
 import { navigationRef } from '../navigation/rootNavigation';
 
 import MediaPlayerOverlay from '../ui/MediaPlayerOverlay';
@@ -168,7 +170,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           progressUpdateEventInterval: 1,
         });
         if (!unmounted) setIsPlayerReady(true);
-        console.log('[MediaPlayer] TrackPlayer setup complete with background capabilities');
+        logger.log('[MediaPlayer] TrackPlayer setup complete with background capabilities');
       }
     };
     setup();
@@ -177,7 +179,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
-      console.log('App state changed to:', next);
+      logger.log('App state changed to:', next);
       const item = currentItemRef.current;
       const s = stateRef.current;
 
@@ -405,13 +407,13 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       const now = Date.now();
       const delay = Math.max(10_000, expMs - now - 35_000); // 35s buffer
-      console.log(`[MediaPlayer] Scheduling ${type} refresh in ${Math.round(delay / 1000)}s`);
+      logger.log(`[MediaPlayer] Scheduling ${type} refresh in ${Math.round(delay / 1000)}s`);
 
       tokenRefreshTimerRef.current = setTimeout(() => {
         (async () => {
           const item = currentItemRef.current;
           if (!item?.id) return;
-          console.log(`[MediaPlayer] Background refreshing ${type} URL...`);
+          logger.log(`[MediaPlayer] Background refreshing ${type} URL...`);
           try {
             const nextUrl = await getPlaybackUrl(item.contentId ?? item.id, type, preferredQuality);
             if (type === 'audio') {
@@ -422,7 +424,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
               scheduleTokenRefresh(nextUrl, 'video');
             }
           } catch (e) {
-            console.warn(`[MediaPlayer] Failed to background refresh ${type} token`, e);
+            logger.warn(`[MediaPlayer] Failed to background refresh ${type} token`, e);
           }
         })().catch(() => undefined);
       }, delay);
@@ -439,7 +441,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     if (!item?.id || preloadedUrlRef.current?.id === item.id) return;
 
     try {
-      console.log('[MediaPlayer] Preloading next item', { id: item.id });
+      logger.log('[MediaPlayer] Preloading next item', { id: item.id });
       const url = await getPlaybackUrl(item.contentId ?? item.id, item.mediaType, preferredQuality);
       preloadedUrlRef.current = { id: item.id, url };
     } catch {
@@ -473,7 +475,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         try {
           playbackUrl = await getPlaybackUrl(item.contentId ?? item.id, 'audio', preferredQuality);
         } catch (e) {
-          console.warn('[MediaPlayer] getPlaybackUrl failed', e);
+          logger.warn('[MediaPlayer] getPlaybackUrl failed', e);
           Alert.alert('Playback Error', 'Could not get playback URL. Try again.');
           return;
         }
@@ -486,7 +488,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           const fallbackUrl = await getPlaybackUrl(item.contentId ?? item.id, 'audio', preferredQuality);
           if (fallbackUrl) {
             playbackUrl = normalizePlaybackUrl(fallbackUrl);
-            console.log('[MediaPlayer] Used fallback stream URL for', item.title);
+            logger.log('[MediaPlayer] Used fallback stream URL for', item.title);
           }
         } catch {
           // ignore – we'll surface the error below
@@ -505,7 +507,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       // track-player automatically handles background audio settings when configured with capabilities
 
       try {
-        console.log('[MediaPlayer] Loading audio', { playbackUrl });
+        logger.log('[MediaPlayer] Loading audio', { playbackUrl });
         setAudioSource(playbackUrl);
         scheduleTokenRefresh(playbackUrl, 'audio');
 
@@ -525,7 +527,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           isLiveStream: false,
         };
 
-        console.log('[MediaPlayer] Adding track to TrackPlayer:', {
+        logger.log('[MediaPlayer] Adding track to TrackPlayer:', {
           id: track.id,
           title: track.title,
           artist: track.artist,
@@ -542,9 +544,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           isPlaying: true,
         }));
         
-        console.log('[MediaPlayer] Audio playback started successfully');
+        logger.log('[MediaPlayer] Audio playback started successfully');
       } catch (err) {
-        console.warn('[MediaPlayer] Failed to create or play audio', err);
+        logger.warn('[MediaPlayer] Failed to create or play audio', err);
         Alert.alert(
           'Playback Error',
           'Could not start audio playback. Please check the media URL and try again.'
@@ -586,7 +588,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           item = { ...item, mediaUrl: url };
           nextState.queue[nextState.currentIndex] = item;
         } catch (e) {
-          console.warn('[MediaPlayer] getPlaybackUrl for video failed', e);
+          logger.warn('[MediaPlayer] getPlaybackUrl for video failed', e);
           Alert.alert('Playback Error', 'Could not get playback URL. Try again.');
           return;
         }
@@ -629,7 +631,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           setState((s) => ({ ...s, isPlaying: true }));
         }
       } catch (err) {
-        console.warn('[MediaPlayer] togglePlayPause audio failed', err);
+        logger.warn('[MediaPlayer] togglePlayPause audio failed', err);
       }
       return;
     }
@@ -646,7 +648,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         setState((s) => ({ ...s, isPlaying: true }));
       }
     } catch (err) {
-      console.warn('[MediaPlayer] togglePlayPause video failed', err);
+        logger.warn('[MediaPlayer] togglePlayPause video failed', err);
     }
   }, [currentItem, audioPlayer, videoPlayer]);
 
@@ -661,7 +663,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         try {
           TrackPlayer.seekTo(safe / 1000);
         } catch (err) {
-          console.warn('[MediaPlayer] audio seekTo failed', err);
+          logger.warn('[MediaPlayer] audio seekTo failed', err);
         }
         return;
       }
@@ -670,7 +672,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       try {
         videoPlayer.seekBy((safe - videoPlayer.currentTime * 1000) / 1000);
       } catch (err) {
-        console.warn('[MediaPlayer] video seekTo failed', err);
+          logger.warn('[MediaPlayer] video seekTo failed', err);
       }
     },
     [currentItem, audioPlayer, videoPlayer]
@@ -871,23 +873,23 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isPlayerReady) return;
 
-    console.log('[MediaPlayer] Setting up TrackPlayer event listeners');
+    logger.log('[MediaPlayer] Setting up TrackPlayer event listeners');
 
     // Listen for remote play events from notification/lock screen
     const remotePlaySubscription = TrackPlayer.addEventListener(Event.RemotePlay, () => {
-      console.log('[MediaPlayer] RemotePlay event received');
+      logger.log('[MediaPlayer] RemotePlay event received');
       setState((s) => ({ ...s, isPlaying: true }));
     });
 
     // Listen for remote pause events from notification/lock screen
     const remotePauseSubscription = TrackPlayer.addEventListener(Event.RemotePause, () => {
-      console.log('[MediaPlayer] RemotePause event received');
+      logger.log('[MediaPlayer] RemotePause event received');
       setState((s) => ({ ...s, isPlaying: false }));
     });
 
     // Listen for remote next events from notification/lock screen
     const remoteNextSubscription = TrackPlayer.addEventListener(Event.RemoteNext, () => {
-      console.log('[MediaPlayer] RemoteNext event received');
+      logger.log('[MediaPlayer] RemoteNext event received');
       const s = stateRef.current;
       if (!s.queue.length) return;
       const isLast = s.currentIndex >= Math.max(0, s.queue.length - 1);

@@ -1,4 +1,5 @@
 import { apiV1 } from './api';
+import logger from '../utils/logger';
 
 export type AudioQualityPref = 'HIGH' | 'DATA SAVER';
 
@@ -209,7 +210,7 @@ export const userService: UserService = {
         formattedTime: (res.data?.formattedTime || '0m').toString() 
       };
     } catch (err) {
-      console.warn('[Analytics] Failed to fetch listen time', err);
+      logger.warn('[Analytics] Failed to fetch listen time', err);
       return { totalMinutes: 0, formattedTime: '—' };
     }
   },
@@ -355,7 +356,7 @@ export const userService: UserService = {
     try {
       await apiV1.post('/subscriptions/upsell/track');
     } catch (err) {
-      console.warn('[Upsell] Track attempt failed', err);
+      logger.warn('[Upsell] Track attempt failed', err);
     }
   },
 

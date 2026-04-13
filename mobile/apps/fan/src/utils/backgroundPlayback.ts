@@ -1,5 +1,6 @@
 import TrackPlayer, { State, Event } from 'react-native-track-player';
 import { Platform } from 'react-native';
+import logger from './logger';
 
 /**
  * Background Playback Utilities
@@ -33,7 +34,7 @@ export async function getPlaybackState(): Promise<PlaybackState> {
       track: track?.id || null,
     };
   } catch (error) {
-    console.error('[BackgroundPlayback] Error getting playback state:', error);
+    logger.error('[BackgroundPlayback] Error getting playback state:', error);
     return {
       isPlaying: false,
       position: 0,
@@ -69,7 +70,7 @@ export function formatDuration(seconds: number): string {
  * Handle audio focus changes (for custom audio focus management if needed)
  */
 export function handleAudioFocusChange(focus: 'gain' | 'loss' | 'loss_transient' | 'loss_transient_can_duck') {
-  console.log('[BackgroundPlayback] Audio focus changed:', focus);
+  logger.log('[BackgroundPlayback] Audio focus changed:', focus);
   
   switch (focus) {
     case 'gain':
@@ -157,9 +158,9 @@ export async function configureAudioSession(): Promise<void> {
   try {
     // Additional iOS audio session configuration if needed
     // Most configuration is handled by TrackPlayer automatically
-    console.log('[BackgroundPlayback] iOS audio session configured');
+    logger.log('[BackgroundPlayback] iOS audio session configured');
   } catch (error) {
-    console.error('[BackgroundPlayback] Error configuring audio session:', error);
+    logger.error('[BackgroundPlayback] Error configuring audio session:', error);
   }
 }
 
@@ -172,7 +173,7 @@ export async function logPlaybackState(): Promise<void> {
     const track = await TrackPlayer.getActiveTrack();
     const queue = await TrackPlayer.getQueue();
     
-    console.log('[BackgroundPlayback] Current State:', {
+    logger.log('[BackgroundPlayback] Current State:', {
       isPlaying: state.isPlaying,
       position: formatDuration(state.position),
       duration: formatDuration(state.duration),
@@ -181,7 +182,7 @@ export async function logPlaybackState(): Promise<void> {
       queueLength: queue.length,
     });
   } catch (error) {
-    console.error('[BackgroundPlayback] Error logging state:', error);
+    logger.error('[BackgroundPlayback] Error logging state:', error);
   }
 }
 
@@ -191,9 +192,9 @@ export async function logPlaybackState(): Promise<void> {
 export async function resetPlayback(): Promise<void> {
   try {
     await TrackPlayer.reset();
-    console.log('[BackgroundPlayback] TrackPlayer reset complete');
+    logger.log('[BackgroundPlayback] TrackPlayer reset complete');
   } catch (error) {
-    console.error('[BackgroundPlayback] Error resetting TrackPlayer:', error);
+    logger.error('[BackgroundPlayback] Error resetting TrackPlayer:', error);
   }
 }
 
@@ -205,7 +206,7 @@ export async function testBackgroundPlayback(): Promise<boolean> {
   try {
     const isReady = await isTrackPlayerReady();
     if (!isReady) {
-      console.warn('[BackgroundPlayback] TrackPlayer not ready for test');
+      logger.warn('[BackgroundPlayback] TrackPlayer not ready for test');
       return false;
     }
 
@@ -224,12 +225,12 @@ export async function testBackgroundPlayback(): Promise<boolean> {
     setTimeout(async () => {
       await TrackPlayer.pause();
       await TrackPlayer.reset();
-      console.log('[BackgroundPlayback] Background playback test completed successfully');
+      logger.log('[BackgroundPlayback] Background playback test completed successfully');
     }, 2000);
 
     return true;
   } catch (error) {
-    console.error('[BackgroundPlayback] Background playback test failed:', error);
+    logger.error('[BackgroundPlayback] Background playback test failed:', error);
     return false;
   }
 }
