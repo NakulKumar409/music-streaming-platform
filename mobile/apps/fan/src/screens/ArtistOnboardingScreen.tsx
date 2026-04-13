@@ -8,6 +8,7 @@ import {
   Linking,
   StatusBar,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -144,10 +145,28 @@ const MotivationSection = () => {
 export default function ArtistOnboardingScreen() {
   const insets = useSafeAreaInsets();
 
-  const handleStartUploading = () => {
-    Linking.openURL(ARTIST_WEB_URL + '/artist/landing').catch((err) =>
-      console.error('Failed to open web url', err)
-    );
+  const handleStartUploading = async () => {
+    const artistUrl = ARTIST_WEB_URL + '/artist/landing';
+
+    // Check if the URL can be opened
+    const canOpen = await Linking.canOpenURL(artistUrl);
+    if (!canOpen) {
+      Alert.alert(
+        'Cannot Open Artist Dashboard',
+        'The artist dashboard URL is not accessible. Please ensure:\n\n1. The web-artist server is running (npm run dev in web-artist folder)\n2. Your device is on the same network as the server\n3. The EXPO_PUBLIC_ARTIST_WEB_URL in .env points to the correct server IP (not localhost)',
+        [{ text: 'OK', style: 'default' }]
+      );
+      return;
+    }
+
+    Linking.openURL(artistUrl).catch((err) => {
+      console.error('Failed to open web url', err);
+      Alert.alert(
+        'Error Opening Dashboard',
+        'Failed to open the artist dashboard. Please check that the server is running and try again.',
+        [{ text: 'OK', style: 'default' }]
+      );
+    });
   };
 
   return (

@@ -70,6 +70,7 @@ type ApiContentItem = {
   fileUrl?: string | null;
   artistName?: string | null;
   artistId?: string | number | null;
+  artistProfileImage?: string | null;
   createdAt?: string | null;
   useStreamAccess?: boolean;
   isLocked?: boolean;
@@ -89,6 +90,7 @@ type VideoCard = {
   title: string;
   artistName: string;
   artistId?: string;
+  artistProfileImage?: string;
   artworkUrl: string;
   mediaUrl: string;
   useStreamAccess?: boolean;
@@ -343,6 +345,7 @@ export default function VideoScreen() {
   const searchRequestIdRef = useRef(0);
 
   const listRef = useRef<FlatList<VideoCard> | null>(null);
+  const userPausedRef = useRef<boolean>(false); // Track if user explicitly paused
 
   const safePlay = useCallback((target: { play: () => any }, tag: string) => {
     try {
@@ -366,7 +369,10 @@ export default function VideoScreen() {
   const videoPlayer = useVideoPlayer(activePlaybackUrl, (player) => {
     player.loop = false;
     player.staysActiveInBackground = true;
-    safePlay(player as any, 'init');
+    // Only auto-play on init if user hasn't explicitly paused
+    if (!userPausedRef.current) {
+      safePlay(player as any, 'init');
+    }
   });
   const lastTapRef = useRef(0);
   const lastTapXRef = useRef(0);
@@ -545,6 +551,7 @@ export default function VideoScreen() {
           title: (it.title ?? 'Untitled').toString(),
           artistName: (it.artistName ?? 'Artist').toString(),
           artistId: artistIdValue,
+          artistProfileImage: (it.artistProfileImage ?? '').toString() || undefined,
           artworkUrl,
           mediaUrl: (it.mediaUrl ?? it.fileUrl ?? '').toString(),
           useStreamAccess: Boolean(it.useStreamAccess ?? (it.storage_provider === 'cloudinary')),
@@ -896,6 +903,7 @@ export default function VideoScreen() {
         setActiveVideoId(video.id);
         setActiveVideoMeta(video);
 
+        userPausedRef.current = false; // Reset for new video
         playedOnceRef.current = false;
         setShowControls(true);
         setPlaybackError(null);
@@ -1347,9 +1355,11 @@ export default function VideoScreen() {
       const v = videoPlayer;
       if (!v) return;
       if (v.playing) {
+        userPausedRef.current = true; // Mark as user-initiated pause
         await v.pause();
         setIsVideoPlaying(false);
       } else {
+        userPausedRef.current = false; // Reset when user plays
         await v.play();
         setIsVideoPlaying(true);
       }
@@ -1903,7 +1913,7 @@ export default function VideoScreen() {
                   
               <View style={styles.artistRowContainer}>
                     <Pressable style={styles.artistRow} onPress={onPressArtist}>
-                      <Image source={{ uri: getOptimizedImageUrl(activeVideoMeta.artworkUrl || FALLBACK_ARTWORK) }} style={styles.artistAvatar} />
+                      <Image source={{ uri: getOptimizedImageUrl(activeVideoMeta.artistProfileImage || FALLBACK_ARTWORK) }} style={styles.artistAvatar} />
                       <View style={styles.artistNameCol}>
                         <Text style={styles.artistRowName} numberOfLines={1}>
                           {activeVideoMeta.artistName}
