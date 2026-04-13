@@ -81,6 +81,7 @@ type ApiContentItem = {
   dislikeCount?: number | null;
   storageKey?: string | null;
   storage_provider?: string | null;
+  userReaction?: 'like' | 'dislike' | null;
 };
 
 type VideoCard = {
@@ -97,6 +98,7 @@ type VideoCard = {
   viewCount?: number | null;
   likeCount?: number | null;
   dislikeCount?: number | null;
+  userReaction?: 'like' | 'dislike' | null;
 };
 
 function toCount(v: unknown): number | null {
@@ -552,6 +554,7 @@ export default function VideoScreen() {
           viewCount: (toCount(it.viewCount) ?? toCount(it.views) ?? 0) as any,
           likeCount: (toCount(it.likeCount) ?? 0) as any,
           dislikeCount: (toCount(it.dislikeCount) ?? 0) as any,
+          userReaction: (it.userReaction ?? null) as any,
         };
       })
       .filter(Boolean) as VideoCard[];
@@ -1415,48 +1418,56 @@ export default function VideoScreen() {
     const id = activeVideoMeta.id;
 
     setReactionStateById((prev) => {
-      const cur = prev[id] ?? { reaction: null, likeDelta: 0, dislikeDelta: 0 };
+      const cur = prev[String(id)] ?? { reaction: activeVideoMeta.userReaction ?? null, likeDelta: 0, dislikeDelta: 0 };
       const currentReaction = cur.reaction;
       const nextReaction: 'like' | 'dislike' | null = currentReaction === 'like' ? null : 'like';
 
+      contentApi.post('/reaction', { contentId: id, reaction: nextReaction }).catch((e) => {
+        console.warn('[VideoScreen] Failed to like content', e);
+      });
+
       if (currentReaction === 'like') {
-        return { ...prev, [id]: { reaction: nextReaction, likeDelta: cur.likeDelta - 1, dislikeDelta: cur.dislikeDelta } };
+        return { ...prev, [String(id)]: { reaction: nextReaction, likeDelta: cur.likeDelta - 1, dislikeDelta: cur.dislikeDelta } };
       }
 
       if (currentReaction === 'dislike') {
         return {
           ...prev,
-          [id]: { reaction: nextReaction, likeDelta: cur.likeDelta + 1, dislikeDelta: cur.dislikeDelta - 1 },
+          [String(id)]: { reaction: nextReaction, likeDelta: cur.likeDelta + 1, dislikeDelta: cur.dislikeDelta - 1 },
         };
       }
 
-      return { ...prev, [id]: { reaction: nextReaction, likeDelta: cur.likeDelta + 1, dislikeDelta: cur.dislikeDelta } };
+      return { ...prev, [String(id)]: { reaction: nextReaction, likeDelta: cur.likeDelta + 1, dislikeDelta: cur.dislikeDelta } };
     });
-  }, [activeVideoMeta?.id]);
+  }, [activeVideoMeta]);
 
   const onPressDislike = useCallback(() => {
     if (!activeVideoMeta?.id) return;
     const id = activeVideoMeta.id;
 
     setReactionStateById((prev) => {
-      const cur = prev[id] ?? { reaction: null, likeDelta: 0, dislikeDelta: 0 };
+      const cur = prev[String(id)] ?? { reaction: activeVideoMeta.userReaction ?? null, likeDelta: 0, dislikeDelta: 0 };
       const currentReaction = cur.reaction;
       const nextReaction: 'like' | 'dislike' | null = currentReaction === 'dislike' ? null : 'dislike';
 
+      contentApi.post('/reaction', { contentId: id, reaction: nextReaction }).catch((e) => {
+        console.warn('[VideoScreen] Failed to dislike content', e);
+      });
+
       if (currentReaction === 'dislike') {
-        return { ...prev, [id]: { reaction: nextReaction, likeDelta: cur.likeDelta, dislikeDelta: cur.dislikeDelta - 1 } };
+        return { ...prev, [String(id)]: { reaction: nextReaction, likeDelta: cur.likeDelta, dislikeDelta: cur.dislikeDelta - 1 } };
       }
 
       if (currentReaction === 'like') {
         return {
           ...prev,
-          [id]: { reaction: nextReaction, likeDelta: cur.likeDelta - 1, dislikeDelta: cur.dislikeDelta + 1 },
+          [String(id)]: { reaction: nextReaction, likeDelta: cur.likeDelta - 1, dislikeDelta: cur.dislikeDelta + 1 },
         };
       }
 
-      return { ...prev, [id]: { reaction: nextReaction, likeDelta: cur.likeDelta, dislikeDelta: cur.dislikeDelta + 1 } };
+      return { ...prev, [String(id)]: { reaction: nextReaction, likeDelta: cur.likeDelta, dislikeDelta: cur.dislikeDelta + 1 } };
     });
-  }, [activeVideoMeta?.id]);
+  }, [activeVideoMeta]);
 
   const onPressArtist = useCallback(() => {
     const artistId = activeVideoMeta?.artistId;
@@ -1890,7 +1901,7 @@ export default function VideoScreen() {
                     {activeVideoMeta.title}
                   </Text>
                   
-                  <View style={styles.artistRowContainer}>
+              <View style={styles.artistRowContainer}>
                     <Pressable style={styles.artistRow} onPress={onPressArtist}>
                       <Image source={{ uri: getOptimizedImageUrl(activeVideoMeta.artworkUrl || FALLBACK_ARTWORK) }} style={styles.artistAvatar} />
                       <View style={styles.artistNameCol}>
@@ -1905,12 +1916,12 @@ export default function VideoScreen() {
 
                   {(() => {
                     const id = activeVideoMeta.id;
-                    const state = reactionStateById[id] ?? { reaction: null, likeDelta: 0, dislikeDelta: 0 };
+                    const state = reactionStateById[String(id)] ?? { reaction: activeVideoMeta.userReaction ?? null, likeDelta: 0, dislikeDelta: 0 };
                     const reaction = state.reaction;
-                    const likeBase = typeof activeVideoMeta.likeCount === 'number' ? activeVideoMeta.likeCount : null;
-                    const dislikeBase = typeof activeVideoMeta.dislikeCount === 'number' ? activeVideoMeta.dislikeCount : null;
-                    const likeCount = typeof likeBase === 'number' ? Math.max(0, likeBase + state.likeDelta) : null;
-                    const dislikeCount = typeof dislikeBase === 'number' ? Math.max(0, dislikeBase + state.dislikeDelta) : null;
+                    const likeBase = typeof activeVideoMeta.likeCount === 'number' ? activeVideoMeta.likeCount : 0;
+                    const dislikeBase = typeof activeVideoMeta.dislikeCount === 'number' ? activeVideoMeta.dislikeCount : 0;
+                    const likeCount = Math.max(0, likeBase + state.likeDelta);
+                    const dislikeCount = Math.max(0, dislikeBase + state.dislikeDelta);
 
                     const likeActive = reaction === 'like';
                     const dislikeActive = reaction === 'dislike';

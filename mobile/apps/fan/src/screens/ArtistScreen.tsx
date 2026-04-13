@@ -127,6 +127,9 @@ type Song = {
   mediaUrl: string;
   useStreamAccess?: boolean;
   createdAt?: string | null;
+  likeCount?: number | null;
+  dislikeCount?: number | null;
+  userReaction?: 'like' | 'dislike' | null;
 };
 
 type Artist = {
@@ -310,6 +313,9 @@ export default function ArtistScreen({ navigation, route }: any) {
           mediaUrl: it.mediaUrl,
           useStreamAccess: it.useStreamAccess,
           createdAt: it.createdAt ?? null,
+          likeCount: it.likeCount ?? null,
+          dislikeCount: it.dislikeCount ?? null,
+          userReaction: it.userReaction ?? null,
         });
 
         setArtist(normalizedArtist);
@@ -467,6 +473,9 @@ export default function ArtistScreen({ navigation, route }: any) {
             mediaUrl: song.mediaUrl || '',
             useStreamAccess: song.useStreamAccess,
             category: 'Artist Upload',
+            likeCount: song.likeCount ?? 0,
+            dislikeCount: song.dislikeCount ?? 0,
+            userReaction: song.userReaction ?? null,
           },
         },
       });

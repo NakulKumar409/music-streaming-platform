@@ -625,7 +625,7 @@ const lockedStyles = StyleSheet.create({
     marginBottom: 8,
   },
   body: {
-    color: 'rgba(255,255,255,0.65)',
+    color: 'rgba(255,255,255,0.9)',
     fontSize: 13,
     fontWeight: '600',
     textAlign: 'center',
@@ -651,7 +651,7 @@ const qualityStyles = StyleSheet.create({
   },
   textWrap: { flex: 1, marginLeft: 10 },
   title: { color: '#fff', fontSize: 13, fontWeight: '800' },
-  sub: { color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: '600', marginTop: 2 },
+  sub: { color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: '600', marginTop: 2 },
   btn: {
     backgroundColor: '#4AA3FF',
     borderRadius: 10,
@@ -688,7 +688,7 @@ const cardStyles = StyleSheet.create({
     backgroundColor: 'rgba(74,163,255,0.12)',
   },
   planTitle: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  planType: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700', marginTop: 2 },
+  planType: { color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: '700', marginTop: 2 },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -707,7 +707,7 @@ const cardStyles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.07)',
   },
-  expiryLabel: { color: 'rgba(255,255,255,0.55)', fontSize: 13, fontWeight: '600' },
+  expiryLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600' },
   expiryValue: { color: '#fff', fontSize: 13, fontWeight: '800' },
 
   warningRow: {
@@ -734,17 +734,17 @@ const cardStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.10)',
   },
-  manageBtnText: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '800' },
+  manageBtnText: { color: 'rgba(255,255,255,0.95)', fontSize: 13, fontWeight: '800' },
   
   // New Styles
   detailsGrid: { flexDirection: 'row', gap: 12, marginTop: 12, marginBottom: 16 },
   detailItem: { flex: 1, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-  detailLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', marginBottom: 4 },
+  detailLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', marginBottom: 4 },
   detailValue: { color: '#fff', fontSize: 13, fontWeight: '800' },
   benefitsList: { marginBottom: 20, gap: 8 },
   benefitListItem: { flexDirection: 'row', alignItems: 'center' },
   benefitTick: { color: '#4AA3FF', fontSize: 14, fontWeight: '900', marginRight: 10, width: 16 },
-  benefitListText: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600' },
+  benefitListText: { color: 'rgba(255,255,255,0.95)', fontSize: 13, fontWeight: '600' },
 
   artistItem: { 
     flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', 
@@ -752,13 +752,13 @@ const cardStyles = StyleSheet.create({
   },
   artistAvatarWrap: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,122,24,0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,122,24,0.2)' },
   artistName: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  artistSubInfo: { color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '600', marginTop: 2 },
-  artistExpiry: { color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '500' },
+  artistSubInfo: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '600', marginTop: 2 },
+  artistExpiry: { color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: '500' },
 
   emptyContainer: { alignItems: 'center', paddingVertical: 40, paddingHorizontal: 20, backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 24, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.1)' },
   emptyIconWrap: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.03)', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
   emptyTitle: { color: '#fff', fontSize: 18, fontWeight: '900', marginBottom: 8, textAlign: 'center' },
-  emptySub: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '600', textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  emptySub: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '600', textAlign: 'center', lineHeight: 20, marginBottom: 24 },
   exploreBtn: { width: 200, height: 52, borderRadius: 26, overflow: 'hidden' },
   exploreBtnInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   exploreBtnText: { color: '#fff', fontSize: 15, fontWeight: '900' },

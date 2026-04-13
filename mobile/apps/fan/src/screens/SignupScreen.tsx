@@ -1,7 +1,7 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  KeyboardAvoidingView,
+
   Platform,
   Pressable,
   ScrollView,
@@ -457,16 +457,13 @@ export default function SignupScreen({ navigation }: Props) {
     >
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        <KeyboardAvoidingView
-          behavior={Platform.select({ ios: 'padding', android: 'height' })}
-          style={styles.overlay}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          automaticallyAdjustKeyboardInsets={true}
         >
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={[styles.content, isDesktop ? styles.contentDesktop : styles.contentMobile]}>
+          <View style={[styles.content, isDesktop ? styles.contentDesktop : styles.contentMobile]}>
               <Pressable onPress={onBack} hitSlop={10} style={styles.backBtn}>
                 <ArrowLeft color={Colors.textPrimary} size={22} />
                 <Text style={styles.backText}>Back</Text>
@@ -503,9 +500,8 @@ export default function SignupScreen({ navigation }: Props) {
                   </Pressable>
                 </View>
               </BlurView>
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     </LinearGradient>
   );

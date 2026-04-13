@@ -133,6 +133,9 @@ export type ApiArtistContentItem = {
   useStreamAccess?: boolean;
   createdAt?: string | null;
   created_at?: string | null;
+  likeCount?: number | null;
+  dislikeCount?: number | null;
+  userReaction?: 'like' | 'dislike' | null;
 };
 
 export type ArtistMediaItem = {
@@ -145,6 +148,9 @@ export type ArtistMediaItem = {
   locked: boolean;
   useStreamAccess?: boolean;
   createdAt?: string | null;
+  likeCount?: number | null;
+  dislikeCount?: number | null;
+  userReaction?: 'like' | 'dislike' | null;
 };
 
 function resolveMediaUrl(url: string) {
@@ -227,6 +233,9 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
           locked: false,
           useStreamAccess,
           createdAt,
+          likeCount: it.likeCount,
+          dislikeCount: it.dislikeCount,
+          userReaction: it.userReaction,
         });
       }
       if (effectiveVideoUrl || useStreamAccess) {
@@ -240,6 +249,9 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
           locked: false,
           useStreamAccess,
           createdAt,
+          likeCount: it.likeCount,
+          dislikeCount: it.dislikeCount,
+          userReaction: it.userReaction,
         });
       }
       continue;
@@ -259,6 +271,9 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
       locked: false,
       useStreamAccess,
       createdAt,
+      likeCount: it.likeCount,
+      dislikeCount: it.dislikeCount,
+      userReaction: it.userReaction,
     });
   }
 

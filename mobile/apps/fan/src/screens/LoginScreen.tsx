@@ -4,16 +4,13 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Keyboard,
-  KeyboardAvoidingView,
+  StyleSheet,
+  Text,
+  TextInput,
   Platform,
   Pressable,
   ScrollView,
   StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableWithoutFeedback,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -100,23 +97,18 @@ export default function LoginScreen({ navigation, route }: Props) {
     >
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
-          behavior={Platform.select({ ios: 'padding', android: 'height' })}
-          style={styles.overlay}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          automaticallyAdjustKeyboardInsets={true}
         >
-          {isNative ? (
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-              <ScrollView
-                contentContainerStyle={styles.scrollContent}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-              >
-                <View
-                  style={[
-                    styles.content,
-                    isDesktop ? styles.contentDesktop : styles.contentMobile,
-                  ]}
-                >
+          <View
+            style={[
+              styles.content,
+              isDesktop ? styles.contentDesktop : styles.contentMobile,
+            ]}
+          >
                   <View
                     style={[
                       styles.logoWrapper,
@@ -204,112 +196,8 @@ export default function LoginScreen({ navigation, route }: Props) {
                       </Pressable>
                     </View>
                   </BlurView>
-                </View>
-              </ScrollView>
-            </TouchableWithoutFeedback>
-          ) : (
-            <ScrollView
-              contentContainerStyle={styles.scrollContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              <View
-                style={[
-                  styles.content,
-                  isDesktop ? styles.contentDesktop : styles.contentMobile,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.logoWrapper,
-                    isDesktop && styles.logoWrapperDesktop,
-                  ]}
-                >
-                  <Image
-                    source={require('../logo.png')}
-                    style={styles.logoImage}
-                    resizeMode="contain"
-                  />
-                </View>
-
-                <BlurView intensity={25} tint="dark" style={[styles.cardBlur, isDesktop && styles.cardBlurDesktop]}>
-                  <View style={[styles.cardInner, isDesktop && styles.cardInnerDesktop]}>
-                    <Text style={styles.title}>Login to Fan App</Text>
-                    {!!errorText && <Text style={styles.errorText}>{errorText}</Text>}
-
-                    <Text style={styles.label}>Username</Text>
-                    <View style={styles.inputGlass}>
-                      <TextInput
-                        placeholder="Email"
-                        placeholderTextColor={Colors.textMuted}
-                        style={styles.input}
-                        value={email}
-                        onChangeText={(t) => {
-                          setEmail(t);
-                          if (errorText) setErrorText('');
-                        }}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                        keyboardType="email-address"
-                        returnKeyType="next"
-                      />
-                    </View>
-
-                    <Text style={styles.label}>Password</Text>
-                    <View style={styles.passwordContainer}>
-                      <TextInput
-                        placeholder="Password"
-                        placeholderTextColor={Colors.textMuted}
-                        style={styles.passwordInput}
-                        secureTextEntry={!isPasswordVisible}
-                        value={password}
-                        onChangeText={(t) => {
-                          setPassword(t);
-                          if (errorText) setErrorText('');
-                        }}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                        returnKeyType="done"
-                        onSubmitEditing={() => {
-                          if (canSubmit) void onSubmit();
-                        }}
-                      />
-                      <Pressable
-                        onPress={() => setIsPasswordVisible((v) => !v)}
-                        hitSlop={10}
-                        style={styles.eyeButton}
-                      >
-                        {isPasswordVisible ? (
-                          <EyeOff color={Colors.textPrimary} size={18} />
-                        ) : (
-                          <Eye color={Colors.textPrimary} size={18} />
-                        )}
-                      </Pressable>
-                    </View>
-
-
-
-                    <Pressable onPress={onSubmit} disabled={!canSubmit}>
-                      <View style={styles.buttonGlass}>
-                        <LinearGradient colors={[Colors.accent, Colors.accent]} style={styles.button}>
-                          {isLoggingIn ? (
-                            <ActivityIndicator color="#000" />
-                          ) : (
-                            <Text style={styles.btnText}>Login</Text>
-                          )}
-                        </LinearGradient>
-                      </View>
-                    </Pressable>
-
-                    <Pressable onPress={() => navigation.navigate('Signup')} hitSlop={10}>
-                      <Text style={styles.link}>Create account</Text>
-                    </Pressable>
-                  </View>
-                </BlurView>
-              </View>
-            </ScrollView>
-          )}
-        </KeyboardAvoidingView>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     </LinearGradient>
   );

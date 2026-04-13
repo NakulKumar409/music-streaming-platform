@@ -220,6 +220,10 @@ export default function HomeScreen({ navigation }: any) {
               mediaType,
               mediaUrl: (it.mediaUrl ?? it.fileUrl ?? null) as any,
               useStreamAccess: Boolean(it.useStreamAccess),
+              viewCount: (it.viewCount ?? it.views ?? 0) as any,
+              likeCount: (it.likeCount ?? 0) as any,
+              dislikeCount: (it.dislikeCount ?? 0) as any,
+              userReaction: (it.userReaction ?? null) as any,
             };
           })
           .sort((a, b) => {
@@ -418,7 +422,7 @@ export default function HomeScreen({ navigation }: any) {
             style={styles.artistBannerGradient}
           >
             <View style={styles.artistBannerContent}>
-              <View>
+              <View style={{ flex: 1, paddingRight: 12 }}>
                 <Text style={styles.artistBannerTitle}>
                   {user?.role === 'ARTIST' ? 'Artist Dashboard' : 'Become an Artist'}
                 </Text>

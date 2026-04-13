@@ -69,6 +69,7 @@ router.get("/", (req, res) => {
              (SELECT COUNT(*)::int FROM content_plays WHERE content_id = c.id) as view_count,
              (SELECT COUNT(*)::int FROM content_reactions WHERE content_id = c.id AND reaction = 'like') as like_count,
              (SELECT COUNT(*)::int FROM content_reactions WHERE content_id = c.id AND reaction = 'dislike') as dislike_count,
+             (CASE WHEN $1::int IS NULL THEN NULL ELSE (SELECT reaction FROM content_reactions WHERE content_id = c.id AND user_id = $1 LIMIT 1) END) as user_reaction,
                              (CASE 
                    WHEN $1::int IS NULL THEN false
                    ELSE EXISTS (
@@ -160,7 +161,8 @@ router.get("/", (req, res) => {
           isLocked,
           viewCount: r.view_count,
           likeCount: r.like_count,
-          dislikeCount: r.dislike_count
+          dislikeCount: r.dislike_count,
+          userReaction: r.user_reaction ?? null
         };
       });
 
@@ -228,6 +230,7 @@ router.get("/artist/:artistId", (req, res) => {
                 (SELECT COUNT(*)::int FROM content_plays WHERE content_id = c.id) as view_count,
                 (SELECT COUNT(*)::int FROM content_reactions WHERE content_id = c.id AND reaction = 'like') as like_count,
                 (SELECT COUNT(*)::int FROM content_reactions WHERE content_id = c.id AND reaction = 'dislike') as dislike_count,
+                (CASE WHEN $2::int IS NULL THEN NULL ELSE (SELECT reaction FROM content_reactions WHERE content_id = c.id AND user_id = $2 LIMIT 1) END) as user_reaction,
                                 (CASE 
                   WHEN $2::int IS NULL THEN false
                   ELSE EXISTS (
@@ -322,7 +325,8 @@ router.get("/artist/:artistId", (req, res) => {
           createdAt: r.created_at,
           viewCount: r.view_count,
           likeCount: r.like_count,
-          dislikeCount: r.dislike_count
+          dislikeCount: r.dislike_count,
+          userReaction: r.user_reaction ?? null
         };
       });
 
@@ -375,14 +379,15 @@ router.get("/:id", (req, res) => {
              c.storage_provider,
              c.subscription_required,
              c.artist_id,
-             COALESCE(NULLIF(u.name, ''), NULLIF(u.full_name, ''), NULLIF(u.username, ''), NULLIF(split_part(u.email, '@', 1), ''), u.email) as artist_name
+             COALESCE(NULLIF(u.name, ''), NULLIF(u.full_name, ''), NULLIF(u.username, ''), NULLIF(split_part(u.email, '@', 1), ''), u.email) as artist_name,
+             (CASE WHEN $2::int IS NULL THEN NULL ELSE (SELECT reaction FROM content_reactions WHERE content_id = c.id AND user_id = $2 LIMIT 1) END) as user_reaction
            FROM content_items c
            LEFT JOIN users u ON u.id = c.artist_id
            WHERE c.id = $1
              AND COALESCE(c.is_approved, false) = true
              AND UPPER(COALESCE(c.lifecycle_state, '')) = 'PUBLISHED'
            LIMIT 1`,
-          [id]
+          [id, userId]
         );
       } catch (err: any) {
         if (err?.code === '42703') {
@@ -401,14 +406,15 @@ router.get("/:id", (req, res) => {
                c.storage_provider,
                c.subscription_required,
                c.artist_id,
-               COALESCE(NULLIF(u.name, ''), NULLIF(split_part(u.email, '@', 1), ''), u.email) as artist_name
+               COALESCE(NULLIF(u.name, ''), NULLIF(split_part(u.email, '@', 1), ''), u.email) as artist_name,
+               (CASE WHEN $2::int IS NULL THEN NULL ELSE (SELECT reaction FROM content_reactions WHERE content_id = c.id AND user_id = $2 LIMIT 1) END) as user_reaction
              FROM content_items c
              LEFT JOIN users u ON u.id = c.artist_id
              WHERE c.id = $1
                AND COALESCE(c.is_approved, false) = true
                AND UPPER(COALESCE(c.lifecycle_state, '')) = 'PUBLISHED'
              LIMIT 1`,
-            [id]
+            [id, userId]
           );
         } else {
           throw err;
@@ -482,6 +488,7 @@ router.get("/:id", (req, res) => {
           videoUrl: finalVideoUrl,
           storage_provider: r.storage_provider ?? 'local',
           useStreamAccess,
+          userReaction: r.user_reaction ?? null,
         }
       });
     } catch (err: any) {

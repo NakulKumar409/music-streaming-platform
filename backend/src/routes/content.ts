@@ -371,6 +371,42 @@ router.post("/report", requireAuth, async (req: any, res: any) => {
   }
 });
 
+router.post("/reaction", requireAuth, async (req: any, res: any) => {
+  const correlationId = req?.correlationId || "-";
+  const userId = Number(req.user?.id);
+  if (!Number.isFinite(userId) || userId <= 0) {
+    return res.status(401).json({ success: false, message: "Unauthorized", correlationId });
+  }
+
+  const { contentId, reaction } = req.body as { contentId?: any; reaction?: string | null };
+  const cid = Number(contentId);
+  
+  if (!Number.isFinite(cid) || cid <= 0) {
+    return res.status(400).json({ success: false, message: "contentId is required", correlationId });
+  }
+
+  try {
+    if (reaction === 'like' || reaction === 'dislike') {
+      await pool.query(
+        `INSERT INTO public.content_reactions (content_id, user_id, reaction)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (content_id, user_id) DO UPDATE SET reaction = EXCLUDED.reaction`,
+        [cid, userId, reaction]
+      );
+    } else {
+      await pool.query(
+        `DELETE FROM public.content_reactions WHERE content_id = $1 AND user_id = $2`,
+        [cid, userId]
+      );
+    }
+
+    return res.json({ success: true, correlationId });
+  } catch (err: any) {
+    console.error("[content/reaction] error", correlationId, err?.message);
+    return res.status(500).json({ success: false, message: "Failed to set reaction", correlationId });
+  }
+});
+
 router.get("/mine", requireAuth, requireArtist, async (req: any, res: any) => {
   const correlationId = req?.correlationId || "-";
 

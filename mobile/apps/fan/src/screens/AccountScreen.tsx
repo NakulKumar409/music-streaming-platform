@@ -388,7 +388,7 @@ export default function AccountScreen() {
                 onPress={() => setShowArtistSubList(true)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.statValue}>{subscriptionCount}</Text>
+                <Text style={styles.statValue}>{artistSubs.length}</Text>
                 <Text style={styles.statLabel}>Subscribed Artists</Text>
               </TouchableOpacity>
               <View style={styles.statBox}>
@@ -697,7 +697,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sub: {
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.85)',
     fontSize: 14,
     fontWeight: '500',
     textAlign: 'center',
@@ -707,7 +707,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   sectionTitle: {
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.95)',
     fontSize: 16,
     fontWeight: '700',
     marginBottom: 12,
@@ -731,7 +731,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   subGroupTitle: {
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(255,255,255,0.8)',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1,
@@ -750,7 +750,7 @@ const styles = StyleSheet.create({
   },
   upsellNudgeText: {
     flex: 1,
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.9)',
     fontSize: 12,
     fontWeight: '600',
     marginLeft: 10,
@@ -775,7 +775,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statusLabel: {
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.85)',
     fontSize: 13,
     fontWeight: '500',
   },
@@ -810,7 +810,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   menuSubText: {
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(255,255,255,0.8)',
     fontSize: 12,
     fontWeight: '500',
     marginTop: 2,
@@ -823,7 +823,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   userInfoLabel: {
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.8)',
     fontSize: 13,
     fontWeight: '500',
     marginTop: 12,
@@ -888,7 +888,7 @@ const styles = StyleSheet.create({
   },
   profileEmail: {
     marginTop: 6,
-    color: 'rgba(255,255,255,0.65)',
+    color: 'rgba(255,255,255,0.9)',
     fontSize: 13,
     fontWeight: '500',
   },
@@ -926,7 +926,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     marginTop: 4,
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.85)',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -960,7 +960,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   upgradeCtaTitle: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  upgradeCtaSub: { color: 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: '600', marginTop: 2 },
+  upgradeCtaSub: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '600', marginTop: 2 },
   upgradeCtaArrow: { color: '#4AA3FF', fontSize: 18, fontWeight: '900' },
   nudgeCard: {
     flexDirection: 'row',
@@ -972,7 +972,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginTop: 4,
   },
-  nudgeText: { flex: 1, color: 'rgba(255,255,255,0.65)', fontSize: 12, fontWeight: '600', marginLeft: 8 },
+  nudgeText: { flex: 1, color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '600', marginLeft: 8 },
   nudgeArrow: { color: '#4AA3FF', fontSize: 16, fontWeight: '900' },
   secondaryButton: {
     flex: 1,
