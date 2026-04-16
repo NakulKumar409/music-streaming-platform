@@ -101,6 +101,7 @@ type VideoCard = {
   likeCount?: number | null;
   dislikeCount?: number | null;
   userReaction?: 'like' | 'dislike' | null;
+  isLocked?: boolean;
 };
 
 function toCount(v: unknown): number | null {
@@ -562,6 +563,7 @@ export default function VideoScreen() {
           likeCount: (toCount(it.likeCount) ?? 0) as any,
           dislikeCount: (toCount(it.dislikeCount) ?? 0) as any,
           userReaction: (it.userReaction ?? null) as any,
+          isLocked: Boolean(it.isLocked || it.locked),
         };
       })
       .filter(Boolean) as VideoCard[];
@@ -1517,6 +1519,11 @@ export default function VideoScreen() {
         <Pressable style={styles.rowItem} onPress={() => onPressVideo(item)}>
           <View style={[styles.rowThumbWrap, isActive ? styles.rowThumbWrapActive : null]}>
             <Image source={{ uri: getOptimizedImageUrl(item.artworkUrl || FALLBACK_ARTWORK) }} style={styles.rowThumb} />
+            {item.isLocked && (
+              <View style={styles.lockBadgeMini}>
+                <Lock size={12} color="#fff" />
+              </View>
+            )}
             <View style={styles.rowThumbOverlay}>
               <View style={styles.rowPlayBadge}>
                 <Image
@@ -1572,7 +1579,14 @@ export default function VideoScreen() {
         <Text style={styles.relatedTitle}>Related Videos</Text>
         {related.map((v) => (
           <Pressable key={v.id} style={styles.relatedRow} onPress={() => onPressVideo(v)}>
-            <Image source={{ uri: getOptimizedImageUrl(v.artworkUrl || FALLBACK_ARTWORK) }} style={styles.relatedThumb} />
+            <View>
+              <Image source={{ uri: getOptimizedImageUrl(v.artworkUrl || FALLBACK_ARTWORK) }} style={styles.relatedThumb} />
+              {v.isLocked && (
+                <View style={[styles.lockBadgeMini, { top: 4, right: 4 }]}>
+                   <Lock size={10} color="#fff" />
+                </View>
+              )}
+            </View>
             <View style={styles.relatedMeta}>
               <Text style={styles.relatedRowTitle} numberOfLines={2}>
                 {v.title}
@@ -2824,5 +2838,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+  },
+  lockBadgeMini: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
 });

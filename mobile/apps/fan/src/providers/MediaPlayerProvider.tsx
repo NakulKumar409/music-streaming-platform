@@ -493,6 +493,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   const loadAndPlayAudio = useCallback(
     async (item: MediaItem) => {
+      if (await blockLockedPlayback(item)) return;
       const loadToken = (audioLoadTokenRef.current += 1);
       await stopVideo();
       await unloadAudio();
@@ -611,10 +612,19 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   const blockLockedPlayback = useCallback(
     async (item: MediaItem) => {
-      void item;
-      return;
+      if (item.isLocked) {
+        Alert.alert(
+          'Subscription Required',
+          `Full access to "${item.title}" requires a subscription to ${
+            item.artistName || 'this artist'
+          }.`,
+          [{ text: 'Dismiss', style: 'cancel' }]
+        );
+        return true;
+      }
+      return false;
     },
-    [unloadAudio, stopVideo]
+    []
   );
 
   const playQueue = useCallback(
@@ -626,6 +636,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       let item = nextState.queue[nextState.currentIndex];
       if (!item) return;
+
+      if (await blockLockedPlayback(item)) {
+        setState((s) => ({ ...s, queue: nextState.queue, currentIndex: nextState.currentIndex }));
+        return;
+      }
 
       if (item.mediaType === 'video' && item.useStreamAccess) {
         try {

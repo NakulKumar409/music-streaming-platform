@@ -136,6 +136,8 @@ export type ApiArtistContentItem = {
   likeCount?: number | null;
   dislikeCount?: number | null;
   userReaction?: 'like' | 'dislike' | null;
+  subscriptionRequired?: boolean | number;
+  subscription_required?: boolean | number;
 };
 
 export type ArtistMediaItem = {
@@ -229,7 +231,7 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
           mediaType: 'audio',
           artworkUrl,
           mediaUrl: effectiveAudioUrl,
-          locked: false,
+          locked: Boolean(it.isLocked || it.locked || it.subscriptionRequired || it.subscription_required),
           useStreamAccess,
           createdAt,
           likeCount: it.likeCount,
@@ -245,7 +247,7 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
           mediaType: 'video',
           artworkUrl,
           mediaUrl: effectiveVideoUrl,
-          locked: false,
+          locked: Boolean(it.isLocked || it.locked || it.subscriptionRequired || it.subscription_required),
           useStreamAccess,
           createdAt,
           likeCount: it.likeCount,
@@ -267,7 +269,7 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
       mediaType,
       artworkUrl,
       mediaUrl,
-      locked: false,
+      locked: Boolean(it.isLocked || it.locked || it.subscriptionRequired || it.subscription_required),
       useStreamAccess,
       createdAt,
       likeCount: it.likeCount,

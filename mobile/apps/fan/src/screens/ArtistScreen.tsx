@@ -23,7 +23,7 @@ import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Path, Rect, Circl
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { ArrowLeft, BadgeCheck, Settings } from 'lucide-react-native';
+import { ArrowLeft, BadgeCheck, Settings, Lock } from 'lucide-react-native';
 import { VideoView } from 'expo-video';
 import { useIsFocused } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -253,6 +253,7 @@ export default function ArtistScreen({ navigation, route }: any) {
 
             const isSub = !!targetArtistSub || hasPlatformSub;
             setIsSubscribedToArtist(isSub);
+            setIsSubscriptionActive(isSub);
 
             const activeSub = targetArtistSub || (hasPlatformSub ? platformSub : null);
 
@@ -308,7 +309,7 @@ export default function ArtistScreen({ navigation, route }: any) {
           artist: a.name,
           duration: it.mediaType === 'video' ? 'Video' : 'Audio',
           thumbnail: it.artworkUrl,
-          locked: false,
+          locked: Boolean(it.isLocked || it.locked || it.subscriptionRequired),
           mediaType: it.mediaType,
           mediaUrl: it.mediaUrl,
           useStreamAccess: it.useStreamAccess,
@@ -378,7 +379,7 @@ export default function ArtistScreen({ navigation, route }: any) {
         mediaType: s.mediaType,
         artworkUrl: s.thumbnail,
         mediaUrl: s.mediaUrl || '',
-        isLocked: false,
+        isLocked: s.locked ?? false,
         useStreamAccess: s.useStreamAccess,
       }));
     const idx = queue.findIndex((q) => q.id === initialMediaId || q.contentId === initialMediaId);
@@ -421,7 +422,7 @@ export default function ArtistScreen({ navigation, route }: any) {
           mediaType: s.mediaType,
           artworkUrl: s.thumbnail,
           mediaUrl: s.mediaUrl || '',
-          isLocked: false,
+          isLocked: s.locked ?? false,
           useStreamAccess: s.useStreamAccess,
         }));
       const idx = queue.findIndex((q) => q.id === song.id);
@@ -449,7 +450,7 @@ export default function ArtistScreen({ navigation, route }: any) {
 
   const handleSongPress = (song: Song) => {
     if (!artist) return;
-    if (!isSubscriptionActive) {
+    if (song.locked) {
       // Tracking locked clicks for smart upsell
       const newCount = lockedClicks + 1;
       setLockedClicks(newCount);
@@ -457,7 +458,13 @@ export default function ArtistScreen({ navigation, route }: any) {
       if (newCount >= 3) {
         setShowStrongUpsell(true);
       }
-      return; // Block all playback when subscription is expired
+
+      // If song is locked, show the artist lock modal for specific upsell
+      if (song.locked) {
+        setShowArtistLockModal({ visible: true, song });
+      }
+
+      return; // Block playback when locked
     }
 
     if (song.mediaType === 'video') {
@@ -531,10 +538,6 @@ export default function ArtistScreen({ navigation, route }: any) {
           ) : null}
 
 
-          {/* Subscription Expiry Guard Screen */}
-          {!isSubscriptionActive && artist ? (
-            <SubscriptionExpiryScreen artistName={artist.name} onRenewSubscription={handleRenewSubscription} />
-          ) : null}
 
           {loading ? (
             <View style={styles.loadingWrap}>
@@ -1010,6 +1013,11 @@ function MediaCard({
       <View style={styles.card}>
         <View style={styles.cardThumbWrap}>
           <Image source={{ uri: getOptimizedImageUrl(item.thumbnail) }} style={styles.cardThumb} />
+          {item.locked && (
+            <View style={styles.lockOverlay}>
+              <Lock size={12} color="#fff" fill="rgba(255,255,255,0.2)" />
+            </View>
+          )}
           <LinearGradient colors={['rgba(0,0,0,0.00)', 'rgba(0,0,0,0.55)']} style={styles.cardThumbGradient} />
 
           <View style={styles.cardBadgeRight}>
@@ -1573,5 +1581,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-
+  lockOverlay: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
 });

@@ -69,32 +69,55 @@ router.get("/", (req, res) => {
              u.profile_image_url as artist_profile_image_url,
              (SELECT COUNT(*)::int FROM content_plays WHERE content_id = c.id) as view_count,
              (SELECT COUNT(*)::int FROM content_reactions WHERE content_id = c.id AND reaction = 'like') as like_count,
-             (SELECT COUNT(*)::int FROM content_reactions WHERE content_id = c.id AND reaction = 'dislike') as dislike_count,
-             (CASE WHEN $1::int IS NULL THEN NULL ELSE (SELECT reaction FROM content_reactions WHERE content_id = c.id AND user_id = $1 LIMIT 1) END) as user_reaction,
-                             (CASE 
-                   WHEN $1::int IS NULL THEN false
-                   ELSE EXISTS (
-                     SELECT 1 FROM subscriptions s 
-                     WHERE s.user_id = $1 
-                       AND (
-                         (s.type = 'ARTIST' AND s.artist_id = c.artist_id)
-                         OR (s.type = 'PLATFORM')
-                       )
-                       AND UPPER(COALESCE(s.status, '')) IN ('ACTIVE', 'GRACE_PERIOD')
-                       AND (COALESCE(s.grace_ends_at, s.next_billing_date) IS NULL OR COALESCE(s.grace_ends_at, s.next_billing_date) > now())
-                   )
-                 END) as has_subscription
+             (SELECT COUNT(*)::int FROM content_reactions WHERE content_id = c.id AND reaction = 'dislike') as dislike_count
            FROM content_items c
            LEFT JOIN users u ON u.id = c.artist_id
            WHERE ${baseWhere}
-             ${useCursor ? "AND c.created_at < $2" : ""}
+             ${useCursor ? "AND c.created_at < $1" : ""}
            ORDER BY c.created_at DESC
-           LIMIT ${useCursor ? "$3" : "$2"} ${useCursor ? "" : "OFFSET $3"}`;
+           LIMIT ${useCursor ? "$2" : "$1"} ${useCursor ? "" : "OFFSET $2"}`;
 
-        const params = useCursor ? [userId, cursor, limit] : [userId, limit, offset];
+        const params = useCursor ? [cursor, limit] : [limit, offset];
         rows = await pool.query(querySql, params);
         return rows.rows;
       }, 120);
+
+      // Post-cache enrichment for user-specific data (reactions, subscription status)
+      if (userId && queryRows && queryRows.length > 0) {
+        const contentIds = queryRows.map((r: any) => r.id);
+        const artistIds = Array.from(new Set(queryRows.map((r: any) => r.artist_id))).filter(id => id !== null);
+
+        const [reactions, subscriptions] = await Promise.all([
+          pool.query(
+            `SELECT content_id, reaction FROM content_reactions WHERE user_id = $1 AND content_id = ANY($2::int[])`,
+            [userId, contentIds]
+          ),
+          pool.query(
+            `SELECT artist_id, type FROM subscriptions 
+             WHERE user_id = $1 
+               AND (type = 'PLATFORM' OR (type = 'ARTIST' AND artist_id = ANY($2::int[])))
+               AND UPPER(COALESCE(status, '')) IN ('ACTIVE', 'GRACE_PERIOD', 'PAST_DUE', 'GRACE')
+               AND (COALESCE(grace_ends_at, next_billing_date) IS NULL OR COALESCE(grace_ends_at, next_billing_date) > now())`,
+            [userId, artistIds]
+          )
+        ]);
+
+        const reactionMap = new Map(reactions.rows.map((rr: any) => [rr.content_id, rr.reaction]));
+        const hasPlatformSub = subscriptions.rows.some((ss: any) => ss.type === 'PLATFORM');
+        const artistSubSet = new Set(subscriptions.rows.filter((ss: any) => ss.type === 'ARTIST').map((ss: any) => ss.artist_id));
+
+        queryRows = queryRows.map((r: any) => ({
+          ...r,
+          user_reaction: reactionMap.get(r.id) || null,
+          has_subscription: hasPlatformSub || artistSubSet.has(r.artist_id)
+        }));
+      } else {
+        queryRows = (queryRows ?? []).map((r: any) => ({
+          ...r,
+          user_reaction: null,
+          has_subscription: false
+        }));
+      }
 
       const mediaCfg = getMediaConfig();
       const streamRoute = (mediaCfg.localPrivateStreamRoute || "media/stream").replace(/^\//, "");

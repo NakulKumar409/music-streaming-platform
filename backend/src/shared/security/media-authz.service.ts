@@ -37,6 +37,7 @@ export async function checkPlatformAccess(userId: number | null): Promise<boolea
   }
 }
 
+
 /**
  * Validate requested quality against user's subscription level.
  * HD (High Quality) is reserved for PLATFORM subscribers.
@@ -94,6 +95,7 @@ export async function checkMediaEntitlement(
     if (!subscriptionRequired) return { allowed: true, tier: 'FREE' };
 
     const hasArtistAccess = await checkAccess(userId, artistId);
+
     if (!hasArtistAccess) {
       if (allowPreview) {
          logger.info({ userId, artistId, tier: 'FREE' }, "[AUTHZ] Access granted via PREVIEW");

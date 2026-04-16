@@ -53,6 +53,7 @@ type ApiContentItem = {
   artistId?: string | number | null;
   createdAt?: string | null;
   useStreamAccess?: boolean;
+  isLocked?: boolean;
 };
 
 type AudioCard = AudioItemData & {
@@ -60,6 +61,7 @@ type AudioCard = AudioItemData & {
   contentId: string;
   mediaUrl: string;
   useStreamAccess?: boolean;
+  isLocked?: boolean;
   createdAt?: string | null;
 };
 
@@ -162,6 +164,7 @@ export default function AudioScreen({ navigation }: any) {
           artworkUrl,
           mediaUrl: rawMediaUrl ? normalizePlaybackUrl(rawMediaUrl) : '',
           useStreamAccess: Boolean(it.useStreamAccess),
+          isLocked: Boolean(it.isLocked),
           createdAt: (it.createdAt ?? null) as any,
         };
       }).filter(Boolean) as AudioCard[];
@@ -367,7 +370,7 @@ export default function AudioScreen({ navigation }: any) {
         mediaUrl:
           playbackUrlCacheRef.current.get(x.contentId ?? x.id)?.url ??
           (x.mediaUrl ? normalizePlaybackUrl(x.mediaUrl) : ''),
-        isLocked: false,
+        isLocked: x.isLocked ?? false,
         useStreamAccess: x.useStreamAccess,
       }));
     const queueIndex = Math.max(0, queue.findIndex((q) => q.id === song.id || q.contentId === song.id));
@@ -433,6 +436,7 @@ export default function AudioScreen({ navigation }: any) {
               artworkUrl,
               mediaUrl: rawMediaUrl ? normalizePlaybackUrl(rawMediaUrl) : '',
               useStreamAccess: Boolean(it.useStreamAccess),
+              isLocked: Boolean(it.isLocked),
               createdAt: (it.createdAt ?? null) as any,
             };
           });

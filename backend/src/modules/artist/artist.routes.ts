@@ -378,9 +378,9 @@ router.get("/:artistId/content", (req, res) => {
                   ELSE EXISTS (
                     SELECT 1 FROM subscriptions s 
                     WHERE s.user_id = $userId 
-                      AND s.artist_id = c.artist_id 
-                      AND UPPER(COALESCE(s.status, '')) = 'ACTIVE'
-                      AND (s.next_billing_date IS NULL OR s.next_billing_date > now() - interval '2 days')
+                      AND (s.type = 'PLATFORM' OR (s.type = 'ARTIST' AND s.artist_id = c.artist_id))
+                      AND UPPER(COALESCE(s.status, '')) IN ('ACTIVE', 'GRACE_PERIOD', 'PAST_DUE', 'GRACE')
+                      AND (COALESCE(s.grace_ends_at, s.next_billing_date) IS NULL OR COALESCE(s.grace_ends_at, s.next_billing_date) > now())
                   )
                 END) as has_subscription
         FROM content_items c

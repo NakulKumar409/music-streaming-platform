@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Play, Pause } from 'lucide-react-native';
+import { Play, Pause, Lock } from 'lucide-react-native';
 import { Colors } from '../../theme';
 import { getOptimizedImageUrl } from '../../utils/cloudinary';
 
@@ -12,6 +12,7 @@ export interface AudioItemData {
   title: string;
   artistName: string;
   artworkUrl: string;
+  isLocked?: boolean;
 }
 
 interface AudioListItemProps {
@@ -43,8 +44,10 @@ const AudioListItem = memo(({ item, onPress, isActive, isPlaying }: AudioListIte
             {item.artistName}
           </Text>
         </View>
-        <View style={[styles.playButtonWrap, isActive && styles.playButtonWrapActive]}>
-          {isActive && isPlaying ? (
+        <View style={[styles.playButtonWrap, isActive && styles.playButtonWrapActive, item.isLocked && styles.playButtonWrapLocked]}>
+          {item.isLocked ? (
+            <Lock size={16} color="rgba(255,255,255,0.4)" />
+          ) : isActive && isPlaying ? (
             <Pause size={16} color="#000" fill="#000" />
           ) : (
             <Play size={16} color={isActive ? "#000" : "#fff"} fill={isActive ? "#000" : "#fff"} />
@@ -116,5 +119,9 @@ const styles = StyleSheet.create({
   playButtonWrapActive: {
     backgroundColor: Colors.accent,
     borderColor: Colors.accent,
+  },
+  playButtonWrapLocked: {
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderColor: 'rgba(255,255,255,0.05)',
   },
 });

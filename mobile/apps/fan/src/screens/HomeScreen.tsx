@@ -18,7 +18,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { BadgeCheck, Play, Search } from 'lucide-react-native';
+import { BadgeCheck, Lock, Play, Search } from 'lucide-react-native';
 import { apiV1 } from '../services/api';
 import { fetchVerifiedArtists, fetchFeaturedArtists, type ArtistListItem } from '../services/artistService';
 import { API_HOST_BASE_URL, ARTIST_WEB_URL } from '../config/env';
@@ -131,7 +131,7 @@ export default function HomeScreen({ navigation }: any) {
         artworkUrl: x.thumbnail,
         mediaUrl: x.mediaUrl ?? null,
         useStreamAccess: Boolean(x.useStreamAccess),
-        isLocked: false,
+        isLocked: x.isLocked,
       }));
       const idx = Math.max(0, queue.findIndex((q) => q.id === item.id));
       return {
@@ -220,7 +220,7 @@ export default function HomeScreen({ navigation }: any) {
               artistId: artistId ? String(artistId) : undefined,
               description: (it.type || '').toString(),
               thumbnail: thumb || thumbFallbackFromStorageKey || FALLBACK_THUMBNAIL,
-              isLocked: false,
+              isLocked: Boolean(it.isLocked || it.locked),
               createdAt: (it.createdAt ?? null) as any,
               mediaType,
               mediaUrl: (it.mediaUrl ?? it.fileUrl ?? null) as any,
@@ -339,9 +339,16 @@ export default function HomeScreen({ navigation }: any) {
   // Square thumbnail for audio — tapping plays as audio
   const renderRecentAudio = ({ item }: { item: ContentCard }) => (
     <Pressable style={styles.audioCard} onPress={() => onPressAudioItem(item)}>
-      <Image source={{ uri: getOptimizedImageUrl(item.thumbnail || FALLBACK_THUMBNAIL) }} style={styles.audioImg} />
-      <View style={styles.audioBadge}>
-        <View style={styles.audioDot} />
+      <View>
+        <Image source={{ uri: getOptimizedImageUrl(item.thumbnail || FALLBACK_THUMBNAIL) }} style={styles.audioImg} />
+        {item.isLocked && (
+          <View style={styles.lockOverlay}>
+            <Lock color="#fff" size={14} fill="rgba(255,255,255,0.2)" />
+          </View>
+        )}
+        <View style={styles.audioBadge}>
+          <View style={styles.audioDot} />
+        </View>
       </View>
       <View style={styles.cardTextWrap}>
         <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
@@ -353,9 +360,16 @@ export default function HomeScreen({ navigation }: any) {
   // 16:9 landscape thumbnail for video — tapping opens VideoTab
   const renderRecentVideo = ({ item }: { item: ContentCard }) => (
     <Pressable style={styles.videoCard} onPress={() => onPressVideoItem(item)}>
-      <Image source={{ uri: getOptimizedImageUrl(item.thumbnail || FALLBACK_THUMBNAIL) }} style={styles.videoImg} />
-      <View style={styles.videoPlayOverlay}>
-        <Play color="#fff" size={22} fill="rgba(255,255,255,0.85)" />
+      <View>
+        <Image source={{ uri: getOptimizedImageUrl(item.thumbnail || FALLBACK_THUMBNAIL) }} style={styles.videoImg} />
+        {item.isLocked && (
+          <View style={styles.lockOverlay}>
+            <Lock color="#fff" size={14} fill="rgba(255,255,255,0.2)" />
+          </View>
+        )}
+        <View style={styles.videoPlayOverlay}>
+          <Play color="#fff" size={22} fill="rgba(255,255,255,0.85)" />
+        </View>
       </View>
       <View style={styles.cardTextWrap}>
         <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
@@ -901,5 +915,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     marginTop: 2,
+  },
+  lockOverlay: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    zIndex: 10,
   },
 });
