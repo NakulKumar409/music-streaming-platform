@@ -2,6 +2,7 @@ import { Router } from "express";
 import { pool } from "../../common/db";
 import { fetchWithCache } from "../../common/cache";
 import { checkContentAccess } from "../../common/accessControl";
+import { optionalAuth } from "../../common/auth/requireAuth";
 import { getMediaConfig } from "../../config/media.config";
 import { createPlaybackToken } from "../../shared/security/signed-media-token.service";
 
@@ -21,7 +22,7 @@ const restrictedMediaUrl = (req: any, mediaType: 'audio' | 'video') => {
   return toAbsoluteUrl(req, path);
 };
 
-router.get("/", (req, res) => {
+router.get("/", optionalAuth, (req, res) => {
   // Allow short-lived caching (30s) and conditional GET (304) so repeat
   // loads are near-instant for clients that already have the response.
   res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');

@@ -62,6 +62,7 @@ export async function ensureUsersSchema(): Promise<void> {
     "ALTER TABLE users ALTER COLUMN trust_score SET DEFAULT 100",
     "ALTER TABLE users ALTER COLUMN strike_count SET DEFAULT 0",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_features JSONB NOT NULL DEFAULT '[]'",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS yearly_subscription_price NUMERIC NOT NULL DEFAULT 0",
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email)",
     "CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)",
     "CREATE INDEX IF NOT EXISTS idx_users_artist_status ON users(artist_status)",
@@ -297,12 +298,14 @@ export async function ensurePlatformConfigSchema(): Promise<void> {
       is_active BOOLEAN NOT NULL DEFAULT true,
       discount_price NUMERIC,
       discount_months INT DEFAULT 1,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      yearly_price NUMERIC
     )
   `);
 
   await pool.query("ALTER TABLE platform_subscription_configs ADD COLUMN IF NOT EXISTS discount_price NUMERIC").catch(() => undefined);
   await pool.query("ALTER TABLE platform_subscription_configs ADD COLUMN IF NOT EXISTS discount_months INT DEFAULT 1").catch(() => undefined);
+  await pool.query("ALTER TABLE platform_subscription_configs ADD COLUMN IF NOT EXISTS yearly_price NUMERIC").catch(() => undefined);
 
   // Seed default if empty
   const count = await pool.query("SELECT COUNT(*)::int as c FROM platform_subscription_configs");

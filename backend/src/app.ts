@@ -11,9 +11,16 @@ import compression from "compression";
 import { globalLimiter } from "./common/security/rateLimit";
 import { validateEnv } from "./config/env.validation";
 import {
+  ensureUsersSchema,
+  ensureContentSchema,
+  ensurePlaysSchema,
+  ensureReactionsSchema,
   ensureSessionsSchema,
+  ensureSubscriptionsSchema,
+  ensureArtistStatsSchema,
   ensureUpsellSchema,
-  ensureUserStatsSchema
+  ensureUserStatsSchema,
+  ensurePlatformConfigSchema
 } from "./config/ensure-schema";
 import fanRoutes from "./routes/fan";
 import artistRoutes from "./routes/artist";
@@ -292,9 +299,17 @@ const PORT = process.env.PORT || 8000;
 
   // Run schema migrations after server is up (non-fatal on transient DB issues)
   try {
+    await ensureUsersSchema();
+    await ensureContentSchema();
+    await ensurePlaysSchema();
+    await ensureReactionsSchema();
+    await ensureSessionsSchema();
+    await ensureSubscriptionsSchema();
+    await ensureArtistStatsSchema();
     await ensureUpsellSchema();
     await ensureUserStatsSchema();
-    console.log("[Startup] Database schema ensured ✅");
+    await ensurePlatformConfigSchema();
+    console.log("[Startup] All database schemas ensured or updated ✅");
 
     // ── Subscription Lifecycle Management ────────────────────────────────
     // Sweeps for subscriptions where grace_ends_at < now() and updates to EXPIRED.

@@ -99,3 +99,42 @@ export const requireAuth = async (
     });
   }
 };
+
+/**
+ * Optional authentication middleware.
+ * If a valid token is provided, populates req.user.
+ * If token is missing or invalid, proceeds without req.user.
+ */
+export const optionalAuth = async (
+  req: any,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return next();
+
+    const token = authHeader.split(" ")[1];
+    if (!token) return next();
+
+    const decoded: any = jwt.verify(
+      token,
+      process.env.JWT_SECRET as string
+    );
+
+    const userId = decoded?.id ?? decoded?.userId;
+    if (!userId) return next();
+
+    // Attach user but don't perform heavy DB checks to keep it fast
+    req.user = {
+      ...decoded,
+      id: userId,
+      role: (decoded.role || "FAN").toString().toUpperCase()
+    };
+
+    next();
+  } catch (error) {
+    // On JWT error, just treat as guest
+    next();
+  }
+};

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { pool } from "../../common/db";
 import { fetchWithCache } from "../../common/cache";
 import { checkContentAccess } from "../../common/accessControl";
+import { optionalAuth } from "../../common/auth/requireAuth";
 import { getMediaConfig } from "../../config/media.config";
 import { createPlaybackToken } from "../../shared/security/signed-media-token.service";
 
@@ -347,7 +348,7 @@ router.get("/:artistId", (req, res) => {
   })();
 });
 
-router.get("/:artistId/content", (req, res) => {
+router.get("/:artistId/content", optionalAuth, (req, res) => {
   const artistId = req.params.artistId;
   console.log(`[DEBUG] GET /artists/${artistId}/content - START`);
   (async () => {
@@ -461,7 +462,6 @@ router.get("/:artistId/content", (req, res) => {
           kind
         )}`;
       };
-
       try {
         const content = await Promise.all((rows.rows ?? []).map(async (r: any) => {
           try {
