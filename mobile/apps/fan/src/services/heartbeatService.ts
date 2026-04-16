@@ -12,19 +12,24 @@ export function startHeartbeat(contentId: string) {
   stopHeartbeat(); // Clear any existing heartbeat
   
   currentContentId = contentId;
-  
-  // Send heartbeat every 30 seconds
-  heartbeatInterval = setInterval(async () => {
+
+  // Send an immediate heartbeat right when playback starts
+  const sendBeat = async () => {
     try {
       const response = await apiV1.post('/stream/heartbeat', { contentId });
-
       if (!response.data.success) {
         logger.warn('[Heartbeat] Failed to send heartbeat:', response.data.message);
       }
     } catch (error: any) {
       logger.error('[Heartbeat] Error sending heartbeat:', error?.response?.status || error?.message);
     }
-  }, 30000); // 30 seconds
+  };
+
+  // Fire immediately on start
+  sendBeat();
+  
+  // Then every 30 seconds
+  heartbeatInterval = setInterval(sendBeat, 30000);
 
   logger.log('[Heartbeat] Started for content:', contentId);
 }

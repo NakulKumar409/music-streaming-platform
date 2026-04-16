@@ -1,5 +1,5 @@
 
-import { pool } from '../backend/src/common/db/index';
+import { pool } from '../src/common/db/index';
 
 async function migrate() {
   try {

@@ -40,7 +40,8 @@ export default function AdminNavbar() {
       { label: "Featured Artists", to: "/admin/featured-artists" },
       { label: "Content Moderation", to: "/admin/moderation" },
       { label: "Platform Plan", to: "/admin/subscription-settings" },
-      { label: "Analytics", to: "/admin/analytics" }
+      { label: "Analytics", to: "/admin/analytics" },
+      { label: "Audit Logs", to: "/admin/audit" }
     ],
     []
   );

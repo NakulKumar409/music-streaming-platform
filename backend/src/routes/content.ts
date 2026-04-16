@@ -14,6 +14,7 @@ import { getExtensionFromMime } from "../shared/storage/utils/file-metadata.util
 import { createPlaybackToken } from "../shared/security/signed-media-token.service";
 import { invalidateCachePattern, invalidateContentCache } from "../common/cache";
 import { uploadQueue } from "../common/queue";
+import { AuditService } from "../shared/audit/audit.service";
 
 const router = Router();
 
@@ -271,6 +272,17 @@ router.post(
       });
       
       await invalidateContentCache();
+
+      AuditService.log({
+        action: 'content.uploaded',
+        entity: 'content',
+        entityId: String(row.id),
+        performedBy: artistId,
+        role: 'artist',
+        status: 'success',
+        correlationId,
+        metadata: { title: trimmedTitle, artist_id: artistId }
+      });
 
       return res.json({
         success: true,

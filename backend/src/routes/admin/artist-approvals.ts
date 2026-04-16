@@ -3,6 +3,7 @@ import { requireAuth } from "../../common/auth/requireAuth";
 import { pool } from "../../common/db";
 import { invalidateArtistCache } from "../../common/cache";
 import { logger } from "../../common/logger";
+import { AuditService } from "../../shared/audit/audit.service";
 
 const router = Router();
 
@@ -158,6 +159,17 @@ router.patch("/resolve-artist/:id", requireAuth, requireAdmin, async (req: any, 
         )
         .catch(() => undefined);
 
+      AuditService.log({
+        action: 'admin.artist_approved',
+        entity: 'user',
+        entityId: String(id),
+        performedBy: req.user?.id,
+        role: 'admin',
+        status: 'success',
+        correlationId,
+        metadata: { action: 'approve' }
+      });
+
       return res.json({ success: true, status: "APPROVED", correlationId });
     }
 
@@ -176,6 +188,17 @@ router.patch("/resolve-artist/:id", requireAuth, requireAdmin, async (req: any, 
     if (!r.rows?.length) {
       return res.status(404).json({ success: false, message: "Artist not found", correlationId });
     }
+
+    AuditService.log({
+      action: 'admin.artist_rejected',
+      entity: 'user',
+      entityId: String(id),
+      performedBy: req.user?.id,
+      role: 'admin',
+      status: 'success',
+      correlationId,
+      metadata: { reason: note }
+    });
 
     return res.json({ success: true, status: "REJECTED", correlationId });
   } catch (err: any) {

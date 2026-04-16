@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { pool } from "../../common/db";
 import { Expo, ExpoPushMessage } from "expo-server-sdk";
+import { AuditService } from "../../shared/audit/audit.service";
 
 const expo = new Expo();
 
@@ -199,6 +200,16 @@ export class UserController {
         location || null,
         userId
       ]);
+
+      AuditService.log({
+        action: 'user.profile_updated',
+        entity: 'user',
+        entityId: String(userId),
+        performedBy: userId,
+        role: 'fan',
+        status: 'success',
+        metadata: { fullName, username }
+      });
 
       return res.json({
         success: true,
@@ -417,39 +428,84 @@ export class UserController {
 
   async getListenTime(req: any, res: Response) {
     try {
-      const userId = req.user?.id;
-      if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+      const userId = Number(req.user?.id);
+      if (!userId || isNaN(userId)) return res.status(401).json({ success: false, message: "Unauthorized" });
 
       const now = new Date();
       const year = now.getFullYear();
       const month = now.getMonth() + 1;
 
-      const result = await pool.query(
-        `SELECT total_seconds 
-         FROM user_listening_stats 
-         WHERE user_id = $1 AND year = $2 AND month = $3`,
-        [userId, year, month]
+      // ── Source 1: Heartbeat-based stats (most accurate) ──────────────
+      // Query ALL months, not just current, so historical data appears too
+      const statsResult = await pool.query(
+        `SELECT COALESCE(SUM(total_seconds), 0)::bigint AS total_seconds
+         FROM user_listening_stats
+         WHERE user_id = $1`,
+        [userId]
       );
+      let totalSeconds = Number(statsResult.rows[0]?.total_seconds || 0);
 
-      const totalSeconds = Number(result.rows[0]?.total_seconds || 0);
+      // ── Source 2: playback_sessions fallback (when heartbeats have no data) ──
+      // Each session = duration from started_at to heartbeat_at (or 3 min avg if no heartbeat)
+      if (totalSeconds === 0) {
+        const sessionsResult = await pool.query(
+          `SELECT 
+            COUNT(*) AS session_count,
+            COALESCE(
+              SUM(
+                LEAST(600, EXTRACT(EPOCH FROM (
+                  COALESCE(heartbeat_at, started_at + INTERVAL '3 minutes') - started_at
+                )))
+              ), 0
+            )::bigint AS estimated_seconds
+           FROM playback_sessions
+           WHERE user_id = $1`,
+          [userId]
+        ).catch((err) => {
+          console.error("[UserController.getListenTime] sessionsResult query failed:", err);
+          return { rows: [{ session_count: 0, estimated_seconds: 0 }] };
+        });
+
+        const estimated = Number(sessionsResult.rows[0]?.estimated_seconds || 0);
+        const sessionCount = Number(sessionsResult.rows[0]?.session_count || 0);
+
+        if (estimated > 0) {
+          totalSeconds = estimated;
+        } else if (sessionCount > 0) {
+          // Last resort: assume average 3 min per song play
+          totalSeconds = sessionCount * 180;
+        }
+      }
+
+      // ── Source 3: content_plays count as last resort ─────────────────
+      if (totalSeconds === 0) {
+        const playsResult = await pool.query(
+          `SELECT COUNT(*) AS play_count FROM content_plays WHERE user_id = $1`,
+          [userId]
+        ).catch(() => ({ rows: [{ play_count: 0 }] }));
+        const playCount = Number(playsResult.rows[0]?.play_count || 0);
+        if (playCount > 0) {
+          totalSeconds = playCount * 180; // assume ~3 min per play
+        }
+      }
+
       const totalMinutes = Math.floor(totalSeconds / 60);
 
-      // Format time (e.g., "12h 45m" or "15m")
+      // Format: e.g., "2h 34m" or "45m"
       let formattedTime = "0m";
-      if (totalMinutes > 0) {
+      if (totalMinutes >= 60) {
         const hours = Math.floor(totalMinutes / 60);
         const mins = totalMinutes % 60;
-        if (hours > 0) {
-          formattedTime = `${hours}h ${mins}m`;
-        } else {
-          formattedTime = `${mins}m`;
-        }
+        formattedTime = mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+      } else if (totalMinutes > 0) {
+        formattedTime = `${totalMinutes}m`;
       }
 
       return res.json({
         success: true,
         totalMinutes,
-        formattedTime
+        formattedTime,
+        source: totalSeconds === 0 ? "none" : "computed"
       });
     } catch (error: any) {
       console.error("[UserController.getListenTime] error:", error);

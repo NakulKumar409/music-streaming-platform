@@ -209,34 +209,42 @@ export const userService: UserService = {
         totalMinutes: Number(res.data?.totalMinutes || 0), 
         formattedTime: (res.data?.formattedTime || '0m').toString() 
       };
-    } catch (err) {
-      logger.warn('[Analytics] Failed to fetch listen time', err);
+    } catch (err: any) {
+      logger.warn('[userService] getListenTime failed - status:', err?.response?.status, 'msg:', err?.message);
       return { totalMinutes: 0, formattedTime: '—' };
     }
   },
 
   async getSubscriptionPlanSummary() {
-    const res = await apiV1.get('/subscriptions/summary');
-    const data = res.data ?? {};
-    if (!data.success) return null;
+    try {
+      const res = await apiV1.get('/subscriptions/summary');
+      const data = res.data ?? {};
+      if (!data.success) {
+        logger.warn('[userService] getSubscriptionPlanSummary returned success=false', data);
+        return null;
+      }
 
-    const artistPlan = mapSubRecord(data.artistPlan);
-    const platformPlan = mapSubRecord(data.platformPlan);
-    const legacyPlan = mapSubRecord(data.plan);
-    const activePlan = artistPlan ?? legacyPlan;
+      const artistPlan = mapSubRecord(data.artistPlan);
+      const platformPlan = mapSubRecord(data.platformPlan);
+      const legacyPlan = mapSubRecord(data.plan);
+      const activePlan = artistPlan ?? legacyPlan;
 
-    return {
-      // Legacy fields (for backward compat)
-      status: (activePlan?.status ?? '').toString(),
-      planType: (activePlan?.planType ?? 'MONTHLY').toString(),
-      endDate: activePlan?.endDate ?? null,
-      artistId: activePlan?.artistId ?? null,
-      artistName: activePlan?.artistName,
-      // New fields
-      artistPlan,
-      platformPlan,
-      artistSubCount: Number(data.artistSubCount ?? 0),
-    };
+      return {
+        // Legacy fields (for backward compat)
+        status: (activePlan?.status ?? '').toString(),
+        planType: (activePlan?.planType ?? 'MONTHLY').toString(),
+        endDate: activePlan?.endDate ?? null,
+        artistId: activePlan?.artistId ?? null,
+        artistName: activePlan?.artistName,
+        // New fields
+        artistPlan,
+        platformPlan,
+        artistSubCount: Number(data.artistSubCount ?? 0),
+      };
+    } catch (err: any) {
+      logger.warn('[userService] getSubscriptionPlanSummary FAILED - HTTP status:', err?.response?.status, 'message:', err?.message);
+      return null;
+    }
   },
 
   async checkContentAccess(contentId: number, artistId: string): Promise<AccessCheckResult> {
@@ -314,6 +322,7 @@ export const userService: UserService = {
   async getSubscriptionDetails() {
     try {
       const res = await apiV1.get('/subscriptions/details');
+      logger.log('[userService] getSubscriptionDetails raw response success:', res.data?.success, 'platform:', !!res.data?.platform, 'artists:', res.data?.artists?.length);
       if (res.data?.success) {
         return {
           platform: mapSubRecord(res.data.platform),
@@ -331,7 +340,8 @@ export const userService: UserService = {
         };
       }
       return null;
-    } catch {
+    } catch (err: any) {
+      logger.warn('[userService] getSubscriptionDetails FAILED - HTTP status:', err?.response?.status, 'message:', err?.message, 'url:', err?.config?.url);
       return null;
     }
   },

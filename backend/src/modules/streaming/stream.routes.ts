@@ -116,16 +116,17 @@ router.post("/heartbeat", requireAuth, async (req: any, res: any) => {
   }
 
   try {
-    // Try to update existing session first
+    // Try to update existing session first - ONLY if it's not stale (last heartbeat within 5 mins)
     const result = await pool.query(
       `UPDATE playback_sessions 
        SET heartbeat_at = now() 
-       WHERE user_id = $1 AND content_id = $2
+       WHERE user_id = $1 AND content_id = $2 
+       AND heartbeat_at > now() - INTERVAL '5 minutes'
        RETURNING id`,
       [userId, contentId]
     );
 
-    // If no session exists, create one
+    // If no active session exists (or it was stale), create one
     if (result.rows.length === 0) {
       await pool.query(
         `INSERT INTO playback_sessions (user_id, content_id, started_at, heartbeat_at)
@@ -147,20 +148,22 @@ router.post("/heartbeat", requireAuth, async (req: any, res: any) => {
     }
 
     // Increment monthly listening stats (30 seconds per heartbeat)
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
 
-    await pool.query(
-      `INSERT INTO user_listening_stats (user_id, year, month, total_seconds)
-       VALUES ($1, $2, $3, 30)
-       ON CONFLICT (user_id, year, month)
-       DO UPDATE SET total_seconds = user_listening_stats.total_seconds + 30`,
-      [userId, year, month]
-    ).catch(err => {
+    try {
+      await pool.query(
+        `INSERT INTO user_listening_stats (user_id, year, month, total_seconds)
+         VALUES ($1, $2, $3, 30)
+         ON CONFLICT (user_id, year, month)
+         DO UPDATE SET total_seconds = user_listening_stats.total_seconds + 30`,
+        [userId, year, month]
+      );
+    } catch (err: any) {
       logger.error({ userId, contentId, error: err.message }, "[HEARTBEAT] Failed to update stats");
       // Don't fail the entire heartbeat if stats fails (non-critical)
-    });
+    }
 
     return res.json({ success: true, correlationId });
   } catch (err: any) {

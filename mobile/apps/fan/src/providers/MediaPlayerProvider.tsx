@@ -10,12 +10,38 @@ import React, {
 } from 'react';
 import { Alert, AppState, Platform } from 'react-native';
 
-import TrackPlayer, { State as TrackPlayerState, Event, Capability, AppKilledPlaybackBehavior, Track, RepeatMode, PitchAlgorithm } from 'react-native-track-player';
 import { useVideoPlayer, VideoView, VideoPlayer } from 'expo-video';
 
 import { API_HOST_BASE_URL } from '../config/env';
 import logger from '../utils/logger';
 import { navigationRef } from '../navigation/rootNavigation';
+
+// Try to import TrackPlayer, fallback for Expo Go compatibility
+let TrackPlayer: any = null;
+let TrackPlayerState: any = null;
+let Event: any = null;
+let Capability: any = null;
+let AppKilledPlaybackBehavior: any = null;
+let RepeatMode: any = null;
+let PitchAlgorithm: any = null;
+let TrackPlayerAvailable = false;
+
+try {
+  const TrackPlayerModule = require('react-native-track-player');
+  TrackPlayer = TrackPlayerModule.default;
+  TrackPlayerState = TrackPlayerModule.State;
+  Event = TrackPlayerModule.Event;
+  Capability = TrackPlayerModule.Capability;
+  AppKilledPlaybackBehavior = TrackPlayerModule.AppKilledPlaybackBehavior;
+  RepeatMode = TrackPlayerModule.RepeatMode;
+  PitchAlgorithm = TrackPlayerModule.PitchAlgorithm;
+  TrackPlayerAvailable = true;
+} catch (e) {
+  logger.warn('TrackPlayer not available, running in Expo Go without background audio playback');
+}
+
+// Type for Track when module is available
+type Track = any;
 
 import MediaPlayerOverlay from '../ui/MediaPlayerOverlay';
 import { recordPlayback } from '../services/libraryService';
@@ -120,6 +146,13 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   }, [state]);
 
   useEffect(() => {
+    // Skip TrackPlayer setup if not available (Expo Go compatibility)
+    if (!TrackPlayerAvailable) {
+      setIsPlayerReady(true); // Mark as ready even without TrackPlayer
+      logger.log('[MediaPlayer] TrackPlayer not available, audio playback disabled in Expo Go');
+      return;
+    }
+
     let unmounted = false;
     const setup = async () => {
       let isSetup = false;
@@ -137,34 +170,34 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       if (isSetup) {
         await TrackPlayer.updateOptions({
           android: {
-            appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
+            appKilledPlaybackBehavior: AppKilledPlaybackBehavior?.StopPlaybackAndRemoveNotification,
             alwaysPauseOnInterruption: false,
             // Keep notification visible when paused
             stopForegroundGracePeriod: 0,
           },
           // Main capabilities shown in notification/lock screen
           capabilities: [
-            Capability.Play,
-            Capability.Pause,
-            Capability.SkipToNext,
-            Capability.SkipToPrevious,
-            Capability.SeekTo,
-            Capability.JumpForward,
-            Capability.JumpBackward,
+            Capability?.Play,
+            Capability?.Pause,
+            Capability?.SkipToNext,
+            Capability?.SkipToPrevious,
+            Capability?.SeekTo,
+            Capability?.JumpForward,
+            Capability?.JumpBackward,
           ],
           // Compact capabilities (small notification view)
           compactCapabilities: [
-            Capability.Play,
-            Capability.Pause,
-            Capability.SkipToNext,
+            Capability?.Play,
+            Capability?.Pause,
+            Capability?.SkipToNext,
           ],
           // Notification icon customization
           notificationCapabilities: [
-            Capability.Play,
-            Capability.Pause,
-            Capability.SkipToNext,
-            Capability.SkipToPrevious,
-            Capability.SeekTo,
+            Capability?.Play,
+            Capability?.Pause,
+            Capability?.SkipToNext,
+            Capability?.SkipToPrevious,
+            Capability?.SeekTo,
           ],
           // Progress bar on notification
           progressUpdateEventInterval: 1,
@@ -305,7 +338,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     const item = currentItemRef.current;
     if (!item) return;
 
-    if (item.mediaType === 'audio') {
+    if (item.mediaType === 'audio' && TrackPlayerAvailable) {
       try {
         TrackPlayer.setRate(s.playbackRate);
       } catch {
@@ -352,7 +385,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
     if (s.repeatMode === 'one') {
       try {
-        if (item.mediaType === 'audio') {
+        if (item.mediaType === 'audio' && TrackPlayerAvailable) {
           TrackPlayer.seekTo(0);
           TrackPlayer.play();
         } else if (videoPlayer) {
@@ -389,7 +422,16 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const unloadAudio = useCallback(async () => { setAudioSource(null); await TrackPlayer.reset(); }, []);
+  const unloadAudio = useCallback(async () => {
+    setAudioSource(null);
+    if (TrackPlayerAvailable) {
+      try {
+        await TrackPlayer.reset();
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
 
   const stopVideo = useCallback(async () => {
     videoPlayer?.pause();
@@ -506,6 +548,13 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       // track-player automatically handles background audio settings when configured with capabilities
 
+      // Check if TrackPlayer is available (Expo Go compatibility)
+      if (!TrackPlayerAvailable) {
+        Alert.alert('Audio Not Available', 'Audio playback requires a development build. Please build the app with EAS Build to enable audio features.');
+        setState((s) => ({ ...s, isPlaying: false }));
+        return;
+      }
+
       try {
         logger.log('[MediaPlayer] Loading audio', { playbackUrl });
         setAudioSource(playbackUrl);
@@ -537,13 +586,13 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         await TrackPlayer.reset();
         await TrackPlayer.add([track]);
         await TrackPlayer.play();
-        
+
         // Update state to playing immediately
         setState((s) => ({
           ...s,
           isPlaying: true,
         }));
-        
+
         logger.log('[MediaPlayer] Audio playback started successfully');
       } catch (err) {
         logger.warn('[MediaPlayer] Failed to create or play audio', err);
@@ -620,6 +669,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     if (stateRef.current.queue.length === 0) return;
 
     if (item.mediaType === 'audio') {
+      if (!TrackPlayerAvailable) {
+        Alert.alert('Audio Not Available', 'Audio playback requires a development build. Please build the app with EAS Build to enable audio features.');
+        return;
+      }
       try {
         const isCurrentlyPlaying = stateRef.current.isPlaying;
         if (isCurrentlyPlaying) {
@@ -660,6 +713,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       const safe = Math.max(0, Math.round(positionMs));
 
       if (item.mediaType === 'audio') {
+        if (!TrackPlayerAvailable) {
+          logger.warn('[MediaPlayer] Cannot seek - TrackPlayer not available in Expo Go');
+          return;
+        }
         try {
           TrackPlayer.seekTo(safe / 1000);
         } catch (err) {
@@ -768,11 +825,13 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     const item = currentItemRef.current;
     if (!item) return;
     try {
-    if (item.mediaType === 'audio') {
-      TrackPlayer.setRate(safe);
-    } else if (videoPlayer) {
-      videoPlayer.playbackRate = safe;
-    }
+      if (item.mediaType === 'audio') {
+        if (TrackPlayerAvailable) {
+          TrackPlayer.setRate(safe);
+        }
+      } else if (videoPlayer) {
+        videoPlayer.playbackRate = safe;
+      }
     } catch {
       // ignore
     }
@@ -786,7 +845,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     if (!item) return;
     try {
       if (item.mediaType === 'audio') {
-        TrackPlayer.setVolume(safe);
+        if (TrackPlayerAvailable) {
+          TrackPlayer.setVolume(safe);
+        }
       } else if (videoPlayer) {
         videoPlayer.volume = safe;
       }
@@ -806,37 +867,44 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Skip polling if TrackPlayer not available (Expo Go compatibility)
+    if (!TrackPlayerAvailable) return;
+
     const interval = setInterval(async () => {
       if (!isPlayerReady) return;
-      const progress = await TrackPlayer.getProgress();
-      const pos = Math.max(0, Math.round(progress.position * 1000));
-      const dur = Math.max(0, Math.round(progress.duration * 1000));
-      const trackState = await TrackPlayer.getState();
-      const isNativePlaying = trackState === TrackPlayerState.Playing;
+      try {
+        const progress = await TrackPlayer.getProgress();
+        const pos = Math.max(0, Math.round(progress.position * 1000));
+        const dur = Math.max(0, Math.round(progress.duration * 1000));
+        const trackState = await TrackPlayer.getState();
+        const isNativePlaying = trackState === TrackPlayerState?.Playing;
 
-      setState((s) => {
-        let nextIsPlaying = isNativePlaying;
-        if (nextIsPlaying) hasStartedPlayingRef.current = true;
-        
-        if (s.isPlaying && !nextIsPlaying) {
-          if (!hasStartedPlayingRef.current || pos < 500) {
-            nextIsPlaying = true;
+        setState((s) => {
+          let nextIsPlaying = isNativePlaying;
+          if (nextIsPlaying) hasStartedPlayingRef.current = true;
+
+          if (s.isPlaying && !nextIsPlaying) {
+            if (!hasStartedPlayingRef.current || pos < 500) {
+              nextIsPlaying = true;
+            }
           }
+
+          const posDiff = Math.abs(s.positionMs - pos);
+          const shouldUpdate = s.isPlaying !== nextIsPlaying || posDiff > 800 || s.durationMs !== dur;
+          if (!shouldUpdate) return s;
+
+          if (nextIsPlaying && dur > 30000 && pos > dur * 0.75 && !preloadedUrlRef.current) {
+            preloadNextItem().catch(() => undefined);
+          }
+
+          return { ...s, isPlaying: nextIsPlaying, positionMs: pos, durationMs: dur };
+        });
+
+        if (dur > 0 && progress.position >= progress.duration - 0.5 && preloadedUrlRef.current && isNativePlaying === false && stateRef.current.isPlaying) {
+           handleDidJustFinish().catch(() => undefined);
         }
-
-        const posDiff = Math.abs(s.positionMs - pos);
-        const shouldUpdate = s.isPlaying !== nextIsPlaying || posDiff > 800 || s.durationMs !== dur;
-        if (!shouldUpdate) return s;
-
-        if (nextIsPlaying && dur > 30000 && pos > dur * 0.75 && !preloadedUrlRef.current) {
-          preloadNextItem().catch(() => undefined);
-        }
-        
-        return { ...s, isPlaying: nextIsPlaying, positionMs: pos, durationMs: dur };
-      });
-
-      if (dur > 0 && progress.position >= progress.duration - 0.5 && preloadedUrlRef.current && isNativePlaying === false && stateRef.current.isPlaying) {
-         handleDidJustFinish().catch(() => undefined);
+      } catch {
+        // Ignore errors from TrackPlayer in Expo Go
       }
     }, 1000);
     return () => clearInterval(interval);
@@ -846,13 +914,17 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   // retry calling play(). This handles cases where the direct play() call in
   // loadAndPlayAudio fired before the native player finished initializing.
   useEffect(() => {
-    if (!state.isPlaying || !audioSource || !isPlayerReady) return;
-    
+    if (!TrackPlayerAvailable || !state.isPlaying || !audioSource || !isPlayerReady) return;
+
     // Polling retry
     const timer = setTimeout(async () => {
-      const ts = await TrackPlayer.getState();
-      if (ts !== TrackPlayerState.Playing && stateRef.current.isPlaying) {
-        TrackPlayer.play();
+      try {
+        const ts = await TrackPlayer.getState();
+        if (ts !== TrackPlayerState?.Playing && stateRef.current.isPlaying) {
+          TrackPlayer.play();
+        }
+      } catch {
+        // Ignore errors from TrackPlayer in Expo Go
       }
     }, 3000);
     return () => clearTimeout(timer);
@@ -871,24 +943,24 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   // TrackPlayer remote event listeners for background/lock screen control synchronization
   useEffect(() => {
-    if (!isPlayerReady) return;
+    if (!TrackPlayerAvailable || !isPlayerReady) return;
 
     logger.log('[MediaPlayer] Setting up TrackPlayer event listeners');
 
     // Listen for remote play events from notification/lock screen
-    const remotePlaySubscription = TrackPlayer.addEventListener(Event.RemotePlay, () => {
+    const remotePlaySubscription = TrackPlayer.addEventListener(Event?.RemotePlay, () => {
       logger.log('[MediaPlayer] RemotePlay event received');
       setState((s) => ({ ...s, isPlaying: true }));
     });
 
     // Listen for remote pause events from notification/lock screen
-    const remotePauseSubscription = TrackPlayer.addEventListener(Event.RemotePause, () => {
+    const remotePauseSubscription = TrackPlayer.addEventListener(Event?.RemotePause, () => {
       logger.log('[MediaPlayer] RemotePause event received');
       setState((s) => ({ ...s, isPlaying: false }));
     });
 
     // Listen for remote next events from notification/lock screen
-    const remoteNextSubscription = TrackPlayer.addEventListener(Event.RemoteNext, () => {
+    const remoteNextSubscription = TrackPlayer.addEventListener(Event?.RemoteNext, () => {
       logger.log('[MediaPlayer] RemoteNext event received');
       const s = stateRef.current;
       if (!s.queue.length) return;
@@ -900,7 +972,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     });
 
     // Listen for remote previous events from notification/lock screen
-    const remotePrevSubscription = TrackPlayer.addEventListener(Event.RemotePrevious, () => {
+    const remotePrevSubscription = TrackPlayer.addEventListener(Event?.RemotePrevious, () => {
       console.log('[MediaPlayer] RemotePrevious event received');
       const s = stateRef.current;
       if (!s.queue.length) return;
@@ -909,14 +981,14 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     });
 
     // Listen for remote seek events from notification progress bar
-    const remoteSeekSubscription = TrackPlayer.addEventListener(Event.RemoteSeek, (event) => {
+    const remoteSeekSubscription = TrackPlayer.addEventListener(Event?.RemoteSeek, (event: any) => {
       console.log('[MediaPlayer] RemoteSeek event received:', event.position);
       const pos = Math.round(event.position * 1000);
       setState((s) => ({ ...s, positionMs: pos }));
     });
 
     // Handle audio ducking (interruptions like phone calls)
-    const remoteDuckSubscription = TrackPlayer.addEventListener(Event.RemoteDuck, async (event) => {
+    const remoteDuckSubscription = TrackPlayer.addEventListener(Event?.RemoteDuck, async (event: any) => {
       console.log('[MediaPlayer] RemoteDuck event:', event);
       if (event.permanent) {
         // Permanent interruption (phone call) - pause and update state
@@ -934,10 +1006,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     });
 
     // Playback state change tracking
-    const playbackStateSubscription = TrackPlayer.addEventListener(Event.PlaybackState, (playbackState) => {
-      const isPlaying = playbackState.state === TrackPlayerState.Playing;
+    const playbackStateSubscription = TrackPlayer.addEventListener(Event?.PlaybackState, (playbackState: any) => {
+      const isPlaying = playbackState.state === TrackPlayerState?.Playing;
       console.log('[MediaPlayer] PlaybackState changed:', playbackState.state, 'isPlaying:', isPlaying);
-      
+
       // Sync state if different from current
       if (stateRef.current.isPlaying !== isPlaying) {
         setState((s) => ({ ...s, isPlaying }));
@@ -945,12 +1017,12 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     });
 
     // Track changed event
-    const trackChangedSubscription = TrackPlayer.addEventListener(Event.PlaybackTrackChanged, (event) => {
+    const trackChangedSubscription = TrackPlayer.addEventListener(Event?.PlaybackTrackChanged, (event: any) => {
       console.log('[MediaPlayer] PlaybackTrackChanged:', event);
     });
 
     // Playback error handling
-    const playbackErrorSubscription = TrackPlayer.addEventListener(Event.PlaybackError, (error) => {
+    const playbackErrorSubscription = TrackPlayer.addEventListener(Event?.PlaybackError, (error: any) => {
       console.error('[MediaPlayer] PlaybackError:', error);
       // Pause on error
       setState((s) => ({ ...s, isPlaying: false }));

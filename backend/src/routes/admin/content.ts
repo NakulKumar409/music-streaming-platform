@@ -4,6 +4,7 @@ import { pool } from "../../common/db";
 import { createPlaybackToken } from "../../shared/security/signed-media-token.service";
 import { getMediaConfig } from "../../config/media.config";
 import { invalidateCachePattern, invalidateContentCache } from "../../common/cache";
+import { AuditService } from "../../shared/audit/audit.service";
 
 const router = Router();
 
@@ -182,6 +183,17 @@ router.post("/:id/restore", requireAuth, requireAdmin, async (req: any, res: any
 
     await invalidateContentCache();
 
+    AuditService.log({
+      action: 'content.approved',
+      entity: 'content',
+      entityId: String(id),
+      performedBy: req.user?.id,
+      role: 'admin',
+      status: 'success',
+      correlationId,
+      metadata: { action: 'restore' }
+    });
+
     return res.json({ success: true, correlationId });
   } catch (err: any) {
     await pool.query("ROLLBACK").catch(() => undefined);
@@ -232,6 +244,17 @@ router.post("/:id/delete-strike", requireAuth, requireAdmin, async (req: any, re
 
     await invalidateContentCache();
 
+    AuditService.log({
+      action: 'content.takedown',
+      entity: 'content',
+      entityId: String(id),
+      performedBy: req.user?.id,
+      role: 'admin',
+      status: 'success',
+      correlationId,
+      metadata: { reason: 'strike applied' }
+    });
+
     return res.json({ success: true, correlationId });
   } catch (err: any) {
     await pool.query("ROLLBACK").catch(() => undefined);
@@ -257,6 +280,17 @@ router.post("/artists/:artistId/ban", requireAuth, requireAdmin, async (req: any
     if (!r.rows?.length) {
       return res.status(404).json({ success: false, message: "Artist not found", correlationId });
     }
+
+    AuditService.log({
+      action: 'admin.user_banned',
+      entity: 'user',
+      entityId: String(artistId),
+      performedBy: req.user?.id,
+      role: 'admin',
+      status: 'success',
+      correlationId,
+      metadata: { action: 'ban' }
+    });
 
     return res.json({ success: true, correlationId });
   } catch (err: any) {

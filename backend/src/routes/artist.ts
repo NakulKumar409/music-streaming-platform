@@ -10,6 +10,7 @@ import path from "path";
 import fs from "fs";
 import { AnalyticsController } from "../controllers/analyticsController";
 import { logger } from "../common/logger";
+import { AuditService } from "../shared/audit/audit.service";
 
 const router = Router();
 router.get("/dashboard/subscription-insights", requireAuth, AnalyticsController.getArtistSubscriptionInsights);
@@ -502,6 +503,17 @@ router.patch("/me", requireAuth, requireArtist, async (req: any, res: any) => {
         accentColor: typeof accentColor === "string",
         socialLinks: socialLinks !== undefined
       }
+    });
+
+    AuditService.log({
+      action: 'artist.profile_updated',
+      entity: 'user',
+      entityId: String(artistUserId),
+      performedBy: artistUserId,
+      role: 'artist',
+      status: 'success',
+      correlationId,
+      metadata: { fields: ['name', 'bio', 'profileImageUrl', 'bannerImageUrl', 'accentColor', 'socialLinks'] }
     });
 
     await invalidateArtistCache();

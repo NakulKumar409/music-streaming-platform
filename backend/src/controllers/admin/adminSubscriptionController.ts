@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { pool } from "../../common/db";
 import { logger } from "../../common/logger";
 import { razorpayClient } from "../../config/razorpay";
+import { AuditService } from "../../shared/audit/audit.service";
 
 /**
  * Admin: Force revoke a subscription immediately.
@@ -45,6 +46,17 @@ export const revokeSubscription = async (req: Request, res: Response) => {
     );
 
     logger.info({ id, correlationId, adminUserId: (req as any).user?.id }, "[ADMIN] Subscription revoked successfully");
+
+    AuditService.log({
+      action: 'admin.subscription_cancelled',
+      entity: 'subscription',
+      entityId: String(id),
+      performedBy: (req as any).user?.id,
+      role: 'admin',
+      status: 'success',
+      correlationId,
+      metadata: { action: 'revoked' }
+    });
 
     return res.json({ success: true, message: "Subscription revoked successfully" });
   } catch (err: any) {
@@ -93,6 +105,17 @@ export const adjustSubscription = async (req: Request, res: Response) => {
     }
 
     logger.info({ id, correlationId, adminUserId: (req as any).user?.id, updates: req.body }, "[ADMIN] Subscription adjusted successfully");
+
+    AuditService.log({
+      action: 'admin.subscription_adjusted',
+      entity: 'subscription',
+      entityId: String(id),
+      performedBy: (req as any).user?.id,
+      role: 'admin',
+      status: 'success',
+      correlationId,
+      metadata: { updates: req.body }
+    });
 
     return res.json({ success: true, message: "Subscription adjusted successfully" });
   } catch (err: any) {

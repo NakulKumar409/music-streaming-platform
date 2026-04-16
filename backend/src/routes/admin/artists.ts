@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import { requireAuth } from "../../common/auth/requireAuth";
 import { pool } from "../../common/db";
 import { invalidateCachePattern, invalidateArtistCache } from "../../common/cache";
+import { AuditService } from "../../shared/audit/audit.service";
 
 const router = Router();
 
@@ -150,6 +151,17 @@ router.post("/create", requireAuth, requireAdmin, async (req, res) => {
         status: inserted?.status ?? "ACTIVE"
       })}`
     );
+
+    AuditService.log({
+      action: 'admin.artist_created',
+      entity: 'user',
+      entityId: String(inserted?.id),
+      performedBy: (req as any)?.user?.id,
+      role: 'admin',
+      status: 'success',
+      correlationId,
+      metadata: { email: trimmedEmail, artistName: name }
+    });
 
     await invalidateArtistCache();
 
@@ -418,6 +430,17 @@ router.patch("/:id/soft-delete", requireAuth, requireAdmin, async (req, res) => 
 
     await invalidateArtistCache();
 
+    AuditService.log({
+      action: 'admin.artist_status_changed',
+      entity: 'user',
+      entityId: String(id),
+      performedBy: (req as any)?.user?.id,
+      role: 'admin',
+      status: 'success',
+      correlationId,
+      metadata: { action: 'soft_delete', deletionReason: reason }
+    });
+
     return res.json({
       success: true,
       artist: {
@@ -464,6 +487,17 @@ router.patch("/:id/reactivate", requireAuth, requireAdmin, async (req, res) => {
     }
 
     await invalidateArtistCache();
+
+    AuditService.log({
+      action: 'admin.artist_status_changed',
+      entity: 'user',
+      entityId: String(id),
+      performedBy: (req as any)?.user?.id,
+      role: 'admin',
+      status: 'success',
+      correlationId,
+      metadata: { action: 'reactivate' }
+    });
 
     return res.json({
       success: true,
@@ -647,6 +681,16 @@ router.patch("/:id/status", requireAuth, requireAdmin, async (req, res) => {
   }
 
   await invalidateCachePattern("artist_search:*");
+
+  AuditService.log({
+    action: 'admin.artist_status_changed',
+    entity: 'user',
+    entityId: String(id),
+    performedBy: (req as any)?.user?.id,
+    role: 'admin',
+    status: 'success',
+    metadata: { action: isInactive ? 'activate' : 'deactivate', reason: req.body?.reason }
+  });
 
   return res.json({
     success: true,

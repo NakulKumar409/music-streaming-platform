@@ -1,7 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
-import NetInfo from '@react-native-community/netinfo';
 import OfflineScreen from '../screens/OfflineScreen';
 import logger from '../utils/logger';
+
+// Try to import NetInfo, fallback for Expo Go compatibility
+let NetInfo: any = null;
+try {
+  NetInfo = require('@react-native-community/netinfo').default;
+} catch (e) {
+  logger.warn('NetInfo not available, running in Expo Go without connectivity checks');
+}
 
 interface ConnectivityContextType {
   isConnected: boolean;
@@ -59,6 +66,12 @@ export const ConnectivityProvider: React.FC<ConnectivityProviderProps> = ({ chil
   }, []);
 
   const checkConnection = async () => {
+    if (!NetInfo) {
+      // Expo Go fallback - assume always connected
+      applyConnectivity(true, true);
+      return;
+    }
+
     try {
       const netInfoState = await NetInfo.fetch();
       const connected = netInfoState.isConnected ?? false;
@@ -83,8 +96,13 @@ export const ConnectivityProvider: React.FC<ConnectivityProviderProps> = ({ chil
     // Initial connection check
     checkConnection();
 
+    if (!NetInfo) {
+      // Expo Go fallback - no event listener available
+      return;
+    }
+
     // Subscribe to network state changes
-    const unsubscribe = NetInfo.addEventListener(state => {
+    const unsubscribe = NetInfo.addEventListener((state: any) => {
       const connected = state.isConnected ?? false;
       const reachable = state.isInternetReachable;
 
@@ -99,7 +117,7 @@ export const ConnectivityProvider: React.FC<ConnectivityProviderProps> = ({ chil
     });
 
     return () => {
-      unsubscribe();
+      unsubscribe?.();
     };
   }, []);
 

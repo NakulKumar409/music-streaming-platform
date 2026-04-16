@@ -5,6 +5,7 @@ import { pool } from "../common/db";
 import { logger } from "../common/logger";
 import Razorpay from "razorpay";
 import { NotificationService } from "../shared/notifications/notification.service";
+import { AuditService } from "../shared/audit/audit.service";
 
 const getRazorpayClient = () => {
   const key_id = (process.env.RAZORPAY_KEY_ID ?? "").toString().trim();
@@ -594,6 +595,15 @@ export const razorpayWebhook = async (req: any, res: Response) => {
                   );
                   console.log(`[WEBHOOK] SUCCESS: ${subscriptionType} payment recorded`);
                   logger.info({ userId: userIdFromNotes, artistId: artistIdFromNotes, subscriptionType, subscriptionId, amountPaise, paymentId }, "[WEBHOOK] Payment recorded in payments table");
+                  AuditService.log({
+                    action: 'payment.captured',
+                    entity: 'payment',
+                    entityId: paymentId,
+                    performedBy: userIdFromNotes,
+                    role: 'system',
+                    status: 'success',
+                    metadata: { transaction_id: orderId, amount: amountPaise, gateway_response: eventType }
+                  });
                 } catch (err: any) {
                   console.error(`[WEBHOOK] FAILED: ${err.message}`);
                   logger.error({ userId: userIdFromNotes, artistId: artistIdFromNotes, subscriptionType, error: err.message }, "[WEBHOOK] Failed to record payment");
@@ -684,6 +694,16 @@ export const razorpayWebhook = async (req: any, res: Response) => {
              }
 
              await logSubscriptionAudit(payment.user_id, payment.subscription_id, 'refund_processed', { payment_id: paymentId, amount: amountPaise }, client);
+
+             AuditService.log({
+               action: 'refund.issued',
+               entity: 'payment',
+               entityId: paymentId,
+               performedBy: payment.user_id,
+               role: 'system',
+               status: 'success',
+               metadata: { transaction_id: paymentId, amount: amountPaise, gateway_response: 'refund.processed' }
+             });
           }
         }
         break;
@@ -704,6 +724,16 @@ export const razorpayWebhook = async (req: any, res: Response) => {
         // Fetch user_id for notification
         const subRow = await client.query(`SELECT user_id FROM subscriptions WHERE razorpay_subscription_id = $1`, [subId]);
         if (subRow.rows[0]) {
+          AuditService.log({
+            action: 'payment.failed',
+            entity: 'payment',
+            entityId: paymentEntity?.id || 'unknown',
+            performedBy: subRow.rows[0].user_id,
+            role: 'system',
+            status: 'failed',
+            metadata: { transaction_id: paymentEntity?.order_id, amount: paymentEntity?.amount, gateway_response: 'payment.failed' }
+          });
+
           NotificationService.sendToUser({
             userId: String(subRow.rows[0].user_id),
             title: "Payment Failed ⚠️",
@@ -754,6 +784,16 @@ export const razorpayWebhook = async (req: any, res: Response) => {
   } catch (err: any) {
     if (client) await client.query('ROLLBACK');
     logger.error({ error: err.message, stack: err.stack, eventId: req.body?.id, tags: ['ALERT', 'PAYMENT_FAILURE'] }, "[WEBHOOK] Error handling event");
+    
+    AuditService.log({
+      action: 'webhook.failed',
+      entity: 'payment',
+      entityId: String(req.body?.id || 'unknown'),
+      role: 'system',
+      status: 'failed',
+      metadata: { gateway_response: 'exception', error: err.message, stack: err.stack }
+    });
+
     return res.status(500).send("Internal Server Error");
   } finally {
     if (client) client.release();

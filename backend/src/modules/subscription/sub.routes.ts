@@ -331,9 +331,11 @@ router.get("/details", requireAuth, (req: any, res: any) => {
       const platformRow = await pool.query(
         `SELECT s.id, s.type, s.status, s.plan_type, s.start_date, s.next_billing_date,
                 s.grace_ends_at, s.end_date, s.auto_renew,
-                cfg.price, cfg.yearly_price, cfg.currency, cfg.features
+                (SELECT cfg.price FROM platform_subscription_configs cfg WHERE cfg.is_active = true ORDER BY cfg.updated_at DESC LIMIT 1) as price,
+                (SELECT cfg.yearly_price FROM platform_subscription_configs cfg WHERE cfg.is_active = true ORDER BY cfg.updated_at DESC LIMIT 1) as yearly_price,
+                (SELECT cfg.currency FROM platform_subscription_configs cfg WHERE cfg.is_active = true ORDER BY cfg.updated_at DESC LIMIT 1) as currency,
+                (SELECT cfg.features FROM platform_subscription_configs cfg WHERE cfg.is_active = true ORDER BY cfg.updated_at DESC LIMIT 1) as features
          FROM subscriptions s
-         LEFT JOIN platform_subscription_configs cfg ON cfg.is_active = true
          WHERE s.user_id = $1 AND s.type = 'PLATFORM'
          ORDER BY s.created_at DESC LIMIT 1`,
         [userId]
@@ -355,7 +357,7 @@ router.get("/details", requireAuth, (req: any, res: any) => {
 
       // 3. Complete Transaction History
       const txRows = await pool.query(
-        `SELECT id, amount, currency, artist_name, status, date, artist_id, razorpay_payment_id
+        `SELECT id, amount, currency, artist_name, status, date, razorpay_payment_id
          FROM transactions
          WHERE user_id = $1
          ORDER BY date DESC LIMIT 100`,

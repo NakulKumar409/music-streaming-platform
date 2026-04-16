@@ -5,6 +5,7 @@ import { razorpayClient } from "../config/razorpay";
 import { logger } from "../common/logger";
 import { creditArtistEarnings } from "./paymentController";
 import { NotificationService } from "../shared/notifications/notification.service";
+import { AuditService } from "../shared/audit/audit.service";
 
 const safeEqualHex = (aHex: string, bHex: string) => {
   const a = Buffer.from(aHex, "hex");
@@ -197,6 +198,17 @@ export const createSubscription = async (req: any, res: Response) => {
 
     logger.info({ userId, subscriptionId: subscription.id, correlationId }, "[SUBSCRIPTION] Created Razorpay subscription");
 
+    AuditService.log({
+      action: subscriptionType === 'PLATFORM' ? 'platform_sub.created' : 'artist_sub.created',
+      entity: 'subscription',
+      entityId: String(subscription.id),
+      performedBy: userId,
+      role: 'fan',
+      status: 'pending',
+      correlationId,
+      metadata: { plan: planId.trim(), user_id: userId, artist_id: artistIdNum }
+    });
+
     return res.json({
       success: true,
       subscription_id: subscription.id,
@@ -350,6 +362,17 @@ export const verifySubscription = async (req: any, res: Response) => {
         data: { type: "subscription_success", subId: sub.id }
       }).catch(e => logger.error(e, "[VERIFY] Notification failed"));
 
+      AuditService.log({
+        action: sub.type === 'PLATFORM' ? 'platform_sub.renewed' : 'artist_sub.renewed',
+        entity: 'subscription',
+        entityId: String(sub.id),
+        performedBy: userId,
+        role: 'fan',
+        status: 'success',
+        correlationId,
+        metadata: { amount: amountPaise, user_id: userId, artist_id: sub.artist_id }
+      });
+
       return res.json({
         success: true,
         message: "Subscription verified and activated",
@@ -462,7 +485,7 @@ export const cancelSubscription = async (req: any, res: Response) => {
       `UPDATE subscriptions 
        SET auto_renew = false, updated_at = now()
        WHERE id = $1 AND user_id = $2
-       RETURNING id`,
+       RETURNING id, type`,
       [subId, userId]
     );
 
@@ -471,6 +494,17 @@ export const cancelSubscription = async (req: any, res: Response) => {
     }
 
     logger.info({ userId, subId, reason, correlationId }, "[SUBSCRIPTION] Subscription cancelled (auto-renew disabled)");
+
+    AuditService.log({
+      action: result.rows[0].type === 'PLATFORM' ? 'platform_sub.cancelled' : 'artist_sub.cancelled',
+      entity: 'subscription',
+      entityId: String(subId),
+      performedBy: userId,
+      role: 'fan',
+      status: 'success',
+      correlationId,
+      metadata: { reason, feedback, user_id: userId }
+    });
 
     return res.json({ 
       success: true, 

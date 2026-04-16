@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { AuthService } from "./auth.service";
 import { pool } from "../../common/db";
+import { AuditService } from "../../shared/audit/audit.service";
 
 const authService = new AuthService();
 
@@ -72,6 +73,17 @@ export class AuthController {
         })}`
       );
 
+      AuditService.log({
+        action: 'user.login',
+        entity: 'user',
+        entityId: String(userId),
+        performedBy: userId,
+        role: role ? role.toString().toLowerCase() as any : 'fan',
+        status: 'success',
+        correlationId,
+        metadata: { email, deviceId, deviceName }
+      });
+
       return res.json(result);
     } catch (err: any) {
       const correlationId = (req as any)?.correlationId || "-";
@@ -84,6 +96,20 @@ export class AuthController {
           message: err?.message || "Invalid credentials"
         })}`
       );
+
+      AuditService.log({
+        action: 'auth.failed_login',
+        entity: 'user',
+        entityId: 'unauthenticated',
+        performedBy: undefined,
+        role: 'system',
+        status: 'failed',
+        correlationId,
+        metadata: {
+          email: (req as any)?.body?.email ?? null,
+          message: err?.message || "Invalid credentials"
+        }
+      });
 
       return res.status(err?.status || 401).json({
         success: false,

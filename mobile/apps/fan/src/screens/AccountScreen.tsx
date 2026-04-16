@@ -97,26 +97,50 @@ export default function AccountScreen() {
   const refresh = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [p, details, l, plan] = await Promise.all([
+      const [profileRes, detailsRes, listenRes, planRes] = await Promise.allSettled([
         userService.getUserProfile(),
         userService.getSubscriptionDetails(),
         userService.getListenTime(),
         userService.getSubscriptionPlanSummary(),
       ]);
 
-      setProfileName(p.name);
-      setProfileImageUrl(p.profileImageUrl || '');
-      setIsPremium(p.isPremium);
-      setSubscriptionCount(p.subscriptionCount);
-      setListenTime(l.formattedTime);
-      setPlanSummary(plan);
-      
-      if (details) {
+      if (profileRes.status === 'fulfilled') {
+        const p = profileRes.value;
+        setProfileName(p.name);
+        setProfileImageUrl(p.profileImageUrl || '');
+        setIsPremium(p.isPremium);
+        setSubscriptionCount(p.subscriptionCount);
+      } else {
+        console.warn('[AccountScreen] getUserProfile failed:', profileRes.reason);
+      }
+
+      if (detailsRes.status === 'fulfilled' && detailsRes.value) {
+        const details = detailsRes.value;
         setPlatformPlan(details.platform);
         setArtistSubs(details.artists || []);
         setTransactions(details.transactions || []);
+        console.log(`[AccountScreen] Subscriptions loaded: ${details.artists?.length || 0} artists, Transactions: ${details.transactions?.length || 0}`);
+      } else {
+        const reason = detailsRes.status === 'rejected' ? detailsRes.reason : 'No data';
+        console.warn('[AccountScreen] getSubscriptionDetails failed or empty:', reason);
       }
 
+      if (listenRes.status === 'fulfilled') {
+        console.log('[AccountScreen] Listen time success:', listenRes.value.formattedTime);
+        setListenTime(listenRes.value.formattedTime);
+      } else {
+        console.warn('[AccountScreen] getListenTime failed:', listenRes.reason);
+        setListenTime('—');
+      }
+
+      if (planRes.status === 'fulfilled') {
+        setPlanSummary(planRes.value);
+      } else {
+        console.warn('[AccountScreen] getSubscriptionPlanSummary failed:', planRes.reason);
+      }
+
+    } catch (error: any) {
+      console.error('[AccountScreen] refresh error:', error);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -388,7 +412,7 @@ export default function AccountScreen() {
                 onPress={() => setShowArtistSubList(true)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.statValue}>{artistSubs.length}</Text>
+                <Text style={styles.statValue}>{artistSubs.length || subscriptionCount || 0}</Text>
                 <Text style={styles.statLabel}>Subscribed Artists</Text>
               </TouchableOpacity>
               <View style={styles.statBox}>

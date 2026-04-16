@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { pool } from "../common/db";
+import { AuditService } from "../shared/audit/audit.service";
 
 const isValidDob = (dob: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) return false;
@@ -176,6 +177,17 @@ export const registerFan = async (req: Request, res: Response) => {
       { expiresIn: "1d" }
     );
 
+    AuditService.log({
+      action: 'user.register',
+      entity: 'user',
+      entityId: String(user.id),
+      performedBy: user.id,
+      role: 'fan',
+      status: 'success',
+      correlationId,
+      metadata: { username: user.username, email: user.email }
+    });
+
     return res.status(201).json({
       success: true,
       message: "Fan registered successfully",
@@ -195,6 +207,16 @@ export const registerFan = async (req: Request, res: Response) => {
       code: err?.code,
       stack: err?.stack,
       error: String(err)
+    });
+
+    AuditService.log({
+      action: 'system.error',
+      entity: 'system',
+      entityId: 'register_fan',
+      role: 'system',
+      status: 'failed',
+      correlationId,
+      metadata: { error: err?.message || "Unknown error", stack: err?.stack }
     });
 
     return res.status(500).json({

@@ -81,6 +81,11 @@ type ApiContentItem = {
   useStreamAccess?: boolean;
   isVerified?: boolean;
   verified?: boolean;
+  viewCount?: number;
+  views?: number;
+  likeCount?: number;
+  dislikeCount?: number;
+  userReaction?: 'LIKE' | 'DISLIKE' | null;
   artist?: {
     id?: string | number | null;
     name?: string | null;
