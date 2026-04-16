@@ -57,6 +57,8 @@ import { isStreamingUrlExpiringSoon, decodeJwtExpMsFromUrl } from '../utils/stre
 import PauseButtonImg from '../pausebuttton.png';
 import PlayButtonImg from '../playbutton.png';
 
+import { LockedContentOverlay } from '../ui/SubscriptionUI';
+
 const REPORTED_CONTENT_STORAGE_KEY = 'reportedContentIds';
 
 type ApiContentItem = {
@@ -301,8 +303,10 @@ export default function VideoScreen() {
   const [isStreamingHdAllowed, setIsStreamingHdAllowed] = useState(false);
 
   const [showHdLockModal, setShowHdLockModal] = useState(false);
-  const [showArtistLockModal, setShowArtistLockModal] = useState<{ visible: boolean; video: VideoCard | null; isPreviewEnded?: boolean }>({ visible: false, video: null });
-  const [isLockedPreview, setIsLockedPreview] = useState(false);
+  const [showArtistLockModal, setShowArtistLockModal] = useState<{ visible: boolean; video: VideoCard | null }>({
+    visible: false,
+    video: null,
+  });
 
   const [showMini, setShowMini] = useState(false);
   const scrollYRef = useRef(0);
@@ -665,7 +669,6 @@ export default function VideoScreen() {
       setShowControls(true);
       playedOnceRef.current = false;
       setShowQualitySheet(false);
-      setIsLockedPreview(false);
     }
   }, [videoPlayer]);
 
@@ -920,21 +923,6 @@ export default function VideoScreen() {
           const accessRes = await userService.checkContentAccess(Number(video.id), video.artistId || '');
           
           if (!accessRes.allowed) {
-            // New Preview Logic: Try to fetch a preview URL if fully locked
-            try {
-              const previewUrl = await streamService.getPlaybackUrl(video.id, 'video', 'SD', true);
-              if (previewUrl && sessionId === playbackSessionRef.current) {
-                 setIsLockedPreview(true);
-                 setActivePlaybackUrl(previewUrl);
-                 setIsVideoReady(false);
-                 setIsVideoPlaying(true);
-                 setLoadingPlaybackUrl(false);
-                 return;
-              }
-            } catch (pErr) {
-              console.warn('[VideoScreen] Preview fetch failed', pErr);
-            }
-
             setLastAttemptedVideo(video);
             setShowArtistLockModal({ visible: true, video });
             setPlaybackError('Subscription Required');
@@ -942,8 +930,6 @@ export default function VideoScreen() {
             setLoadingPlaybackUrl(false);
             return;
           }
-
-          setIsLockedPreview(false);
 
           const playbackUrl = await resolvePlaybackUrl(video);
 
@@ -1028,7 +1014,6 @@ export default function VideoScreen() {
         if (lastAttemptedVideo) {
           const v = lastAttemptedVideo;
           setLastAttemptedVideo(null);
-          setIsLockedPreview(false); // Reset preview flag on real unlock
           onPressVideo(v);
         }
       }
@@ -1152,16 +1137,8 @@ export default function VideoScreen() {
       if (!status.isLoaded) return;
       const pos = status.positionMillis || 0;
       setPositionMs(pos);
-
-      // Enforce 10-second preview limit
-      if (isLockedPreview && pos > 10000) {
-        videoPlayer.pause();
-        setIsVideoPlaying(false);
-        setShowArtistLockModal({ visible: true, video: activeVideoMeta, isPreviewEnded: true });
-        return;
-      }
     },
-    [activeVideoMeta, isLockedPreview, videoPlayer]
+    []
   );
 
   useEffect(() => {
@@ -1623,9 +1600,7 @@ export default function VideoScreen() {
             <Lock color="#FF7A18" size={32} />
           </View>
           
-          <Text style={styles.modalTitle}>
-            {showArtistLockModal.isPreviewEnded ? "Preview Finished" : "Exclusive Content"}
-          </Text>
+          <Text style={styles.modalTitle}>Exclusive Content</Text>
           
           <Text style={styles.modalMessage}>
             Support <Text style={{ color: '#fff', fontWeight: '900' }}>{showArtistLockModal.video?.artistName || 'this artist'}</Text> to unlock full access and premium benefits.

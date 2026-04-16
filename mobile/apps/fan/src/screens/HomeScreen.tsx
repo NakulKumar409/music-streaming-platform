@@ -13,12 +13,14 @@ import {
   View,
   Dimensions,
   Linking,
+  Modal,
 } from 'react-native';
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { BadgeCheck, Lock, Play, Search } from 'lucide-react-native';
+import { BadgeCheck, Lock, Play, Search, X } from 'lucide-react-native';
+import { LockedContentOverlay } from '../ui/SubscriptionUI';
 import { apiV1 } from '../services/api';
 import { fetchVerifiedArtists, fetchFeaturedArtists, type ArtistListItem } from '../services/artistService';
 import { API_HOST_BASE_URL, ARTIST_WEB_URL } from '../config/env';
@@ -104,6 +106,10 @@ export default function HomeScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [artistsError, setArtistsError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [showArtistLockModal, setShowArtistLockModal] = useState<{ visible: boolean; item: ContentCard | null }>({
+    visible: false,
+    item: null,
+  });
   const mountedRef = useRef(true);
   const dataLoadedRef = useRef(false);
   const [featuredArtists, setFeaturedArtists] = useState<FeaturedArtistCard[]>([]);
@@ -276,6 +282,11 @@ export default function HomeScreen({ navigation }: any) {
 
   // Tapping an item in the VIDEO row — always open in VideoTab
   const onPressVideoItem = (item: ContentCard) => {
+    if (item.isLocked) {
+      setShowArtistLockModal({ visible: true, item });
+      return;
+    }
+
     navigation.getParent()?.navigate('VideoTab', {
       screen: 'VideoIndex',
       params: {
@@ -571,7 +582,40 @@ export default function HomeScreen({ navigation }: any) {
         <View style={{ height: 30 }} />
       </ScrollView>
 
-      </View>
+        </View>
+
+        {showArtistLockModal.visible && (
+          <Modal
+            transparent
+            visible={true}
+            animationType="fade"
+            onRequestClose={() => setShowArtistLockModal({ visible: false, item: null })}
+          >
+            <LockedContentOverlay
+              artistName={showArtistLockModal.item?.artist}
+              onSubscribe={() => {
+                setShowArtistLockModal({ visible: false, item: null });
+                navigation.navigate('SubscriptionFlow', {
+                  artistId: showArtistLockModal.item?.artistId,
+                  artistName: showArtistLockModal.item?.artist,
+                });
+              }}
+            />
+            <Pressable
+              style={{
+                position: 'absolute',
+                top: 50,
+                right: 20,
+                zIndex: 100,
+                padding: 10,
+              }}
+              onPress={() => setShowArtistLockModal({ visible: false, item: null })}
+            >
+              <X color="#fff" size={28} />
+            </Pressable>
+          </Modal>
+        )}
+
       </SafeAreaView>
     </LinearGradient>
   );

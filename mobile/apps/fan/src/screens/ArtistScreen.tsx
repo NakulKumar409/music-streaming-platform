@@ -17,13 +17,14 @@ import {
   TouchableOpacity,
   Platform,
   UIManager,
+  Modal,
 } from 'react-native';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Path, Rect, Circle } from 'react-native-svg';
 
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { ArrowLeft, BadgeCheck, Settings, Lock } from 'lucide-react-native';
+import { ArrowLeft, BadgeCheck, Settings, Lock, X } from 'lucide-react-native';
 import { VideoView } from 'expo-video';
 import { useIsFocused } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -202,6 +203,10 @@ export default function ArtistScreen({ navigation, route }: any) {
   const [daysUntilExpiry, setDaysUntilExpiry] = useState<number>(0);
   const [lockedClicks, setLockedClicks] = useState(0);
   const [showStrongUpsell, setShowStrongUpsell] = useState(false);
+  const [showArtistLockModal, setShowArtistLockModal] = useState<{ visible: boolean; song: Song | null }>({
+    visible: false,
+    song: null,
+  });
 
   const [showDebugToggle, setShowDebugToggle] = useState(__DEV__);
 
@@ -651,6 +656,39 @@ export default function ArtistScreen({ navigation, route }: any) {
               navigation.navigate('SubscriptionFlow', { artistId: artist?.id, artistName: artist?.name });
             }}
           />
+        )}
+
+        {showArtistLockModal.visible && (
+          <Modal
+            transparent
+            visible={true}
+            animationType="fade"
+            onRequestClose={() => setShowArtistLockModal({ visible: false, song: null })}
+          >
+            <LockedContentOverlay
+              artistName={artist?.name}
+              onSubscribe={() => {
+                setShowArtistLockModal({ visible: false, song: null });
+                navigation.navigate('SubscriptionFlow', {
+                  artistId: artist?.id,
+                  artistName: artist?.name,
+                  amount: artist?.subscriptionPrice,
+                });
+              }}
+            />
+            <Pressable
+              style={{
+                position: 'absolute',
+                top: 50,
+                right: 20,
+                zIndex: 100,
+                padding: 10,
+              }}
+              onPress={() => setShowArtistLockModal({ visible: false, song: null })}
+            >
+              <X color="#fff" size={28} />
+            </Pressable>
+          </Modal>
         )}
       </SafeAreaView>
     </LinearGradient>
