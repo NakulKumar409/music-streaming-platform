@@ -1,19 +1,32 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, Pressable } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, Image, Pressable, Modal } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Play } from 'lucide-react-native';
+import { ArrowLeft, Play, X } from 'lucide-react-native';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import AudioListItem from '../ui/audio/AudioListItem';
+import { LockedContentOverlay } from '../ui/SubscriptionUI';
 import { Colors } from '../theme';
 
 export default function AlbumDetailScreen({ route, navigation }: any) {
   const { albumId, title, artistName, coverImage, tracks } = route.params;
   const insets = useSafeAreaInsets();
   const { playQueue, currentItem, state: playerState } = useMediaPlayer();
+  const [showArtistLockModal, setShowArtistLockModal] = useState<{ visible: boolean; item: any }>({
+    visible: false,
+    item: null,
+  });
 
   const handlePlayAll = () => {
     if (!tracks || tracks.length === 0) return;
+
+    // Check if first track is locked
+    const firstTrack = tracks[0];
+    if (firstTrack.isLocked || firstTrack.locked) {
+      setShowArtistLockModal({ visible: true, item: firstTrack });
+      return;
+    }
+
     const queue = tracks.map((x: any) => ({
       id: x.id,
       contentId: x.contentId,
@@ -23,7 +36,7 @@ export default function AlbumDetailScreen({ route, navigation }: any) {
       mediaType: 'audio' as const,
       artworkUrl: x.artworkUrl,
       mediaUrl: x.mediaUrl || '',
-      isLocked: false,
+      isLocked: Boolean(x.isLocked || x.locked),
       useStreamAccess: x.useStreamAccess,
     }));
 
@@ -39,6 +52,11 @@ export default function AlbumDetailScreen({ route, navigation }: any) {
   };
 
   const handlePressTrack = (song: any) => {
+    if (song.isLocked || song.locked) {
+      setShowArtistLockModal({ visible: true, item: song });
+      return;
+    }
+
     const queue = tracks.map((x: any) => ({
       id: x.id,
       contentId: x.contentId,
@@ -48,7 +66,7 @@ export default function AlbumDetailScreen({ route, navigation }: any) {
       mediaType: 'audio' as const,
       artworkUrl: x.artworkUrl,
       mediaUrl: x.mediaUrl || '',
-      isLocked: false,
+      isLocked: Boolean(x.isLocked || x.locked),
       useStreamAccess: x.useStreamAccess,
     }));
     
@@ -112,6 +130,38 @@ export default function AlbumDetailScreen({ route, navigation }: any) {
           }}
         />
       </View>
+
+      {showArtistLockModal.visible && (
+        <Modal
+          transparent
+          visible={true}
+          animationType="fade"
+          onRequestClose={() => setShowArtistLockModal({ visible: false, item: null })}
+        >
+          <LockedContentOverlay
+            artistName={showArtistLockModal.item?.artistName}
+            onSubscribe={() => {
+              setShowArtistLockModal({ visible: false, item: null });
+              navigation.navigate('SubscriptionFlow', {
+                artistId: showArtistLockModal.item?.artistId,
+                artistName: showArtistLockModal.item?.artistName,
+              });
+            }}
+          />
+          <Pressable
+            style={{
+              position: 'absolute',
+              top: 50,
+              right: 20,
+              zIndex: 100,
+              padding: 10,
+            }}
+            onPress={() => setShowArtistLockModal({ visible: false, item: null })}
+          >
+            <X color="#fff" size={28} />
+          </Pressable>
+        </Modal>
+      )}
     </LinearGradient>
   );
 }

@@ -44,8 +44,8 @@ const AudioListItem = memo(({ item, onPress, isActive, isPlaying }: AudioListIte
             {item.artistName}
           </Text>
         </View>
-        <View style={[styles.playButtonWrap, isActive && styles.playButtonWrapActive, item.isLocked && styles.playButtonWrapLocked]}>
-          {item.isLocked ? (
+        <View style={[styles.playButtonWrap, isActive && styles.playButtonWrapActive, (item.isLocked || (item as any).locked) && styles.playButtonWrapLocked]}>
+          {(item.isLocked || (item as any).locked) ? (
             <Lock size={16} color="rgba(255,255,255,0.4)" />
           ) : isActive && isPlaying ? (
             <Pause size={16} color="#000" fill="#000" />
