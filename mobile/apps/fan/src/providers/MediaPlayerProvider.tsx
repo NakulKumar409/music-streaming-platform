@@ -45,7 +45,7 @@ type Track = any;
 
 import MediaPlayerOverlay from '../ui/MediaPlayerOverlay';
 import { recordPlayback } from '../services/libraryService';
-import { getPlaybackUrl, normalizePlaybackUrl, validatePlaybackUrl } from '../services/streamService';
+import { getPlaybackUrl, normalizePlaybackUrl, validatePlaybackUrl, type VideoQuality } from '../services/streamService';
 import { isStreamingUrlExpiringSoon, decodeJwtExpMsFromUrl } from '../utils/streaming';
 import { startHeartbeat, stopHeartbeat } from '../services/heartbeatService';
 
@@ -82,8 +82,8 @@ type MediaPlayerContextValue = {
   audioPlayer: null; isPlayerReady: boolean;
   onVideoPlaybackStatusUpdate: (status: any) => void;
   
-  preferredQuality: 'SD' | 'HD';
-  setPreferredQuality: (q: 'SD' | 'HD') => void;
+  preferredQuality: VideoQuality;
+  setPreferredQuality: (q: VideoQuality) => void;
   setExpanded: (expanded: boolean) => void;
 };
 
@@ -126,7 +126,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   const [videoSource, setVideoSource] = useState<string | null>(null);
   const videoPlayer = useVideoPlayer(videoSource);
 
-  const [preferredQuality, setPreferredQuality] = useState<'SD' | 'HD'>('HD');
+  const [preferredQuality, setPreferredQuality] = useState<VideoQuality>('Auto');
 
   const audioLoadTokenRef = useRef(0);
   const hasStartedPlayingRef = useRef(false);

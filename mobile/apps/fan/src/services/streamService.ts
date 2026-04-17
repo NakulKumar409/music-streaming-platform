@@ -82,7 +82,9 @@ export function validatePlaybackUrl(url: string, kind?: "audio" | "video"): bool
   return true;
 }
 
-export async function getPlaybackUrl(contentId: string, kind?: 'audio' | 'video', quality?: 'SD' | 'HD', allowPreview?: boolean): Promise<string> {
+export type VideoQuality = '144p' | '240p' | '360p' | '480p' | '720p' | '1080p' | 'Auto' | 'SD' | 'HD';
+
+export async function getPlaybackUrl(contentId: string, kind?: 'audio' | 'video', quality?: VideoQuality, allowPreview?: boolean): Promise<string> {
   const res = await apiV1.post<StreamAccessResponse>('/stream/access', {
     contentId: Number(contentId),
     kind,

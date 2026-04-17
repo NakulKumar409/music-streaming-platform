@@ -5,6 +5,11 @@
 
 export type VisibilityType = "PUBLIC" | "PROTECTED" | "PRIVATE_INTERNAL";
 
+/**
+ * Supported video quality options.
+ */
+export type VideoQuality = '144p' | '240p' | '360p' | '480p' | '720p' | '1080p' | 'Auto' | 'SD' | 'HD';
+
 export interface GeneratePlaybackAccessParams {
   mediaId: number;
   storageProvider: string;
@@ -17,7 +22,7 @@ export interface GeneratePlaybackAccessParams {
   userId: number;
   expiresInSeconds: number;
   token: string;
-  quality?: 'SD' | 'HD';
+  quality?: VideoQuality;
 }
 
 export interface PlaybackAccessResult {

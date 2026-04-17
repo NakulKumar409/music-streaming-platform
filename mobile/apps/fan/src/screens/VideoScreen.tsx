@@ -259,7 +259,7 @@ export default function VideoScreen() {
   const [items, setItems] = useState<VideoCard[]>([]);
 
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
-  const [lastAttemptedHdQuality, setLastAttemptedHdQuality] = useState<string | null>(null);
+  const [lastAttemptedHdQuality, setLastAttemptedHdQuality] = useState<streamService.VideoQuality | null>(null);
   const [lastAttemptedVideo, setLastAttemptedVideo] = useState<VideoCard | null>(null);
 
   const [activeVideoMeta, setActiveVideoMeta] = useState<VideoCard | null>(null);
@@ -293,13 +293,13 @@ export default function VideoScreen() {
   const durationSetForUrlRef = useRef<string | null>(null);
 
   const [showQualitySheet, setShowQualitySheet] = useState(false);
-  const [selectedQuality, setSelectedQuality] = useState<string>('Auto');
+  const [selectedQuality, setSelectedQuality] = useState<streamService.VideoQuality>('Auto');
   const [isHD, setIsHD] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   // Flag to distinguish quality-only URL changes from full video switches
   const isQualitySwitchRef = useRef(false);
 
-  const [maxAllowedResolution, setMaxAllowedResolution] = useState<string>('240p');
+  const [maxAllowedResolution, setMaxAllowedResolution] = useState<streamService.VideoQuality>('240p');
   const [isStreamingHdAllowed, setIsStreamingHdAllowed] = useState(false);
 
   const [showHdLockModal, setShowHdLockModal] = useState(false);
@@ -315,14 +315,14 @@ export default function VideoScreen() {
   useEffect(() => {
     (async () => {
       const res = await userService.checkStreamingQuality();
-      const maxRes = (res?.maxResolution ?? '240p').toString();
+      const maxRes = (res?.maxResolution ?? '240p').toString() as streamService.VideoQuality;
       setMaxAllowedResolution(maxRes);
       setIsStreamingHdAllowed(res?.quality === 'HD');
 
       // If user is not allowed HD, ensure UI doesn't get stuck in an HD selection.
       if (res?.quality !== 'HD') {
         setSelectedQuality((prev) => {
-          if (prev === '720p' || prev === '1080p' || prev === 'Auto') return maxRes;
+          if (prev === '720p' || prev === '1080p' || prev === 'Auto') return '240p';
           return prev;
         });
         setIsHD(false);
@@ -511,7 +511,11 @@ export default function VideoScreen() {
 
           console.log('[VideoScreen] Background refreshing video URL...');
           try {
-            const nextUrl = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video', isStreamingHdAllowed ? 'HD' : 'SD');
+            // Use current selected quality for refresh, respecting subscription
+            const refreshQuality: streamService.VideoQuality = isStreamingHdAllowed 
+              ? (selectedQuality as streamService.VideoQuality) 
+              : '240p';
+            const nextUrl = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video', refreshQuality);
             resumeAfterUrlChangeRef.current = pos;
             setActivePlaybackUrl(nextUrl);
           } catch {
@@ -788,7 +792,11 @@ export default function VideoScreen() {
         if (!activeVideoMeta?.id) return;
         const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
         try {
-          const nextUrl = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video', isStreamingHdAllowed ? 'HD' : 'SD');
+          // Use current selected quality for refresh, respecting subscription
+          const refreshQuality: streamService.VideoQuality = isStreamingHdAllowed 
+            ? (selectedQuality as streamService.VideoQuality) 
+            : '240p';
+          const nextUrl = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video', refreshQuality);
           resumeAfterUrlChangeRef.current = pos;
           setActivePlaybackUrl(nextUrl);
         } catch {
@@ -870,7 +878,10 @@ export default function VideoScreen() {
 
   const resolvePlaybackUrl = useCallback(async (video: VideoCard) => {
     try {
-      const q: 'SD' | 'HD' = isStreamingHdAllowed ? 'HD' : 'SD';
+      // Use current selected quality or default to 240p for free users, Auto for paid
+      const q: streamService.VideoQuality = selectedQuality && selectedQuality !== 'Auto' 
+        ? selectedQuality 
+        : (isStreamingHdAllowed ? 'Auto' : '240p');
       return await streamService.getPlaybackUrl(video.id, 'video', q);
     } catch (err: any) {
       if (err?.message && (err.message.toLowerCase().includes('subscription') || err.message.toLowerCase().includes('access denied'))) {
@@ -972,7 +983,7 @@ export default function VideoScreen() {
   const refreshSubscriptionAndRetry = useCallback(async () => {
     try {
       const res = await userService.checkStreamingQuality();
-      const maxRes = (res?.maxResolution ?? '240p').toString();
+      const maxRes = (res?.maxResolution ?? '240p').toString() as streamService.VideoQuality;
       const isAllowedHD = res?.quality === 'HD';
       
       setMaxAllowedResolution(maxRes);
@@ -992,12 +1003,13 @@ export default function VideoScreen() {
           const q = lastAttemptedHdQuality;
           setLastAttemptedHdQuality(null);
           // Auto-apply the quality
-          setSelectedQuality(q);
+          setSelectedQuality(q as streamService.VideoQuality);
           const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
           if (activeVideoMeta?.id) {
             setLoadingPlaybackUrl(true);
             try {
-              const qParam: 'SD' | 'HD' = (q === '720p' || q === '1080p' || q === 'Auto') ? 'HD' : 'SD';
+              // Use the pending quality directly - backend will enforce subscription
+              const qParam: streamService.VideoQuality = getStreamQualityParam(q);
               const nextUrl = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video', qParam);
               isQualitySwitchRef.current = true;
               qualityResumePositionRef.current = pos / 1000;
@@ -1206,9 +1218,17 @@ export default function VideoScreen() {
   );
 
   const getStreamQualityParam = useCallback(
-    (q: string): 'SD' | 'HD' => {
-      void q;
-      return isStreamingHdAllowed ? 'HD' : 'SD';
+    (q: string): streamService.VideoQuality => {
+      // Free users: max 240p
+      if (!isStreamingHdAllowed) {
+        const freeQualities: streamService.VideoQuality[] = ['144p', '240p'];
+        const normalized = freeQualities.find(fq => fq.toLowerCase() === q.toLowerCase());
+        return normalized || '240p';
+      }
+      // Paid users: full access (144p-1080p + Auto)
+      const validQualities: streamService.VideoQuality[] = ['144p', '240p', '360p', '480p', '720p', '1080p', 'Auto'];
+      const normalized = validQualities.find(vq => vq.toLowerCase() === q.toLowerCase());
+      return normalized || 'Auto';
     },
     [isStreamingHdAllowed]
   );
@@ -1228,11 +1248,11 @@ export default function VideoScreen() {
 
       const isLockedQuality = (q !== '144p' && q !== '240p');
       if (isLockedQuality && !isStreamingHdAllowed) {
-        setLastAttemptedHdQuality(q);
+        setLastAttemptedHdQuality(q as streamService.VideoQuality);
         setShowQualitySheet(false);
         setShowHdLockModal(true);
       } else {
-        setSelectedQuality(q);
+        setSelectedQuality(q as streamService.VideoQuality);
         setShowQualitySheet(false);
         // Update HD badge state
         setIsHD(q === '720p' || q === '1080p');
@@ -1260,7 +1280,9 @@ export default function VideoScreen() {
       setIsBuffering(true);
 
       try {
-        const url = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video', getStreamQualityParam(q));
+        const qualityParam = getStreamQualityParam(q);
+        console.log(`[VideoScreen] Quality selection: ${q} => ${qualityParam}`);
+        const url = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video', qualityParam);
         // Setting the URL causes useVideoPlayer to reload the source.
         // useEventListener('statusChange') above will fire seek+play atomically
         // as soon as status === 'readyToPlay' — no setTimeout needed.

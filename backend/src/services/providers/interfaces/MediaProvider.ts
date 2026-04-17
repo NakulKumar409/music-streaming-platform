@@ -11,6 +11,8 @@ export interface PlayerUrlResult {
   mediaType: string;
 }
 
+import type { VideoQuality } from '../../../shared/delivery/interfaces/media-delivery-strategy.interface';
+
 export interface MediaProvider {
   /**
    * Initialize and perform the raw file upload to the provider
@@ -34,7 +36,7 @@ export interface MediaProvider {
   generateSignedPlaybackUrl(
     providerAssetId: string,
     fileType: "audio" | "video",
-    quality?: "SD" | "HD"
+    quality?: VideoQuality
   ): Promise<PlayerUrlResult>;
 
   generatePublicAssetUrl?(

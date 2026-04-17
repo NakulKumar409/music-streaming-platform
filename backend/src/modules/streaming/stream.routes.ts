@@ -20,8 +20,9 @@ router.post("/access", async (req: any, res: any) => {
   const kindRaw = (req.body?.kind ?? "").toString().toLowerCase();
   const kind = kindRaw === "video" ? "video" : kindRaw === "audio" ? "audio" : undefined;
   
-  const qualityRaw = (req.body?.quality ?? "").toString().toUpperCase();
-  const quality = (qualityRaw === "HD" || qualityRaw === "SD") ? (qualityRaw as "HD" | "SD") : undefined;
+  const qualityRaw = (req.body?.quality ?? "").toString();
+  const validQualities = ['144p', '240p', '360p', '480p', '720p', '1080p', 'Auto', 'SD', 'HD'];
+  const quality = validQualities.includes(qualityRaw) ? qualityRaw : undefined;
 
   if (!Number.isFinite(contentId) || contentId <= 0) {
     return res.status(400).json({

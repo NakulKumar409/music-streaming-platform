@@ -39,29 +39,66 @@ export async function checkPlatformAccess(userId: number | null): Promise<boolea
 
 
 /**
+ * Supported video quality options.
+ */
+export type VideoQuality = '144p' | '240p' | '360p' | '480p' | '720p' | '1080p' | 'Auto' | 'SD' | 'HD';
+
+/**
+ * Quality tiers mapped to subscription levels.
+ * - Free users: max 240p
+ * - Platform subscribers: full access (144p-1080p + Auto)
+ */
+const FREE_MAX_QUALITY: VideoQuality = '240p';
+const PAID_QUALITIES: VideoQuality[] = ['144p', '240p', '360p', '480p', '720p', '1080p', 'Auto'];
+
+/**
  * Validate requested quality against user's subscription level.
- * HD (High Quality) is reserved for PLATFORM subscribers.
- * SD (Standard Quality) is available to all authorized users.
+ * Free users: max 240p
+ * Platform subscribers: full access (144p-1080p + Auto)
+ * Legacy 'SD'/'HD' values are mapped to appropriate resolutions.
  */
 export async function validateQualityAccess(
   userId: number | null,
   requestedQuality?: string
-): Promise<{ authorized: boolean; quality: 'SD' | 'HD' }> {
-  const isHD = (requestedQuality || "").toString().toUpperCase() === "HD";
+): Promise<{ authorized: boolean; quality: VideoQuality; maxAllowedQuality: VideoQuality }> {
+  const q = (requestedQuality || '').toString().toLowerCase();
   
-  // If user didn't request HD, allow SD by default.
-  if (!isHD) {
-    return { authorized: true, quality: "SD" };
-  }
-
-  // If user requested HD, check for PLATFORM subscription.
+  // Check if user has platform subscription
   const isPlatform = await checkPlatformAccess(userId);
-  if (isPlatform) {
-    return { authorized: true, quality: "HD" };
+  const maxAllowedQuality: VideoQuality = isPlatform ? '1080p' : FREE_MAX_QUALITY;
+  
+  // Handle legacy SD/HD values
+  if (q === 'sd') {
+    return { authorized: true, quality: '240p', maxAllowedQuality };
   }
-
-  // Unauthorized person or Free user requesting HD.
-  return { authorized: false, quality: "SD" };
+  if (q === 'hd') {
+    if (isPlatform) {
+      return { authorized: true, quality: 'Auto', maxAllowedQuality };
+    }
+    return { authorized: false, quality: '240p', maxAllowedQuality };
+  }
+  
+  // Validate specific resolution request
+  const validQualities: VideoQuality[] = ['144p', '240p', '360p', '480p', '720p', '1080p', 'Auto'];
+  const normalizedQuality = validQualities.find(vq => vq.toLowerCase() === q) || '240p';
+  
+  // Define quality ranking for comparison (lower index = lower quality)
+  const qualityRanks = ['144p', '240p', '360p', '480p', '720p', '1080p'];
+  const requestedRank = qualityRanks.indexOf(normalizedQuality === 'Auto' ? '1080p' : normalizedQuality);
+  const maxAllowedRank = qualityRanks.indexOf(maxAllowedQuality);
+  
+  // Check if requested quality exceeds subscription tier
+  if (normalizedQuality !== 'Auto' && requestedRank > maxAllowedRank) {
+    // Downgrade to max allowed
+    return { authorized: false, quality: maxAllowedQuality, maxAllowedQuality };
+  }
+  
+  // Auto is allowed for platform users
+  if (normalizedQuality === 'Auto' && !isPlatform) {
+    return { authorized: false, quality: '240p', maxAllowedQuality };
+  }
+  
+  return { authorized: true, quality: normalizedQuality, maxAllowedQuality };
 }
 
 /**

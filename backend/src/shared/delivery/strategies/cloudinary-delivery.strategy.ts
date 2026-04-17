@@ -7,13 +7,13 @@
  * but this should be avoided at the database level.
  */
 
-import type { IMediaDeliveryStrategy } from "../interfaces/media-delivery-strategy.interface";
+import type { IMediaDeliveryStrategy, VideoQuality } from "../interfaces/media-delivery-strategy.interface";
 import type { GeneratePlaybackAccessParams, PlaybackAccessResult } from "../interfaces/media-delivery-strategy.interface";
 import { DeliveryFailedException } from "../../exceptions/delivery.exception";
 import { normalizePublicId, isValidPublicId, logPublicIdNormalization } from "../../utils/cloudinary.utils";
 
 interface CloudinaryPlaybackSigner {
-  generateSignedPlaybackUrl(providerAssetId: string, fileType: "audio" | "video", quality?: "SD" | "HD"): Promise<{ playbackUrl: string }>;
+  generateSignedPlaybackUrl(providerAssetId: string, fileType: "audio" | "video", quality?: VideoQuality): Promise<{ playbackUrl: string }>;
 }
 
 export class CloudinaryDeliveryStrategy implements IMediaDeliveryStrategy {

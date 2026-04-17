@@ -1,6 +1,7 @@
 import { v2 as cloudinary } from 'cloudinary';
 import { MediaProvider, PlayerUrlResult, UploadResult } from './interfaces/MediaProvider';
 import { normalizePublicId, isValidPublicId, logPublicIdNormalization } from '../../shared/utils/cloudinary.utils';
+import type { VideoQuality } from '../../shared/delivery/interfaces/media-delivery-strategy.interface';
 
 // Validate Cloudinary configuration on startup
 function validateCloudinaryConfig(): void {
@@ -114,6 +115,28 @@ export class CloudinaryProvider implements MediaProvider {
   }
 
   /**
+   * Map specific video qualities to Cloudinary transformation parameters.
+   * These match the eager transformations created during upload.
+   */
+  private getQualityTransformation(quality: VideoQuality): Record<string, any> {
+    const transformations: Record<Exclude<VideoQuality, 'SD' | 'HD'>, Record<string, any>> = {
+      '144p': { width: 256, height: 144, crop: "scale", bit_rate: "100k" },
+      '240p': { width: 426, height: 240, crop: "scale", bit_rate: "200k" },
+      '360p': { width: 640, height: 360, crop: "scale", bit_rate: "400k" },
+      '480p': { width: 854, height: 480, crop: "scale", bit_rate: "700k" },
+      '720p': { width: 1280, height: 720, crop: "scale", bit_rate: "1500k" },
+      '1080p': { width: 1920, height: 1080, crop: "scale", bit_rate: "3000k" },
+      'Auto': { streaming_profile: "auto" },
+    };
+
+    // Handle legacy values
+    if (quality === 'SD') return transformations['240p'];
+    if (quality === 'HD') return transformations['Auto'];
+    
+    return transformations[quality] || transformations['Auto'];
+  }
+
+  /**
    * Generates a signed, short-lived URL for authenticated delivery.
    * @param providerAssetId - The Cloudinary public_id (NOT a full URL)
    * @param fileType - 'audio' or 'video'
@@ -121,7 +144,7 @@ export class CloudinaryProvider implements MediaProvider {
   async generateSignedPlaybackUrl(
     providerAssetId: string,
     fileType: "audio" | "video",
-    quality?: "SD" | "HD"
+    quality?: VideoQuality
   ): Promise<PlayerUrlResult> {
     
     // CRITICAL: Normalize providerAssetId to valid public_id
@@ -165,19 +188,12 @@ export class CloudinaryProvider implements MediaProvider {
       // For video, request HLS format with streaming profile
       urlOptions.format = "m3u8";
       
-      // QUALITY GATING: If SD is requested/forced, we apply a transformation to limit quality.
-      if (quality === 'SD') {
-        // Force a low-quality rendition (240p). Keep transformation minimal and valid for HLS.
-        // Avoid non-standard streaming_profile values that can cause Cloudinary to return an invalid playlist.
-        urlOptions.transformation = [
-          { width: 426, height: 240, crop: "scale", bit_rate: "200k", quality: "auto:eco" }
-        ];
-      } else {
-        // Allow full adaptive bitrate switching for HD/Premium users
-        urlOptions.transformation = [
-          { streaming_profile: "auto" }
-        ];
-      }
+      // QUALITY SELECTION: Apply specific transformation based on requested quality.
+      // Each quality generates a unique URL with different resolution/bitrate.
+      const qualityTransform = this.getQualityTransformation(quality || 'Auto');
+      urlOptions.transformation = [qualityTransform];
+      
+      console.log(`[CloudinaryProvider] Quality ${quality || 'Auto'} => transformation:`, qualityTransform);
     } else {
       // For audio, specify mp3 format for compatibility.
       // IMPORTANT: Do NOT apply bitrate or any other transformation here.
