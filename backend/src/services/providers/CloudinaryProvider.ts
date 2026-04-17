@@ -17,7 +17,11 @@ cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
-  secure: true
+  secure: true,
+  // Disable auto-appended analytics (?_a=...) token — it can confuse iOS AVPlayer
+  // and is not needed for server-side URL generation.
+  urlAnalytics: false,
+  analytics: false,
 });
 
 console.log('[CloudinaryProvider] Configuration loaded successfully');
@@ -150,6 +154,11 @@ export class CloudinaryProvider implements MediaProvider {
       type: "authenticated",
       sign_url: true,
       expires_at: expiresAt,
+      // Prevent Cloudinary SDK from appending ?_a=... analytics token.
+      // This token, added AFTER signing, can cause iOS AVPlayer / SwiftAudioEx
+      // to reject the URL with AudioPlayerError.PlaybackError.
+      analytics: false,
+      urlAnalytics: false,
     };
     
     if (isVideo) {
@@ -170,14 +179,14 @@ export class CloudinaryProvider implements MediaProvider {
         ];
       }
     } else {
-      // For audio, specify mp3 format for compatibility
+      // For audio, specify mp3 format for compatibility.
+      // IMPORTANT: Do NOT apply bitrate or any other transformation here.
+      // Authenticated Cloudinary resources cannot be lazily transcoded — the
+      // transformation must have been pre-generated (eager) at upload time.
+      // Adding a transformation to an authenticated audio URL that wasn't
+      // eagerly generated returns a Cloudinary error, which causes iOS
+      // SwiftAudioEx.AudioPlayerError.PlaybackError on the device.
       urlOptions.format = "mp3";
-      // Optional: Add bitrate transformation for SD audio if needed
-      if (quality === 'SD') {
-        urlOptions.transformation = [
-          { bit_rate: "64k" }
-        ];
-      }
     }
 
     try {
@@ -209,7 +218,9 @@ export class CloudinaryProvider implements MediaProvider {
     return cloudinary.url(publicId, {
       resource_type: "image",
       type: "upload",
-      secure: true
+      secure: true,
+      analytics: false,
+      urlAnalytics: false,
     });
   }
 

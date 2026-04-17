@@ -159,11 +159,19 @@ router.get("/", optionalAuth, (req, res) => {
         const finalMediaUrl = mediaType === "video" ? finalVideoUrl : finalAudioUrl;
         const useStreamAccess = Boolean((hasNewAudioStorage || hasNewVideoStorage) && !isLocked);
 
-        const thumbnailUrl = r.thumbnail_url
-          ? toAbsoluteUrl(req, r.thumbnail_url)
-          : r.thumbnail_storage_key
-            ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
-            : null;
+        const isAuthenticatedCloudinaryUrl = (url: string | null) =>
+          !!(url && (url.includes('/authenticated/') || url.includes('res.cloudinary.com')));
+
+        // For Cloudinary content, thumbnail_url holds an authenticated CDN URL which
+        // cannot be rendered by the mobile app. Route those through /stream/thumbnail/
+        // which generates a proper publicly-accessible Cloudinary URL.
+        const thumbnailUrl = r.thumbnail_storage_key
+          ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
+          : (r.thumbnail_url && !isAuthenticatedCloudinaryUrl(r.thumbnail_url))
+            ? toAbsoluteUrl(req, r.thumbnail_url)
+            : r.thumbnail_url
+              ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
+              : null;
 
         return {
           id: r.id,
@@ -327,11 +335,16 @@ router.get("/artist/:artistId", (req, res) => {
         const finalMediaUrl = inferredMediaType === "video" ? finalVideoUrl : finalAudioUrl;
         const useStreamAccess = Boolean((hasNewAudioStorage || hasNewVideoStorage) && !isLocked);
 
-        const thumbnailUrl = r.thumbnail_url
-          ? toAbsoluteUrl(req, r.thumbnail_url)
-          : r.thumbnail_storage_key
-            ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
-            : null;
+        const isAuthenticatedCloudinaryUrl2 = (url: string | null) =>
+          !!(url && (url.includes('/authenticated/') || url.includes('res.cloudinary.com')));
+
+        const thumbnailUrl = r.thumbnail_storage_key
+          ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
+          : (r.thumbnail_url && !isAuthenticatedCloudinaryUrl2(r.thumbnail_url))
+            ? toAbsoluteUrl(req, r.thumbnail_url)
+            : r.thumbnail_url
+              ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
+              : null;
 
         return {
           id: r.id,
@@ -489,11 +502,16 @@ router.get("/:id", (req, res) => {
       const finalMediaUrl = mediaType === "video" ? finalVideoUrl : finalAudioUrl;
       const useStreamAccess = Boolean((hasNewAudioStorage || hasNewVideoStorage) && !isLocked);
 
-      const thumbnailUrl = r.thumbnail_url
-        ? toAbsoluteUrl(req, r.thumbnail_url)
-        : r.thumbnail_storage_key
-          ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
-          : null;
+      const isAuthenticatedCloudinaryUrl3 = (url: string | null) =>
+        !!(url && (url.includes('/authenticated/') || url.includes('res.cloudinary.com')));
+
+      const thumbnailUrl = r.thumbnail_storage_key
+        ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
+        : (r.thumbnail_url && !isAuthenticatedCloudinaryUrl3(r.thumbnail_url))
+          ? toAbsoluteUrl(req, r.thumbnail_url)
+          : r.thumbnail_url
+            ? toAbsoluteUrl(req, `/api/v1/fan/stream/thumbnail/${r.id}`)
+            : null;
       
       return res.json({
         success: true,

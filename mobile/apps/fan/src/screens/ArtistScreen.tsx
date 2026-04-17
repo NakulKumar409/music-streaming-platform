@@ -314,7 +314,7 @@ export default function ArtistScreen({ navigation, route }: any) {
           artist: a.name,
           duration: it.mediaType === 'video' ? 'Video' : 'Audio',
           thumbnail: it.artworkUrl,
-          locked: Boolean(it.isLocked || it.locked || it.subscriptionRequired),
+          locked: it.locked,
           mediaType: it.mediaType,
           mediaUrl: it.mediaUrl,
           useStreamAccess: it.useStreamAccess,
