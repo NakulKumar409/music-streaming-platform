@@ -267,11 +267,28 @@ export default function AccountScreen() {
     }
   };
 
-  const handleOpenArtistDashboard = () => {
+  const handleOpenArtistDashboard = async () => {
     if (user?.role === 'ARTIST') {
-      Linking.openURL(ARTIST_WEB_URL + '/artist/dashboard').catch((err) =>
-        console.error('An error occurred', err)
-      );
+      const dashboardUrl = ARTIST_WEB_URL + '/artist/dashboard';
+      try {
+        const canOpen = await Linking.canOpenURL(dashboardUrl);
+        if (!canOpen) {
+          Alert.alert(
+            'Cannot Open Dashboard',
+            'Unable to open the artist dashboard. Please try again later or contact support.',
+            [{ text: 'OK', style: 'default' }]
+          );
+          return;
+        }
+        await Linking.openURL(dashboardUrl);
+      } catch (err) {
+        console.error('[AccountScreen] Failed to open artist dashboard:', err);
+        Alert.alert(
+          'Error Opening Dashboard',
+          'Something went wrong while trying to open the artist dashboard. Please try again.',
+          [{ text: 'OK', style: 'default' }]
+        );
+      }
     } else {
       navigation.navigate('ArtistOnboarding');
     }
