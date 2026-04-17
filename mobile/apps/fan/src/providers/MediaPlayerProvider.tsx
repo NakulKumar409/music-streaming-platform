@@ -184,6 +184,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             Capability?.SeekTo,
             Capability?.JumpForward,
             Capability?.JumpBackward,
+            Capability?.Stop,
           ],
           // Compact capabilities (small notification view)
           compactCapabilities: [
@@ -198,6 +199,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             Capability?.SkipToNext,
             Capability?.SkipToPrevious,
             Capability?.SeekTo,
+            Capability?.Stop,
           ],
           // Progress bar on notification
           progressUpdateEventInterval: 1,
@@ -564,12 +566,15 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         hasStartedPlayingRef.current = false;
 
         // Build track metadata for notification/lock screen display
+        // Use artworkUrl from MediaItem type - this is the correct field for artwork
+        const artworkUrl = item.artworkUrl || undefined;
+
         const track: Track = {
           id: item.id.toString(),
           url: playbackUrl,
           title: item.title || 'Unknown Title',
           artist: item.artistName || 'Unknown Artist',
-          artwork: (item as any).thumbnailUrl || (item as any).avatarUrl || (item as any).coverUrl || undefined,
+          artwork: artworkUrl,
           // Additional metadata for better lock screen display
           album: (item as any).albumName || undefined,
           duration: item.duration ? item.duration / 1000 : undefined, // Convert ms to seconds
@@ -893,6 +898,16 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         const dur = Math.max(0, Math.round(progress.duration * 1000));
         const trackState = await TrackPlayer.getState();
         const isNativePlaying = trackState === TrackPlayerState?.Playing;
+
+        // Update lock screen notification with current playback progress
+        // This updates the progress bar and elapsed time on lock screen/control center
+        if (TrackPlayerAvailable && isNativePlaying) {
+          try {
+            TrackPlayer.setProgressUpdateEventInterval?.(1);
+          } catch {
+            // Ignore if method not available
+          }
+        }
 
         setState((s) => {
           let nextIsPlaying = isNativePlaying;
