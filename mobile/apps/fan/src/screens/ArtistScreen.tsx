@@ -722,6 +722,9 @@ function InlineVideoPlayer({
   onBack: () => void;
   topInset: number;
 }) {
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const toggleControls = useCallback(() => setControlsVisible((v) => !v), []);
+
   return (
     <View style={[styles.youtubeVideoWrap, { aspectRatio }]}>
       <VideoView
@@ -740,6 +743,8 @@ function InlineVideoPlayer({
         onSeek={onSeek}
         isFullscreen={false}
         onToggleFullscreen={onToggleFullscreen}
+        isVisible={controlsVisible}
+        onToggleVisibility={toggleControls}
       />
 
       <LinearGradient colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0)']} style={styles.youtubeVideoTopGradient} />
