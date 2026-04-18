@@ -178,6 +178,26 @@ export default function MediaPlayerOverlay({
     setPlaybackRate(next).catch(() => undefined);
   }, [setPlaybackRate, state.playbackRate]);
 
+  const [controlsVisible, setControlsVisible] = useState(true);
+
+  // Auto-hide controls after 3 seconds of inactivity
+  useEffect(() => {
+    if (controlsVisible && state.isPlaying) {
+      const timer = setTimeout(() => {
+        setControlsVisible(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [controlsVisible, state.isPlaying]);
+
+  const toggleControls = useCallback(() => {
+    setControlsVisible((prev) => !prev);
+  }, []);
+
+  const onUserInteraction = useCallback(() => {
+    setControlsVisible(true);
+  }, []);
+
   if (!isVisible || !currentItem) return null;
 
   if (currentItem.mediaType === 'video' && state.isExpanded) {
@@ -215,21 +235,29 @@ export default function MediaPlayerOverlay({
           </View>
 
           <View style={[styles.videoFrame, { aspectRatio: expandedVideoAspectRatio }]}>
-            {videoPlayer && (
-              <VideoView
-                player={videoPlayer}
-                style={{ width: '100%', height: undefined, aspectRatio: expandedVideoAspectRatio }}
-                contentFit="contain"
-                allowsFullscreen={true}
-                allowsPictureInPicture={true}
-                allowsVideoFrameAnalysis={false}
-              />
-            )}
+            <Pressable 
+              onPress={toggleControls} 
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+            >
+              {videoPlayer && (
+                <VideoView
+                  player={videoPlayer}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="contain"
+                  nativeControls={false}
+                  allowsPictureInPicture={true}
+                />
+              )}
+            </Pressable>
 
             <YouTubeVideoControlsOverlay
               isPlaying={state.isPlaying}
               positionMs={state.positionMs}
               durationMs={state.durationMs}
+              isVisible={controlsVisible}
+              onToggleVisibility={toggleControls}
+              onInteraction={onUserInteraction}
               onTogglePlay={() => {
                 togglePlayPause().catch(() => undefined);
               }}

@@ -10,7 +10,7 @@ import React, {
 } from 'react';
 import { Alert, AppState, Platform } from 'react-native';
 
-import { useVideoPlayer, VideoView, VideoPlayer } from 'expo-video';
+import { useVideoPlayer, VideoView, VideoPlayer, createVideoPlayer } from 'expo-video';
 
 import { API_HOST_BASE_URL } from '../config/env';
 import logger from '../utils/logger';
@@ -124,7 +124,83 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   const [isPlayerReady, setIsPlayerReady] = useState(false); const audioPlayer = null; const [audioSource, setAudioSource] = useState<string | null>(null);
 
   const [videoSource, setVideoSource] = useState<string | null>(null);
-  const videoPlayer = useVideoPlayer(videoSource);
+  const [videoPlayer, setVideoPlayer] = useState<VideoPlayer | null>(null);
+
+  // Lazy initialization of VideoPlayer to avoid "Activity not available" crash at startup
+  useEffect(() => {
+    let isMounted = true;
+    
+    // Defer creation to the first effect run (after initial render/mount)
+    // this ensures the Android Activity is ready for the native module.
+    try {
+      logger.log('[MediaPlayer] Initializing VideoPlayer lazily...');
+      const player = createVideoPlayer(videoSource);
+      
+      // Configure background playback capabilities
+      player.showNowPlayingNotification = true;
+      player.staysActiveInBackground = true;
+      player.timeUpdateEventInterval = 0.1; // 100ms updates for smooth seekbar
+      
+      if (isMounted) {
+        setVideoPlayer(player);
+        logger.log('[MediaPlayer] VideoPlayer initialized successfully');
+      }
+    } catch (e) {
+      logger.error('[MediaPlayer] Failed to create VideoPlayer in useEffect', e);
+    }
+
+    return () => {
+      isMounted = false;
+      // Note: VideoPlayer will be cleaned up by native garbage collection 
+      // or we could explicitly null it if needed in future versions.
+    };
+  }, []); // Run only once on mount
+
+  // Keep player in sync with source changes
+  useEffect(() => {
+    if (videoPlayer && videoSource) {
+      try {
+        videoPlayer.replace(videoSource);
+        // Reset state for new source
+        setState(s => ({ ...s, positionMs: 0, durationMs: 0 }));
+      } catch (e) {
+        logger.warn('[MediaPlayer] Failed to replace video source', e);
+      }
+    }
+  }, [videoSource, videoPlayer]);
+
+  // Sync video player native events to context state
+  useEffect(() => {
+    if (!videoPlayer) return;
+
+    logger.log('[MediaPlayer] Attaching VideoPlayer event listeners');
+
+    const playingSub = videoPlayer.addListener('playingChange', (event) => {
+      setState((s) => ({ ...s, isPlaying: event.isPlaying }));
+    });
+
+    const timeSub = videoPlayer.addListener('timeUpdate', (event) => {
+      const pos = Math.round(event.currentTime * 1000);
+      setState((s) => {
+        // Only update if difference is significant or it's a state change
+        // this helps reduce unnecessary re-renders while keeping 100ms smoothness.
+        if (Math.abs(s.positionMs - pos) < 50 && s.isPlaying) return s;
+        return { ...s, positionMs: pos };
+      });
+    });
+
+    const sourceSub = videoPlayer.addListener('sourceLoad', (event) => {
+      if (event.duration > 0) {
+        setState((s) => ({ ...s, durationMs: Math.round(event.duration * 1000) }));
+      }
+    });
+
+    return () => {
+      playingSub.remove();
+      timeSub.remove();
+      sourceSub.remove();
+    };
+  }, [videoPlayer]);
 
   const [preferredQuality, setPreferredQuality] = useState<VideoQuality>('Auto');
 
@@ -732,6 +808,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       const safe = Math.max(0, Math.round(positionMs));
 
+      // Optimistically update the UI state to the target position
+      // to prevent "jump back" jitter on real devices while native is catching up.
+      setState((s) => ({ ...s, positionMs: safe }));
+
       if (item.mediaType === 'audio') {
         if (!TrackPlayerAvailable) {
           logger.warn('[MediaPlayer] Cannot seek - TrackPlayer not available in Expo Go');
@@ -747,9 +827,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       if (!videoPlayer) return;
       try {
-        videoPlayer.seekBy((safe - videoPlayer.currentTime * 1000) / 1000);
+        // Use direct currentTime assignment for more reliable seeking in expo-video
+        videoPlayer.currentTime = safe / 1000;
       } catch (err) {
-          logger.warn('[MediaPlayer] video seekTo failed', err);
+        logger.warn('[MediaPlayer] video seekTo failed', err);
       }
     },
     [currentItem, audioPlayer, videoPlayer]

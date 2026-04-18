@@ -22,7 +22,13 @@
     ],
     "plugins": [
       "expo-audio",
-      "expo-video",
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": true,
+          "supportsPictureInPicture": true
+        }
+      ],
       "expo-notifications"
     ],
     "extra": {

@@ -3,5 +3,20 @@
 
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
 
-    <application android:usesCleartextTraffic="true" tools:targetApi="28" tools:ignore="GoogleAppIndexingWarning" tools:replace="android:usesCleartextTraffic" />
+    <application
+        android:usesCleartextTraffic="true"
+        tools:targetApi="28"
+        tools:ignore="GoogleAppIndexingWarning"
+        tools:replace="android:usesCleartextTraffic">
+
+        <!-- Override react-native-track-player exported=true to keep service non-exported -->
+        <service
+            android:name="com.doublesymmetry.trackplayer.service.MusicService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback"
+            tools:replace="android:exported" />
+
+    </application>
+
 </manifest>

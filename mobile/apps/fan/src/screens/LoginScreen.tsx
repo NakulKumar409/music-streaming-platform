@@ -13,6 +13,9 @@ import {
   StatusBar,
   useWindowDimensions,
   View,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -96,13 +99,17 @@ export default function LoginScreen({ navigation, route }: Props) {
       style={[styles.bg, webViewportStyle]}
     >
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          automaticallyAdjustKeyboardInsets={true}
-        >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <SafeAreaView style={styles.safeArea}>
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
           <View
             style={[
               styles.content,
@@ -197,8 +204,10 @@ export default function LoginScreen({ navigation, route }: Props) {
                     </View>
                   </BlurView>
           </View>
-        </ScrollView>
-      </SafeAreaView>
+            </ScrollView>
+          </SafeAreaView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </LinearGradient>
   );
 }
@@ -224,7 +233,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     padding: 24,
-    paddingBottom: 32,
+    paddingBottom: 40,
   },
   content: {
     justifyContent: 'center',

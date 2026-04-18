@@ -38,6 +38,9 @@ export default function YouTubeVideoControlsOverlay({
   onSeek,
   onToggleFullscreen,
   isFullscreen,
+  isVisible,
+  onToggleVisibility,
+  onInteraction,
 }: {
   isPlaying: boolean;
   positionMs: number;
@@ -46,37 +49,32 @@ export default function YouTubeVideoControlsOverlay({
   onSeek: (positionMs: number) => void;
   onToggleFullscreen: () => void;
   isFullscreen: boolean;
+  isVisible: boolean;
+  onToggleVisibility: () => void;
+  onInteraction?: () => void;
 }) {
-  const [isControlsVisible, setIsControlsVisible] = useState(true);
-
   const [isSeeking, setIsSeeking] = useState(false);
   const seekValueRef = useRef(0);
 
   const uiPositionMs = isSeeking ? seekValueRef.current : positionMs;
 
-  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const overlayOpacity = useRef(new Animated.Value(1)).current;
   const overlayTranslateY = useRef(new Animated.Value(0)).current;
 
-  const clearHideTimer = useCallback(() => {
-    if (hideTimeoutRef.current) {
-      clearTimeout(hideTimeoutRef.current);
-      hideTimeoutRef.current = null;
-    }
-  }, []);
-
   const animateTo = useCallback(
     (visible: boolean) => {
+      overlayOpacity.stopAnimation();
+      overlayTranslateY.stopAnimation();
+      
       Animated.parallel([
         Animated.timing(overlayOpacity, {
           toValue: visible ? 1 : 0,
-          duration: 180,
+          duration: 200,
           useNativeDriver: true,
         }),
         Animated.timing(overlayTranslateY, {
-          toValue: visible ? 0 : 6,
-          duration: 180,
+          toValue: visible ? 0 : 4,
+          duration: 200,
           useNativeDriver: true,
         }),
       ]).start();
@@ -84,60 +82,28 @@ export default function YouTubeVideoControlsOverlay({
     [overlayOpacity, overlayTranslateY]
   );
 
-  const scheduleAutoHide = useCallback(() => {
-    clearHideTimer();
-    hideTimeoutRef.current = setTimeout(() => {
-      setIsControlsVisible(false);
-    }, 3000);
-  }, [clearHideTimer]);
-
-  const showControls = useCallback(() => {
-    setIsControlsVisible(true);
-    scheduleAutoHide();
-  }, [scheduleAutoHide]);
-
-  const hideControls = useCallback(() => {
-    clearHideTimer();
-    setIsControlsVisible(false);
-  }, [clearHideTimer]);
-
-  const onTapVideo = useCallback(() => {
-    if (isControlsVisible) {
-      hideControls();
-    } else {
-      showControls();
-    }
-  }, [hideControls, isControlsVisible, showControls]);
-
   useEffect(() => {
-    animateTo(isControlsVisible);
-
-    if (isControlsVisible && !isSeeking) {
-      scheduleAutoHide();
-    }
-
-    return () => {
-      clearHideTimer();
-    };
-  }, [animateTo, clearHideTimer, isControlsVisible, isSeeking, scheduleAutoHide]);
+    animateTo(isVisible);
+  }, [animateTo, isVisible]);
 
   const onSeekStart = useCallback(() => {
     setIsSeeking(true);
     seekValueRef.current = positionMs;
-    showControls();
-  }, [positionMs, showControls]);
+    onInteraction?.();
+  }, [positionMs, onInteraction]);
 
   const onSeekChange = useCallback((value: number) => {
     seekValueRef.current = value;
-  }, []);
+    onInteraction?.();
+  }, [onInteraction]);
 
   const onSeekComplete = useCallback(
     (value: number) => {
       setIsSeeking(false);
       onSeek(value);
-      showControls();
+      onInteraction?.();
     },
-    [onSeek, showControls]
+    [onSeek, onInteraction]
   );
 
   const safeDuration = useMemo(() => Math.max(1, durationMs || 1), [durationMs]);
@@ -146,19 +112,19 @@ export default function YouTubeVideoControlsOverlay({
     (deltaMs: number) => {
       const next = Math.max(0, Math.min(safeDuration, positionMs + deltaMs));
       onSeek(next);
-      showControls();
+      onInteraction?.();
     },
-    [onSeek, positionMs, safeDuration, showControls]
+    [onSeek, positionMs, safeDuration, onInteraction]
   );
 
   return (
     <View style={styles.touchLayer} pointerEvents="box-none">
-      <TouchableWithoutFeedback onPress={onTapVideo}>
+      <TouchableWithoutFeedback onPress={onToggleVisibility}>
         <View style={styles.tapCatcher} />
       </TouchableWithoutFeedback>
 
       <Animated.View
-        pointerEvents={isControlsVisible ? 'auto' : 'none'}
+        pointerEvents={isVisible ? 'auto' : 'none'}
         style={[
           styles.overlay,
           {
@@ -170,9 +136,9 @@ export default function YouTubeVideoControlsOverlay({
           <View style={styles.centerControlsRow} pointerEvents="box-none">
             <Pressable
               onPress={() => skipBy(-10_000)}
-              onPressIn={showControls}
+              onPressIn={onInteraction}
               style={styles.centerIconBtn}
-              hitSlop={18}
+              hitSlop={24}
             >
               <SkipBack size={34} color="#fff" />
               <Text style={styles.skipText}>10</Text>
@@ -181,11 +147,11 @@ export default function YouTubeVideoControlsOverlay({
             <Pressable
               onPress={() => {
                 onTogglePlay();
-                showControls();
+                onInteraction?.();
               }}
-              onPressIn={showControls}
+              onPressIn={onInteraction}
               style={styles.playBtn}
-              hitSlop={22}
+              hitSlop={28}
             >
               {isPlaying ? (
                 <Pause size={52} color="#fff" fill="#fff" />
@@ -196,9 +162,9 @@ export default function YouTubeVideoControlsOverlay({
 
             <Pressable
               onPress={() => skipBy(10_000)}
-              onPressIn={showControls}
+              onPressIn={onInteraction}
               style={styles.centerIconBtn}
-              hitSlop={18}
+              hitSlop={24}
             >
               <SkipForward size={34} color="#fff" />
               <Text style={styles.skipText}>10</Text>
@@ -227,11 +193,11 @@ export default function YouTubeVideoControlsOverlay({
             <Pressable
               onPress={() => {
                 onToggleFullscreen();
-                showControls();
+                onInteraction?.();
               }}
-              onPressIn={showControls}
+              onPressIn={onInteraction}
               style={styles.fullscreenBtn}
-              hitSlop={18}
+              hitSlop={24}
             >
               {isFullscreen ? (
                 <Minimize size={20} color="#fff" />
