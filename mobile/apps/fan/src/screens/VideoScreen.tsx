@@ -43,6 +43,7 @@ import Slider from '@react-native-community/slider';
 import Svg, { Path } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Crown, Star, Lock, BadgeCheck, ShieldCheck } from 'lucide-react-native';
+import * as ScreenOrientation from 'expo-screen-orientation';
 
 import { apiV1 } from '../services/api';
 import { contentApi } from '../services/api';
@@ -334,6 +335,18 @@ export default function VideoScreen() {
       setIsHD(false);
     });
   }, []);
+
+  // Auto-detect orientation changes and update fullscreen state
+  useEffect(() => {
+    // Only respond to orientation changes when video is active and not manually controlled
+    if (!activePlaybackUrl) return;
+    
+    // Sync fullscreen state with actual orientation
+    // This handles the case when user physically rotates device
+    if (isLandscape !== isFullscreen) {
+      setIsFullscreen(isLandscape);
+    }
+  }, [isLandscape, activePlaybackUrl, isFullscreen]);
 
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportSubmitting, setReportSubmitting] = useState(false);
@@ -648,12 +661,16 @@ export default function VideoScreen() {
     };
   }, [fetchAll, matchesQuery, normalizedQuery]);
 
-  const enterFullscreen = useCallback(() => {
+  const enterFullscreen = useCallback(async () => {
     setIsFullscreen(true);
+    // Lock to landscape when entering fullscreen
+    await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
   }, []);
 
-  const exitFullscreen = useCallback(() => {
+  const exitFullscreen = useCallback(async () => {
     setIsFullscreen(false);
+    // Lock back to portrait when exiting fullscreen
+    await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
   }, []);
 
   const stopAndReset = useCallback(async () => {
@@ -1757,7 +1774,6 @@ export default function VideoScreen() {
                         },
                       ]}
                       contentFit="contain"
-                      allowsFullscreen={false}
                       nativeControls={false}
                       allowsVideoFrameAnalysis={false}
                     />

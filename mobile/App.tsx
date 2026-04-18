@@ -1,7 +1,8 @@
 import 'react-native-gesture-handler';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import * as Sentry from '@sentry/react-native';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import AppNavigator from './apps/fan/src/navigation/AppNavigator';
 import { AuthProvider } from './apps/fan/src/store/authStore';
 import { ConnectivityProvider } from './apps/fan/src/providers/ConnectivityProvider';
@@ -30,6 +31,11 @@ const queryClient = new QueryClient({
 });
 
 export default function App() {
+  useEffect(() => {
+    // Lock entire app to portrait - video screen will handle its own orientation
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+  }, []);
+
   return (
     <ErrorBoundary label="Fan App">
       <QueryClientProvider client={queryClient}>
