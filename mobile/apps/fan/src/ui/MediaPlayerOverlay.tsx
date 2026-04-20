@@ -235,10 +235,9 @@ export default function MediaPlayerOverlay({
           </View>
 
           <View style={[styles.videoFrame, { aspectRatio: expandedVideoAspectRatio }]}>
-            <Pressable 
-              onPress={toggleControls} 
+            <Pressable
+              onPress={toggleControls}
               style={StyleSheet.absoluteFill}
-              activeOpacity={1}
             >
               {videoPlayer && (
                 <VideoView

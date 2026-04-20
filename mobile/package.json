@@ -18,6 +18,16 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "enabled": false
+      },
+      "appConfigFieldsNotSyncedCheck": {
+        "enabled": false
+      }
+    }
+  },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -30,8 +40,10 @@
     "@tanstack/react-query": "^5.90.21",
     "axios": "^1.13.5",
     "expo": "^54.0.33",
+    "expo-asset": "~12.0.12",
     "expo-audio": "~1.1.1",
     "expo-blur": "~15.0.8",
+    "expo-constants": "~18.0.13",
     "expo-dev-client": "~6.0.20",
     "expo-device": "~8.0.10",
     "expo-file-system": "~19.0.21",

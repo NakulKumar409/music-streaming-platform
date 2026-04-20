@@ -13,7 +13,7 @@
       "output": "single"
     },
     "splash": {
-      "image": "./logo.jpg",
+      "image": "./logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
@@ -29,7 +29,8 @@
           "supportsPictureInPicture": true
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "expo-asset"
     ],
     "extra": {
       "eas": {
@@ -39,7 +40,6 @@
     "android": {
       "package": "com.moinimran.fanapp",
       "softwareKeyboardLayoutMode": "resize",
-      "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
