@@ -45,10 +45,9 @@ export const createOrder = async (req: any, res: Response) => {
     const amountInt = Number(amount);
 
     // ============================================
-    // BUG 12 FIX: Free plan (₹0) - skip Razorpay
+    // FREE PLAN (₹0) - Direct activate, no payment
     // ============================================
     if (amountInt === 0) {
-      // Free subscription activate karo directly
       return handleFreeSubscription(req, res, userId, artistId, artistName);
     }
 
@@ -130,17 +129,9 @@ export const createOrder = async (req: any, res: Response) => {
       }
     } else {
       const dupCheck = await pool.query(
-        `SELECT id FROM subscriptions WHERE user_id = $1 AND type = $2 AND status = 'ACTIVE'`,
-        [userId, isPlatform ? "PLATFORM" : "ARTIST"]
+        `SELECT id FROM subscriptions WHERE user_id = $1 AND artist_id = $2 AND type = 'ARTIST' AND status = 'ACTIVE' LIMIT 1`,
+        [userId, artistIdNumber]
       );
-      if (dupCheck.rows.length > 0) {
-        return res.status(409).json({
-          success: false,
-          message: `You already have an active ${
-            isPlatform ? "Platform" : "artist"
-          } subscription.`,
-        });
-      }
       if (dupCheck.rows.length > 0) {
         return res.status(409).json({
           success: false,
@@ -231,6 +222,7 @@ export const createOrder = async (req: any, res: Response) => {
       },
     });
   } catch (err: any) {
+    logger.error({ error: err.message }, "[PAYMENT] Failed to create order");
     return res.status(500).json({
       success: false,
       message: err?.message || "Failed to create order",
@@ -274,37 +266,12 @@ async function handleFreeSubscription(
       nextBillingDate.getTime() + 2 * 24 * 60 * 60 * 1000
     );
 
-    // ============================================
-    // FIX: "amount" with double quotes
-    // ============================================
+    // Insert free subscription
     const result = await pool.query(
       `INSERT INTO subscriptions
-   (
-     user_id,
-     type,
-     artist_id,
-     status,
-     plan_type,
-     start_date,
-     next_billing_date,
-     auto_renew,
-     created_at,
-     updated_at
-   )
-   VALUES
-   (
-     $1,
-     $2,
-     $3,
-     'ACTIVE',
-     'MONTHLY',
-     now(),
-     $4,
-     true,
-     now(),
-     now()
-   )
-   RETURNING id`,
+      (user_id, type, artist_id, status, plan_type, start_date, next_billing_date, auto_renew, created_at, updated_at)
+      VALUES ($1, $2, $3, 'ACTIVE', 'MONTHLY', now(), $4, true, now(), now())
+      RETURNING id`,
       [
         userId,
         isPlatform ? "PLATFORM" : "ARTIST",
@@ -316,13 +283,14 @@ async function handleFreeSubscription(
     try {
       await pool.query(
         `INSERT INTO payments
-     (user_id, subscription_id, amount, status, created_at)
-     VALUES ($1, $2, 0, 'SUCCESS', now())`,
+        (user_id, subscription_id, amount, status, created_at)
+        VALUES ($1, $2, 0, 'SUCCESS', now())`,
         [userId, result.rows[0].id]
       );
     } catch (err) {
       logger.warn({ err }, "payments table insert skipped");
     }
+
     logger.info(
       { userId, subscriptionId: result.rows[0].id, isPlatform },
       "Free subscription activated"
