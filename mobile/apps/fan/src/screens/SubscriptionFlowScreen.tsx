@@ -343,13 +343,19 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
       try {
         paymentData = await RazorpayCheckout.open(options);
       } catch (e: any) {
-        const msg = (
-          e?.description ??
-          e?.error?.description ??
-          e?.message ??
-          ""
-        ).toString();
-        if (/cancel/i.test(msg)) {
+        // ============================================
+        // BUG 13 FIX: Handle Razorpay cancellation gracefully
+        // ============================================
+        const errorMsg =
+          e?.description || e?.error?.description || e?.message || "";
+        const errorString =
+          typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg);
+
+        // Check if user cancelled the payment
+        if (
+          /cancel/i.test(errorString) ||
+          errorString.includes("payment_error")
+        ) {
           // Notify backend that payment was cancelled
           try {
             await apiV1.post("/subscriptions/payment-failed", {
@@ -359,10 +365,18 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
           } catch (err) {
             logger.warn("[Payment] Failed to record cancellation", err);
           }
-          setIsCreatingOrder(false);
+          // Show user-friendly message
+          Alert.alert(
+            "Payment Cancelled",
+            "You cancelled the payment. You can try again anytime.",
+            [{ text: "OK", onPress: () => setIsCreatingOrder(false) }]
+          );
           return;
         }
-        throw new Error(msg || "Payment cancelled");
+
+        // Other errors
+        setErrorMessage(errorString || "Payment failed. Please try again.");
+        setIsCreatingOrder(false);
       }
 
       const razorpay_order_id = (
