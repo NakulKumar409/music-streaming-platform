@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   Alert,
+  Animated,
   AppState,
   Dimensions,
   FlatList,
@@ -23,42 +23,43 @@ import {
   View,
 } from 'react-native';
 
-import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Slider from '@react-native-community/slider';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Maximize,
-  Search,
-  Settings,
-  X,
-} from 'lucide-react-native';
-import { VideoView, useVideoPlayer, VideoPlayer } from 'expo-video';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useEventListener } from 'expo';
 import { setAudioModeAsync } from 'expo-audio';
 import { BlurView } from 'expo-blur';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Slider from '@react-native-community/slider';
-import Svg, { Path } from 'react-native-svg';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Crown, Star, Lock, BadgeCheck, ShieldCheck } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  BadgeCheck,
+  Crown,
+  Lock,
+  Maximize,
+  Search,
+  Settings,
+  ShieldCheck,
+  X,
+} from 'lucide-react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 
-import { apiV1 } from '../services/api';
-import { contentApi } from '../services/api';
-import * as streamService from '../services/streamService';
-import { userService } from '../services/userService';
-import { startHeartbeat, stopHeartbeat } from '../services/heartbeatService';
-import { Colors } from '../theme';
-import { useMediaPlayer } from '../providers/MediaPlayerProvider';
-import { getOptimizedImageUrl } from '../utils/cloudinary';
-import { formatDurationLabel, hasFiniteDuration, toFiniteDurationMs } from '../utils/mediaTime';
-import { isStreamingUrlExpiringSoon, decodeJwtExpMsFromUrl } from '../utils/streaming';
 import PauseButtonImg from '../pausebuttton.png';
 import PlayButtonImg from '../playbutton.png';
+import { useMediaPlayer } from '../providers/MediaPlayerProvider';
+import { apiV1, contentApi } from '../services/api';
+import { startHeartbeat, stopHeartbeat } from '../services/heartbeatService';
+import * as streamService from '../services/streamService';
+import { userService } from '../services/userService';
+import { Colors } from '../theme';
+import { getOptimizedImageUrl } from '../utils/cloudinary';
+import { formatDurationLabel, hasFiniteDuration, toFiniteDurationMs } from '../utils/mediaTime';
+import { decodeJwtExpMsFromUrl, isStreamingUrlExpiringSoon } from '../utils/streaming';
 
-import { LockedContentOverlay } from '../ui/SubscriptionUI';
 
 const REPORTED_CONTENT_STORAGE_KEY = 'reportedContentIds';
 
@@ -703,14 +704,19 @@ export default function VideoScreen() {
     setPositionMs(Math.max(0, Math.round(value)));
   }, []);
 
-  const onSeekComplete = useCallback(async (value: number) => {
-    setIsSeeking(false);
-    try {
-      videoPlayer.seekBy((value - videoPlayer.currentTime * 1000) / 1000);
-    } catch {
-      // ignore
-    }
-  }, [videoPlayer]);
+ const onSeekComplete = useCallback(
+   async (value: number) => {
+     setIsSeeking(false);
+     try {
+       // ✅ Better seek for both Android & iOS
+       const targetSeconds = value / 1000;
+       videoPlayer.currentTime = targetSeconds;
+     } catch {
+       // ignore
+     }
+   },
+   [videoPlayer]
+ );
 
   const load = useCallback(
     async (opts?: { refresh?: boolean }) => {
@@ -1701,10 +1707,23 @@ export default function VideoScreen() {
 
   return (
     <View style={styles.root}>
-      <LinearGradient colors={Colors.backgroundGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-      <LinearGradient colors={[`${ambientColor.replace('rgb', 'rgba').replace(')', ',0.20)')}`, 'rgba(0,0,0,0)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient
+        colors={Colors.backgroundGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <LinearGradient
+        colors={[
+          `${ambientColor.replace("rgb", "rgba").replace(")", ",0.20)")}`,
+          "rgba(0,0,0,0)",
+        ]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
 
-      <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <SafeAreaView style={styles.safe} edges={["bottom"]}>
         {loading ? (
           <FlatList
             data={Array.from({ length: 6 })}
@@ -1716,8 +1735,17 @@ export default function VideoScreen() {
             showsVerticalScrollIndicator={false}
             onScroll={onListScroll}
             scrollEventThrottle={16}
-            contentContainerStyle={{ paddingTop: measuredHeaderHeight + 88, paddingBottom: tabBarHeight + 120 }}
-            refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
+            contentContainerStyle={{
+              paddingTop: measuredHeaderHeight + 88,
+              paddingBottom: tabBarHeight + 120,
+            }}
+            refreshControl={
+              <RefreshControl
+                tintColor="#fff"
+                refreshing={refreshing}
+                onRefresh={() => load({ refresh: true })}
+              />
+            }
           />
         ) : (
           <FlatList<VideoCard>
@@ -1733,15 +1761,31 @@ export default function VideoScreen() {
             showsVerticalScrollIndicator={false}
             onScroll={onListScroll}
             scrollEventThrottle={16}
-            contentContainerStyle={{ paddingTop: measuredHeaderHeight + 88, paddingBottom: tabBarHeight + 120 }}
-            refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
+            contentContainerStyle={{
+              paddingTop: measuredHeaderHeight + 88,
+              paddingBottom: tabBarHeight + 120,
+            }}
+            refreshControl={
+              <RefreshControl
+                tintColor="#fff"
+                refreshing={refreshing}
+                onRefresh={() => load({ refresh: true })}
+              />
+            }
             ListEmptyComponent={listEmpty}
             ListHeaderComponent={listHeader}
-            ListHeaderComponentStyle={listHeader ? { marginTop: 36, marginBottom: 16 } : undefined}
+            ListHeaderComponentStyle={
+              listHeader ? { marginTop: 36, marginBottom: 16 } : undefined
+            }
           />
         )}
 
-        <View style={[styles.stickyHeader, isFullscreen ? styles.stickyHeaderFullscreen : null]} pointerEvents="box-none">
+        <View
+          style={[
+            styles.stickyHeader,
+            isFullscreen ? styles.stickyHeaderFullscreen : null,
+          ]}
+          pointerEvents="box-none">
           <View onLayout={onHeaderLayout}>
             {!isFullscreen ? (
               <View style={styles.headerTopRow}>
@@ -1753,280 +1797,439 @@ export default function VideoScreen() {
               <Animated.View
                 style={[
                   styles.playerFrame,
-                  isFullscreen ? [{ width: windowWidth, height: windowHeight } as any] : null,
+                  isFullscreen
+                    ? [{ width: windowWidth, height: windowHeight } as any]
+                    : null,
                 ]}
-                pointerEvents="box-none"
-              >
-              <View style={styles.playerInner} pointerEvents="box-none" {...panResponder.panHandlers}>
-                {activePlaybackUrl ? (
-                  <Pressable
-                    style={[StyleSheet.absoluteFill, styles.playerSurfacePressable]}
-                    pointerEvents="auto"
-                    onPress={onPressPlayerSurface}
-                  >
-                    <VideoView
-                      player={videoPlayer}
+                pointerEvents="box-none">
+                <View
+                  style={styles.playerInner}
+                  pointerEvents="box-none"
+                  {...panResponder.panHandlers}>
+                  {activePlaybackUrl ? (
+                    <Pressable
                       style={[
-                        styles.video,
-                        {
-                          width: isFullscreen ? windowWidth : SCREEN_WIDTH,
-                          height: isFullscreen ? windowHeight : HEADER_HEIGHT,
-                        },
+                        StyleSheet.absoluteFill,
+                        styles.playerSurfacePressable,
                       ]}
-                      contentFit="contain"
-                      nativeControls={false}
-                      allowsVideoFrameAnalysis={false}
-                    />
-                  </Pressable>
-                ) : (
-                  <View style={StyleSheet.absoluteFill}>
-                    <View style={styles.playerBlank} />
-                    <View style={styles.heroOverlay}>
-                      {loadingPlaybackUrl ? <ActivityIndicator color="#fff" /> : null}
-                      <Text style={styles.selectText}>Select a video to play</Text>
-                    </View>
-                  </View>
-                )}
-
-                {activePlaybackUrl && showControls ? (
-                  <View style={[styles.playerTopLeft, isFullscreen ? { top: insets.top + 12 } : null]}>
-                    <Pressable
-                      style={styles.iconBtn}
-                      onPress={() => {
-                        if (isFullscreen) {
-                          exitFullscreen();
-                        } else {
-                          stopAndReset().catch(() => undefined);
-                        }
-                      }}
-                    >
-                      <ArrowLeft size={18} color="#fff" />
-                    </Pressable>
-                  </View>
-                ) : null}
-
-                <View style={[styles.playerTopRight, isFullscreen ? { top: insets.top + 12 } : null]}>
-                  {activePlaybackUrl && showControls ? (
-                    <Pressable style={styles.iconBtn} onPress={() => setShowQualitySheet((s) => !s)}>
-                      <View style={styles.qualityIconWrap}>
-                        <Settings size={18} color="#fff" />
-                        {isHD ? (
-                          <View style={styles.hdBadge}>
-                            <Text style={styles.hdBadgeText}>HD</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    </Pressable>
-                  ) : null}
-                  {activePlaybackUrl && showControls ? (
-                    <Pressable
-                      style={styles.iconBtn}
-                      onPress={() => {
-                        if (isFullscreen) {
-                          exitFullscreen();
-                        } else {
-                          enterFullscreen();
-                        }
-                      }}
-                    >
-                      {isFullscreen ? <X size={18} color="#fff" /> : <Maximize size={18} color="#fff" />}
-                    </Pressable>
-                  ) : null}
-                </View>
-
-                {showQualitySheet && activePlaybackUrl && showControls ? (
-                  <BlurView intensity={70} tint="dark" style={styles.qualitySheet}>
-                    <Text style={styles.qualitySheetTitle}>Quality</Text>
-                    <ScrollView
-                      bounces={false}
-                      showsVerticalScrollIndicator={false}
-                      style={styles.qualityScrollView}
-                      contentContainerStyle={styles.qualityScrollContent}
-                    >
-                      {availableQualities.map((q) => {
-                        const active = q === selectedQuality;
-                        const isLockedForFree = !isStreamingHdAllowed && (q !== '144p' && q !== '240p');
-                        return (
-                          <Pressable
-                            key={q}
-                            style={[styles.qualityPill, active ? styles.qualityPillActive : null]}
-                            onPress={() => {
-                              applyQualitySelection(q).catch(() => undefined);
-                            }}
-                          >
-                            <Text style={[styles.qualityText, active ? styles.qualityTextActive : null]}>
-                              {q}
-                            </Text>
-                            {isLockedForFree ? (
-                              <View style={[styles.qualityHdTag, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-                                <Lock color="#FFA500" size={12} />
-                              </View>
-                            ) : null}
-                            {active ? (
-                              <View style={styles.qualityActiveDot} />
-                            ) : null}
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
-                  </BlurView>
-                ) : null}
-
-                {activePlaybackUrl && showControls ? (
-                  <View style={styles.controlsOverlay} pointerEvents="box-none">
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.playPauseBtn,
-                        pressed ? styles.playPauseBtnPressed : null,
-                      ]}
-                      onPress={toggleInlinePlayPause}
-                    >
-                      <Image
-                        source={isVideoPlaying ? PlayButtonImg : PauseButtonImg}
-                        style={styles.playPauseImg}
-                        resizeMode="contain"
+                      pointerEvents="auto"
+                      onPress={onPressPlayerSurface}>
+                      <VideoView
+                        player={videoPlayer}
+                        style={[
+                          styles.video,
+                          {
+                            width: isFullscreen ? windowWidth : SCREEN_WIDTH,
+                            height: isFullscreen ? windowHeight : HEADER_HEIGHT,
+                          },
+                        ]}
+                        contentFit="contain"
+                        nativeControls={false}
+                        allowsVideoFrameAnalysis={false}
                       />
                     </Pressable>
-                  </View>
-                ) : null}
-
-                {showUpNext ? (
-                  <View style={styles.upNextOverlay}>
-                    <Text style={styles.upNextTitle}>Up Next</Text>
-                    <Text style={styles.upNextSub}>Playing next in {upNextSeconds}s</Text>
-                  </View>
-                ) : null}
-
-                {activePlaybackUrl && showControls ? (
-                  <View style={styles.seekWrap} pointerEvents="box-none">
-                    <View style={styles.seekTimesRow}>
-                      <Text style={styles.seekTime}>{formatDurationLabel(positionMs, '00:00')}</Text>
-                      <Text style={styles.seekTime}>{formatDurationLabel(durationMs, '--:--')}</Text>
+                  ) : (
+                    <View style={StyleSheet.absoluteFill}>
+                      <View style={styles.playerBlank} />
+                      <View style={styles.heroOverlay}>
+                        {loadingPlaybackUrl ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : null}
+                        <Text style={styles.selectText}>
+                          Select a video to play
+                        </Text>
+                      </View>
                     </View>
-                    <Slider
-                      style={styles.slider}
-                      minimumValue={0}
-                      maximumValue={Math.max(1, durationMs || 1)}
-                      value={Math.min(positionMs, durationMs || 1)}
-                      disabled={!hasFiniteDuration(durationMs)}
-                      minimumTrackTintColor="#FFFFFF"
-                      maximumTrackTintColor="rgba(255,255,255,0.22)"
-                      thumbTintColor="#FFFFFF"
-                      onSlidingStart={onSeekStart}
-                      onValueChange={onSeekChange}
-                      onSlidingComplete={onSeekComplete}
-                    />
-                  </View>
-                ) : null}
+                  )}
 
-                {playbackError ? <Text style={styles.heroHintText}>{playbackError}</Text> : null}
+                  {activePlaybackUrl && showControls ? (
+                    <View
+                      style={[
+                        styles.playerTopLeft,
+                        isFullscreen ? { top: insets.top + 12 } : null,
+                      ]}>
+                      <Pressable
+                        style={styles.iconBtn}
+                        onPress={() => {
+                          if (isFullscreen) {
+                            exitFullscreen();
+                          } else {
+                            stopAndReset().catch(() => undefined);
+                          }
+                        }}>
+                        <ArrowLeft size={18} color="#fff" />
+                      </Pressable>
+                    </View>
+                  ) : null}
 
-                {!activePlaybackUrl ? (
-                  <View style={styles.heroHint}>
-                    <Text style={styles.heroHintText}>Tap a video below to start playing</Text>
+                  <View
+                    style={[
+                      styles.playerTopRight,
+                      isFullscreen ? { top: insets.top + 12 } : null,
+                    ]}>
+                    {activePlaybackUrl && showControls ? (
+                      <Pressable
+                        style={styles.iconBtn}
+                        onPress={() => setShowQualitySheet((s) => !s)}>
+                        <View style={styles.qualityIconWrap}>
+                          <Settings size={18} color="#fff" />
+                          {isHD ? (
+                            <View style={styles.hdBadge}>
+                              <Text style={styles.hdBadgeText}>HD</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      </Pressable>
+                    ) : null}
+                    {activePlaybackUrl && showControls ? (
+                      <Pressable
+                        style={styles.iconBtn}
+                        onPress={() => {
+                          if (isFullscreen) {
+                            exitFullscreen();
+                          } else {
+                            enterFullscreen();
+                          }
+                        }}>
+                        {isFullscreen ? (
+                          <X size={18} color="#fff" />
+                        ) : (
+                          <Maximize size={18} color="#fff" />
+                        )}
+                      </Pressable>
+                    ) : null}
                   </View>
-                ) : null}
-              </View>
-            </Animated.View>
+
+                  {showQualitySheet && activePlaybackUrl && showControls ? (
+                    <BlurView
+                      intensity={70}
+                      tint="dark"
+                      style={styles.qualitySheet}>
+                      <Text style={styles.qualitySheetTitle}>Quality</Text>
+                      <ScrollView
+                        bounces={false}
+                        showsVerticalScrollIndicator={false}
+                        style={styles.qualityScrollView}
+                        contentContainerStyle={styles.qualityScrollContent}>
+                        {availableQualities.map((q) => {
+                          const active = q === selectedQuality;
+                          const isLockedForFree =
+                            !isStreamingHdAllowed &&
+                            q !== "144p" &&
+                            q !== "240p";
+                          return (
+                            <Pressable
+                              key={q}
+                              style={[
+                                styles.qualityPill,
+                                active ? styles.qualityPillActive : null,
+                              ]}
+                              onPress={() => {
+                                applyQualitySelection(q).catch(() => undefined);
+                              }}>
+                              <Text
+                                style={[
+                                  styles.qualityText,
+                                  active ? styles.qualityTextActive : null,
+                                ]}>
+                                {q}
+                              </Text>
+                              {isLockedForFree ? (
+                                <View
+                                  style={[
+                                    styles.qualityHdTag,
+                                    { backgroundColor: "rgba(0,0,0,0.5)" },
+                                  ]}>
+                                  <Lock color="#FFA500" size={12} />
+                                </View>
+                              ) : null}
+                              {active ? (
+                                <View style={styles.qualityActiveDot} />
+                              ) : null}
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    </BlurView>
+                  ) : null}
+
+                  {activePlaybackUrl && showControls ? (
+                    <View
+                      style={[
+                        styles.controlsOverlay,
+                        { flexDirection: "row", gap: 20 },
+                      ]}
+                      pointerEvents="box-none">
+                      {/* BACKWARD 10 SEC BUTTON */}
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.seekBtn,
+                          pressed ? styles.seekBtnPressed : null,
+                        ]}
+                        onPress={async () => {
+                          try {
+                            const newTime = Math.max(
+                              0,
+                              videoPlayer.currentTime - 10
+                            );
+                            videoPlayer.currentTime = newTime;
+                          } catch (e) {}
+                        }}>
+                        <Text style={styles.seekBtnText}>⏪ 10</Text>
+                      </Pressable>
+
+                      {/* PLAY/PAUSE BUTTON */}
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.playPauseBtn,
+                          pressed ? styles.playPauseBtnPressed : null,
+                        ]}
+                        onPress={toggleInlinePlayPause}>
+                        <Image
+                          source={
+                            isVideoPlaying ? PlayButtonImg : PauseButtonImg
+                          }
+                          style={styles.playPauseImg}
+                          resizeMode="contain"
+                        />
+                      </Pressable>
+
+                      {/* FORWARD 10 SEC BUTTON */}
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.seekBtn,
+                          pressed ? styles.seekBtnPressed : null,
+                        ]}
+                        onPress={async () => {
+                          try {
+                            const dur = videoPlayer.duration;
+                            const newTime = Math.min(
+                              dur,
+                              videoPlayer.currentTime + 10
+                            );
+                            videoPlayer.currentTime = newTime;
+                          } catch (e) {}
+                        }}>
+                        <Text style={styles.seekBtnText}>10 ⏩</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                  {showUpNext ? (
+                    <View style={styles.upNextOverlay}>
+                      <Text style={styles.upNextTitle}>Up Next</Text>
+                      <Text style={styles.upNextSub}>
+                        Playing next in {upNextSeconds}s
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {activePlaybackUrl && showControls ? (
+                    <View style={styles.seekWrap} pointerEvents="box-none">
+                      <View style={styles.seekTimesRow}>
+                        <Text style={styles.seekTime}>
+                          {formatDurationLabel(positionMs, "00:00")}
+                        </Text>
+                        <Text style={styles.seekTime}>
+                          {formatDurationLabel(durationMs, "--:--")}
+                        </Text>
+                      </View>
+                      <Slider
+                        style={styles.slider}
+                        minimumValue={0}
+                        maximumValue={Math.max(1, durationMs || 1)}
+                        value={Math.min(positionMs, durationMs || 1)}
+                        disabled={!hasFiniteDuration(durationMs)}
+                        minimumTrackTintColor="#FFFFFF"
+                        maximumTrackTintColor="rgba(255,255,255,0.22)"
+                        thumbTintColor="#FFFFFF"
+                        onSlidingStart={onSeekStart}
+                        onValueChange={onSeekChange}
+                        onSlidingComplete={onSeekComplete}
+                      />
+                    </View>
+                  ) : null}
+
+                  {playbackError ? (
+                    <Text style={styles.heroHintText}>{playbackError}</Text>
+                  ) : null}
+
+                  {!activePlaybackUrl ? (
+                    <View style={styles.heroHint}>
+                      <Text style={styles.heroHintText}>
+                        Tap a video below to start playing
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              </Animated.View>
             ) : null}
 
             {activeVideoId ? (
               <View style={styles.metaBlock}>
                 {hasPlaybackStarted && activeVideoMeta ? (
                   <>
-                  <Text style={styles.nowTitle} numberOfLines={1}>
-                    {activeVideoMeta.title}
-                  </Text>
-                  
-              <View style={styles.artistRowContainer}>
-                    <Pressable style={styles.artistRow} onPress={onPressArtist}>
-                      <Image source={{ uri: getOptimizedImageUrl(activeVideoMeta.artistProfileImage || FALLBACK_ARTWORK) }} style={styles.artistAvatar} />
-                      <View style={styles.artistNameCol}>
-                        <Text style={styles.artistRowName} numberOfLines={1}>
-                          {activeVideoMeta.artistName}
-                        </Text>
-                        <Text style={styles.artistRowSub} numberOfLines={1}>
-                          {formatDateLabel(activeVideoMeta.createdAt)}
-                        </Text>
-                      </View>
-                    </Pressable>
+                    <Text style={styles.nowTitle} numberOfLines={1}>
+                      {activeVideoMeta.title}
+                    </Text>
 
-                  {(() => {
-                    const id = activeVideoMeta.id;
-                    const state = reactionStateById[String(id)] ?? { reaction: activeVideoMeta.userReaction ?? null, likeDelta: 0, dislikeDelta: 0 };
-                    const reaction = state.reaction;
-                    const likeBase = typeof activeVideoMeta.likeCount === 'number' ? activeVideoMeta.likeCount : 0;
-                    const dislikeBase = typeof activeVideoMeta.dislikeCount === 'number' ? activeVideoMeta.dislikeCount : 0;
-                    const likeCount = Math.max(0, likeBase + state.likeDelta);
-                    const dislikeCount = Math.max(0, dislikeBase + state.dislikeDelta);
-
-                    const likeActive = reaction === 'like';
-                    const dislikeActive = reaction === 'dislike';
-
-                    return (
-                      <View style={styles.engagementIconsRow}>
-                        <Pressable
-                          style={[styles.engagementIconBtn, likeActive ? styles.engagementIconBtnActive : null]}
-                          onPress={onPressLike}
-                          hitSlop={8}
-                        >
-                          <EngagementIcon name="like" color={likeActive ? Colors.accent : '#fff'} />
-                          {typeof likeCount === 'number' ? (
-                            <Text style={[styles.engagementIconCount, likeActive ? styles.engagementIconCountActive : null]}>
-                              {formatCompactViews(likeCount).replace(' views', '')}
-                            </Text>
-                          ) : null}
-                        </Pressable>
-                        <Pressable
-                          style={[styles.engagementIconBtn, dislikeActive ? styles.engagementIconBtnActive : null]}
-                          onPress={onPressDislike}
-                          hitSlop={8}
-                        >
-                          <EngagementIcon name="dislike" color={dislikeActive ? Colors.accent : '#fff'} />
-                          {typeof dislikeCount === 'number' ? (
-                            <Text style={[styles.engagementIconCount, dislikeActive ? styles.engagementIconCountActive : null]}>
-                              {formatCompactViews(dislikeCount).replace(' views', '')}
-                            </Text>
-                          ) : null}
-                        </Pressable>
-                        <Pressable
-                          style={[
-                            styles.engagementIconBtn,
-                            activeVideoMeta?.id && reportedContentIds[String(activeVideoMeta.id)] ? styles.reportIconBtnDisabled : null,
-                          ]}
-                          onPress={() => {
-                            if (!activeVideoMeta?.id) return;
-                            if (reportedContentIds[String(activeVideoMeta.id)]) return;
-                            setReportModalOpen(true);
-                          }}
-                          hitSlop={8}
-                        >
-                          <AlertTriangle
-                            size={18}
-                            color={
-                              activeVideoMeta?.id && reportedContentIds[String(activeVideoMeta.id)]
-                                ? 'rgba(255,255,255,0.35)'
-                                : '#fff'
-                            }
-                          />
-                          <Text
-                            style={[
-                              styles.engagementIconCount,
-                              activeVideoMeta?.id && reportedContentIds[String(activeVideoMeta.id)] ? styles.reportTextDisabled : null,
-                            ]}
-                          >
-                            Report
+                    <View style={styles.artistRowContainer}>
+                      <Pressable
+                        style={styles.artistRow}
+                        onPress={onPressArtist}>
+                        <Image
+  source={{
+    uri: getOptimizedImageUrl(
+      activeVideoMeta.artistProfileImage ||
+        FALLBACK_ARTWORK
+    ),
+  }}
+  style={styles.artistAvatar}
+  onError={(e) => {
+    // Agar image load nahi hoti toh default image dikhao
+    e.currentTarget.source = { uri: FALLBACK_ARTWORK };
+  }}
+/>
+                        <View style={styles.artistNameCol}>
+                          <Text style={styles.artistRowName} numberOfLines={1}>
+                            {activeVideoMeta.artistName}
                           </Text>
-                        </Pressable>
-                      </View>
-                    );
-                  })()}
-                  </View>
+                          <Text style={styles.artistRowSub} numberOfLines={1}>
+                            {formatDateLabel(activeVideoMeta.createdAt)}
+                          </Text>
+                        </View>
+                      </Pressable>
 
-                </>
-              ) : null}
-            </View>
-          ) : null}
+                      {(() => {
+                        const id = activeVideoMeta.id;
+                        const state = reactionStateById[String(id)] ?? {
+                          reaction: activeVideoMeta.userReaction ?? null,
+                          likeDelta: 0,
+                          dislikeDelta: 0,
+                        };
+                        const reaction = state.reaction;
+                        const likeBase =
+                          typeof activeVideoMeta.likeCount === "number"
+                            ? activeVideoMeta.likeCount
+                            : 0;
+                        const dislikeBase =
+                          typeof activeVideoMeta.dislikeCount === "number"
+                            ? activeVideoMeta.dislikeCount
+                            : 0;
+                        const likeCount = Math.max(
+                          0,
+                          likeBase + state.likeDelta
+                        );
+                        const dislikeCount = Math.max(
+                          0,
+                          dislikeBase + state.dislikeDelta
+                        );
+
+                        const likeActive = reaction === "like";
+                        const dislikeActive = reaction === "dislike";
+
+                        return (
+                          <View style={styles.engagementIconsRow}>
+                            <Pressable
+                              style={[
+                                styles.engagementIconBtn,
+                                likeActive
+                                  ? styles.engagementIconBtnActive
+                                  : null,
+                              ]}
+                              onPress={onPressLike}
+                              hitSlop={8}>
+                              <EngagementIcon
+                                name="like"
+                                color={likeActive ? Colors.accent : "#fff"}
+                              />
+                              {typeof likeCount === "number" ? (
+                                <Text
+                                  style={[
+                                    styles.engagementIconCount,
+                                    likeActive
+                                      ? styles.engagementIconCountActive
+                                      : null,
+                                  ]}>
+                                  {formatCompactViews(likeCount).replace(
+                                    " views",
+                                    ""
+                                  )}
+                                </Text>
+                              ) : null}
+                            </Pressable>
+                            <Pressable
+                              style={[
+                                styles.engagementIconBtn,
+                                dislikeActive
+                                  ? styles.engagementIconBtnActive
+                                  : null,
+                              ]}
+                              onPress={onPressDislike}
+                              hitSlop={8}>
+                              <EngagementIcon
+                                name="dislike"
+                                color={dislikeActive ? Colors.accent : "#fff"}
+                              />
+                              {typeof dislikeCount === "number" ? (
+                                <Text
+                                  style={[
+                                    styles.engagementIconCount,
+                                    dislikeActive
+                                      ? styles.engagementIconCountActive
+                                      : null,
+                                  ]}>
+                                  {formatCompactViews(dislikeCount).replace(
+                                    " views",
+                                    ""
+                                  )}
+                                </Text>
+                              ) : null}
+                            </Pressable>
+                            <Pressable
+                              style={[
+                                styles.engagementIconBtn,
+                                activeVideoMeta?.id &&
+                                reportedContentIds[String(activeVideoMeta.id)]
+                                  ? styles.reportIconBtnDisabled
+                                  : null,
+                              ]}
+                              onPress={() => {
+                                if (!activeVideoMeta?.id) return;
+                                if (
+                                  reportedContentIds[String(activeVideoMeta.id)]
+                                )
+                                  return;
+                                setReportModalOpen(true);
+                              }}
+                              hitSlop={8}>
+                              <AlertTriangle
+                                size={18}
+                                color={
+                                  activeVideoMeta?.id &&
+                                  reportedContentIds[String(activeVideoMeta.id)]
+                                    ? "rgba(255,255,255,0.35)"
+                                    : "#fff"
+                                }
+                              />
+                              <Text
+                                style={[
+                                  styles.engagementIconCount,
+                                  activeVideoMeta?.id &&
+                                  reportedContentIds[String(activeVideoMeta.id)]
+                                    ? styles.reportTextDisabled
+                                    : null,
+                                ]}>
+                                Report
+                              </Text>
+                            </Pressable>
+                          </View>
+                        );
+                      })()}
+                    </View>
+                  </>
+                ) : null}
+              </View>
+            ) : null}
 
             <View style={styles.searchWrap}>
               <BlurView intensity={24} tint="dark" style={styles.searchBlur}>
@@ -2044,18 +2247,18 @@ export default function VideoScreen() {
                   <Pressable
                     style={styles.searchClearBtn}
                     onPress={() => {
-                      setSearchQuery('');
+                      setSearchQuery("");
                       setSearchResults(null);
                     }}
-                    hitSlop={10}
-                  >
+                    hitSlop={10}>
                     <X size={18} color="rgba(255,255,255,0.70)" />
                   </Pressable>
                 ) : null}
-                {searchLoading ? <ActivityIndicator color="#fff" size="small" /> : null}
+                {searchLoading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : null}
               </BlurView>
             </View>
-
           </View>
         </View>
       </SafeAreaView>
@@ -2066,8 +2269,7 @@ export default function VideoScreen() {
         animationType="fade"
         onRequestClose={() => {
           if (!reportSubmitting) setReportModalOpen(false);
-        }}
-      >
+        }}>
         <Pressable
           style={styles.reportModalBackdrop}
           onPress={() => {
@@ -2079,104 +2281,114 @@ export default function VideoScreen() {
           <Text style={styles.reportModalSub}>Select a reason</Text>
 
           <Pressable
-            style={({ pressed }) => [styles.reportReasonBtn, pressed ? styles.reportReasonBtnPressed : null]}
+            style={({ pressed }) => [
+              styles.reportReasonBtn,
+              pressed ? styles.reportReasonBtnPressed : null,
+            ]}
             disabled={reportSubmitting}
-            onPress={() => submitReport('Spam')}
-          >
+            onPress={() => submitReport("Spam")}>
             <Text style={styles.reportReasonText}>Spam</Text>
           </Pressable>
           <Pressable
-            style={({ pressed }) => [styles.reportReasonBtn, pressed ? styles.reportReasonBtnPressed : null]}
+            style={({ pressed }) => [
+              styles.reportReasonBtn,
+              pressed ? styles.reportReasonBtnPressed : null,
+            ]}
             disabled={reportSubmitting}
-            onPress={() => submitReport('Inappropriate')}
-          >
+            onPress={() => submitReport("Inappropriate")}>
             <Text style={styles.reportReasonText}>Inappropriate</Text>
           </Pressable>
           <Pressable
-            style={({ pressed }) => [styles.reportReasonBtn, pressed ? styles.reportReasonBtnPressed : null]}
+            style={({ pressed }) => [
+              styles.reportReasonBtn,
+              pressed ? styles.reportReasonBtnPressed : null,
+            ]}
             disabled={reportSubmitting}
-            onPress={() => submitReport('Copyright')}
-          >
+            onPress={() => submitReport("Copyright")}>
             <Text style={styles.reportReasonText}>Copyright</Text>
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [styles.reportCancelBtn, pressed ? styles.reportCancelBtnPressed : null]}
+            style={({ pressed }) => [
+              styles.reportCancelBtn,
+              pressed ? styles.reportCancelBtnPressed : null,
+            ]}
             disabled={reportSubmitting}
-            onPress={() => setReportModalOpen(false)}
-          >
-            <Text style={styles.reportCancelText}>{reportSubmitting ? 'Submitting...' : 'Cancel'}</Text>
+            onPress={() => setReportModalOpen(false)}>
+            <Text style={styles.reportCancelText}>
+              {reportSubmitting ? "Submitting..." : "Cancel"}
+            </Text>
           </Pressable>
         </View>
       </Modal>
 
-        {/* ── HD Quality Lock Modal ─────────────────────────────────────── */}
-        <Modal
-          visible={showHdLockModal}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowHdLockModal(false)}
-        >
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalContainer}>
-              <View style={styles.modalIconWrap}>
-                <Crown color="#4AA3FF" size={28} />
-              </View>
-              <Text style={styles.modalTitle}>HD Quality Locked</Text>
-              <Text style={styles.modalMessage}>
-                Upgrade to Premium to watch in high quality (720p/1080p).
-              </Text>
-              <Pressable
-                style={styles.modalPrimaryBtn}
-                onPress={() => {
-                  setShowHdLockModal(false);
-                  navigation.navigate('SubscriptionFlow', { defaultPlan: 'PLATFORM' });
-                }}
-              >
-                <LinearGradient
-                  colors={['#4AA3FF', '#0B7EE8']}
-                  style={styles.modalBtnGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Text style={styles.modalPrimaryBtnText}>Upgrade Now</Text>
-                </LinearGradient>
-              </Pressable>
-              <Pressable
-                style={styles.modalSecondaryBtn}
-                onPress={() => setShowHdLockModal(false)}
-              >
-                <Text style={styles.modalSecondaryBtnText}>Continue with {maxAllowedResolution}</Text>
-              </Pressable>
+      {/* ── HD Quality Lock Modal ─────────────────────────────────────── */}
+      <Modal
+        visible={showHdLockModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowHdLockModal(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalIconWrap}>
+              <Crown color="#4AA3FF" size={28} />
             </View>
+            <Text style={styles.modalTitle}>HD Quality Locked</Text>
+            <Text style={styles.modalMessage}>
+              Upgrade to Premium to watch in high quality (720p/1080p).
+            </Text>
+            <Pressable
+              style={styles.modalPrimaryBtn}
+              onPress={() => {
+                setShowHdLockModal(false);
+                navigation.navigate("SubscriptionFlow", {
+                  defaultPlan: "PLATFORM",
+                });
+              }}>
+              <LinearGradient
+                colors={["#4AA3FF", "#0B7EE8"]}
+                style={styles.modalBtnGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}>
+                <Text style={styles.modalPrimaryBtnText}>Upgrade Now</Text>
+              </LinearGradient>
+            </Pressable>
+            <Pressable
+              style={styles.modalSecondaryBtn}
+              onPress={() => setShowHdLockModal(false)}>
+              <Text style={styles.modalSecondaryBtnText}>
+                Continue with {maxAllowedResolution}
+              </Text>
+            </Pressable>
           </View>
-        </Modal>
+        </View>
+      </Modal>
 
-        {/* ── Artist Lock Modal ─────────────────────────────────────────── */}
-        {renderArtistLockModal()}
+      {/* ── Artist Lock Modal ─────────────────────────────────────────── */}
+      {renderArtistLockModal()}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000' },
+  root: { flex: 1, backgroundColor: "#000" },
   safe: { flex: 1 },
-  title: { color: '#fff', fontSize: 28, fontWeight: '900' },
+  title: { color: "#fff", fontSize: 28, fontWeight: "900" },
 
   stickyHeader: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     paddingBottom: 10,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
     zIndex: 100,
     elevation: 20,
   },
   stickyHeaderFullscreen: {
     bottom: 0,
     paddingBottom: 0,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
     zIndex: 999,
     elevation: 999,
   },
@@ -2187,101 +2399,101 @@ const styles = StyleSheet.create({
   },
 
   playerFrame: {
-    width: '100%',
+    width: "100%",
     height: HEADER_HEIGHT,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
   },
   playerFrameFullscreen: {
-    height: Dimensions.get('window').height,
+    height: Dimensions.get("window").height,
   },
   playerFrameMini: {
-    position: 'absolute',
+    position: "absolute",
     borderRadius: 14,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: "rgba(255,255,255,0.14)",
   },
   playerInner: {
     flex: 1,
   },
   playerBlank: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
   },
   selectText: {
     marginTop: 10,
-    color: 'rgba(255,255,255,0.85)',
+    color: "rgba(255,255,255,0.85)",
     fontSize: 14,
-    fontWeight: '800',
-    textAlign: 'center',
+    fontWeight: "800",
+    textAlign: "center",
   },
   video: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   videoOffscreen: {
-    position: 'absolute',
+    position: "absolute",
     left: -9999,
     top: 0,
   },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.25)",
   },
   heroHint: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: "rgba(0,0,0,0.45)",
   },
   heroHintText: {
-    color: 'rgba(255,255,255,0.80)',
+    color: "rgba(255,255,255,0.80)",
     fontSize: 12,
-    fontWeight: '800',
-    textAlign: 'center',
+    fontWeight: "800",
+    textAlign: "center",
   },
 
   playerTopRight: {
-    position: 'absolute',
+    position: "absolute",
     right: 12,
     top: 12,
     zIndex: 30,
     elevation: 30,
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
   },
   playerTopLeft: {
-    position: 'absolute',
+    position: "absolute",
     left: 12,
     top: 12,
     zIndex: 30,
     elevation: 30,
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
   },
   iconBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.45)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderColor: "rgba(255,255,255,0.16)",
   },
 
   controlsOverlay: {
     ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     zIndex: 10,
     elevation: 10,
-    backgroundColor: 'rgba(0,0,0,0.10)',
+    backgroundColor: "rgba(0,0,0,0.10)",
   },
 
   playerSurfacePressable: {
@@ -2292,11 +2504,11 @@ const styles = StyleSheet.create({
     width: 66,
     height: 66,
     borderRadius: 33,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
     borderWidth: 0,
-    borderColor: 'transparent',
+    borderColor: "transparent",
   },
   playPauseBtnPressed: {
     opacity: 0.92,
@@ -2306,9 +2518,29 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
   },
+  // ✅ YAHAN SE NEEECHE YEH ADD KARO
+  seekBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  seekBtnPressed: {
+    transform: [{ scale: 0.95 }],
+    opacity: 0.8,
+  },
+  seekBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
 
   seekWrap: {
-    position: 'absolute',
+    position: "absolute",
     left: 10,
     right: 10,
     bottom: 8,
@@ -2317,109 +2549,114 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 8,
     borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: "rgba(0,0,0,0.35)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: "rgba(255,255,255,0.10)",
   },
   seekTimesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 6,
   },
   seekTime: {
-    color: 'rgba(255,255,255,0.85)',
+    color: "rgba(255,255,255,0.85)",
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: "800",
   },
-  slider: { width: '100%', height: 20 },
+  slider: { width: "100%", height: 20 },
 
   upNextOverlay: {
-    position: 'absolute',
+    position: "absolute",
     left: 12,
     bottom: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.60)',
+    backgroundColor: "rgba(0,0,0,0.60)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: "rgba(255,255,255,0.12)",
   },
-  upNextTitle: { color: '#fff', fontSize: 13, fontWeight: '900' },
-  upNextSub: { marginTop: 2, color: 'rgba(255,255,255,0.70)', fontSize: 12, fontWeight: '700' },
+  upNextTitle: { color: "#fff", fontSize: 13, fontWeight: "900" },
+  upNextSub: {
+    marginTop: 2,
+    color: "rgba(255,255,255,0.70)",
+    fontSize: 12,
+    fontWeight: "700",
+  },
 
   metaBlock: {
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 10,
-    backgroundColor: 'rgba(0,0,0,0.20)',
+    backgroundColor: "rgba(0,0,0,0.20)",
   },
-  nowTitle: { color: '#fff', fontSize: 16, fontWeight: '900' },
-  
+  nowTitle: { color: "#fff", fontSize: 16, fontWeight: "900" },
+
   artistRowContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
     marginTop: 8,
   },
   artistRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     flexShrink: 1,
     marginRight: 10,
   },
   artistNameCol: {
-    flexDirection: 'column',
-    justifyContent: 'center',
+    flexDirection: "column",
+    justifyContent: "center",
     flexShrink: 1,
   },
   artistAvatar: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: "rgba(255,255,255,0.10)",
   },
   artistRowName: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 13,
-    fontWeight: '900',
+    fontWeight: "900",
   },
   artistRowSub: {
-    color: 'rgba(255,255,255,0.60)',
+    color: "rgba(255,255,255,0.60)",
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
     marginTop: 2,
   },
 
   engagementIconsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
     gap: 8,
   },
   engagementIconBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     paddingVertical: 6,
     paddingHorizontal: 8,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: "rgba(255,255,255,0.10)",
   },
   engagementIconBtnActive: {
-    backgroundColor: 'rgba(255,106,0,0.16)',
-    borderColor: 'rgba(255,106,0,0.55)',
+    backgroundColor: "rgba(255,106,0,0.16)",
+    borderColor: "rgba(255,106,0,0.55)",
   },
   engagementIconCount: {
-    color: 'rgba(255,255,255,0.90)',
+    color: "rgba(255,255,255,0.90)",
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: "900",
   },
   engagementIconCountActive: {
     color: Colors.accent,
@@ -2429,43 +2666,43 @@ const styles = StyleSheet.create({
     opacity: 0.65,
   },
   reportTextDisabled: {
-    color: 'rgba(255,255,255,0.40)',
+    color: "rgba(255,255,255,0.40)",
   },
 
   reportModalBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: "rgba(0,0,0,0.6)",
   },
   reportModalCard: {
-    position: 'absolute',
+    position: "absolute",
     left: 18,
     right: 18,
     bottom: 26,
     borderRadius: 18,
     padding: 16,
-    backgroundColor: 'rgba(20,20,20,0.96)',
+    backgroundColor: "rgba(20,20,20,0.96)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: "rgba(255,255,255,0.10)",
   },
   reportModalTitle: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '900',
+    fontWeight: "900",
   },
   reportModalSub: {
     marginTop: 6,
     marginBottom: 12,
-    color: 'rgba(255,255,255,0.65)',
+    color: "rgba(255,255,255,0.65)",
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   reportReasonBtn: {
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: "rgba(255,255,255,0.10)",
     marginBottom: 10,
   },
   reportReasonBtnPressed: {
@@ -2473,46 +2710,46 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.99 }],
   },
   reportReasonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   reportCancelBtn: {
     marginTop: 4,
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,255,255,0.02)',
+    backgroundColor: "rgba(255,255,255,0.02)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
+    borderColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
   },
   reportCancelBtnPressed: {
     opacity: 0.85,
   },
   reportCancelText: {
-    color: 'rgba(255,255,255,0.85)',
+    color: "rgba(255,255,255,0.85)",
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: "800",
   },
 
-  actionRow: { marginTop: 12, flexDirection: 'row', gap: 18 },
+  actionRow: { marginTop: 12, flexDirection: "row", gap: 18 },
 
   qualitySheet: {
-    position: 'absolute',
+    position: "absolute",
     // Anchor to bottom-right — grows upward, never out of player bounds.
     right: 12,
-    bottom: 48,          // sits just above the seek bar
-    zIndex: 999,         // above everything (controls are z:30)
+    bottom: 48, // sits just above the seek bar
+    zIndex: 999, // above everything (controls are z:30)
     elevation: 999,
     paddingHorizontal: 0,
     paddingTop: 10,
     paddingBottom: 8,
     borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(0,0,0,0.88)',
+    overflow: "hidden",
+    backgroundColor: "rgba(0,0,0,0.88)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: "rgba(255,255,255,0.18)",
     minWidth: 160,
     maxWidth: 200,
   },
@@ -2525,11 +2762,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   qualitySheetTitle: {
-    color: 'rgba(255,255,255,0.50)',
+    color: "rgba(255,255,255,0.50)",
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     paddingHorizontal: 4,
     paddingBottom: 2,
   },
@@ -2537,35 +2774,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: "rgba(255,255,255,0.07)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    borderColor: "rgba(255,255,255,0.10)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 8,
   },
   qualityPillActive: {
-    borderColor: 'rgba(255,106,0,0.70)',
-    backgroundColor: 'rgba(255,106,0,0.18)',
+    borderColor: "rgba(255,106,0,0.70)",
+    backgroundColor: "rgba(255,106,0,0.18)",
   },
   qualityText: {
-    color: 'rgba(255,255,255,0.86)',
+    color: "rgba(255,255,255,0.86)",
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: "800",
     flex: 1,
   },
   qualityTextActive: { color: Colors.accent },
   qualityHdTag: {
-    backgroundColor: '#FF0000',
+    backgroundColor: "#FF0000",
     borderRadius: 3,
     paddingHorizontal: 4,
     paddingVertical: 1,
   },
   qualityHdTagText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 8,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 0.5,
   },
   qualityActiveDot: {
@@ -2581,33 +2818,33 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   searchBlur: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 16,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.04)",
   },
   searchInput: {
     flex: 1,
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     padding: 0,
   },
   searchClearBtn: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: "rgba(255,255,255,0.12)",
   },
 
   rowItem: {
@@ -2615,40 +2852,50 @@ const styles = StyleSheet.create({
     paddingTop: 14,
   },
   rowThumbWrap: {
-    width: '100%',
+    width: "100%",
     aspectRatio: 16 / 9,
     borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: "rgba(255,255,255,0.10)",
   },
   rowThumbWrapActive: {
-    borderColor: 'rgba(255,106,0,0.60)',
+    borderColor: "rgba(255,106,0,0.60)",
   },
-  rowThumb: { width: '100%', height: '100%' },
+  rowThumb: { width: "100%", height: "100%" },
   rowThumbOverlay: {
     ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.10)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.10)",
   },
   rowPlayBadge: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
   },
   rowPlayImg: {
     width: 60,
     height: 60,
   },
   rowMeta: { paddingTop: 10, paddingBottom: 2 },
-  rowTitle: { color: '#fff', fontSize: 14, fontWeight: '900' },
-  rowArtist: { marginTop: 4, color: 'rgba(255,255,255,0.70)', fontSize: 12, fontWeight: '800' },
-  rowSub: { marginTop: 4, color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '800' },
+  rowTitle: { color: "#fff", fontSize: 14, fontWeight: "900" },
+  rowArtist: {
+    marginTop: 4,
+    color: "rgba(255,255,255,0.70)",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  rowSub: {
+    marginTop: 4,
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 11,
+    fontWeight: "800",
+  },
 
   relatedWrap: {
     paddingHorizontal: 16,
@@ -2657,212 +2904,236 @@ const styles = StyleSheet.create({
     marginTop: 26,
   },
   relatedTitle: {
-    color: 'rgba(255,255,255,0.85)',
+    color: "rgba(255,255,255,0.85)",
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: "900",
     marginBottom: 10,
   },
   relatedRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
     marginBottom: 10,
     padding: 10,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: "rgba(255,255,255,0.04)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: "rgba(255,255,255,0.08)",
   },
   relatedThumb: {
     width: 92,
     height: Math.round(92 * (9 / 16)),
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: "rgba(255,255,255,0.06)",
   },
-  relatedMeta: { flex: 1, justifyContent: 'center' },
-  relatedRowTitle: { color: '#fff', fontSize: 13, fontWeight: '900' },
-  relatedRowSub: { marginTop: 4, color: 'rgba(255,255,255,0.62)', fontSize: 11, fontWeight: '800' },
+  relatedMeta: { flex: 1, justifyContent: "center" },
+  relatedRowTitle: { color: "#fff", fontSize: 13, fontWeight: "900" },
+  relatedRowSub: {
+    marginTop: 4,
+    color: "rgba(255,255,255,0.62)",
+    fontSize: 11,
+    fontWeight: "800",
+  },
 
   skelRow: { paddingHorizontal: 16, paddingTop: 14 },
   skelThumb: {
-    width: '100%',
+    width: "100%",
     aspectRatio: 16 / 9,
     borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.06)",
   },
   skelMeta: { paddingTop: 10 },
-  skelLineLg: { height: 14, borderRadius: 8, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)' },
-  skelLineSm: { marginTop: 8, height: 12, width: '70%', borderRadius: 8, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)' },
-  skelLineXs: { marginTop: 8, height: 11, width: '52%', borderRadius: 8, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)' },
+  skelLineLg: {
+    height: 14,
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  skelLineSm: {
+    marginTop: 8,
+    height: 12,
+    width: "70%",
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  skelLineXs: {
+    marginTop: 8,
+    height: 11,
+    width: "52%",
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
   skelShimmer: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     bottom: 0,
     width: 120,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    transform: [{ skewX: '-20deg' } as any],
+    backgroundColor: "rgba(255,255,255,0.06)",
+    transform: [{ skewX: "-20deg" } as any],
   },
 
   emptyText: {
     marginTop: 16,
-    color: 'rgba(255,255,255,0.6)',
+    color: "rgba(255,255,255,0.6)",
     fontSize: 14,
-    fontWeight: '700',
-    textAlign: 'center',
+    fontWeight: "700",
+    textAlign: "center",
   },
 
   // Quality settings icon + HD badge wrapper
   qualityIconWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   hdBadge: {
-    position: 'absolute',
+    position: "absolute",
     top: -6,
     right: -10,
-    backgroundColor: '#FF0000',
+    backgroundColor: "#FF0000",
     borderRadius: 4,
     paddingHorizontal: 3,
     paddingVertical: 1,
     minWidth: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
     shadowOpacity: 0.4,
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },
     elevation: 4,
   },
   hdBadgeText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 8,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 0.5,
   },
-  
+
   // Custom Modal Styles for Lock Flow
-  modalBackdrop: { 
-    flex: 1, 
-    backgroundColor: 'rgba(5,5,15,0.92)', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    padding: 24 
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(5,5,15,0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
   },
-  modalContainer: { 
-    width: '100%', 
-    maxWidth: 360, 
-    backgroundColor: '#1C1C24', 
-    borderRadius: 32, 
-    padding: 30, 
-    alignItems: 'center', 
-    borderWidth: 1, 
-    borderColor: 'rgba(255,255,255,0.08)',
-    shadowColor: '#000',
+  modalContainer: {
+    width: "100%",
+    maxWidth: 360,
+    backgroundColor: "#1C1C24",
+    borderRadius: 32,
+    padding: 30,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 20 },
     shadowOpacity: 0.6,
     shadowRadius: 32,
     elevation: 24,
   },
-  modalIconWrap: { 
-    width: 76, 
-    height: 76, 
-    borderRadius: 38, 
-    backgroundColor: 'rgba(255,255,255,0.05)', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
+  modalIconWrap: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 22,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: "rgba(255,255,255,0.1)",
   },
-  modalTitle: { 
-    color: '#fff', 
-    fontSize: 26, 
-    fontWeight: '900', 
-    marginBottom: 12, 
-    textAlign: 'center', 
-    letterSpacing: -0.5 
+  modalTitle: {
+    color: "#fff",
+    fontSize: 26,
+    fontWeight: "900",
+    marginBottom: 12,
+    textAlign: "center",
+    letterSpacing: -0.5,
   },
-  modalMessage: { 
-    color: 'rgba(255,255,255,0.65)', 
-    fontSize: 15, 
-    textAlign: 'center', 
-    marginHorizontal: 4, 
-    marginBottom: 32, 
+  modalMessage: {
+    color: "rgba(255,255,255,0.65)",
+    fontSize: 15,
+    textAlign: "center",
+    marginHorizontal: 4,
+    marginBottom: 32,
     lineHeight: 24,
-    fontWeight: '600',
+    fontWeight: "600",
   },
-  modalPrimaryBtn: { 
-    width: '100%', 
-    height: 60, 
-    borderRadius: 20, 
-    overflow: 'hidden', 
+  modalPrimaryBtn: {
+    width: "100%",
+    height: 60,
+    borderRadius: 20,
+    overflow: "hidden",
     marginBottom: 14,
-    shadowColor: '#FF7A18',
+    shadowColor: "#FF7A18",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
   },
-  modalBtnGradient: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
+  modalBtnGradient: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  modalPrimaryBtnText: { 
-    color: '#fff', 
-    fontSize: 17, 
-    fontWeight: '900', 
-    letterSpacing: 0.5 
+  modalPrimaryBtnText: {
+    color: "#fff",
+    fontSize: 17,
+    fontWeight: "900",
+    letterSpacing: 0.5,
   },
-  modalSecondaryBtn: { 
-    width: '100%', 
-    height: 52, 
-    borderRadius: 20, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
+  modalSecondaryBtn: {
+    width: "100%",
+    height: 52,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  modalSecondaryBtnText: { 
-    color: 'rgba(255,255,255,0.5)', 
-    fontSize: 15, 
-    fontWeight: '700' 
+  modalSecondaryBtnText: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 15,
+    fontWeight: "700",
   },
   benefitsList: {
-    width: '100%',
+    width: "100%",
     marginBottom: 24,
     gap: 12,
   },
   benefitItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   benefitText: {
-    color: 'rgba(255,255,255,0.8)',
+    color: "rgba(255,255,255,0.8)",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   trustBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     marginBottom: 16,
     opacity: 0.6,
   },
   trustText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   lockBadgeMini: {
-    position: 'absolute',
+    position: "absolute",
     top: 8,
     right: 8,
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: "rgba(255,255,255,0.2)",
   },
 });

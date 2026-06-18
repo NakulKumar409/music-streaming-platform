@@ -97,8 +97,7 @@ router.get("/search", async (req, res) => {
             COALESCE(is_verified, verified, false) as is_verified,
             profile_image_url,
             COALESCE(status, 'ACTIVE') as status,
-            COALESCE(subscription_price, 0) as subscription_price,
-            COALESCE(genre, '') as genre
+            COALESCE(subscription_price, 0) as subscription_price
            FROM users
            WHERE UPPER(role) = 'ARTIST'
              AND COALESCE(is_deleted, false) = false
@@ -116,8 +115,7 @@ router.get("/search", async (req, res) => {
             COALESCE(is_verified, verified, false) as is_verified,
             profile_image_url,
             COALESCE(status, 'ACTIVE') as status,
-            COALESCE(subscription_price, 0) as subscription_price,
-            COALESCE(genre, '') as genre
+            COALESCE(subscription_price, 0) as subscription_price
            FROM users
            WHERE UPPER(role) = 'ARTIST'
              AND COALESCE(is_deleted, false) = false
@@ -136,7 +134,6 @@ router.get("/search", async (req, res) => {
         profileImageUrl: toAbsoluteUrl(req, row.profile_image_url),
         status: (row.status ?? 'ACTIVE').toString(),
         subscriptionPrice: Number(row.subscription_price ?? 0),
-        genre: (row.genre ?? '').toString(),
       }));
 
       const lastArtist = artists[artists.length - 1];
@@ -170,8 +167,7 @@ router.get("/", (req, res) => {
           COALESCE(is_verified, verified, false) as is_verified,
           profile_image_url,
           COALESCE(status, 'ACTIVE') as status,
-          COALESCE(subscription_price, 0) as subscription_price,
-          COALESCE(genre, '') as genre
+          COALESCE(subscription_price, 0) as subscription_price
          FROM users
          WHERE UPPER(role) = 'ARTIST'
            AND COALESCE(is_deleted, false) = false
@@ -189,7 +185,6 @@ router.get("/", (req, res) => {
         profileImageUrl: toAbsoluteUrl(req, row.profile_image_url),
         status: (row.status ?? 'ACTIVE').toString(),
         subscriptionPrice: Number(row.subscription_price ?? 0),
-        genre: (row.genre ?? '').toString(),
       }));
 
       return res.json({ success: true, artists });
@@ -202,8 +197,7 @@ router.get("/", (req, res) => {
         `SELECT id,
           name,
           profile_image_url,
-          COALESCE(subscription_price, 0) as subscription_price,
-          COALESCE(genre, '') as genre
+          COALESCE(subscription_price, 0) as subscription_price
          FROM users
          WHERE UPPER(role) = 'ARTIST'
            AND COALESCE(is_deleted, false) = false
@@ -219,7 +213,6 @@ router.get("/", (req, res) => {
         profileImageUrl: toAbsoluteUrl(req, row.profile_image_url),
         status: 'ACTIVE',
         subscriptionPrice: Number(row.subscription_price ?? 0),
-        genre: (row.genre ?? '').toString(),
       }));
 
       return res.json({ success: true, artists });
@@ -252,8 +245,7 @@ router.get("/:artistId", (req, res) => {
           social_links,
           COALESCE(status, 'ACTIVE') as status,
           COALESCE(subscription_price, 0) as subscription_price,
-          COALESCE(subscription_features, '[]'::jsonb) as subscription_features,
-          COALESCE(genre, '') as genre
+          COALESCE(subscription_features, '[]'::jsonb) as subscription_features
          FROM users
          WHERE id = $1
            AND UPPER(role) = 'ARTIST'
@@ -290,7 +282,6 @@ router.get("/:artistId", (req, res) => {
           status: (row.status ?? 'ACTIVE').toString(),
           subscriptionPrice: Number(row.subscription_price ?? 0),
           subscriptionFeatures: Array.isArray(row.subscription_features) ? row.subscription_features : [],
-          genre: (row.genre ?? '').toString(),
         },
       });
     } catch (err: any) {
@@ -304,8 +295,7 @@ router.get("/:artistId", (req, res) => {
           artist_bio,
           social_links,
           COALESCE(subscription_price, 0) as subscription_price,
-          COALESCE(subscription_features, '[]'::jsonb) as subscription_features,
-          COALESCE(genre, '') as genre
+          COALESCE(subscription_features, '[]'::jsonb) as subscription_features
          FROM users
          WHERE id = $1
            AND UPPER(role) = 'ARTIST'
@@ -341,7 +331,6 @@ router.get("/:artistId", (req, res) => {
           status: 'ACTIVE',
           subscriptionPrice: Number(row.subscription_price ?? 0),
           subscriptionFeatures: Array.isArray(row.subscription_features) ? row.subscription_features : [],
-          genre: (row.genre ?? '').toString(),
         },
       });
     }
