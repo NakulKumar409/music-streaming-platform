@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -8,21 +8,20 @@ import {
   Text,
   TextInput,
   View,
-} from 'react-native';
+} from "react-native";
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search as SearchIcon, X, User } from 'lucide-react-native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import type { AxiosRequestConfig } from 'axios';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { Search as SearchIcon, User, X } from "lucide-react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Colors } from '../theme';
-import { api } from '../services/api';
-import { useMediaPlayer } from '../providers/MediaPlayerProvider';
-import { useQuery } from '@tanstack/react-query';
-import { getOptimizedImageUrl } from '../utils/cloudinary';
+import { useQuery } from "@tanstack/react-query";
+import { useMediaPlayer } from "../providers/MediaPlayerProvider";
+import { api } from "../services/api";
+import { Colors } from "../theme";
+import { getOptimizedImageUrl } from "../utils/cloudinary";
 
 type Artist = {
   id: number;
@@ -40,60 +39,72 @@ type SearchHistoryItem = {
   created_at: string;
 };
 
-const RECENT_SEARCHES_STORAGE_KEY = 'recentSearches';
+const RECENT_SEARCHES_STORAGE_KEY = "recentSearches";
 
-const ArtistItem = React.memo(({ item, onPress }: { item: Artist; onPress: (item: Artist) => void }) => (
-  <Pressable style={styles.artistRow} onPress={() => onPress(item)}>
-    <View style={styles.artistThumbWrap}>
-      {item.profileImageUrl ? (
-        <Image source={{ uri: getOptimizedImageUrl(item.profileImageUrl) }} style={styles.artistThumb} />
-      ) : (
-        <View style={styles.artistThumbPlaceholder}>
-          <User color="rgba(255,255,255,0.5)" size={24} />
-        </View>
-      )}
-    </View>
-    <View style={styles.artistInfo}>
-      <Text style={styles.artistName} numberOfLines={1}>
-        {item.name}
-      </Text>
-      {item.genre ? (
-        <Text style={styles.artistGenre} numberOfLines={1}>
-          {item.genre}
+const ArtistItem = React.memo(
+  ({ item, onPress }: { item: Artist; onPress: (item: Artist) => void }) => (
+    <Pressable style={styles.artistRow} onPress={() => onPress(item)}>
+      <View style={styles.artistThumbWrap}>
+        {item.profileImageUrl ? (
+          <Image
+            source={{ uri: getOptimizedImageUrl(item.profileImageUrl) }}
+            style={styles.artistThumb}
+          />
+        ) : (
+          <View style={styles.artistThumbPlaceholder}>
+            <User color="rgba(255,255,255,0.5)" size={24} />
+          </View>
+        )}
+      </View>
+      <View style={styles.artistInfo}>
+        <Text style={styles.artistName} numberOfLines={1}>
+          {item.name}
         </Text>
-      ) : null}
-    </View>
-  </Pressable>
-));
+        {item.genre ? (
+          <Text style={styles.artistGenre} numberOfLines={1}>
+            {item.genre}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
+  )
+);
 
-const HistoryItem = React.memo(({ item, onPress, onDelete }: { item: SearchHistoryItem; onPress: (item: SearchHistoryItem) => void; onDelete: (id: number) => void }) => (
-  <BlurView intensity={18} tint="dark" style={styles.historyRow}>
-    <Pressable
-      style={{ flex: 1 }}
-      onPress={() => onPress(item)}
-    >
-      <Text style={styles.historyText} numberOfLines={1}>
-        {item.query}
-      </Text>
-    </Pressable>
-    <Pressable
-      accessibilityLabel="Delete recent search"
-      style={styles.historyDeleteBtn}
-      onPress={() => onDelete(item.id)}
-    >
-      <X color="#fff" size={16} />
-    </Pressable>
-  </BlurView>
-));
+const HistoryItem = React.memo(
+  ({
+    item,
+    onPress,
+    onDelete,
+  }: {
+    item: SearchHistoryItem;
+    onPress: (item: SearchHistoryItem) => void;
+    onDelete: (id: number) => void;
+  }) => (
+    <BlurView intensity={18} tint="dark" style={styles.historyRow}>
+      <Pressable style={{ flex: 1 }} onPress={() => onPress(item)}>
+        <Text style={styles.historyText} numberOfLines={1}>
+          {item.query}
+        </Text>
+      </Pressable>
+      <Pressable
+        accessibilityLabel="Delete recent search"
+        style={styles.historyDeleteBtn}
+        onPress={() => onDelete(item.id)}>
+        <X color="#fff" size={16} />
+      </Pressable>
+    </BlurView>
+  )
+);
 
 export default function SearchScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
   const { currentItem } = useMediaPlayer();
-  const activeAudioMeta = currentItem?.mediaType === 'audio' ? currentItem : null;
+  const activeAudioMeta =
+    currentItem?.mediaType === "audio" ? currentItem : null;
   const hasActiveAudio = !!activeAudioMeta;
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<SearchHistoryItem[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -103,7 +114,7 @@ export default function SearchScreen({ navigation }: any) {
   // Debounce: update debouncedQuery 300ms after user stops typing
   useEffect(() => {
     if (searchQuery.trim().length < 2) {
-      setDebouncedQuery('');
+      setDebouncedQuery("");
       return;
     }
     const timer = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
@@ -122,7 +133,7 @@ export default function SearchScreen({ navigation }: any) {
             .map((q: any, idx: number) => ({
               id: -(idx + 1),
               user_id: 0,
-              query: (q ?? '').toString(),
+              query: (q ?? "").toString(),
               created_at: new Date().toISOString(),
             }))
             .filter((x) => x.query.trim().length > 0);
@@ -135,23 +146,29 @@ export default function SearchScreen({ navigation }: any) {
   }, []);
 
   // Persist recent searches to AsyncStorage
-  const persistHistoryFallback = useCallback(async (items: SearchHistoryItem[]) => {
-    try {
-      const queries = items
-        .map((x) => x.query)
-        .filter((q) => q.trim().length > 0)
-        .slice(0, 10);
-      await AsyncStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, JSON.stringify(queries));
-    } catch {
-      // ignore
-    }
-  }, []);
+  const persistHistoryFallback = useCallback(
+    async (items: SearchHistoryItem[]) => {
+      try {
+        const queries = items
+          .map((x) => x.query)
+          .filter((q) => q.trim().length > 0)
+          .slice(0, 10);
+        await AsyncStorage.setItem(
+          RECENT_SEARCHES_STORAGE_KEY,
+          JSON.stringify(queries)
+        );
+      } catch {
+        // ignore
+      }
+    },
+    []
+  );
 
   // Fetch search history from API
   const fetchHistory = useCallback(async () => {
     setIsLoadingHistory(true);
     try {
-      const res = await api.get('/search/history');
+      const res = await api.get("/search/history");
       const items = (res.data?.items ?? []) as SearchHistoryItem[];
       setRecentSearches(items);
       await persistHistoryFallback(items);
@@ -175,7 +192,7 @@ export default function SearchScreen({ navigation }: any) {
       const q = query.trim();
       if (!q) return;
       try {
-        await api.post('/search/history', { query: q });
+        await api.post("/search/history", { query: q });
         await fetchHistory();
       } catch {
         // ignore
@@ -204,13 +221,8 @@ export default function SearchScreen({ navigation }: any) {
   );
 
   // React Query: fetch artists for debouncedQuery
-  // staleTime is inherited from the global QueryClient default (5 min)
-  // React Query provides an AbortSignal via queryFn context — no manual AbortController needed
-  const {
-    data: searchData,
-    isFetching: isLoading,
-  } = useQuery({
-    queryKey: ['artistSearch', debouncedQuery],
+  const { data: artists = [], isFetching: isLoading } = useQuery({
+    queryKey: ["artistSearch", debouncedQuery],
     queryFn: async ({ signal }) => {
       const res = await api.get(
         `/artists/search?q=${encodeURIComponent(debouncedQuery)}`,
@@ -222,19 +234,12 @@ export default function SearchScreen({ navigation }: any) {
     staleTime: 5 * 60 * 1000,
   });
 
-  const artists = searchData ?? [];
-
-  // Cleanup on unmount (React Query handles in-flight cancellation via signal)
-  useEffect(() => {
-    return () => { /* no-op — React Query cancels via AbortSignal */ };
-  }, []);
-
   // Navigate to artist profile
   const navigateToArtist = useCallback(
     (artist: Artist) => {
       saveHistory(artist.name).catch(() => undefined);
-      navigation.navigate('HomeTab', {
-        screen: 'Artist',
+      navigation.navigate("HomeTab", {
+        screen: "Artist",
         params: { artistId: artist.id },
       });
     },
@@ -243,7 +248,7 @@ export default function SearchScreen({ navigation }: any) {
 
   // Clear search input
   const onClearSearch = useCallback(() => {
-    setSearchQuery('');
+    setSearchQuery("");
     inputRef.current?.focus();
   }, []);
 
@@ -282,8 +287,7 @@ export default function SearchScreen({ navigation }: any) {
       colors={Colors.backgroundGradient}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={styles.gradientBackground}
-    >
+      style={styles.gradientBackground}>
       <SafeAreaView style={styles.container}>
         {/* Search Header */}
         <View>
@@ -317,11 +321,13 @@ export default function SearchScreen({ navigation }: any) {
           {/* Section Title */}
           {showRecent ? (
             <Text style={styles.sectionTitle}>
-              {isLoadingHistory ? 'Recent Searches…' : 'Recent Searches'}
+              {isLoadingHistory ? "Recent Searches…" : "Recent Searches"}
             </Text>
           ) : showResults ? (
             <Text style={styles.sectionTitle}>
-              {isLoading ? 'Searching…' : `${artists.length} Artist${artists.length !== 1 ? 's' : ''}`}
+              {isLoading
+                ? "Searching…"
+                : `${artists.length} Artist${artists.length !== 1 ? "s" : ""}`}
             </Text>
           ) : null}
         </View>
@@ -365,11 +371,15 @@ export default function SearchScreen({ navigation }: any) {
               showNoResults ? (
                 <View style={styles.emptyWrap}>
                   <Text style={styles.emptyTitle}>No artist found</Text>
-                  <Text style={styles.emptySub}>Try a different spelling or search term.</Text>
+                  <Text style={styles.emptySub}>
+                    Try a different spelling or search term.
+                  </Text>
                 </View>
               ) : searchQuery.trim().length === 1 ? (
                 <View style={styles.emptyWrap}>
-                  <Text style={styles.emptySub}>Type at least 2 characters to search</Text>
+                  <Text style={styles.emptySub}>
+                    Type at least 2 characters to search
+                  </Text>
                 </View>
               ) : (
                 <View style={styles.emptySpacer} />
@@ -395,29 +405,29 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   list: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     flex: 1,
   },
   searchBar: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 12,
-    backgroundColor: 'rgba(0,0,0,0.50)',
+    backgroundColor: "rgba(0,0,0,0.50)",
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.10)',
+    borderBottomColor: "rgba(255,255,255,0.10)",
   },
   searchPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     height: 44,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: "rgba(0,0,0,0.35)",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderColor: "rgba(255,255,255,0.22)",
   },
   searchInput: {
     flex: 1,
@@ -430,32 +440,32 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.35)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderColor: "rgba(255,255,255,0.22)",
   },
   sectionTitle: {
     color: Colors.textPrimary,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 10,
-    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowColor: "rgba(0,0,0,0.35)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
   artistRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderRadius: 16,
     padding: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: "rgba(255,255,255,0.06)",
   },
   artistThumbWrap: {
     width: 56,
@@ -466,22 +476,22 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: "rgba(255,255,255,0.04)",
   },
   artistThumbPlaceholder: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   artistInfo: {
     flex: 1,
   },
   artistName: {
-    color: '#fff',
-    fontWeight: '700',
+    color: "#fff",
+    fontWeight: "700",
     fontSize: 15,
   },
   artistGenre: {
@@ -490,47 +500,47 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   historyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    overflow: 'hidden',
+    borderColor: "rgba(255,255,255,0.06)",
+    overflow: "hidden",
   },
   historyText: {
     color: Colors.textPrimary,
-    fontWeight: '700',
+    fontWeight: "700",
     fontSize: 14,
   },
   historyDeleteBtn: {
     width: 34,
     height: 34,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.28)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.28)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: "rgba(255,255,255,0.14)",
     marginLeft: 10,
   },
   emptyWrap: {
     paddingTop: 56,
     paddingHorizontal: 24,
-    alignItems: 'center',
+    alignItems: "center",
   },
   emptyTitle: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   emptySub: {
     marginTop: 10,
-    color: 'rgba(255,255,255,0.55)',
-    textAlign: 'center',
+    color: "rgba(255,255,255,0.55)",
+    textAlign: "center",
     fontSize: 13,
     lineHeight: 18,
   },
@@ -538,12 +548,12 @@ const styles = StyleSheet.create({
     height: 180,
   },
   loadingOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 100,
     left: 0,
     right: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 20,
   },
 });

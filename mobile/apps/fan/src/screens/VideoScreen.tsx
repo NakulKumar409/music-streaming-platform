@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
   Alert,
+  Animated,
   AppState,
   Dimensions,
   FlatList,
@@ -21,46 +21,60 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   View,
-} from 'react-native';
+} from "react-native";
 
-import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import Slider from "@react-native-community/slider";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from "@react-navigation/native";
+import { useEventListener } from "expo";
+import { setAudioModeAsync } from "expo-audio";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import * as ScreenOrientation from "expo-screen-orientation";
+import { useVideoPlayer, VideoView } from "expo-video";
 import {
   AlertTriangle,
   ArrowLeft,
+  BadgeCheck,
+  Crown,
+  Lock,
   Maximize,
   Search,
   Settings,
+  ShieldCheck,
   X,
-} from 'lucide-react-native';
-import { VideoView, useVideoPlayer, VideoPlayer } from 'expo-video';
-import { useEventListener } from 'expo';
-import { setAudioModeAsync } from 'expo-audio';
-import { BlurView } from 'expo-blur';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Slider from '@react-native-community/slider';
-import Svg, { Path } from 'react-native-svg';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Crown, Star, Lock, BadgeCheck, ShieldCheck } from 'lucide-react-native';
-import * as ScreenOrientation from 'expo-screen-orientation';
+} from "lucide-react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import Svg, { Path } from "react-native-svg";
 
-import { apiV1 } from '../services/api';
-import { contentApi } from '../services/api';
-import * as streamService from '../services/streamService';
-import { userService } from '../services/userService';
-import { startHeartbeat, stopHeartbeat } from '../services/heartbeatService';
-import { Colors } from '../theme';
-import { useMediaPlayer } from '../providers/MediaPlayerProvider';
-import { getOptimizedImageUrl } from '../utils/cloudinary';
-import { formatDurationLabel, hasFiniteDuration, toFiniteDurationMs } from '../utils/mediaTime';
-import { isStreamingUrlExpiringSoon, decodeJwtExpMsFromUrl } from '../utils/streaming';
-import PauseButtonImg from '../pausebuttton.png';
-import PlayButtonImg from '../playbutton.png';
+import PauseButtonImg from "../pausebuttton.png";
+import PlayButtonImg from "../playbutton.png";
+import { useMediaPlayer } from "../providers/MediaPlayerProvider";
+import { apiV1, contentApi } from "../services/api";
+import { startHeartbeat, stopHeartbeat } from "../services/heartbeatService";
+import * as streamService from "../services/streamService";
+import { userService } from "../services/userService";
+import { Colors } from "../theme";
+import { getOptimizedImageUrl } from "../utils/cloudinary";
+import {
+  formatDurationLabel,
+  hasFiniteDuration,
+  toFiniteDurationMs,
+} from "../utils/mediaTime";
+import {
+  decodeJwtExpMsFromUrl,
+  isStreamingUrlExpiringSoon,
+} from "../utils/streaming";
 
-import { LockedContentOverlay } from '../ui/SubscriptionUI';
-
-const REPORTED_CONTENT_STORAGE_KEY = 'reportedContentIds';
+const REPORTED_CONTENT_STORAGE_KEY = "reportedContentIds";
 
 type ApiContentItem = {
   id: string | number;
@@ -85,7 +99,7 @@ type ApiContentItem = {
   dislikeCount?: number | null;
   storageKey?: string | null;
   storage_provider?: string | null;
-  userReaction?: 'like' | 'dislike' | null;
+  userReaction?: "like" | "dislike" | null;
 };
 
 type VideoCard = {
@@ -103,24 +117,32 @@ type VideoCard = {
   viewCount?: number | null;
   likeCount?: number | null;
   dislikeCount?: number | null;
-  userReaction?: 'like' | 'dislike' | null;
+  userReaction?: "like" | "dislike" | null;
   isLocked?: boolean;
 };
 
 function toCount(v: unknown): number | null {
-  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
-  if (typeof v === 'string') {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string") {
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
   }
   return null;
 }
 
-function EngagementIcon({ name, size = 18, color = '#fff' }: { name: 'like' | 'dislike' | 'report'; size?: number; color?: string }) {
+function EngagementIcon({
+  name,
+  size = 18,
+  color = "#fff",
+}: {
+  name: "like" | "dislike" | "report";
+  size?: number;
+  color?: string;
+}) {
   const s = size;
   const strokeWidth = 1.9;
 
-  if (name === 'like') {
+  if (name === "like") {
     return (
       <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
         <Path
@@ -134,7 +156,7 @@ function EngagementIcon({ name, size = 18, color = '#fff' }: { name: 'like' | 'd
     );
   }
 
-  if (name === 'dislike') {
+  if (name === "dislike") {
     return (
       <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
         <Path
@@ -176,9 +198,9 @@ function EngagementIcon({ name, size = 18, color = '#fff' }: { name: 'like' | 'd
 }
 
 const FALLBACK_ARTWORK =
-  'https://images.unsplash.com/photo-1526948128573-703ee1aeb6fa?auto=format&fit=crop&w=1400&q=80';
+  "https://images.unsplash.com/photo-1526948128573-703ee1aeb6fa?auto=format&fit=crop&w=1400&q=80";
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const HEADER_ASPECT = 16 / 9;
 const HEADER_HEIGHT = Math.round(SCREEN_WIDTH / HEADER_ASPECT);
 const MINI_PLAYER_W = 180;
@@ -206,49 +228,47 @@ function hashColor(input: string): string {
 }
 
 function formatCompactViews(v: number | null | undefined): string {
-  const n = typeof v === 'number' && Number.isFinite(v) ? v : null;
-  if (n === null) return '— views';
+  const n = typeof v === "number" && Number.isFinite(v) ? v : null;
+  if (n === null) return "— views";
   if (n < 1000) return `${n} views`;
-  if (n < 1_000_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}K views`;
-  if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M views`;
-  return `${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B views`;
+  if (n < 1_000_000)
+    return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K views`;
+  if (n < 1_000_000_000)
+    return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M views`;
+  return `${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B views`;
 }
 
 function formatDateLabel(raw?: string | null): string {
-  if (!raw) return '';
+  if (!raw) return "";
   const d = new Date(raw);
-  if (!Number.isFinite(d.getTime())) return '';
+  if (!Number.isFinite(d.getTime())) return "";
   const now = Date.now();
   const diff = Math.max(0, now - d.getTime());
   const day = 24 * 60 * 60 * 1000;
   const days = Math.floor(diff / day);
-  if (days <= 0) return 'Today';
-  if (days === 1) return '1 day ago';
+  if (days <= 0) return "Today";
+  if (days === 1) return "1 day ago";
   if (days < 7) return `${days} days ago`;
   const weeks = Math.floor(days / 7);
-  if (weeks === 1) return '1 week ago';
+  if (weeks === 1) return "1 week ago";
   if (weeks < 5) return `${weeks} weeks ago`;
   const months = Math.floor(days / 30);
-  if (months === 1) return '1 month ago';
+  if (months === 1) return "1 month ago";
   if (months < 12) return `${months} months ago`;
   const years = Math.floor(days / 365);
-  return years <= 1 ? '1 year ago' : `${years} years ago`;
+  return years <= 1 ? "1 year ago" : `${years} years ago`;
 }
 
 function normalizeCategory(raw: unknown): string {
-  const c = (raw ?? '').toString().trim();
-  return c || 'Trending';
+  const c = (raw ?? "").toString().trim();
+  return c || "Trending";
 }
 
 export default function VideoScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const tabBarHeight = useBottomTabBarHeight();
-  const {
-    currentItem,
-    state: playerState,
-    togglePlayPause,
-  } = useMediaPlayer();
+  const { currentItem, state: playerState, togglePlayPause } = useMediaPlayer();
 
   const insets = useSafeAreaInsets();
 
@@ -260,17 +280,30 @@ export default function VideoScreen() {
   const [items, setItems] = useState<VideoCard[]>([]);
 
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
-  const [lastAttemptedHdQuality, setLastAttemptedHdQuality] = useState<streamService.VideoQuality | null>(null);
-  const [lastAttemptedVideo, setLastAttemptedVideo] = useState<VideoCard | null>(null);
+  const [lastAttemptedHdQuality, setLastAttemptedHdQuality] =
+    useState<streamService.VideoQuality | null>(null);
+  const [lastAttemptedVideo, setLastAttemptedVideo] =
+    useState<VideoCard | null>(null);
 
-  const [activeVideoMeta, setActiveVideoMeta] = useState<VideoCard | null>(null);
-  const [activePlaybackUrl, setActivePlaybackUrl] = useState<string | null>(null);
+  const [activeVideoMeta, setActiveVideoMeta] = useState<VideoCard | null>(
+    null
+  );
+  const [activePlaybackUrl, setActivePlaybackUrl] = useState<string | null>(
+    null
+  );
   const [loadingPlaybackUrl, setLoadingPlaybackUrl] = useState(false);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [reactionStateById, setReactionStateById] = useState<
-    Record<string, { reaction: 'like' | 'dislike' | null; likeDelta: number; dislikeDelta: number }>
+    Record<
+      string,
+      {
+        reaction: "like" | "dislike" | null;
+        likeDelta: number;
+        dislikeDelta: number;
+      }
+    >
   >({});
 
   const [isVideoReady, setIsVideoReady] = useState(false);
@@ -283,7 +316,9 @@ export default function VideoScreen() {
   const upNextTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [showControls, setShowControls] = useState(true);
-  const controlsHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const controlsHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const playedOnceRef = useRef(false);
 
   const [isSeeking, setIsSeeking] = useState(false);
@@ -294,17 +329,22 @@ export default function VideoScreen() {
   const durationSetForUrlRef = useRef<string | null>(null);
 
   const [showQualitySheet, setShowQualitySheet] = useState(false);
-  const [selectedQuality, setSelectedQuality] = useState<streamService.VideoQuality>('Auto');
+  const [selectedQuality, setSelectedQuality] =
+    useState<streamService.VideoQuality>("Auto");
   const [isHD, setIsHD] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   // Flag to distinguish quality-only URL changes from full video switches
   const isQualitySwitchRef = useRef(false);
 
-  const [maxAllowedResolution, setMaxAllowedResolution] = useState<streamService.VideoQuality>('240p');
+  const [maxAllowedResolution, setMaxAllowedResolution] =
+    useState<streamService.VideoQuality>("240p");
   const [isStreamingHdAllowed, setIsStreamingHdAllowed] = useState(false);
 
   const [showHdLockModal, setShowHdLockModal] = useState(false);
-  const [showArtistLockModal, setShowArtistLockModal] = useState<{ visible: boolean; video: VideoCard | null }>({
+  const [showArtistLockModal, setShowArtistLockModal] = useState<{
+    visible: boolean;
+    video: VideoCard | null;
+  }>({
     visible: false,
     video: null,
   });
@@ -316,22 +356,25 @@ export default function VideoScreen() {
   useEffect(() => {
     (async () => {
       const res = await userService.checkStreamingQuality();
-      const maxRes = (res?.maxResolution ?? '240p').toString() as streamService.VideoQuality;
+      const maxRes = (
+        res?.maxResolution ?? "240p"
+      ).toString() as streamService.VideoQuality;
       setMaxAllowedResolution(maxRes);
-      setIsStreamingHdAllowed(res?.quality === 'HD');
+      setIsStreamingHdAllowed(res?.quality === "HD");
 
       // If user is not allowed HD, ensure UI doesn't get stuck in an HD selection.
-      if (res?.quality !== 'HD') {
+      if (res?.quality !== "HD") {
         setSelectedQuality((prev) => {
-          if (prev === '720p' || prev === '1080p' || prev === 'Auto') return '240p';
+          if (prev === "720p" || prev === "1080p" || prev === "Auto")
+            return "240p";
           return prev;
         });
         setIsHD(false);
       }
     })().catch(() => {
-      setMaxAllowedResolution('240p');
+      setMaxAllowedResolution("240p");
       setIsStreamingHdAllowed(false);
-      setSelectedQuality('240p');
+      setSelectedQuality("240p");
       setIsHD(false);
     });
   }, []);
@@ -340,7 +383,7 @@ export default function VideoScreen() {
   useEffect(() => {
     // Only respond to orientation changes when video is active and not manually controlled
     if (!activePlaybackUrl) return;
-    
+
     // Sync fullscreen state with actual orientation
     // This handles the case when user physically rotates device
     if (isLandscape !== isFullscreen) {
@@ -350,13 +393,17 @@ export default function VideoScreen() {
 
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportSubmitting, setReportSubmitting] = useState(false);
-  const [reportedContentIds, setReportedContentIds] = useState<Record<string, boolean>>({});
+  const [reportedContentIds, setReportedContentIds] = useState<
+    Record<string, boolean>
+  >({});
 
-  const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState(HEADER_HEIGHT + 92);
+  const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState(
+    HEADER_HEIGHT + 92
+  );
   const headerHeightRef = useRef<number>(HEADER_HEIGHT + 92);
   const hasMeasuredHeaderRef = useRef(false);
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<VideoCard[] | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -368,18 +415,26 @@ export default function VideoScreen() {
   const safePlay = useCallback((target: { play: () => any }, tag: string) => {
     try {
       const maybePromise = target.play();
-      if (maybePromise && typeof maybePromise.then === 'function') {
+      if (maybePromise && typeof maybePromise.then === "function") {
         maybePromise.catch((err: any) => {
-          const name = (err?.name || '').toString();
-          const msg = (err?.message || '').toString();
-          if (name === 'AbortError' || /interrupted by a call to pause\(\)/i.test(msg)) return;
+          const name = (err?.name || "").toString();
+          const msg = (err?.message || "").toString();
+          if (
+            name === "AbortError" ||
+            /interrupted by a call to pause\(\)/i.test(msg)
+          )
+            return;
           console.warn(`[VideoPlayer] ${tag} play() failed`, err);
         });
       }
     } catch (err: any) {
-      const name = (err?.name || '').toString();
-      const msg = (err?.message || '').toString();
-      if (name === 'AbortError' || /interrupted by a call to pause\(\)/i.test(msg)) return;
+      const name = (err?.name || "").toString();
+      const msg = (err?.message || "").toString();
+      if (
+        name === "AbortError" ||
+        /interrupted by a call to pause\(\)/i.test(msg)
+      )
+        return;
       console.warn(`[VideoPlayer] ${tag} play() failed`, err);
     }
   }, []);
@@ -389,7 +444,7 @@ export default function VideoScreen() {
     player.staysActiveInBackground = true;
     // Only auto-play on init if user hasn't explicitly paused
     if (!userPausedRef.current) {
-      safePlay(player as any, 'init');
+      safePlay(player as any, "init");
     }
   });
   const lastTapRef = useRef(0);
@@ -404,7 +459,9 @@ export default function VideoScreen() {
 
   const resumeAfterUrlChangeRef = useRef<number | null>(null);
   const qualityResumePositionRef = useRef<number | null>(null);
-  const tokenRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tokenRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
   const shimmerX = useRef(new Animated.Value(0)).current;
 
@@ -444,14 +501,14 @@ export default function VideoScreen() {
   }, [activePlaybackUrl]);
 
   useEffect(() => {
-    if (Platform.OS === 'web') {
+    if (Platform.OS === "web") {
       return;
     }
-    const sub = AppState.addEventListener('change', (next) => {
-      console.log('App state changed to:', next);
+    const sub = AppState.addEventListener("change", (next) => {
+      console.log("App state changed to:", next);
       if (!activePlaybackUrl) return;
 
-      const shouldBackground = next === 'inactive' || next === 'background';
+      const shouldBackground = next === "inactive" || next === "background";
       if (shouldBackground) {
         if (bgAudioOnlyMode) return;
 
@@ -463,7 +520,7 @@ export default function VideoScreen() {
           await setAudioModeAsync({
             playsInSilentMode: true,
             shouldPlayInBackground: true,
-            interruptionMode: 'doNotMix',
+            interruptionMode: "doNotMix",
           });
 
           // Keep volume at 1.0 and force resume during the transition.
@@ -473,14 +530,14 @@ export default function VideoScreen() {
             // ignore
           }
           if (wasPlaying) {
-            safePlay(videoPlayer as any, 'appstate-background');
+            safePlay(videoPlayer as any, "appstate-background");
           }
         })().catch(() => undefined);
 
         return;
       }
 
-      if (next === 'active' && bgAudioOnlyMode) {
+      if (next === "active" && bgAudioOnlyMode) {
         setBgAudioOnlyMode(false);
         const shouldPlay = bgWasPlayingRef.current;
         (async () => {
@@ -490,7 +547,7 @@ export default function VideoScreen() {
             // ignore
           }
           if (shouldPlay) {
-            safePlay(videoPlayer as any, 'appstate-active');
+            safePlay(videoPlayer as any, "appstate-active");
           }
         })().catch(() => undefined);
       }
@@ -499,8 +556,13 @@ export default function VideoScreen() {
     return () => {
       sub.remove();
     };
-  }, [activePlaybackUrl, activeVideoMeta?.id, bgAudioOnlyMode, safePlay, videoPlayer]);
-
+  }, [
+    activePlaybackUrl,
+    activeVideoMeta?.id,
+    bgAudioOnlyMode,
+    safePlay,
+    videoPlayer,
+  ]);
 
   const scheduleTokenRefresh = useCallback(
     (url: string | null) => {
@@ -515,20 +577,29 @@ export default function VideoScreen() {
       // Refresh 60s before expiry for better safety (min 10s delay).
       const now = Date.now();
       const delay = Math.max(10000, expMs - now - 60_000);
-      console.log('[VideoScreen] Scheduling token refresh in', Math.round(delay / 1000), 's');
-      
+      console.log(
+        "[VideoScreen] Scheduling token refresh in",
+        Math.round(delay / 1000),
+        "s"
+      );
+
       tokenRefreshTimerRef.current = setTimeout(() => {
         (async () => {
           if (!activeVideoMeta?.id) return;
           const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
 
-          console.log('[VideoScreen] Background refreshing video URL...');
+          console.log("[VideoScreen] Background refreshing video URL...");
           try {
             // Use current selected quality for refresh, respecting subscription
-            const refreshQuality: streamService.VideoQuality = isStreamingHdAllowed 
-              ? (selectedQuality as streamService.VideoQuality) 
-              : '240p';
-            const nextUrl = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video', refreshQuality);
+            const refreshQuality: streamService.VideoQuality =
+              isStreamingHdAllowed
+                ? (selectedQuality as streamService.VideoQuality)
+                : "240p";
+            const nextUrl = await streamService.getPlaybackUrl(
+              activeVideoMeta.id,
+              "video",
+              refreshQuality
+            );
             resumeAfterUrlChangeRef.current = pos;
             setActivePlaybackUrl(nextUrl);
           } catch {
@@ -554,29 +625,40 @@ export default function VideoScreen() {
 
   const fetchAll = useCallback(async () => {
     const res = await apiV1.get(`/content?ts=${Date.now()}`, {
-      params: { mediaType: 'video' },
-      headers: { 'Cache-Control': 'no-store', Pragma: 'no-cache' },
+      params: { mediaType: "video" },
+      headers: { "Cache-Control": "no-store", Pragma: "no-cache" },
     });
-    const raw: ApiContentItem[] = Array.isArray(res.data?.items) ? res.data.items : [];
+    const raw: ApiContentItem[] = Array.isArray(res.data?.items)
+      ? res.data.items
+      : [];
 
     const mapped: VideoCard[] = raw
       .map((it) => {
-        const mediaTypeRaw = (it.mediaType ?? it.type ?? '').toString().toLowerCase();
-        const mediaType = mediaTypeRaw.includes('video') ? 'video' : 'audio';
-        if (mediaType !== 'video') return null;
+        const mediaTypeRaw = (it.mediaType ?? it.type ?? "")
+          .toString()
+          .toLowerCase();
+        const mediaType = mediaTypeRaw.includes("video") ? "video" : "audio";
+        if (mediaType !== "video") return null;
 
-        const artworkUrl = (it.thumbnailUrl ?? it.artwork ?? '').toString() || FALLBACK_ARTWORK;
-        const artistIdValue = it.artistId !== null && it.artistId !== undefined ? String(it.artistId) : undefined;
+        const artworkUrl =
+          (it.thumbnailUrl ?? it.artwork ?? "").toString() || FALLBACK_ARTWORK;
+        const artistIdValue =
+          it.artistId !== null && it.artistId !== undefined
+            ? String(it.artistId)
+            : undefined;
 
         return {
           id: String(it.id),
-          title: (it.title ?? 'Untitled').toString(),
-          artistName: (it.artistName ?? 'Artist').toString(),
+          title: (it.title ?? "Untitled").toString(),
+          artistName: (it.artistName ?? "Artist").toString(),
           artistId: artistIdValue,
-          artistProfileImage: (it.artistProfileImage ?? '').toString() || undefined,
+          artistProfileImage:
+            (it.artistProfileImage ?? "").toString() || undefined,
           artworkUrl,
-          mediaUrl: (it.mediaUrl ?? it.fileUrl ?? '').toString(),
-          useStreamAccess: Boolean(it.useStreamAccess ?? (it.storage_provider === 'cloudinary')),
+          mediaUrl: (it.mediaUrl ?? it.fileUrl ?? "").toString(),
+          useStreamAccess: Boolean(
+            it.useStreamAccess ?? it.storage_provider === "cloudinary"
+          ),
           storageKey: (it.storageKey ?? null) as any,
           category: normalizeCategory(it.genre),
           createdAt: (it.createdAt ?? null) as any,
@@ -592,26 +674,31 @@ export default function VideoScreen() {
     return mapped;
   }, []);
 
-  const normalizedQuery = useMemo(() => searchQuery.trim().toLowerCase(), [searchQuery]);
+  const normalizedQuery = useMemo(
+    () => searchQuery.trim().toLowerCase(),
+    [searchQuery]
+  );
 
   const normalizeForSearch = useCallback((s: string) => {
-    return (s ?? '')
+    return (s ?? "")
       .toString()
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, ' ')
-      .replace(/\s+/g, ' ')
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
       .trim();
   }, []);
 
   const matchesQuery = useCallback(
     (it: VideoCard, q: string) => {
       if (!q) return true;
-      const hayRaw = `${it.title ?? ''} ${it.artistName ?? ''} ${it.category ?? ''}`;
+      const hayRaw = `${it.title ?? ""} ${it.artistName ?? ""} ${
+        it.category ?? ""
+      }`;
       const hay = normalizeForSearch(hayRaw);
       const qq = normalizeForSearch(q);
       if (!qq) return true;
 
-      const tokens = qq.split(' ').filter(Boolean);
+      const tokens = qq.split(" ").filter(Boolean);
       if (!tokens.length) return true;
       return tokens.every((t) => hay.includes(t));
     },
@@ -664,13 +751,17 @@ export default function VideoScreen() {
   const enterFullscreen = useCallback(async () => {
     setIsFullscreen(true);
     // Lock to landscape when entering fullscreen
-    await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+    await ScreenOrientation.lockAsync(
+      ScreenOrientation.OrientationLock.LANDSCAPE
+    );
   }, []);
 
   const exitFullscreen = useCallback(async () => {
     setIsFullscreen(false);
     // Lock back to portrait when exiting fullscreen
-    await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+    await ScreenOrientation.lockAsync(
+      ScreenOrientation.OrientationLock.PORTRAIT
+    );
   }, []);
 
   const stopAndReset = useCallback(async () => {
@@ -703,14 +794,19 @@ export default function VideoScreen() {
     setPositionMs(Math.max(0, Math.round(value)));
   }, []);
 
-  const onSeekComplete = useCallback(async (value: number) => {
-    setIsSeeking(false);
-    try {
-      videoPlayer.seekBy((value - videoPlayer.currentTime * 1000) / 1000);
-    } catch {
-      // ignore
-    }
-  }, [videoPlayer]);
+  const onSeekComplete = useCallback(
+    async (value: number) => {
+      setIsSeeking(false);
+      try {
+        // ✅ Better seek for both Android & iOS
+        const targetSeconds = value / 1000;
+        videoPlayer.currentTime = targetSeconds;
+      } catch {
+        // ignore
+      }
+    },
+    [videoPlayer]
+  );
 
   const load = useCallback(
     async (opts?: { refresh?: boolean }) => {
@@ -740,7 +836,9 @@ export default function VideoScreen() {
       try {
         const raw = await AsyncStorage.getItem(REPORTED_CONTENT_STORAGE_KEY);
         const parsed = raw ? JSON.parse(raw) : null;
-        const ids = Array.isArray(parsed) ? (parsed as any[]).map((x) => String(x)) : [];
+        const ids = Array.isArray(parsed)
+          ? (parsed as any[]).map((x) => String(x))
+          : [];
         const map: Record<string, true> = {};
         ids.forEach((id) => {
           if (id) map[id] = true;
@@ -766,7 +864,7 @@ export default function VideoScreen() {
   }, [normalizedQuery, searchResults, trending]);
 
   const pauseGlobalAudioIfNeeded = useCallback(async () => {
-    if (currentItem?.mediaType !== 'audio') return;
+    if (currentItem?.mediaType !== "audio") return;
     if (!playerState.isPlaying) return;
     try {
       await togglePlayPause();
@@ -797,43 +895,58 @@ export default function VideoScreen() {
   // ─── Native event: status change ───────────────────────────────────────────
   // This fires as soon as the player's native layer transitions state.
   // We use it for the quality-switch seek so it is truly atomic — no setTimeout.
-  useEventListener(videoPlayer, 'statusChange', ({ status }: { status: string }) => {
-    const isReady = status === 'readyToPlay';
-    const isFailed = status === 'failed';
-    setIsVideoReady(isReady);
-    setIsBuffering(status === 'loading');
+  useEventListener(
+    videoPlayer,
+    "statusChange",
+    ({ status }: { status: string }) => {
+      const isReady = status === "readyToPlay";
+      const isFailed = status === "failed";
+      setIsVideoReady(isReady);
+      setIsBuffering(status === "loading");
 
-    if (isFailed || (videoPlayer.status === 'idle' && isStreamingUrlExpiringSoon(activePlaybackUrl))) {
-      console.log('[VideoScreen] Player status failed or URL expired, attempting refresh...');
-      (async () => {
-        if (!activeVideoMeta?.id) return;
-        const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
+      if (
+        isFailed ||
+        (videoPlayer.status === "idle" &&
+          isStreamingUrlExpiringSoon(activePlaybackUrl))
+      ) {
+        console.log(
+          "[VideoScreen] Player status failed or URL expired, attempting refresh..."
+        );
+        (async () => {
+          if (!activeVideoMeta?.id) return;
+          const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
+          try {
+            // Use current selected quality for refresh, respecting subscription
+            const refreshQuality: streamService.VideoQuality =
+              isStreamingHdAllowed
+                ? (selectedQuality as streamService.VideoQuality)
+                : "240p";
+            const nextUrl = await streamService.getPlaybackUrl(
+              activeVideoMeta.id,
+              "video",
+              refreshQuality
+            );
+            resumeAfterUrlChangeRef.current = pos;
+            setActivePlaybackUrl(nextUrl);
+          } catch {
+            // ignore
+          }
+        })().catch(() => undefined);
+        return;
+      }
+
+      if (isReady && qualityResumePositionRef.current !== null) {
+        const targetSeconds = qualityResumePositionRef.current;
+        qualityResumePositionRef.current = null;
         try {
-          // Use current selected quality for refresh, respecting subscription
-          const refreshQuality: streamService.VideoQuality = isStreamingHdAllowed 
-            ? (selectedQuality as streamService.VideoQuality) 
-            : '240p';
-          const nextUrl = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video', refreshQuality);
-          resumeAfterUrlChangeRef.current = pos;
-          setActivePlaybackUrl(nextUrl);
+          videoPlayer.currentTime = targetSeconds;
+          safePlay(videoPlayer as any, "status-ready");
         } catch {
-          // ignore
+          // Player may have been released — safe to ignore
         }
-      })().catch(() => undefined);
-      return;
-    }
-
-    if (isReady && qualityResumePositionRef.current !== null) {
-      const targetSeconds = qualityResumePositionRef.current;
-      qualityResumePositionRef.current = null;
-      try {
-        videoPlayer.currentTime = targetSeconds;
-        safePlay(videoPlayer as any, 'status-ready');
-      } catch {
-        // Player may have been released — safe to ignore
       }
     }
-  });
+  );
 
   // ─── 500ms polling for position / duration / playing state ─────────────────
   useEffect(() => {
@@ -843,11 +956,16 @@ export default function VideoScreen() {
       }
       setDurationMs(toFiniteDurationMs(videoPlayer.duration * 1000));
       setIsVideoPlaying(videoPlayer.playing);
-      setIsBuffering(videoPlayer.status === 'loading');
-      setIsVideoReady(videoPlayer.status === 'readyToPlay');
+      setIsBuffering(videoPlayer.status === "loading");
+      setIsVideoReady(videoPlayer.status === "readyToPlay");
 
       // Handle finished
-      if (videoPlayer.duration > 0 && videoPlayer.currentTime >= videoPlayer.duration - 0.2 && videoPlayer.playing === false && isVideoPlaying) {
+      if (
+        videoPlayer.duration > 0 &&
+        videoPlayer.currentTime >= videoPlayer.duration - 0.2 &&
+        videoPlayer.playing === false &&
+        isVideoPlaying
+      ) {
         // did finish logic can go here if needed
       }
     }, 500);
@@ -870,21 +988,17 @@ export default function VideoScreen() {
     };
   }, [activeVideoMeta?.id, isVideoPlaying]);
 
-
-
-
-
   useEffect(() => {
     // Pause inline video if global audio starts playing.
-    if (currentItem?.mediaType === 'audio' && playerState.isPlaying) {
+    if (currentItem?.mediaType === "audio" && playerState.isPlaying) {
       pauseInlineVideoIfNeeded().catch(() => undefined);
     }
   }, [currentItem?.mediaType, pauseInlineVideoIfNeeded, playerState.isPlaying]);
 
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (s) => {
+    const sub = AppState.addEventListener("change", (s) => {
       // Avoid fighting with the background audio-only handler for active video sessions.
-      if (s !== 'active' && !activePlaybackUrl) {
+      if (s !== "active" && !activePlaybackUrl) {
         pauseInlineVideoIfNeeded().catch(() => undefined);
       }
     });
@@ -893,22 +1007,36 @@ export default function VideoScreen() {
     };
   }, [activePlaybackUrl, pauseInlineVideoIfNeeded]);
 
-  const resolvePlaybackUrl = useCallback(async (video: VideoCard) => {
-    try {
-      // Use current selected quality or default to 240p for free users, Auto for paid
-      const q: streamService.VideoQuality = selectedQuality && selectedQuality !== 'Auto' 
-        ? selectedQuality 
-        : (isStreamingHdAllowed ? 'Auto' : '240p');
-      return await streamService.getPlaybackUrl(video.id, 'video', q);
-    } catch (err: any) {
-      if (err?.message && (err.message.toLowerCase().includes('subscription') || err.message.toLowerCase().includes('access denied'))) {
-        throw err; // Propagate subscription errors for UI handling
+  const resolvePlaybackUrl = useCallback(
+    async (video: VideoCard) => {
+      try {
+        // Use current selected quality or default to 240p for free users, Auto for paid
+        const q: streamService.VideoQuality =
+          selectedQuality && selectedQuality !== "Auto"
+            ? selectedQuality
+            : isStreamingHdAllowed
+            ? "Auto"
+            : "240p";
+        return await streamService.getPlaybackUrl(video.id, "video", q);
+      } catch (err: any) {
+        if (
+          err?.message &&
+          (err.message.toLowerCase().includes("subscription") ||
+            err.message.toLowerCase().includes("access denied"))
+        ) {
+          throw err; // Propagate subscription errors for UI handling
+        }
+        const fallback = video.mediaUrl
+          ? streamService.normalizePlaybackUrl(video.mediaUrl)
+          : "";
+        if (!fallback) return "";
+        return streamService.validatePlaybackUrl(fallback, "video")
+          ? fallback
+          : "";
       }
-      const fallback = video.mediaUrl ? streamService.normalizePlaybackUrl(video.mediaUrl) : '';
-      if (!fallback) return '';
-      return streamService.validatePlaybackUrl(fallback, 'video') ? fallback : '';
-    }
-  }, [isStreamingHdAllowed]);
+    },
+    [isStreamingHdAllowed]
+  );
 
   const onPressVideo = useCallback(
     (video: VideoCard) => {
@@ -948,12 +1076,15 @@ export default function VideoScreen() {
         setLoadingPlaybackUrl(true);
         try {
           // PROACTIVE CHECK: Check if content is locked before even hitting the stream service
-          const accessRes = await userService.checkContentAccess(Number(video.id), video.artistId || '');
-          
+          const accessRes = await userService.checkContentAccess(
+            Number(video.id),
+            video.artistId || ""
+          );
+
           if (!accessRes.allowed) {
             setLastAttemptedVideo(video);
             setShowArtistLockModal({ visible: true, video });
-            setPlaybackError('Subscription Required');
+            setPlaybackError("Subscription Required");
             setActivePlaybackUrl(null);
             setLoadingPlaybackUrl(false);
             return;
@@ -962,8 +1093,8 @@ export default function VideoScreen() {
           const playbackUrl = await resolvePlaybackUrl(video);
 
           if (sessionId !== playbackSessionRef.current) return;
-          if (!streamService.validatePlaybackUrl(playbackUrl, 'video')) {
-            setPlaybackError('Invalid playback source');
+          if (!streamService.validatePlaybackUrl(playbackUrl, "video")) {
+            setPlaybackError("Invalid playback source");
             setActivePlaybackUrl(null);
             return;
           }
@@ -975,19 +1106,19 @@ export default function VideoScreen() {
           await setAudioModeAsync({
             playsInSilentMode: true,
             shouldPlayInBackground: true,
-            interruptionMode: 'doNotMix',
+            interruptionMode: "doNotMix",
           });
         } catch (err: any) {
-          const msg = (err?.message || '').toLowerCase();
-          if (msg.includes('subscription') || msg.includes('access denied')) {
+          const msg = (err?.message || "").toLowerCase();
+          if (msg.includes("subscription") || msg.includes("access denied")) {
             setLastAttemptedVideo(video);
             setShowArtistLockModal({ visible: true, video });
-            setPlaybackError('Subscription Required');
+            setPlaybackError("Subscription Required");
             setActivePlaybackUrl(null);
             return;
           }
-          console.warn('[VideoPlayer] Playback error', err);
-          setPlaybackError('Could not load playback URL');
+          console.warn("[VideoPlayer] Playback error", err);
+          setPlaybackError("Could not load playback URL");
           setActivePlaybackUrl(null);
         } finally {
           setLoadingPlaybackUrl(false);
@@ -1000,9 +1131,11 @@ export default function VideoScreen() {
   const refreshSubscriptionAndRetry = useCallback(async () => {
     try {
       const res = await userService.checkStreamingQuality();
-      const maxRes = (res?.maxResolution ?? '240p').toString() as streamService.VideoQuality;
-      const isAllowedHD = res?.quality === 'HD';
-      
+      const maxRes = (
+        res?.maxResolution ?? "240p"
+      ).toString() as streamService.VideoQuality;
+      const isAllowedHD = res?.quality === "HD";
+
       setMaxAllowedResolution(maxRes);
       setIsStreamingHdAllowed(isAllowedHD);
 
@@ -1026,13 +1159,18 @@ export default function VideoScreen() {
             setLoadingPlaybackUrl(true);
             try {
               // Use the pending quality directly - backend will enforce subscription
-              const qParam: streamService.VideoQuality = getStreamQualityParam(q);
-              const nextUrl = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video', qParam);
+              const qParam: streamService.VideoQuality =
+                getStreamQualityParam(q);
+              const nextUrl = await streamService.getPlaybackUrl(
+                activeVideoMeta.id,
+                "video",
+                qParam
+              );
               isQualitySwitchRef.current = true;
               qualityResumePositionRef.current = pos / 1000;
               setActivePlaybackUrl(nextUrl);
             } catch (e) {
-              console.warn('[VideoScreen] Auto-retry quality switch failed', e);
+              console.warn("[VideoScreen] Auto-retry quality switch failed", e);
             } finally {
               setLoadingPlaybackUrl(false);
             }
@@ -1047,15 +1185,23 @@ export default function VideoScreen() {
         }
       }
     } catch (e) {
-      console.warn('[VideoScreen] Failed to refresh subscription status', e);
+      console.warn("[VideoScreen] Failed to refresh subscription status", e);
     }
-  }, [route.params?.unlocked, navigation, lastAttemptedHdQuality, lastAttemptedVideo, videoPlayer, activeVideoMeta, onPressVideo]);
+  }, [
+    route.params?.unlocked,
+    navigation,
+    lastAttemptedHdQuality,
+    lastAttemptedVideo,
+    videoPlayer,
+    activeVideoMeta,
+    onPressVideo,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
       // Refresh sub status on focus (essential for instant unlock)
       refreshSubscriptionAndRetry();
-      
+
       // Reload video list every time screen gains focus so new uploads appear.
       load().catch(() => undefined);
       return () => {
@@ -1063,8 +1209,6 @@ export default function VideoScreen() {
       };
     }, [load, pauseInlineVideoIfNeeded, refreshSubscriptionAndRetry])
   );
-
-
 
   useEffect(() => {
     if (route.params?.autoplayVideo) {
@@ -1082,11 +1226,11 @@ export default function VideoScreen() {
   }, [activeVideoId, visibleItems]);
 
   const playNextPrev = useCallback(
-    (dir: 'next' | 'prev') => {
+    (dir: "next" | "prev") => {
       if (!visibleItems.length) return;
       const idx = currentIndex;
       if (idx < 0) return;
-      const nextIdx = dir === 'next' ? idx + 1 : idx - 1;
+      const nextIdx = dir === "next" ? idx + 1 : idx - 1;
       const next = visibleItems[clamp(nextIdx, 0, visibleItems.length - 1)];
       if (next && next.id !== activeVideoId) onPressVideo(next);
     },
@@ -1097,7 +1241,7 @@ export default function VideoScreen() {
     return PanResponder.create({
       // Swipe gestures no longer change video — double-tap left/right seeks ±10s instead.
       onMoveShouldSetPanResponder: () => false,
-      onPanResponderRelease: () => { },
+      onPanResponderRelease: () => {},
     });
   }, []);
 
@@ -1128,24 +1272,22 @@ export default function VideoScreen() {
     ).start();
   }, [shimmerX]);
 
-
-  const onListScroll = useCallback(
-    (e: any) => {
-      const y = Math.max(0, e?.nativeEvent?.contentOffset?.y ?? 0);
-      scrollYRef.current = y;
-      // Player stays fixed at the top — no mini/PiP mode on scroll.
-    },
-    []
-  );
+  const onListScroll = useCallback((e: any) => {
+    const y = Math.max(0, e?.nativeEvent?.contentOffset?.y ?? 0);
+    scrollYRef.current = y;
+    // Player stays fixed at the top — no mini/PiP mode on scroll.
+  }, []);
 
   useEffect(() => {
     if (!isFullscreen) return;
 
-    const tabParent: any = navigation.getParent?.('fan-tabs') ?? navigation.getParent?.()?.getParent?.();
+    const tabParent: any =
+      navigation.getParent?.("fan-tabs") ??
+      navigation.getParent?.()?.getParent?.();
     if (!tabParent?.setOptions) return;
 
     tabParent.setOptions({
-      tabBarStyle: { display: 'none' },
+      tabBarStyle: { display: "none" },
     });
 
     return () => {
@@ -1161,14 +1303,11 @@ export default function VideoScreen() {
     }).start();
   }, [miniAnim, showMini]);
 
-  const onPlaybackStatusUpdate = useCallback(
-    (status: any) => {
-      if (!status.isLoaded) return;
-      const pos = status.positionMillis || 0;
-      setPositionMs(pos);
-    },
-    []
-  );
+  const onPlaybackStatusUpdate = useCallback((status: any) => {
+    if (!status.isLoaded) return;
+    const pos = status.positionMillis || 0;
+    setPositionMs(pos);
+  }, []);
 
   useEffect(() => {
     if (!showUpNext) return;
@@ -1190,7 +1329,10 @@ export default function VideoScreen() {
           }
 
           const idx = visibleItems.findIndex((x) => x.id === activeVideoId);
-          const nextItem = visibleItems[clamp(idx + 1, 0, Math.max(0, visibleItems.length - 1))];
+          const nextItem =
+            visibleItems[
+              clamp(idx + 1, 0, Math.max(0, visibleItems.length - 1))
+            ];
           if (nextItem && nextItem.id !== activeVideoId) {
             onPressVideo(nextItem);
           }
@@ -1209,13 +1351,23 @@ export default function VideoScreen() {
   }, [activeVideoId, onPressVideo, showUpNext, visibleItems]);
 
   const ambientColor = useMemo(() => {
-    const key = `${activeVideoMeta?.id ?? ''}|${activeVideoMeta?.artworkUrl ?? ''}`;
+    const key = `${activeVideoMeta?.id ?? ""}|${
+      activeVideoMeta?.artworkUrl ?? ""
+    }`;
     return hashColor(key);
   }, [activeVideoMeta?.artworkUrl, activeVideoMeta?.id]);
 
   // Full quality ladder — ascending order, Auto sits at the bottom.
   // These match the HLS renditions triggered in the backend eager transforms.
-  const QUALITY_LADDER = ['144p', '240p', '360p', '480p', '720p', '1080p', 'Auto'] as const;
+  const QUALITY_LADDER = [
+    "144p",
+    "240p",
+    "360p",
+    "480p",
+    "720p",
+    "1080p",
+    "Auto",
+  ] as const;
 
   const qualityRank = useCallback(
     (q: string) => {
@@ -1229,7 +1381,7 @@ export default function VideoScreen() {
     (q: string) => {
       if (isStreamingHdAllowed) return true;
       // If user can't stream HD, only 144p and 240p are allowed.
-      return q === '144p' || q === '240p';
+      return q === "144p" || q === "240p";
     },
     [isStreamingHdAllowed, maxAllowedResolution, qualityRank]
   );
@@ -1238,14 +1390,26 @@ export default function VideoScreen() {
     (q: string): streamService.VideoQuality => {
       // Free users: max 240p
       if (!isStreamingHdAllowed) {
-        const freeQualities: streamService.VideoQuality[] = ['144p', '240p'];
-        const normalized = freeQualities.find(fq => fq.toLowerCase() === q.toLowerCase());
-        return normalized || '240p';
+        const freeQualities: streamService.VideoQuality[] = ["144p", "240p"];
+        const normalized = freeQualities.find(
+          (fq) => fq.toLowerCase() === q.toLowerCase()
+        );
+        return normalized || "240p";
       }
       // Paid users: full access (144p-1080p + Auto)
-      const validQualities: streamService.VideoQuality[] = ['144p', '240p', '360p', '480p', '720p', '1080p', 'Auto'];
-      const normalized = validQualities.find(vq => vq.toLowerCase() === q.toLowerCase());
-      return normalized || 'Auto';
+      const validQualities: streamService.VideoQuality[] = [
+        "144p",
+        "240p",
+        "360p",
+        "480p",
+        "720p",
+        "1080p",
+        "Auto",
+      ];
+      const normalized = validQualities.find(
+        (vq) => vq.toLowerCase() === q.toLowerCase()
+      );
+      return normalized || "Auto";
     },
     [isStreamingHdAllowed]
   );
@@ -1263,7 +1427,7 @@ export default function VideoScreen() {
         return;
       }
 
-      const isLockedQuality = (q !== '144p' && q !== '240p');
+      const isLockedQuality = q !== "144p" && q !== "240p";
       if (isLockedQuality && !isStreamingHdAllowed) {
         setLastAttemptedHdQuality(q as streamService.VideoQuality);
         setShowQualitySheet(false);
@@ -1272,17 +1436,23 @@ export default function VideoScreen() {
         setSelectedQuality(q as streamService.VideoQuality);
         setShowQualitySheet(false);
         // Update HD badge state
-        setIsHD(q === '720p' || q === '1080p');
+        setIsHD(q === "720p" || q === "1080p");
       }
       if (!activeVideoMeta) return;
 
       // ── Step 1: Pause immediately & capture exact position ──────────────────
-      try { videoPlayer.pause(); } catch { /* ignore */ }
+      try {
+        videoPlayer.pause();
+      } catch {
+        /* ignore */
+      }
       let savedPositionSeconds = 0;
       try {
         const t = videoPlayer.currentTime;
         if (Number.isFinite(t) && t > 0) savedPositionSeconds = t;
-      } catch { /* player not ready — resume from 0 */ }
+      } catch {
+        /* player not ready — resume from 0 */
+      }
 
       // ── Step 2: Store resume target for useEventListener to pick up ─────────
       qualityResumePositionRef.current = savedPositionSeconds;
@@ -1299,7 +1469,11 @@ export default function VideoScreen() {
       try {
         const qualityParam = getStreamQualityParam(q);
         console.log(`[VideoScreen] Quality selection: ${q} => ${qualityParam}`);
-        const url = await streamService.getPlaybackUrl(activeVideoMeta.id, 'video', qualityParam);
+        const url = await streamService.getPlaybackUrl(
+          activeVideoMeta.id,
+          "video",
+          qualityParam
+        );
         // Setting the URL causes useVideoPlayer to reload the source.
         // useEventListener('statusChange') above will fire seek+play atomically
         // as soon as status === 'readyToPlay' — no setTimeout needed.
@@ -1313,25 +1487,29 @@ export default function VideoScreen() {
         setLoadingPlaybackUrl(false);
       }
     },
-    [activeVideoMeta, getStreamQualityParam, isSelectionAllowed, maxAllowedResolution, videoPlayer]
+    [
+      activeVideoMeta,
+      getStreamQualityParam,
+      isSelectionAllowed,
+      maxAllowedResolution,
+      videoPlayer,
+    ]
   );
 
-  const onDoubleTap = useCallback(
-    async (dir: 'back' | 'forward') => {
-      try {
-        const v = videoPlayer;
-        if (!v) return;
-        const current = toFiniteDurationMs(v.currentTime * 1000);
-        const dur = toFiniteDurationMs(v.duration * 1000);
-        const next = dir === 'back' ? current - SEEK_DELTA_MS : current + SEEK_DELTA_MS;
-        const target = clamp(next, 0, dur > 0 ? dur : Number.MAX_SAFE_INTEGER);
-        v.currentTime = target / 1000;
-      } catch {
-        // ignore
-      }
-    },
-    []
-  );
+  const onDoubleTap = useCallback(async (dir: "back" | "forward") => {
+    try {
+      const v = videoPlayer;
+      if (!v) return;
+      const current = toFiniteDurationMs(v.currentTime * 1000);
+      const dur = toFiniteDurationMs(v.duration * 1000);
+      const next =
+        dir === "back" ? current - SEEK_DELTA_MS : current + SEEK_DELTA_MS;
+      const target = clamp(next, 0, dur > 0 ? dur : Number.MAX_SAFE_INTEGER);
+      v.currentTime = target / 1000;
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const onPressPlayerSurface = useCallback(
     async (evt: any) => {
@@ -1343,7 +1521,7 @@ export default function VideoScreen() {
       lastTapXRef.current = x;
 
       if (delta < DOUBLE_TAP_MS && Math.abs(x - lastX) < 50) {
-        const dir = x < SCREEN_WIDTH / 2 ? 'back' : 'forward';
+        const dir = x < SCREEN_WIDTH / 2 ? "back" : "forward";
         await onDoubleTap(dir);
         setShowControls(true);
         if (controlsHideTimerRef.current) {
@@ -1386,15 +1564,15 @@ export default function VideoScreen() {
     }
   }, [videoPlayer]);
 
-
   const showThankYou = useCallback(() => {
-    const message = 'Thank you for reporting.';
-    if (Platform.OS === 'android') {
-      const ToastAndroid = require('react-native').ToastAndroid as typeof import('react-native').ToastAndroid;
+    const message = "Thank you for reporting.";
+    if (Platform.OS === "android") {
+      const ToastAndroid = require("react-native")
+        .ToastAndroid as typeof import("react-native").ToastAndroid;
       ToastAndroid.show(message, ToastAndroid.SHORT);
       return;
     }
-    Alert.alert('Reported', message);
+    Alert.alert("Reported", message);
   }, []);
 
   const persistReported = useCallback(async (next: Record<string, boolean>) => {
@@ -1409,20 +1587,20 @@ export default function VideoScreen() {
   }, []);
 
   const submitReport = useCallback(
-    async (reason: 'Spam' | 'Inappropriate' | 'Copyright') => {
+    async (reason: "Spam" | "Inappropriate" | "Copyright") => {
       if (!activeVideoMeta?.id) return;
       const id = String(activeVideoMeta.id);
       if (reportedContentIds[id]) return;
 
       setReportSubmitting(true);
       try {
-        const res = await contentApi.post('/report', {
+        const res = await contentApi.post("/report", {
           contentId: activeVideoMeta.id,
           reason,
         });
 
         if (!res?.data?.success) {
-          throw new Error(res?.data?.message || 'Failed to submit report');
+          throw new Error(res?.data?.message || "Failed to submit report");
         }
 
         setReportedContentIds((prev) => {
@@ -1433,12 +1611,21 @@ export default function VideoScreen() {
         setReportModalOpen(false);
         showThankYou();
       } catch (e: any) {
-        Alert.alert('Report Failed', e?.message || 'Failed to submit report. Please try again.');
+        Alert.alert(
+          "Report Failed",
+          e?.message || "Failed to submit report. Please try again."
+        );
       } finally {
         setReportSubmitting(false);
       }
     },
-    [activeVideoMeta?.id, activeVideoMeta, persistReported, reportedContentIds, showThankYou]
+    [
+      activeVideoMeta?.id,
+      activeVideoMeta,
+      persistReported,
+      reportedContentIds,
+      showThankYou,
+    ]
   );
 
   const onPressLike = useCallback(() => {
@@ -1446,26 +1633,51 @@ export default function VideoScreen() {
     const id = activeVideoMeta.id;
 
     setReactionStateById((prev) => {
-      const cur = prev[String(id)] ?? { reaction: activeVideoMeta.userReaction ?? null, likeDelta: 0, dislikeDelta: 0 };
+      const cur = prev[String(id)] ?? {
+        reaction: activeVideoMeta.userReaction ?? null,
+        likeDelta: 0,
+        dislikeDelta: 0,
+      };
       const currentReaction = cur.reaction;
-      const nextReaction: 'like' | 'dislike' | null = currentReaction === 'like' ? null : 'like';
+      const nextReaction: "like" | "dislike" | null =
+        currentReaction === "like" ? null : "like";
 
-      contentApi.post('/reaction', { contentId: id, reaction: nextReaction }).catch((e) => {
-        console.warn('[VideoScreen] Failed to like content', e);
-      });
+      contentApi
+        .post("/reaction", { contentId: id, reaction: nextReaction })
+        .catch((e) => {
+          console.warn("[VideoScreen] Failed to like content", e);
+        });
 
-      if (currentReaction === 'like') {
-        return { ...prev, [String(id)]: { reaction: nextReaction, likeDelta: cur.likeDelta - 1, dislikeDelta: cur.dislikeDelta } };
-      }
-
-      if (currentReaction === 'dislike') {
+      if (currentReaction === "like") {
         return {
           ...prev,
-          [String(id)]: { reaction: nextReaction, likeDelta: cur.likeDelta + 1, dislikeDelta: cur.dislikeDelta - 1 },
+          [String(id)]: {
+            reaction: nextReaction,
+            likeDelta: cur.likeDelta - 1,
+            dislikeDelta: cur.dislikeDelta,
+          },
         };
       }
 
-      return { ...prev, [String(id)]: { reaction: nextReaction, likeDelta: cur.likeDelta + 1, dislikeDelta: cur.dislikeDelta } };
+      if (currentReaction === "dislike") {
+        return {
+          ...prev,
+          [String(id)]: {
+            reaction: nextReaction,
+            likeDelta: cur.likeDelta + 1,
+            dislikeDelta: cur.dislikeDelta - 1,
+          },
+        };
+      }
+
+      return {
+        ...prev,
+        [String(id)]: {
+          reaction: nextReaction,
+          likeDelta: cur.likeDelta + 1,
+          dislikeDelta: cur.dislikeDelta,
+        },
+      };
     });
   }, [activeVideoMeta]);
 
@@ -1474,52 +1686,88 @@ export default function VideoScreen() {
     const id = activeVideoMeta.id;
 
     setReactionStateById((prev) => {
-      const cur = prev[String(id)] ?? { reaction: activeVideoMeta.userReaction ?? null, likeDelta: 0, dislikeDelta: 0 };
+      const cur = prev[String(id)] ?? {
+        reaction: activeVideoMeta.userReaction ?? null,
+        likeDelta: 0,
+        dislikeDelta: 0,
+      };
       const currentReaction = cur.reaction;
-      const nextReaction: 'like' | 'dislike' | null = currentReaction === 'dislike' ? null : 'dislike';
+      const nextReaction: "like" | "dislike" | null =
+        currentReaction === "dislike" ? null : "dislike";
 
-      contentApi.post('/reaction', { contentId: id, reaction: nextReaction }).catch((e) => {
-        console.warn('[VideoScreen] Failed to dislike content', e);
-      });
+      contentApi
+        .post("/reaction", { contentId: id, reaction: nextReaction })
+        .catch((e) => {
+          console.warn("[VideoScreen] Failed to dislike content", e);
+        });
 
-      if (currentReaction === 'dislike') {
-        return { ...prev, [String(id)]: { reaction: nextReaction, likeDelta: cur.likeDelta, dislikeDelta: cur.dislikeDelta - 1 } };
-      }
-
-      if (currentReaction === 'like') {
+      if (currentReaction === "dislike") {
         return {
           ...prev,
-          [String(id)]: { reaction: nextReaction, likeDelta: cur.likeDelta - 1, dislikeDelta: cur.dislikeDelta + 1 },
+          [String(id)]: {
+            reaction: nextReaction,
+            likeDelta: cur.likeDelta,
+            dislikeDelta: cur.dislikeDelta - 1,
+          },
         };
       }
 
-      return { ...prev, [String(id)]: { reaction: nextReaction, likeDelta: cur.likeDelta, dislikeDelta: cur.dislikeDelta + 1 } };
+      if (currentReaction === "like") {
+        return {
+          ...prev,
+          [String(id)]: {
+            reaction: nextReaction,
+            likeDelta: cur.likeDelta - 1,
+            dislikeDelta: cur.dislikeDelta + 1,
+          },
+        };
+      }
+
+      return {
+        ...prev,
+        [String(id)]: {
+          reaction: nextReaction,
+          likeDelta: cur.likeDelta,
+          dislikeDelta: cur.dislikeDelta + 1,
+        },
+      };
     });
   }, [activeVideoMeta]);
 
   const onPressArtist = useCallback(() => {
     const artistId = activeVideoMeta?.artistId;
     if (!artistId) return;
-    navigation.navigate('Artist', { artistId });
+    navigation.navigate("Artist", { artistId });
   }, [activeVideoMeta?.artistId, navigation]);
 
   const renderSkeletonRow = useCallback(
     (_: any, idx: number) => {
-      const translateX = shimmerX.interpolate({ inputRange: [0, 1], outputRange: [-160, 260] });
+      const translateX = shimmerX.interpolate({
+        inputRange: [0, 1],
+        outputRange: [-160, 260],
+      });
       return (
         <View style={styles.skelRow} key={`sk-${idx}`}>
           <View style={styles.skelThumb}>
-            <Animated.View style={[styles.skelShimmer, { transform: [{ translateX }] }]} />
+            <Animated.View
+              style={[styles.skelShimmer, { transform: [{ translateX }] }]}
+            />
           </View>
           <View style={styles.skelMeta}>
             <View style={styles.skelLineLg}>
-              <Animated.View style={[styles.skelShimmer, { transform: [{ translateX }] }]} />
+              <Animated.View
+                style={[styles.skelShimmer, { transform: [{ translateX }] }]}
+              />
             </View>
             <View style={styles.skelLineSm}>
-              <Animated.View style={[styles.skelShimmer, { transform: [{ translateX }] }]} />
+              <Animated.View
+                style={[styles.skelShimmer, { transform: [{ translateX }] }]}
+              />
             </View>
             <View style={styles.skelLineXs}>
-              <Animated.View style={[styles.skelShimmer, { transform: [{ translateX }] }]} />
+              <Animated.View
+                style={[styles.skelShimmer, { transform: [{ translateX }] }]}
+              />
             </View>
           </View>
         </View>
@@ -1530,11 +1778,21 @@ export default function VideoScreen() {
 
   const renderVideoItem = useCallback(
     ({ item }: { item: VideoCard }) => {
-      const isActive = activeVideoId != null && String(item.id) === String(activeVideoId);
+      const isActive =
+        activeVideoId != null && String(item.id) === String(activeVideoId);
       return (
         <Pressable style={styles.rowItem} onPress={() => onPressVideo(item)}>
-          <View style={[styles.rowThumbWrap, isActive ? styles.rowThumbWrapActive : null]}>
-            <Image source={{ uri: getOptimizedImageUrl(item.artworkUrl || FALLBACK_ARTWORK) }} style={styles.rowThumb} />
+          <View
+            style={[
+              styles.rowThumbWrap,
+              isActive ? styles.rowThumbWrapActive : null,
+            ]}>
+            <Image
+              source={{
+                uri: getOptimizedImageUrl(item.artworkUrl || FALLBACK_ARTWORK),
+              }}
+              style={styles.rowThumb}
+            />
             {item.isLocked && (
               <View style={styles.lockBadgeMini}>
                 <Lock size={12} color="#fff" />
@@ -1559,7 +1817,7 @@ export default function VideoScreen() {
               {item.artistName}
             </Text>
             <Text style={styles.rowSub} numberOfLines={1}>
-              {formatDateLabel(item.createdAt) || ''}
+              {formatDateLabel(item.createdAt) || ""}
             </Text>
           </View>
         </Pressable>
@@ -1570,8 +1828,18 @@ export default function VideoScreen() {
 
   const related = useMemo(() => {
     if (!activeVideoMeta) return [] as VideoCard[];
-    const sameArtist = trending.filter((x) => x.id !== activeVideoMeta.id && x.artistId && x.artistId === activeVideoMeta.artistId);
-    const sameGenre = trending.filter((x) => x.id !== activeVideoMeta.id && normalizeCategory(x.category) === normalizeCategory(activeVideoMeta.category));
+    const sameArtist = trending.filter(
+      (x) =>
+        x.id !== activeVideoMeta.id &&
+        x.artistId &&
+        x.artistId === activeVideoMeta.artistId
+    );
+    const sameGenre = trending.filter(
+      (x) =>
+        x.id !== activeVideoMeta.id &&
+        normalizeCategory(x.category) ===
+          normalizeCategory(activeVideoMeta.category)
+    );
     const merged = [...sameArtist, ...sameGenre];
     const seen = new Set<string>();
     const out: VideoCard[] = [];
@@ -1594,12 +1862,20 @@ export default function VideoScreen() {
       <View style={styles.relatedWrap}>
         <Text style={styles.relatedTitle}>Related Videos</Text>
         {related.map((v) => (
-          <Pressable key={v.id} style={styles.relatedRow} onPress={() => onPressVideo(v)}>
+          <Pressable
+            key={v.id}
+            style={styles.relatedRow}
+            onPress={() => onPressVideo(v)}>
             <View>
-              <Image source={{ uri: getOptimizedImageUrl(v.artworkUrl || FALLBACK_ARTWORK) }} style={styles.relatedThumb} />
+              <Image
+                source={{
+                  uri: getOptimizedImageUrl(v.artworkUrl || FALLBACK_ARTWORK),
+                }}
+                style={styles.relatedThumb}
+              />
               {v.isLocked && (
                 <View style={[styles.lockBadgeMini, { top: 4, right: 4 }]}>
-                   <Lock size={10} color="#fff" />
+                  <Lock size={10} color="#fff" />
                 </View>
               )}
             </View>
@@ -1615,7 +1891,13 @@ export default function VideoScreen() {
         ))}
       </View>
     );
-  }, [activeVideoMeta, hasPlaybackStarted, normalizedQuery, onPressVideo, related]);
+  }, [
+    activeVideoMeta,
+    hasPlaybackStarted,
+    normalizedQuery,
+    onPressVideo,
+    related,
+  ]);
 
   const listEmpty = useMemo(() => {
     if (normalizedQuery && searchLoading) {
@@ -1630,29 +1912,45 @@ export default function VideoScreen() {
       visible={showArtistLockModal.visible}
       transparent
       animationType="fade"
-      onRequestClose={() => setShowArtistLockModal({ visible: false, video: null })}
-    >
+      onRequestClose={() =>
+        setShowArtistLockModal({ visible: false, video: null })
+      }>
       <View style={styles.modalBackdrop}>
         <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
         <View style={styles.modalContainer}>
-          <View style={[styles.modalIconWrap, { backgroundColor: 'rgba(255,122,24,0.15)', borderColor: 'rgba(255,122,24,0.3)' }]}>
+          <View
+            style={[
+              styles.modalIconWrap,
+              {
+                backgroundColor: "rgba(255,122,24,0.15)",
+                borderColor: "rgba(255,122,24,0.3)",
+              },
+            ]}>
             <Lock color="#FF7A18" size={32} />
           </View>
-          
+
           <Text style={styles.modalTitle}>Exclusive Content</Text>
-          
+
           <Text style={styles.modalMessage}>
-            Support <Text style={{ color: '#fff', fontWeight: '900' }}>{showArtistLockModal.video?.artistName || 'this artist'}</Text> to unlock full access and premium benefits.
+            Support{" "}
+            <Text style={{ color: "#fff", fontWeight: "900" }}>
+              {showArtistLockModal.video?.artistName || "this artist"}
+            </Text>{" "}
+            to unlock full access and premium benefits.
           </Text>
 
           <View style={styles.benefitsList}>
             <View style={styles.benefitItem}>
               <BadgeCheck color="#10B981" size={16} />
-              <Text style={styles.benefitText}>Watch full exclusive releases</Text>
+              <Text style={styles.benefitText}>
+                Watch full exclusive releases
+              </Text>
             </View>
             <View style={styles.benefitItem}>
               <BadgeCheck color="#10B981" size={16} />
-              <Text style={styles.benefitText}>Support the artist directly</Text>
+              <Text style={styles.benefitText}>
+                Support the artist directly
+              </Text>
             </View>
             <View style={styles.benefitItem}>
               <BadgeCheck color="#10B981" size={16} />
@@ -1665,33 +1963,34 @@ export default function VideoScreen() {
             onPress={() => {
               const video = showArtistLockModal.video;
               setShowArtistLockModal({ visible: false, video: null });
-              navigation.navigate('SubscriptionFlow', {
+              navigation.navigate("SubscriptionFlow", {
                 artistId: video?.artistId,
                 artistName: video?.artistName,
-                defaultPlan: 'ARTIST',
-                contentId: video?.id
+                defaultPlan: "ARTIST",
+                contentId: video?.id,
               });
-            }}
-          >
+            }}>
             <LinearGradient
-              colors={['#FF7A18', '#FF3D00']}
+              colors={["#FF7A18", "#FF3D00"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={styles.modalBtnGradient}
-            >
+              style={styles.modalBtnGradient}>
               <Text style={styles.modalPrimaryBtnText}>Subscribe Now</Text>
             </LinearGradient>
           </TouchableOpacity>
 
           <View style={styles.trustBox}>
             <ShieldCheck color="rgba(255,255,255,0.4)" size={14} />
-            <Text style={styles.trustText}>Secure payment via Razorpay • Cancel anytime</Text>
+            <Text style={styles.trustText}>
+              Secure payment via Razorpay • Cancel anytime
+            </Text>
           </View>
 
           <TouchableOpacity
             style={styles.modalSecondaryBtn}
-            onPress={() => setShowArtistLockModal({ visible: false, video: null })}
-          >
+            onPress={() =>
+              setShowArtistLockModal({ visible: false, video: null })
+            }>
             <Text style={styles.modalSecondaryBtnText}>Maybe Later</Text>
           </TouchableOpacity>
         </View>
@@ -1701,10 +2000,23 @@ export default function VideoScreen() {
 
   return (
     <View style={styles.root}>
-      <LinearGradient colors={Colors.backgroundGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-      <LinearGradient colors={[`${ambientColor.replace('rgb', 'rgba').replace(')', ',0.20)')}`, 'rgba(0,0,0,0)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient
+        colors={Colors.backgroundGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <LinearGradient
+        colors={[
+          `${ambientColor.replace("rgb", "rgba").replace(")", ",0.20)")}`,
+          "rgba(0,0,0,0)",
+        ]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
 
-      <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <SafeAreaView style={styles.safe} edges={["bottom"]}>
         {loading ? (
           <FlatList
             data={Array.from({ length: 6 })}
@@ -1716,8 +2028,17 @@ export default function VideoScreen() {
             showsVerticalScrollIndicator={false}
             onScroll={onListScroll}
             scrollEventThrottle={16}
-            contentContainerStyle={{ paddingTop: measuredHeaderHeight + 88, paddingBottom: tabBarHeight + 120 }}
-            refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
+            contentContainerStyle={{
+              paddingTop: measuredHeaderHeight + 88,
+              paddingBottom: tabBarHeight + 120,
+            }}
+            refreshControl={
+              <RefreshControl
+                tintColor="#fff"
+                refreshing={refreshing}
+                onRefresh={() => load({ refresh: true })}
+              />
+            }
           />
         ) : (
           <FlatList<VideoCard>
@@ -1733,15 +2054,31 @@ export default function VideoScreen() {
             showsVerticalScrollIndicator={false}
             onScroll={onListScroll}
             scrollEventThrottle={16}
-            contentContainerStyle={{ paddingTop: measuredHeaderHeight + 88, paddingBottom: tabBarHeight + 120 }}
-            refreshControl={<RefreshControl tintColor="#fff" refreshing={refreshing} onRefresh={() => load({ refresh: true })} />}
+            contentContainerStyle={{
+              paddingTop: measuredHeaderHeight + 88,
+              paddingBottom: tabBarHeight + 120,
+            }}
+            refreshControl={
+              <RefreshControl
+                tintColor="#fff"
+                refreshing={refreshing}
+                onRefresh={() => load({ refresh: true })}
+              />
+            }
             ListEmptyComponent={listEmpty}
             ListHeaderComponent={listHeader}
-            ListHeaderComponentStyle={listHeader ? { marginTop: 36, marginBottom: 16 } : undefined}
+            ListHeaderComponentStyle={
+              listHeader ? { marginTop: 36, marginBottom: 16 } : undefined
+            }
           />
         )}
 
-        <View style={[styles.stickyHeader, isFullscreen ? styles.stickyHeaderFullscreen : null]} pointerEvents="box-none">
+        <View
+          style={[
+            styles.stickyHeader,
+            isFullscreen ? styles.stickyHeaderFullscreen : null,
+          ]}
+          pointerEvents="box-none">
           <View onLayout={onHeaderLayout}>
             {!isFullscreen ? (
               <View style={styles.headerTopRow}>
@@ -1753,280 +2090,447 @@ export default function VideoScreen() {
               <Animated.View
                 style={[
                   styles.playerFrame,
-                  isFullscreen ? [{ width: windowWidth, height: windowHeight } as any] : null,
+                  isFullscreen
+                    ? [{ width: windowWidth, height: windowHeight } as any]
+                    : null,
                 ]}
-                pointerEvents="box-none"
-              >
-              <View style={styles.playerInner} pointerEvents="box-none" {...panResponder.panHandlers}>
-                {activePlaybackUrl ? (
-                  <Pressable
-                    style={[StyleSheet.absoluteFill, styles.playerSurfacePressable]}
-                    pointerEvents="auto"
-                    onPress={onPressPlayerSurface}
-                  >
-                    <VideoView
-                      player={videoPlayer}
+                pointerEvents="box-none">
+                <View
+                  style={styles.playerInner}
+                  pointerEvents="box-none"
+                  {...panResponder.panHandlers}>
+                  {activePlaybackUrl ? (
+                    <Pressable
                       style={[
-                        styles.video,
-                        {
-                          width: isFullscreen ? windowWidth : SCREEN_WIDTH,
-                          height: isFullscreen ? windowHeight : HEADER_HEIGHT,
-                        },
+                        StyleSheet.absoluteFill,
+                        styles.playerSurfacePressable,
                       ]}
-                      contentFit="contain"
-                      nativeControls={false}
-                      allowsVideoFrameAnalysis={false}
-                    />
-                  </Pressable>
-                ) : (
-                  <View style={StyleSheet.absoluteFill}>
-                    <View style={styles.playerBlank} />
-                    <View style={styles.heroOverlay}>
-                      {loadingPlaybackUrl ? <ActivityIndicator color="#fff" /> : null}
-                      <Text style={styles.selectText}>Select a video to play</Text>
-                    </View>
-                  </View>
-                )}
-
-                {activePlaybackUrl && showControls ? (
-                  <View style={[styles.playerTopLeft, isFullscreen ? { top: insets.top + 12 } : null]}>
-                    <Pressable
-                      style={styles.iconBtn}
-                      onPress={() => {
-                        if (isFullscreen) {
-                          exitFullscreen();
-                        } else {
-                          stopAndReset().catch(() => undefined);
-                        }
-                      }}
-                    >
-                      <ArrowLeft size={18} color="#fff" />
-                    </Pressable>
-                  </View>
-                ) : null}
-
-                <View style={[styles.playerTopRight, isFullscreen ? { top: insets.top + 12 } : null]}>
-                  {activePlaybackUrl && showControls ? (
-                    <Pressable style={styles.iconBtn} onPress={() => setShowQualitySheet((s) => !s)}>
-                      <View style={styles.qualityIconWrap}>
-                        <Settings size={18} color="#fff" />
-                        {isHD ? (
-                          <View style={styles.hdBadge}>
-                            <Text style={styles.hdBadgeText}>HD</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    </Pressable>
-                  ) : null}
-                  {activePlaybackUrl && showControls ? (
-                    <Pressable
-                      style={styles.iconBtn}
-                      onPress={() => {
-                        if (isFullscreen) {
-                          exitFullscreen();
-                        } else {
-                          enterFullscreen();
-                        }
-                      }}
-                    >
-                      {isFullscreen ? <X size={18} color="#fff" /> : <Maximize size={18} color="#fff" />}
-                    </Pressable>
-                  ) : null}
-                </View>
-
-                {showQualitySheet && activePlaybackUrl && showControls ? (
-                  <BlurView intensity={70} tint="dark" style={styles.qualitySheet}>
-                    <Text style={styles.qualitySheetTitle}>Quality</Text>
-                    <ScrollView
-                      bounces={false}
-                      showsVerticalScrollIndicator={false}
-                      style={styles.qualityScrollView}
-                      contentContainerStyle={styles.qualityScrollContent}
-                    >
-                      {availableQualities.map((q) => {
-                        const active = q === selectedQuality;
-                        const isLockedForFree = !isStreamingHdAllowed && (q !== '144p' && q !== '240p');
-                        return (
-                          <Pressable
-                            key={q}
-                            style={[styles.qualityPill, active ? styles.qualityPillActive : null]}
-                            onPress={() => {
-                              applyQualitySelection(q).catch(() => undefined);
-                            }}
-                          >
-                            <Text style={[styles.qualityText, active ? styles.qualityTextActive : null]}>
-                              {q}
-                            </Text>
-                            {isLockedForFree ? (
-                              <View style={[styles.qualityHdTag, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-                                <Lock color="#FFA500" size={12} />
-                              </View>
-                            ) : null}
-                            {active ? (
-                              <View style={styles.qualityActiveDot} />
-                            ) : null}
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
-                  </BlurView>
-                ) : null}
-
-                {activePlaybackUrl && showControls ? (
-                  <View style={styles.controlsOverlay} pointerEvents="box-none">
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.playPauseBtn,
-                        pressed ? styles.playPauseBtnPressed : null,
-                      ]}
-                      onPress={toggleInlinePlayPause}
-                    >
-                      <Image
-                        source={isVideoPlaying ? PlayButtonImg : PauseButtonImg}
-                        style={styles.playPauseImg}
-                        resizeMode="contain"
+                      pointerEvents="auto"
+                      onPress={onPressPlayerSurface}>
+                      <VideoView
+                        player={videoPlayer}
+                        style={[
+                          styles.video,
+                          {
+                            width: isFullscreen ? windowWidth : SCREEN_WIDTH,
+                            height: isFullscreen ? windowHeight : HEADER_HEIGHT,
+                          },
+                        ]}
+                        contentFit="contain"
+                        nativeControls={false}
+                        allowsVideoFrameAnalysis={false}
                       />
                     </Pressable>
-                  </View>
-                ) : null}
-
-                {showUpNext ? (
-                  <View style={styles.upNextOverlay}>
-                    <Text style={styles.upNextTitle}>Up Next</Text>
-                    <Text style={styles.upNextSub}>Playing next in {upNextSeconds}s</Text>
-                  </View>
-                ) : null}
-
-                {activePlaybackUrl && showControls ? (
-                  <View style={styles.seekWrap} pointerEvents="box-none">
-                    <View style={styles.seekTimesRow}>
-                      <Text style={styles.seekTime}>{formatDurationLabel(positionMs, '00:00')}</Text>
-                      <Text style={styles.seekTime}>{formatDurationLabel(durationMs, '--:--')}</Text>
+                  ) : (
+                    <View style={StyleSheet.absoluteFill}>
+                      <View style={styles.playerBlank} />
+                      <View style={styles.heroOverlay}>
+                        {loadingPlaybackUrl ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : null}
+                        <Text style={styles.selectText}>
+                          Select a video to play
+                        </Text>
+                      </View>
                     </View>
-                    <Slider
-                      style={styles.slider}
-                      minimumValue={0}
-                      maximumValue={Math.max(1, durationMs || 1)}
-                      value={Math.min(positionMs, durationMs || 1)}
-                      disabled={!hasFiniteDuration(durationMs)}
-                      minimumTrackTintColor="#FFFFFF"
-                      maximumTrackTintColor="rgba(255,255,255,0.22)"
-                      thumbTintColor="#FFFFFF"
-                      onSlidingStart={onSeekStart}
-                      onValueChange={onSeekChange}
-                      onSlidingComplete={onSeekComplete}
-                    />
-                  </View>
-                ) : null}
+                  )}
 
-                {playbackError ? <Text style={styles.heroHintText}>{playbackError}</Text> : null}
+                  {activePlaybackUrl && showControls ? (
+                    <View
+                      style={[
+                        styles.playerTopLeft,
+                        isFullscreen ? { top: insets.top + 12 } : null,
+                      ]}>
+                      <Pressable
+                        style={styles.iconBtn}
+                        onPress={() => {
+                          if (isFullscreen) {
+                            exitFullscreen();
+                          } else {
+                            stopAndReset().catch(() => undefined);
+                          }
+                        }}>
+                        <ArrowLeft size={18} color="#fff" />
+                      </Pressable>
+                    </View>
+                  ) : null}
 
-                {!activePlaybackUrl ? (
-                  <View style={styles.heroHint}>
-                    <Text style={styles.heroHintText}>Tap a video below to start playing</Text>
+                  <View
+                    style={[
+                      styles.playerTopRight,
+                      isFullscreen ? { top: insets.top + 12 } : null,
+                    ]}>
+                    {activePlaybackUrl && showControls ? (
+                      <Pressable
+                        style={styles.iconBtn}
+                        onPress={() => setShowQualitySheet((s) => !s)}>
+                        <View style={styles.qualityIconWrap}>
+                          <Settings size={18} color="#fff" />
+                          {isHD ? (
+                            <View style={styles.hdBadge}>
+                              <Text style={styles.hdBadgeText}>HD</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      </Pressable>
+                    ) : null}
+                    {activePlaybackUrl && showControls ? (
+                      <Pressable
+                        style={styles.iconBtn}
+                        onPress={() => {
+                          if (isFullscreen) {
+                            exitFullscreen();
+                          } else {
+                            enterFullscreen();
+                          }
+                        }}>
+                        {isFullscreen ? (
+                          <X size={18} color="#fff" />
+                        ) : (
+                          <Maximize size={18} color="#fff" />
+                        )}
+                      </Pressable>
+                    ) : null}
                   </View>
-                ) : null}
-              </View>
-            </Animated.View>
+
+                  {showQualitySheet && activePlaybackUrl && showControls ? (
+                    <BlurView
+                      intensity={70}
+                      tint="dark"
+                      style={styles.qualitySheet}>
+                      <Text style={styles.qualitySheetTitle}>Quality</Text>
+                      <ScrollView
+                        bounces={false}
+                        showsVerticalScrollIndicator={false}
+                        style={styles.qualityScrollView}
+                        contentContainerStyle={styles.qualityScrollContent}>
+                        {availableQualities.map((q) => {
+                          const active = q === selectedQuality;
+                          const isLockedForFree =
+                            !isStreamingHdAllowed &&
+                            q !== "144p" &&
+                            q !== "240p";
+                          return (
+                            <Pressable
+                              key={q}
+                              style={[
+                                styles.qualityPill,
+                                active ? styles.qualityPillActive : null,
+                              ]}
+                              onPress={() => {
+                                applyQualitySelection(q).catch(() => undefined);
+                              }}>
+                              <Text
+                                style={[
+                                  styles.qualityText,
+                                  active ? styles.qualityTextActive : null,
+                                ]}>
+                                {q}
+                              </Text>
+                              {isLockedForFree ? (
+                                <View
+                                  style={[
+                                    styles.qualityHdTag,
+                                    { backgroundColor: "rgba(0,0,0,0.5)" },
+                                  ]}>
+                                  <Lock color="#FFA500" size={12} />
+                                </View>
+                              ) : null}
+                              {active ? (
+                                <View style={styles.qualityActiveDot} />
+                              ) : null}
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    </BlurView>
+                  ) : null}
+
+                  {activePlaybackUrl && showControls ? (
+                    <View
+                      style={[
+                        styles.controlsOverlay,
+                        { flexDirection: "row", gap: 20 },
+                      ]}
+                      pointerEvents="box-none">
+                      {/* BACKWARD 10 SEC BUTTON */}
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.seekBtn,
+                          pressed ? styles.seekBtnPressed : null,
+                        ]}
+                        onPress={async () => {
+                          try {
+                            if (videoPlayer.playing) {
+                              await videoPlayer.pause();
+                              setIsVideoPlaying(false);
+                            }
+                            const newTime = Math.max(
+                              0,
+                              videoPlayer.currentTime - 10
+                            );
+                            videoPlayer.seekTo(newTime);
+                          } catch (e) {}
+                        }}>
+                        <Text style={styles.seekBtnText}>⏪ 10</Text>
+                      </Pressable>
+
+                      {/* PLAY/PAUSE BUTTON */}
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.playPauseBtn,
+                          pressed ? styles.playPauseBtnPressed : null,
+                        ]}
+                        onPress={toggleInlinePlayPause}>
+                        <Image
+                          source={
+                            isVideoPlaying ? PlayButtonImg : PauseButtonImg
+                          }
+                          style={styles.playPauseImg}
+                          resizeMode="contain"
+                        />
+                      </Pressable>
+
+                      {/* FORWARD 10 SEC BUTTON */}
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.seekBtn,
+                          pressed ? styles.seekBtnPressed : null,
+                        ]}
+                        onPress={async () => {
+                          try {
+                            if (videoPlayer.playing) {
+                              await videoPlayer.pause();
+                              setIsVideoPlaying(false);
+                            }
+                            const dur = videoPlayer.duration;
+                            const newTime = Math.min(
+                              dur,
+                              videoPlayer.currentTime + 10
+                            );
+                            videoPlayer.seekTo(newTime);
+                          } catch (e) {}
+                        }}>
+                        <Text style={styles.seekBtnText}>10 ⏩</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                  {showUpNext ? (
+                    <View style={styles.upNextOverlay}>
+                      <Text style={styles.upNextTitle}>Up Next</Text>
+                      <Text style={styles.upNextSub}>
+                        Playing next in {upNextSeconds}s
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {activePlaybackUrl && showControls ? (
+                    <View style={styles.seekWrap} pointerEvents="box-none">
+                      <View style={styles.seekTimesRow}>
+                        <Text style={styles.seekTime}>
+                          {formatDurationLabel(positionMs, "00:00")}
+                        </Text>
+                        <Text style={styles.seekTime}>
+                          {formatDurationLabel(durationMs, "--:--")}
+                        </Text>
+                      </View>
+                      <Slider
+                        style={styles.slider}
+                        minimumValue={0}
+                        maximumValue={Math.max(1, durationMs || 1)}
+                        value={Math.min(positionMs, durationMs || 1)}
+                        disabled={!hasFiniteDuration(durationMs)}
+                        minimumTrackTintColor="#FFFFFF"
+                        maximumTrackTintColor="rgba(255,255,255,0.22)"
+                        thumbTintColor="#FFFFFF"
+                        onSlidingStart={onSeekStart}
+                        onValueChange={onSeekChange}
+                        onSlidingComplete={onSeekComplete}
+                      />
+                    </View>
+                  ) : null}
+
+                  {playbackError ? (
+                    <Text style={styles.heroHintText}>{playbackError}</Text>
+                  ) : null}
+
+                  {!activePlaybackUrl ? (
+                    <View style={styles.heroHint}>
+                      <Text style={styles.heroHintText}>
+                        Tap a video below to start playing
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              </Animated.View>
             ) : null}
 
             {activeVideoId ? (
               <View style={styles.metaBlock}>
                 {hasPlaybackStarted && activeVideoMeta ? (
                   <>
-                  <Text style={styles.nowTitle} numberOfLines={1}>
-                    {activeVideoMeta.title}
-                  </Text>
-                  
-              <View style={styles.artistRowContainer}>
-                    <Pressable style={styles.artistRow} onPress={onPressArtist}>
-                      <Image source={{ uri: getOptimizedImageUrl(activeVideoMeta.artistProfileImage || FALLBACK_ARTWORK) }} style={styles.artistAvatar} />
-                      <View style={styles.artistNameCol}>
-                        <Text style={styles.artistRowName} numberOfLines={1}>
-                          {activeVideoMeta.artistName}
-                        </Text>
-                        <Text style={styles.artistRowSub} numberOfLines={1}>
-                          {formatDateLabel(activeVideoMeta.createdAt)}
-                        </Text>
-                      </View>
-                    </Pressable>
+                    <Text style={styles.nowTitle} numberOfLines={1}>
+                      {activeVideoMeta.title}
+                    </Text>
 
-                  {(() => {
-                    const id = activeVideoMeta.id;
-                    const state = reactionStateById[String(id)] ?? { reaction: activeVideoMeta.userReaction ?? null, likeDelta: 0, dislikeDelta: 0 };
-                    const reaction = state.reaction;
-                    const likeBase = typeof activeVideoMeta.likeCount === 'number' ? activeVideoMeta.likeCount : 0;
-                    const dislikeBase = typeof activeVideoMeta.dislikeCount === 'number' ? activeVideoMeta.dislikeCount : 0;
-                    const likeCount = Math.max(0, likeBase + state.likeDelta);
-                    const dislikeCount = Math.max(0, dislikeBase + state.dislikeDelta);
-
-                    const likeActive = reaction === 'like';
-                    const dislikeActive = reaction === 'dislike';
-
-                    return (
-                      <View style={styles.engagementIconsRow}>
-                        <Pressable
-                          style={[styles.engagementIconBtn, likeActive ? styles.engagementIconBtnActive : null]}
-                          onPress={onPressLike}
-                          hitSlop={8}
-                        >
-                          <EngagementIcon name="like" color={likeActive ? Colors.accent : '#fff'} />
-                          {typeof likeCount === 'number' ? (
-                            <Text style={[styles.engagementIconCount, likeActive ? styles.engagementIconCountActive : null]}>
-                              {formatCompactViews(likeCount).replace(' views', '')}
-                            </Text>
-                          ) : null}
-                        </Pressable>
-                        <Pressable
-                          style={[styles.engagementIconBtn, dislikeActive ? styles.engagementIconBtnActive : null]}
-                          onPress={onPressDislike}
-                          hitSlop={8}
-                        >
-                          <EngagementIcon name="dislike" color={dislikeActive ? Colors.accent : '#fff'} />
-                          {typeof dislikeCount === 'number' ? (
-                            <Text style={[styles.engagementIconCount, dislikeActive ? styles.engagementIconCountActive : null]}>
-                              {formatCompactViews(dislikeCount).replace(' views', '')}
-                            </Text>
-                          ) : null}
-                        </Pressable>
-                        <Pressable
-                          style={[
-                            styles.engagementIconBtn,
-                            activeVideoMeta?.id && reportedContentIds[String(activeVideoMeta.id)] ? styles.reportIconBtnDisabled : null,
-                          ]}
-                          onPress={() => {
-                            if (!activeVideoMeta?.id) return;
-                            if (reportedContentIds[String(activeVideoMeta.id)]) return;
-                            setReportModalOpen(true);
+                    <View style={styles.artistRowContainer}>
+                      <Pressable
+                        style={styles.artistRow}
+                        onPress={onPressArtist}>
+                        <Image
+                          source={{
+                            uri: getOptimizedImageUrl(
+                              activeVideoMeta.artistProfileImage ||
+                                FALLBACK_ARTWORK
+                            ),
                           }}
-                          hitSlop={8}
-                        >
-                          <AlertTriangle
-                            size={18}
-                            color={
-                              activeVideoMeta?.id && reportedContentIds[String(activeVideoMeta.id)]
-                                ? 'rgba(255,255,255,0.35)'
-                                : '#fff'
-                            }
-                          />
-                          <Text
-                            style={[
-                              styles.engagementIconCount,
-                              activeVideoMeta?.id && reportedContentIds[String(activeVideoMeta.id)] ? styles.reportTextDisabled : null,
-                            ]}
-                          >
-                            Report
+                          style={styles.artistAvatar}
+                          onError={(e) => {
+                            // Agar image load nahi hoti toh default image dikhao
+                            e.currentTarget.source = { uri: FALLBACK_ARTWORK };
+                          }}
+                        />
+                        <View style={styles.artistNameCol}>
+                          <Text style={styles.artistRowName} numberOfLines={1}>
+                            {activeVideoMeta.artistName}
                           </Text>
-                        </Pressable>
-                      </View>
-                    );
-                  })()}
-                  </View>
+                          <Text style={styles.artistRowSub} numberOfLines={1}>
+                            {formatDateLabel(activeVideoMeta.createdAt)}
+                          </Text>
+                        </View>
+                      </Pressable>
 
-                </>
-              ) : null}
-            </View>
-          ) : null}
+                      {(() => {
+                        const id = activeVideoMeta.id;
+                        const state = reactionStateById[String(id)] ?? {
+                          reaction: activeVideoMeta.userReaction ?? null,
+                          likeDelta: 0,
+                          dislikeDelta: 0,
+                        };
+                        const reaction = state.reaction;
+                        const likeBase =
+                          typeof activeVideoMeta.likeCount === "number"
+                            ? activeVideoMeta.likeCount
+                            : 0;
+                        const dislikeBase =
+                          typeof activeVideoMeta.dislikeCount === "number"
+                            ? activeVideoMeta.dislikeCount
+                            : 0;
+                        const likeCount = Math.max(
+                          0,
+                          likeBase + state.likeDelta
+                        );
+                        const dislikeCount = Math.max(
+                          0,
+                          dislikeBase + state.dislikeDelta
+                        );
+
+                        const likeActive = reaction === "like";
+                        const dislikeActive = reaction === "dislike";
+
+                        return (
+                          <View style={styles.engagementIconsRow}>
+                            <Pressable
+                              style={[
+                                styles.engagementIconBtn,
+                                likeActive
+                                  ? styles.engagementIconBtnActive
+                                  : null,
+                              ]}
+                              onPress={onPressLike}
+                              hitSlop={8}>
+                              <EngagementIcon
+                                name="like"
+                                color={likeActive ? Colors.accent : "#fff"}
+                              />
+                              {typeof likeCount === "number" ? (
+                                <Text
+                                  style={[
+                                    styles.engagementIconCount,
+                                    likeActive
+                                      ? styles.engagementIconCountActive
+                                      : null,
+                                  ]}>
+                                  {formatCompactViews(likeCount).replace(
+                                    " views",
+                                    ""
+                                  )}
+                                </Text>
+                              ) : null}
+                            </Pressable>
+                            <Pressable
+                              style={[
+                                styles.engagementIconBtn,
+                                dislikeActive
+                                  ? styles.engagementIconBtnActive
+                                  : null,
+                              ]}
+                              onPress={onPressDislike}
+                              hitSlop={8}>
+                              <EngagementIcon
+                                name="dislike"
+                                color={dislikeActive ? Colors.accent : "#fff"}
+                              />
+                              {typeof dislikeCount === "number" ? (
+                                <Text
+                                  style={[
+                                    styles.engagementIconCount,
+                                    dislikeActive
+                                      ? styles.engagementIconCountActive
+                                      : null,
+                                  ]}>
+                                  {formatCompactViews(dislikeCount).replace(
+                                    " views",
+                                    ""
+                                  )}
+                                </Text>
+                              ) : null}
+                            </Pressable>
+                            <Pressable
+                              style={[
+                                styles.engagementIconBtn,
+                                activeVideoMeta?.id &&
+                                reportedContentIds[String(activeVideoMeta.id)]
+                                  ? styles.reportIconBtnDisabled
+                                  : null,
+                              ]}
+                              onPress={() => {
+                                if (!activeVideoMeta?.id) return;
+                                if (
+                                  reportedContentIds[String(activeVideoMeta.id)]
+                                )
+                                  return;
+                                setReportModalOpen(true);
+                              }}
+                              hitSlop={8}>
+                              <AlertTriangle
+                                size={18}
+                                color={
+                                  activeVideoMeta?.id &&
+                                  reportedContentIds[String(activeVideoMeta.id)]
+                                    ? "rgba(255,255,255,0.35)"
+                                    : "#fff"
+                                }
+                              />
+                              <Text
+                                style={[
+                                  styles.engagementIconCount,
+                                  activeVideoMeta?.id &&
+                                  reportedContentIds[String(activeVideoMeta.id)]
+                                    ? styles.reportTextDisabled
+                                    : null,
+                                ]}>
+                                Report
+                              </Text>
+                            </Pressable>
+                          </View>
+                        );
+                      })()}
+                    </View>
+                  </>
+                ) : null}
+              </View>
+            ) : null}
 
             <View style={styles.searchWrap}>
               <BlurView intensity={24} tint="dark" style={styles.searchBlur}>
@@ -2044,18 +2548,18 @@ export default function VideoScreen() {
                   <Pressable
                     style={styles.searchClearBtn}
                     onPress={() => {
-                      setSearchQuery('');
+                      setSearchQuery("");
                       setSearchResults(null);
                     }}
-                    hitSlop={10}
-                  >
+                    hitSlop={10}>
                     <X size={18} color="rgba(255,255,255,0.70)" />
                   </Pressable>
                 ) : null}
-                {searchLoading ? <ActivityIndicator color="#fff" size="small" /> : null}
+                {searchLoading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : null}
               </BlurView>
             </View>
-
           </View>
         </View>
       </SafeAreaView>
@@ -2066,8 +2570,7 @@ export default function VideoScreen() {
         animationType="fade"
         onRequestClose={() => {
           if (!reportSubmitting) setReportModalOpen(false);
-        }}
-      >
+        }}>
         <Pressable
           style={styles.reportModalBackdrop}
           onPress={() => {
@@ -2079,104 +2582,114 @@ export default function VideoScreen() {
           <Text style={styles.reportModalSub}>Select a reason</Text>
 
           <Pressable
-            style={({ pressed }) => [styles.reportReasonBtn, pressed ? styles.reportReasonBtnPressed : null]}
+            style={({ pressed }) => [
+              styles.reportReasonBtn,
+              pressed ? styles.reportReasonBtnPressed : null,
+            ]}
             disabled={reportSubmitting}
-            onPress={() => submitReport('Spam')}
-          >
+            onPress={() => submitReport("Spam")}>
             <Text style={styles.reportReasonText}>Spam</Text>
           </Pressable>
           <Pressable
-            style={({ pressed }) => [styles.reportReasonBtn, pressed ? styles.reportReasonBtnPressed : null]}
+            style={({ pressed }) => [
+              styles.reportReasonBtn,
+              pressed ? styles.reportReasonBtnPressed : null,
+            ]}
             disabled={reportSubmitting}
-            onPress={() => submitReport('Inappropriate')}
-          >
+            onPress={() => submitReport("Inappropriate")}>
             <Text style={styles.reportReasonText}>Inappropriate</Text>
           </Pressable>
           <Pressable
-            style={({ pressed }) => [styles.reportReasonBtn, pressed ? styles.reportReasonBtnPressed : null]}
+            style={({ pressed }) => [
+              styles.reportReasonBtn,
+              pressed ? styles.reportReasonBtnPressed : null,
+            ]}
             disabled={reportSubmitting}
-            onPress={() => submitReport('Copyright')}
-          >
+            onPress={() => submitReport("Copyright")}>
             <Text style={styles.reportReasonText}>Copyright</Text>
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [styles.reportCancelBtn, pressed ? styles.reportCancelBtnPressed : null]}
+            style={({ pressed }) => [
+              styles.reportCancelBtn,
+              pressed ? styles.reportCancelBtnPressed : null,
+            ]}
             disabled={reportSubmitting}
-            onPress={() => setReportModalOpen(false)}
-          >
-            <Text style={styles.reportCancelText}>{reportSubmitting ? 'Submitting...' : 'Cancel'}</Text>
+            onPress={() => setReportModalOpen(false)}>
+            <Text style={styles.reportCancelText}>
+              {reportSubmitting ? "Submitting..." : "Cancel"}
+            </Text>
           </Pressable>
         </View>
       </Modal>
 
-        {/* ── HD Quality Lock Modal ─────────────────────────────────────── */}
-        <Modal
-          visible={showHdLockModal}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowHdLockModal(false)}
-        >
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalContainer}>
-              <View style={styles.modalIconWrap}>
-                <Crown color="#4AA3FF" size={28} />
-              </View>
-              <Text style={styles.modalTitle}>HD Quality Locked</Text>
-              <Text style={styles.modalMessage}>
-                Upgrade to Premium to watch in high quality (720p/1080p).
-              </Text>
-              <Pressable
-                style={styles.modalPrimaryBtn}
-                onPress={() => {
-                  setShowHdLockModal(false);
-                  navigation.navigate('SubscriptionFlow', { defaultPlan: 'PLATFORM' });
-                }}
-              >
-                <LinearGradient
-                  colors={['#4AA3FF', '#0B7EE8']}
-                  style={styles.modalBtnGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Text style={styles.modalPrimaryBtnText}>Upgrade Now</Text>
-                </LinearGradient>
-              </Pressable>
-              <Pressable
-                style={styles.modalSecondaryBtn}
-                onPress={() => setShowHdLockModal(false)}
-              >
-                <Text style={styles.modalSecondaryBtnText}>Continue with {maxAllowedResolution}</Text>
-              </Pressable>
+      {/* ── HD Quality Lock Modal ─────────────────────────────────────── */}
+      <Modal
+        visible={showHdLockModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowHdLockModal(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalIconWrap}>
+              <Crown color="#4AA3FF" size={28} />
             </View>
+            <Text style={styles.modalTitle}>HD Quality Locked</Text>
+            <Text style={styles.modalMessage}>
+              Upgrade to Premium to watch in high quality (720p/1080p).
+            </Text>
+            <Pressable
+              style={styles.modalPrimaryBtn}
+              onPress={() => {
+                setShowHdLockModal(false);
+                navigation.navigate("SubscriptionFlow", {
+                  defaultPlan: "PLATFORM",
+                });
+              }}>
+              <LinearGradient
+                colors={["#4AA3FF", "#0B7EE8"]}
+                style={styles.modalBtnGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}>
+                <Text style={styles.modalPrimaryBtnText}>Upgrade Now</Text>
+              </LinearGradient>
+            </Pressable>
+            <Pressable
+              style={styles.modalSecondaryBtn}
+              onPress={() => setShowHdLockModal(false)}>
+              <Text style={styles.modalSecondaryBtnText}>
+                Continue with {maxAllowedResolution}
+              </Text>
+            </Pressable>
           </View>
-        </Modal>
+        </View>
+      </Modal>
 
-        {/* ── Artist Lock Modal ─────────────────────────────────────────── */}
-        {renderArtistLockModal()}
+      {/* ── Artist Lock Modal ─────────────────────────────────────────── */}
+      {renderArtistLockModal()}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000' },
+  root: { flex: 1, backgroundColor: "#000" },
   safe: { flex: 1 },
-  title: { color: '#fff', fontSize: 28, fontWeight: '900' },
+  title: { color: "#fff", fontSize: 28, fontWeight: "900" },
 
   stickyHeader: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     paddingBottom: 10,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
     zIndex: 100,
     elevation: 20,
   },
   stickyHeaderFullscreen: {
     bottom: 0,
     paddingBottom: 0,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
     zIndex: 999,
     elevation: 999,
   },
@@ -2187,101 +2700,101 @@ const styles = StyleSheet.create({
   },
 
   playerFrame: {
-    width: '100%',
+    width: "100%",
     height: HEADER_HEIGHT,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
   },
   playerFrameFullscreen: {
-    height: Dimensions.get('window').height,
+    height: Dimensions.get("window").height,
   },
   playerFrameMini: {
-    position: 'absolute',
+    position: "absolute",
     borderRadius: 14,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: "rgba(255,255,255,0.14)",
   },
   playerInner: {
     flex: 1,
   },
   playerBlank: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
   },
   selectText: {
     marginTop: 10,
-    color: 'rgba(255,255,255,0.85)',
+    color: "rgba(255,255,255,0.85)",
     fontSize: 14,
-    fontWeight: '800',
-    textAlign: 'center',
+    fontWeight: "800",
+    textAlign: "center",
   },
   video: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   videoOffscreen: {
-    position: 'absolute',
+    position: "absolute",
     left: -9999,
     top: 0,
   },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.25)",
   },
   heroHint: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: "rgba(0,0,0,0.45)",
   },
   heroHintText: {
-    color: 'rgba(255,255,255,0.80)',
+    color: "rgba(255,255,255,0.80)",
     fontSize: 12,
-    fontWeight: '800',
-    textAlign: 'center',
+    fontWeight: "800",
+    textAlign: "center",
   },
 
   playerTopRight: {
-    position: 'absolute',
+    position: "absolute",
     right: 12,
     top: 12,
     zIndex: 30,
     elevation: 30,
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
   },
   playerTopLeft: {
-    position: 'absolute',
+    position: "absolute",
     left: 12,
     top: 12,
     zIndex: 30,
     elevation: 30,
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
   },
   iconBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.45)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderColor: "rgba(255,255,255,0.16)",
   },
 
   controlsOverlay: {
     ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     zIndex: 10,
     elevation: 10,
-    backgroundColor: 'rgba(0,0,0,0.10)',
+    backgroundColor: "rgba(0,0,0,0.10)",
   },
 
   playerSurfacePressable: {
@@ -2292,11 +2805,11 @@ const styles = StyleSheet.create({
     width: 66,
     height: 66,
     borderRadius: 33,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
     borderWidth: 0,
-    borderColor: 'transparent',
+    borderColor: "transparent",
   },
   playPauseBtnPressed: {
     opacity: 0.92,
@@ -2306,9 +2819,29 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
   },
+  // ✅ YAHAN SE NEEECHE YEH ADD KARO
+  seekBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  seekBtnPressed: {
+    transform: [{ scale: 0.95 }],
+    opacity: 0.8,
+  },
+  seekBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
 
   seekWrap: {
-    position: 'absolute',
+    position: "absolute",
     left: 10,
     right: 10,
     bottom: 8,
@@ -2317,109 +2850,114 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 8,
     borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: "rgba(0,0,0,0.35)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: "rgba(255,255,255,0.10)",
   },
   seekTimesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 6,
   },
   seekTime: {
-    color: 'rgba(255,255,255,0.85)',
+    color: "rgba(255,255,255,0.85)",
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: "800",
   },
-  slider: { width: '100%', height: 20 },
+  slider: { width: "100%", height: 20 },
 
   upNextOverlay: {
-    position: 'absolute',
+    position: "absolute",
     left: 12,
     bottom: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.60)',
+    backgroundColor: "rgba(0,0,0,0.60)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: "rgba(255,255,255,0.12)",
   },
-  upNextTitle: { color: '#fff', fontSize: 13, fontWeight: '900' },
-  upNextSub: { marginTop: 2, color: 'rgba(255,255,255,0.70)', fontSize: 12, fontWeight: '700' },
+  upNextTitle: { color: "#fff", fontSize: 13, fontWeight: "900" },
+  upNextSub: {
+    marginTop: 2,
+    color: "rgba(255,255,255,0.70)",
+    fontSize: 12,
+    fontWeight: "700",
+  },
 
   metaBlock: {
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 10,
-    backgroundColor: 'rgba(0,0,0,0.20)',
+    backgroundColor: "rgba(0,0,0,0.20)",
   },
-  nowTitle: { color: '#fff', fontSize: 16, fontWeight: '900' },
-  
+  nowTitle: { color: "#fff", fontSize: 16, fontWeight: "900" },
+
   artistRowContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
     marginTop: 8,
   },
   artistRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     flexShrink: 1,
     marginRight: 10,
   },
   artistNameCol: {
-    flexDirection: 'column',
-    justifyContent: 'center',
+    flexDirection: "column",
+    justifyContent: "center",
     flexShrink: 1,
   },
   artistAvatar: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: "rgba(255,255,255,0.10)",
   },
   artistRowName: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 13,
-    fontWeight: '900',
+    fontWeight: "900",
   },
   artistRowSub: {
-    color: 'rgba(255,255,255,0.60)',
+    color: "rgba(255,255,255,0.60)",
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
     marginTop: 2,
   },
 
   engagementIconsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
     gap: 8,
   },
   engagementIconBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     paddingVertical: 6,
     paddingHorizontal: 8,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: "rgba(255,255,255,0.10)",
   },
   engagementIconBtnActive: {
-    backgroundColor: 'rgba(255,106,0,0.16)',
-    borderColor: 'rgba(255,106,0,0.55)',
+    backgroundColor: "rgba(255,106,0,0.16)",
+    borderColor: "rgba(255,106,0,0.55)",
   },
   engagementIconCount: {
-    color: 'rgba(255,255,255,0.90)',
+    color: "rgba(255,255,255,0.90)",
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: "900",
   },
   engagementIconCountActive: {
     color: Colors.accent,
@@ -2429,43 +2967,43 @@ const styles = StyleSheet.create({
     opacity: 0.65,
   },
   reportTextDisabled: {
-    color: 'rgba(255,255,255,0.40)',
+    color: "rgba(255,255,255,0.40)",
   },
 
   reportModalBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: "rgba(0,0,0,0.6)",
   },
   reportModalCard: {
-    position: 'absolute',
+    position: "absolute",
     left: 18,
     right: 18,
     bottom: 26,
     borderRadius: 18,
     padding: 16,
-    backgroundColor: 'rgba(20,20,20,0.96)',
+    backgroundColor: "rgba(20,20,20,0.96)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: "rgba(255,255,255,0.10)",
   },
   reportModalTitle: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '900',
+    fontWeight: "900",
   },
   reportModalSub: {
     marginTop: 6,
     marginBottom: 12,
-    color: 'rgba(255,255,255,0.65)',
+    color: "rgba(255,255,255,0.65)",
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   reportReasonBtn: {
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: "rgba(255,255,255,0.10)",
     marginBottom: 10,
   },
   reportReasonBtnPressed: {
@@ -2473,46 +3011,46 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.99 }],
   },
   reportReasonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   reportCancelBtn: {
     marginTop: 4,
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,255,255,0.02)',
+    backgroundColor: "rgba(255,255,255,0.02)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
+    borderColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
   },
   reportCancelBtnPressed: {
     opacity: 0.85,
   },
   reportCancelText: {
-    color: 'rgba(255,255,255,0.85)',
+    color: "rgba(255,255,255,0.85)",
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: "800",
   },
 
-  actionRow: { marginTop: 12, flexDirection: 'row', gap: 18 },
+  actionRow: { marginTop: 12, flexDirection: "row", gap: 18 },
 
   qualitySheet: {
-    position: 'absolute',
+    position: "absolute",
     // Anchor to bottom-right — grows upward, never out of player bounds.
     right: 12,
-    bottom: 48,          // sits just above the seek bar
-    zIndex: 999,         // above everything (controls are z:30)
+    bottom: 48, // sits just above the seek bar
+    zIndex: 999, // above everything (controls are z:30)
     elevation: 999,
     paddingHorizontal: 0,
     paddingTop: 10,
     paddingBottom: 8,
     borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(0,0,0,0.88)',
+    overflow: "hidden",
+    backgroundColor: "rgba(0,0,0,0.88)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: "rgba(255,255,255,0.18)",
     minWidth: 160,
     maxWidth: 200,
   },
@@ -2525,11 +3063,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   qualitySheetTitle: {
-    color: 'rgba(255,255,255,0.50)',
+    color: "rgba(255,255,255,0.50)",
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     paddingHorizontal: 4,
     paddingBottom: 2,
   },
@@ -2537,35 +3075,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: "rgba(255,255,255,0.07)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    borderColor: "rgba(255,255,255,0.10)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 8,
   },
   qualityPillActive: {
-    borderColor: 'rgba(255,106,0,0.70)',
-    backgroundColor: 'rgba(255,106,0,0.18)',
+    borderColor: "rgba(255,106,0,0.70)",
+    backgroundColor: "rgba(255,106,0,0.18)",
   },
   qualityText: {
-    color: 'rgba(255,255,255,0.86)',
+    color: "rgba(255,255,255,0.86)",
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: "800",
     flex: 1,
   },
   qualityTextActive: { color: Colors.accent },
   qualityHdTag: {
-    backgroundColor: '#FF0000',
+    backgroundColor: "#FF0000",
     borderRadius: 3,
     paddingHorizontal: 4,
     paddingVertical: 1,
   },
   qualityHdTagText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 8,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 0.5,
   },
   qualityActiveDot: {
@@ -2581,33 +3119,33 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   searchBlur: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 16,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.04)",
   },
   searchInput: {
     flex: 1,
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     padding: 0,
   },
   searchClearBtn: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: "rgba(255,255,255,0.12)",
   },
 
   rowItem: {
@@ -2615,40 +3153,50 @@ const styles = StyleSheet.create({
     paddingTop: 14,
   },
   rowThumbWrap: {
-    width: '100%',
+    width: "100%",
     aspectRatio: 16 / 9,
     borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: "rgba(255,255,255,0.10)",
   },
   rowThumbWrapActive: {
-    borderColor: 'rgba(255,106,0,0.60)',
+    borderColor: "rgba(255,106,0,0.60)",
   },
-  rowThumb: { width: '100%', height: '100%' },
+  rowThumb: { width: "100%", height: "100%" },
   rowThumbOverlay: {
     ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.10)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.10)",
   },
   rowPlayBadge: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
   },
   rowPlayImg: {
     width: 60,
     height: 60,
   },
   rowMeta: { paddingTop: 10, paddingBottom: 2 },
-  rowTitle: { color: '#fff', fontSize: 14, fontWeight: '900' },
-  rowArtist: { marginTop: 4, color: 'rgba(255,255,255,0.70)', fontSize: 12, fontWeight: '800' },
-  rowSub: { marginTop: 4, color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '800' },
+  rowTitle: { color: "#fff", fontSize: 14, fontWeight: "900" },
+  rowArtist: {
+    marginTop: 4,
+    color: "rgba(255,255,255,0.70)",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  rowSub: {
+    marginTop: 4,
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 11,
+    fontWeight: "800",
+  },
 
   relatedWrap: {
     paddingHorizontal: 16,
@@ -2657,212 +3205,237 @@ const styles = StyleSheet.create({
     marginTop: 26,
   },
   relatedTitle: {
-    color: 'rgba(255,255,255,0.85)',
+    color: "rgba(255,255,255,0.85)",
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: "900",
     marginBottom: 10,
   },
   relatedRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
     marginBottom: 10,
     padding: 10,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: "rgba(255,255,255,0.04)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: "rgba(255,255,255,0.08)",
   },
   relatedThumb: {
     width: 92,
     height: Math.round(92 * (9 / 16)),
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: "rgba(255,255,255,0.06)",
   },
-  relatedMeta: { flex: 1, justifyContent: 'center' },
-  relatedRowTitle: { color: '#fff', fontSize: 13, fontWeight: '900' },
-  relatedRowSub: { marginTop: 4, color: 'rgba(255,255,255,0.62)', fontSize: 11, fontWeight: '800' },
+  relatedMeta: { flex: 1, justifyContent: "center" },
+  relatedRowTitle: { color: "#fff", fontSize: 13, fontWeight: "900" },
+  relatedRowSub: {
+    marginTop: 4,
+    color: "rgba(255,255,255,0.62)",
+    fontSize: 11,
+    fontWeight: "800",
+  },
 
   skelRow: { paddingHorizontal: 16, paddingTop: 14 },
   skelThumb: {
-    width: '100%',
+    width: "100%",
     aspectRatio: 16 / 9,
     borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.06)",
   },
   skelMeta: { paddingTop: 10 },
-  skelLineLg: { height: 14, borderRadius: 8, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)' },
-  skelLineSm: { marginTop: 8, height: 12, width: '70%', borderRadius: 8, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)' },
-  skelLineXs: { marginTop: 8, height: 11, width: '52%', borderRadius: 8, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)' },
+  skelLineLg: {
+    height: 14,
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  skelLineSm: {
+    marginTop: 8,
+    height: 12,
+    width: "70%",
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  skelLineXs: {
+    marginTop: 8,
+    height: 11,
+    width: "52%",
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
   skelShimmer: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     bottom: 0,
     width: 120,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    transform: [{ skewX: '-20deg' } as any],
+    backgroundColor: "rgba(255,255,255,0.06)",
+    transform: [{ skewX: "-20deg" } as any],
   },
 
   emptyText: {
     marginTop: 16,
-    color: 'rgba(255,255,255,0.6)',
+    color: "rgba(255,255,255,0.6)",
     fontSize: 14,
-    fontWeight: '700',
-    textAlign: 'center',
+    fontWeight: "700",
+    textAlign: "center",
   },
 
   // Quality settings icon + HD badge wrapper
   qualityIconWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   hdBadge: {
-    position: 'absolute',
+    position: "absolute",
     top: -6,
     right: -10,
-    backgroundColor: '#FF0000',
+    backgroundColor: "#FF0000",
     borderRadius: 4,
     paddingHorizontal: 3,
     paddingVertical: 1,
     minWidth: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
     shadowOpacity: 0.4,
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },
     elevation: 4,
   },
   hdBadgeText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 8,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 0.5,
   },
-  
+
   // Custom Modal Styles for Lock Flow
-  modalBackdrop: { 
-    flex: 1, 
-    backgroundColor: 'rgba(5,5,15,0.92)', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    padding: 24 
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(5,5,15,0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
   },
-  modalContainer: { 
-    width: '100%', 
-    maxWidth: 360, 
-    backgroundColor: '#1C1C24', 
-    borderRadius: 32, 
-    padding: 30, 
-    alignItems: 'center', 
-    borderWidth: 1, 
-    borderColor: 'rgba(255,255,255,0.08)',
-    shadowColor: '#000',
+  modalContainer: {
+    width: "100%",
+    maxWidth: 360,
+    backgroundColor: "#1C1C24",
+    borderRadius: 32,
+    padding: 30,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 20 },
     shadowOpacity: 0.6,
     shadowRadius: 32,
     elevation: 24,
   },
-  modalIconWrap: { 
-    width: 76, 
-    height: 76, 
-    borderRadius: 38, 
-    backgroundColor: 'rgba(255,255,255,0.05)', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
+  modalIconWrap: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 22,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: "rgba(255,255,255,0.1)",
   },
-  modalTitle: { 
-    color: '#fff', 
-    fontSize: 26, 
-    fontWeight: '900', 
-    marginBottom: 12, 
-    textAlign: 'center', 
-    letterSpacing: -0.5 
+  modalTitle: {
+    color: "#fff",
+    fontSize: 26,
+    fontWeight: "900",
+    marginBottom: 12,
+    textAlign: "center",
+    letterSpacing: -0.5,
   },
-  modalMessage: { 
-    color: 'rgba(255,255,255,0.65)', 
-    fontSize: 15, 
-    textAlign: 'center', 
-    marginHorizontal: 4, 
-    marginBottom: 32, 
+  modalMessage: {
+    color: "rgba(255,255,255,0.65)",
+    fontSize: 15,
+    textAlign: "center",
+    marginHorizontal: 4,
+    marginBottom: 32,
     lineHeight: 24,
-    fontWeight: '600',
+    fontWeight: "600",
   },
-  modalPrimaryBtn: { 
-    width: '100%', 
-    height: 60, 
-    borderRadius: 20, 
-    overflow: 'hidden', 
+  modalPrimaryBtn: {
+    width: "100%",
+    height: 60,
+    borderRadius: 20,
+    overflow: "hidden",
     marginBottom: 14,
-    shadowColor: '#FF7A18',
+    shadowColor: "#FF7A18",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
   },
-  modalBtnGradient: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
+  modalBtnGradient: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  modalPrimaryBtnText: { 
-    color: '#fff', 
-    fontSize: 17, 
-    fontWeight: '900', 
-    letterSpacing: 0.5 
+  modalPrimaryBtnText: {
+    color: "#fff",
+    fontSize: 17,
+    fontWeight: "900",
+    letterSpacing: 0.5,
   },
-  modalSecondaryBtn: { 
-    width: '100%', 
-    height: 52, 
-    borderRadius: 20, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
+  modalSecondaryBtn: {
+    width: "100%",
+    height: 52,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  modalSecondaryBtnText: { 
-    color: 'rgba(255,255,255,0.5)', 
-    fontSize: 15, 
-    fontWeight: '700' 
+  modalSecondaryBtnText: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 15,
+    fontWeight: "700",
   },
   benefitsList: {
-    width: '100%',
+    width: "100%",
     marginBottom: 24,
     gap: 12,
   },
   benefitItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   benefitText: {
-    color: 'rgba(255,255,255,0.8)',
+    color: "rgba(255,255,255,0.8)",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   trustBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     marginBottom: 16,
     opacity: 0.6,
   },
   trustText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   lockBadgeMini: {
-    position: 'absolute',
+    position: "absolute",
     top: 8,
     right: 8,
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: "rgba(255,255,255,0.2)",
   },
+  
 });

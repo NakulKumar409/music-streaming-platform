@@ -2,6 +2,7 @@ import { redis } from "./redis";
 
 export async function getCache<T = any>(key: string): Promise<T | null> {
   try {
+    if (!redis) return null;
     const data = await redis.get(key);
     if (data) {
       return JSON.parse(data) as T;
@@ -14,6 +15,7 @@ export async function getCache<T = any>(key: string): Promise<T | null> {
 
 export async function setCache(key: string, value: any, ttl: number = 120): Promise<void> {
   try {
+    if (!redis) return;
     await redis.set(key, JSON.stringify(value), "EX", ttl);
   } catch (err: any) {
   }
@@ -21,6 +23,7 @@ export async function setCache(key: string, value: any, ttl: number = 120): Prom
 
 export async function deleteCache(key: string): Promise<void> {
   try {
+    if (!redis) return;
     await redis.del(key);
   } catch (err: any) {
   }
@@ -50,6 +53,7 @@ export const invalidateCache = deleteCache;
  */
 export async function invalidateCachePattern(pattern: string): Promise<void> {
   try {
+    if (!redis) return;
     let cursor = "0";
     let deletedCount = 0;
     
