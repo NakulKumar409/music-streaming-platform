@@ -1077,66 +1077,15 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         const progress = await TrackPlayer.getProgress();
         const pos = Math.max(0, Math.round(progress.position * 1000));
         const dur = Math.max(0, Math.round(progress.duration * 1000));
-        const trackState = await TrackPlayer.getState();
-        const isNativePlaying = trackState === TrackPlayerState?.Playing;
-
-        // Update lock screen notification with current playback progress
-        // This updates the progress bar and elapsed time on lock screen/control center
-        if (TrackPlayerAvailable && isNativePlaying) {
-          try {
-            TrackPlayer.setProgressUpdateEventInterval?.(1);
-          } catch {
-            // Ignore if method not available
-          }
-        }
 
         setState((s) => {
-          let nextIsPlaying = isNativePlaying;
-          if (nextIsPlaying) hasStartedPlayingRef.current = true;
-
-          if (s.isPlaying && !nextIsPlaying) {
-            if (!hasStartedPlayingRef.current || pos < 500) {
-              nextIsPlaying = true;
-            }
-          }
-
-          const posDiff = Math.abs(s.positionMs - pos);
-          const shouldUpdate =
-            s.isPlaying !== nextIsPlaying ||
-            posDiff > 50 ||
-            s.durationMs !== dur;
-          if (!shouldUpdate) return s;
-
-          if (
-            nextIsPlaying &&
-            dur > 30000 &&
-            pos > dur * 0.75 &&
-            !preloadedUrlRef.current
-          ) {
-            preloadNextItem().catch(() => undefined);
-          }
-
-          return {
-            ...s,
-            isPlaying: nextIsPlaying,
-            positionMs: pos,
-            durationMs: dur,
-          };
+          // Update state with new position
+          return { ...s, positionMs: pos, durationMs: dur };
         });
-
-        if (
-          dur > 0 &&
-          progress.position >= progress.duration - 0.5 &&
-          preloadedUrlRef.current &&
-          isNativePlaying === false &&
-          stateRef.current.isPlaying
-        ) {
-          handleDidJustFinish().catch(() => undefined);
-        }
       } catch {
-        // Ignore errors from TrackPlayer in Expo Go
+        // ignore
       }
-    }, 250);
+    }, 100); // Har 100ms mein update
     return () => clearInterval(interval);
   }, [isPlayerReady, handleDidJustFinish, preloadNextItem]);
 

@@ -13,7 +13,7 @@ export class UserController {
       if (!userId) {
         return res.status(401).json({
           success: false,
-          message: "Unauthorized"
+          message: "Unauthorized",
         });
       }
 
@@ -25,7 +25,8 @@ export class UserController {
         userRow = r.rows?.[0];
       } catch (err: any) {
         if (err?.code === "42703") {
-          const q = "SELECT id, name, full_name, email, status FROM users WHERE id = $1";
+          const q =
+            "SELECT id, name, full_name, email, status FROM users WHERE id = $1";
           const r = await pool.query(q, [userId]);
           userRow = r.rows?.[0];
         } else {
@@ -36,7 +37,7 @@ export class UserController {
       if (!userRow) {
         return res.status(404).json({
           success: false,
-          message: "User not found"
+          message: "User not found",
         });
       }
 
@@ -65,24 +66,25 @@ export class UserController {
           profileImageUrl: userRow.profile_image_url ?? null,
           audioQualityPref: userRow.audio_quality_pref ?? "HIGH",
           notificationsPref: userRow.notifications_pref ?? true,
-          totalListenTimeSeconds: Number(userRow.total_listen_time ?? 0)
+          totalListenTimeSeconds: Number(userRow.total_listen_time ?? 0),
         },
         premium: {
           isPremium: subscriptionCount > 0,
-          subscriptionCount
-        }
+          subscriptionCount,
+        },
       });
     } catch {
       return res.status(500).json({
         success: false,
-        message: "Server error"
+        message: "Server error",
       });
     }
   }
 
   async transactions(req: any, res: Response) {
     const userId = req.user?.id;
-    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+    if (!userId)
+      return res.status(401).json({ success: false, message: "Unauthorized" });
 
     try {
       const rows = await pool.query(
@@ -101,7 +103,7 @@ export class UserController {
           date: r.date,
           artist_name: r.artist_name,
           razorpay_order_id: r.razorpay_order_id,
-          razorpay_payment_id: r.razorpay_payment_id
+          razorpay_payment_id: r.razorpay_payment_id,
         }));
         return res.json({ success: true, transactions });
       } else {
@@ -109,7 +111,9 @@ export class UserController {
       }
     } catch (err: any) {
       console.error({ err, userId }, "[USER] Failed to fetch transactions");
-      return res.status(500).json({ success: false, message: "Internal Server Error" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Internal Server Error" });
     }
   }
 
@@ -117,7 +121,8 @@ export class UserController {
     const userId = req.user?.id;
     const txId = req.params.id;
 
-    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+    if (!userId)
+      return res.status(401).json({ success: false, message: "Unauthorized" });
 
     try {
       // 1. Fetch transaction and validate ownership
@@ -130,7 +135,12 @@ export class UserController {
       );
 
       if (txRows.rowCount === 0) {
-        return res.status(404).json({ success: false, message: "Transaction not found or access denied" });
+        return res
+          .status(404)
+          .json({
+            success: false,
+            message: "Transaction not found or access denied",
+          });
       }
 
       const tx = txRows.rows[0];
@@ -138,23 +148,34 @@ export class UserController {
 
       // 2. Map data for PDF
       const pdfBuffer = await InvoiceService.generateInvoicePDF({
-        invoiceNumber: (tx.razorpay_payment_id || tx.razorpay_order_id || tx.id).toString(),
+        invoiceNumber: (
+          tx.razorpay_payment_id ||
+          tx.razorpay_order_id ||
+          tx.id
+        ).toString(),
         date: new Date(tx.payment_confirmed_at || tx.date).toLocaleDateString(),
         userName: tx.full_name || "User",
         userEmail: tx.email,
-        planName: tx.artist_name ? `Artist Subscription: ${tx.artist_name}` : "Platform Plan",
+        planName: tx.artist_name
+          ? `Artist Subscription: ${tx.artist_name}`
+          : "Platform Plan",
         amount: Number(tx.amount),
         currency: tx.currency || "INR",
-        billingCycle: tx.billing_cycle || "monthly"
+        billingCycle: tx.billing_cycle || "monthly",
       });
 
       // 3. Set headers and send
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename=invoice_${txId}.pdf`);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename=invoice_${txId}.pdf`
+      );
       return res.send(pdfBuffer);
     } catch (err: any) {
       console.error({ err, userId, txId }, "[USER] Failed to generate invoice");
-      return res.status(500).json({ success: false, message: "Failed to generate invoice PDF" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Failed to generate invoice PDF" });
     }
   }
 
@@ -163,7 +184,9 @@ export class UserController {
       const userId = req.user?.id;
 
       if (!userId) {
-        return res.status(401).json({ success: false, message: "Unauthorized" });
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
       }
 
       const { fullName, username, bio, favoriteGenre, location } = req.body;
@@ -175,7 +198,9 @@ export class UserController {
           [username, userId]
         );
         if (usernameCheck.rows.length > 0) {
-          return res.status(400).json({ success: false, message: "Username is already taken" });
+          return res
+            .status(400)
+            .json({ success: false, message: "Username is already taken" });
         }
       }
 
@@ -198,23 +223,23 @@ export class UserController {
         bio || null,
         favoriteGenre || null,
         location || null,
-        userId
+        userId,
       ]);
 
       AuditService.log({
-        action: 'user.profile_updated',
-        entity: 'user',
+        action: "user.profile_updated",
+        entity: "user",
         entityId: String(userId),
         performedBy: userId,
-        role: 'fan',
-        status: 'success',
-        metadata: { fullName, username }
+        role: "fan",
+        status: "success",
+        metadata: { fullName, username },
       });
 
       return res.json({
         success: true,
         message: "Profile updated successfully",
-        profile: result.rows[0]
+        profile: result.rows[0],
       });
     } catch (error: any) {
       console.error("[UserController.update] error:", error);
@@ -225,30 +250,51 @@ export class UserController {
   async updatePassword(req: any, res: Response) {
     try {
       const userId = req.user?.id;
-      if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+      if (!userId)
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
 
       const { oldPassword, newPassword } = req.body;
       if (!oldPassword || !newPassword) {
-        return res.status(400).json({ success: false, message: "Both old and new passwords are required" });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: "Both old and new passwords are required",
+          });
       }
 
-      const userRes = await pool.query("SELECT password FROM users WHERE id = $1", [userId]);
+      const userRes = await pool.query(
+        "SELECT password FROM users WHERE id = $1",
+        [userId]
+      );
       if (userRes.rows.length === 0) {
-        return res.status(404).json({ success: false, message: "User not found" });
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
       }
 
       const user = userRes.rows[0];
       const bcrypt = require("bcrypt");
-      
+
       const isValid = await bcrypt.compare(oldPassword, user.password);
       if (!isValid) {
-        return res.status(400).json({ success: false, message: "Incorrect old password" });
+        return res
+          .status(400)
+          .json({ success: false, message: "Incorrect old password" });
       }
 
       const hashed = await bcrypt.hash(newPassword, 10);
-      await pool.query("UPDATE users SET password = $1 WHERE id = $2", [hashed, userId]);
+      await pool.query("UPDATE users SET password = $1 WHERE id = $2", [
+        hashed,
+        userId,
+      ]);
 
-      return res.json({ success: true, message: "Password updated successfully" });
+      return res.json({
+        success: true,
+        message: "Password updated successfully",
+      });
     } catch (error: any) {
       console.error("[UserController.updatePassword] error:", error);
       return res.status(500).json({ success: false, message: "Server error" });
@@ -258,19 +304,36 @@ export class UserController {
   async updateProfileImage(req: any, res: Response) {
     try {
       const userId = req.user?.id;
-      if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+      if (!userId)
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
 
       const file = req.file;
-      if (!file) return res.status(400).json({ success: false, message: "No image file provided" });
+      if (!file)
+        return res
+          .status(400)
+          .json({ success: false, message: "No image file provided" });
 
-      // Note: In a production cluster we should use the same provider strategy, 
-      // but for direct easy integration we import Cloudinary directly here.
+      // ============================================
+      // BUG FIX: File size limit check (2MB)
+      // ============================================
+      const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+      if (file.size > MAX_FILE_SIZE) {
+        return res.status(400).json({
+          success: false,
+          message: `Please keep image under 2MB. Your file is ${(
+            file.size /
+            (1024 * 1024)
+          ).toFixed(2)}MB.`,
+        });
+      }
+
       const cloudinary = require("cloudinary").v2;
-      
-      // Convert buffer to base64
+
       const b64 = Buffer.from(file.buffer).toString("base64");
       const dataURI = "data:" + file.mimetype + ";base64," + b64;
-      
+
       const uploadOptions = {
         folder: `users/${userId}/profile`,
         use_filename: true,
@@ -280,12 +343,15 @@ export class UserController {
       const cRes = await cloudinary.uploader.upload(dataURI, uploadOptions);
       const secureUrl = cRes.secure_url;
 
-      await pool.query("UPDATE users SET profile_image_url = $1 WHERE id = $2", [secureUrl, userId]);
+      await pool.query(
+        "UPDATE users SET profile_image_url = $1 WHERE id = $2",
+        [secureUrl, userId]
+      );
 
-      return res.json({ 
-        success: true, 
-        message: "Profile image updated", 
-        profileImageUrl: secureUrl 
+      return res.json({
+        success: true,
+        message: "Profile image updated",
+        profileImageUrl: secureUrl,
       });
     } catch (error: any) {
       console.error("[UserController.updateProfileImage] error:", error);
@@ -295,7 +361,10 @@ export class UserController {
   async updateSettings(req: any, res: Response) {
     try {
       const userId = req.user?.id;
-      if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+      if (!userId)
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
 
       const { pushNotifications, expoPushToken } = req.body;
 
@@ -307,7 +376,7 @@ export class UserController {
         [
           pushNotifications !== undefined ? pushNotifications : null,
           expoPushToken || null,
-          userId
+          userId,
         ]
       );
 
@@ -321,7 +390,10 @@ export class UserController {
   async testPush(req: any, res: Response) {
     try {
       const userId = req.user?.id;
-      if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+      if (!userId)
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
 
       const userRes = await pool.query(
         "SELECT expo_push_token, notifications_pref FROM users WHERE id = $1",
@@ -332,40 +404,49 @@ export class UserController {
       const token = user?.expo_push_token;
 
       if (!token) {
-        return res.status(400).json({ 
-          success: false, 
-          message: "No push token found. Please enable push notifications in the app first." 
+        return res.status(400).json({
+          success: false,
+          message:
+            "No push token found. Please enable push notifications in the app first.",
         });
       }
 
       if (!user.notifications_pref) {
         return res.status(400).json({
           success: false,
-          message: "Push notifications are disabled for this user."
+          message: "Push notifications are disabled for this user.",
         });
       }
 
       // Only bypass validation if it's a SIM_MOCK for testing
-      if (!token.startsWith("ExponentPushToken[SIM_MOCK_") && !Expo.isExpoPushToken(token)) {
-        return res.status(400).json({ success: false, message: "Invalid Expo push token" });
+      if (
+        !token.startsWith("ExponentPushToken[SIM_MOCK_") &&
+        !Expo.isExpoPushToken(token)
+      ) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid Expo push token" });
       }
 
       if (token.startsWith("ExponentPushToken[SIM_MOCK_")) {
         console.log(`[Push] Bypassing real send for Mock Token: ${token}`);
-        return res.json({ 
-          success: true, 
-          message: "Test push notification 'sent' (bypassed because it's a simulator mock)!",
-          mockToken: token 
+        return res.json({
+          success: true,
+          message:
+            "Test push notification 'sent' (bypassed because it's a simulator mock)!",
+          mockToken: token,
         });
       }
 
-      const messages: ExpoPushMessage[] = [{
-        to: token,
-        sound: "default",
-        title: "🎵 Music Streaming Platform",
-        body: "Hey! Your push notifications are working correctly!",
-        data: { type: "test" },
-      }];
+      const messages: ExpoPushMessage[] = [
+        {
+          to: token,
+          sound: "default",
+          title: "🎵 Music Streaming Platform",
+          body: "Hey! Your push notifications are working correctly!",
+          data: { type: "test" },
+        },
+      ];
 
       const chunks = expo.chunkPushNotifications(messages);
       const tickets = [];
@@ -375,14 +456,16 @@ export class UserController {
         tickets.push(...ticketChunk);
       }
 
-      return res.json({ 
-        success: true, 
+      return res.json({
+        success: true,
         message: "Test push notification sent!",
-        tickets 
+        tickets,
       });
     } catch (error: any) {
       console.error("[UserController.testPush] error:", error);
-      return res.status(500).json({ success: false, message: "Server error: " + error.message });
+      return res
+        .status(500)
+        .json({ success: false, message: "Server error: " + error.message });
     }
   }
 
@@ -391,7 +474,10 @@ export class UserController {
       const userId = req.user?.id;
       const txId = req.params.id;
 
-      if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+      if (!userId)
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
 
       const txRes = await pool.query(
         `SELECT t.id, t.amount, t.currency, t.artist_name, t.status, t.date, t.billing_cycle, u.full_name as customer_name, u.email as customer_email
@@ -402,9 +488,14 @@ export class UserController {
       );
 
       const tx = txRes.rows[0];
-      if (!tx) return res.status(404).json({ success: false, message: "Transaction not found" });
+      if (!tx)
+        return res
+          .status(404)
+          .json({ success: false, message: "Transaction not found" });
 
-      const { InvoiceService } = require("../../shared/financials/invoice.service");
+      const {
+        InvoiceService,
+      } = require("../../shared/financials/invoice.service");
       const pdfBuffer = await InvoiceService.generateInvoiceBuffer({
         invoiceNumber: `INV-${tx.id}`,
         date: new Date(tx.date).toLocaleDateString(),
@@ -414,11 +505,14 @@ export class UserController {
         amount: Number(tx.amount) / 100, // Convert paise to INR
         currency: tx.currency || "INR",
         status: tx.status,
-        billingCycle: tx.billing_cycle || "monthly"
+        billingCycle: tx.billing_cycle || "monthly",
       });
 
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename=invoice-${txId}.pdf`);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename=invoice-${txId}.pdf`
+      );
       return res.send(pdfBuffer);
     } catch (error: any) {
       console.error("[UserController.invoice] error:", error);
@@ -429,7 +523,10 @@ export class UserController {
   async getListenTime(req: any, res: Response) {
     try {
       const userId = Number(req.user?.id);
-      if (!userId || isNaN(userId)) return res.status(401).json({ success: false, message: "Unauthorized" });
+      if (!userId || isNaN(userId))
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
 
       const now = new Date();
       const year = now.getFullYear();
@@ -448,8 +545,9 @@ export class UserController {
       // ── Source 2: playback_sessions fallback (when heartbeats have no data) ──
       // Each session = duration from started_at to heartbeat_at (or 3 min avg if no heartbeat)
       if (totalSeconds === 0) {
-        const sessionsResult = await pool.query(
-          `SELECT 
+        const sessionsResult = await pool
+          .query(
+            `SELECT 
             COUNT(*) AS session_count,
             COALESCE(
               SUM(
@@ -460,13 +558,19 @@ export class UserController {
             )::bigint AS estimated_seconds
            FROM playback_sessions
            WHERE user_id = $1`,
-          [userId]
-        ).catch((err) => {
-          console.error("[UserController.getListenTime] sessionsResult query failed:", err);
-          return { rows: [{ session_count: 0, estimated_seconds: 0 }] };
-        });
+            [userId]
+          )
+          .catch((err) => {
+            console.error(
+              "[UserController.getListenTime] sessionsResult query failed:",
+              err
+            );
+            return { rows: [{ session_count: 0, estimated_seconds: 0 }] };
+          });
 
-        const estimated = Number(sessionsResult.rows[0]?.estimated_seconds || 0);
+        const estimated = Number(
+          sessionsResult.rows[0]?.estimated_seconds || 0
+        );
         const sessionCount = Number(sessionsResult.rows[0]?.session_count || 0);
 
         if (estimated > 0) {
@@ -479,10 +583,12 @@ export class UserController {
 
       // ── Source 3: content_plays count as last resort ─────────────────
       if (totalSeconds === 0) {
-        const playsResult = await pool.query(
-          `SELECT COUNT(*) AS play_count FROM content_plays WHERE user_id = $1`,
-          [userId]
-        ).catch(() => ({ rows: [{ play_count: 0 }] }));
+        const playsResult = await pool
+          .query(
+            `SELECT COUNT(*) AS play_count FROM content_plays WHERE user_id = $1`,
+            [userId]
+          )
+          .catch(() => ({ rows: [{ play_count: 0 }] }));
         const playCount = Number(playsResult.rows[0]?.play_count || 0);
         if (playCount > 0) {
           totalSeconds = playCount * 180; // assume ~3 min per play
@@ -505,7 +611,7 @@ export class UserController {
         success: true,
         totalMinutes,
         formattedTime,
-        source: totalSeconds === 0 ? "none" : "computed"
+        source: totalSeconds === 0 ? "none" : "computed",
       });
     } catch (error: any) {
       console.error("[UserController.getListenTime] error:", error);
