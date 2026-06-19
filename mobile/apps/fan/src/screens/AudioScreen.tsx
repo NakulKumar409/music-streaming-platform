@@ -1,41 +1,42 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Modal,
-  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   View,
-} from 'react-native';
+} from "react-native";
 
-import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { useFocusEffect } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useFocusEffect } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { apiV1, contentApi } from '../services/api';
-import { getPlaybackUrl, normalizePlaybackUrl } from '../services/streamService';
-import { API_HOST_BASE_URL } from '../config/env';
-import { fetchVerifiedArtists } from '../services/artistService';
-import { Colors } from '../theme';
-import { useMediaPlayer } from '../providers/MediaPlayerProvider';
-import type { MediaItem } from '../media.types';
+import { API_HOST_BASE_URL } from "../config/env";
+import type { MediaItem } from "../media.types";
+import { useMediaPlayer } from "../providers/MediaPlayerProvider";
+import { apiV1 } from "../services/api";
+import { fetchVerifiedArtists } from "../services/artistService";
+import {
+  getPlaybackUrl,
+  normalizePlaybackUrl,
+} from "../services/streamService";
+import { Colors } from "../theme";
 
 // New Architecture Components
-import AudioHeader from '../ui/audio/AudioHeader';
-import CategoryChips, { CategoryType } from '../ui/audio/CategoryChips';
-import FeaturedCarousel from '../ui/audio/FeaturedCarousel';
-import AudioListItem, { AudioItemData } from '../ui/audio/AudioListItem';
-import ArtistListItem from '../ui/audio/ArtistListItem';
-import AlbumCard, { AlbumData } from '../ui/audio/AlbumCard';
+import AlbumCard from "../ui/audio/AlbumCard";
+import ArtistListItem from "../ui/audio/ArtistListItem";
+import AudioHeader from "../ui/audio/AudioHeader";
+import AudioListItem, { AudioItemData } from "../ui/audio/AudioListItem";
+import CategoryChips, { CategoryType } from "../ui/audio/CategoryChips";
+import FeaturedCarousel from "../ui/audio/FeaturedCarousel";
 
-const REPORTED_CONTENT_STORAGE_KEY = 'reportedContentIds';
-const AUDIO_CACHE_KEY = 'audio_screen_cache_v1';
+const REPORTED_CONTENT_STORAGE_KEY = "reportedContentIds";
+const AUDIO_CACHE_KEY = "audio_screen_cache_v1";
 
 type ApiContentItem = {
   id: string | number;
@@ -66,23 +67,25 @@ type AudioCard = AudioItemData & {
 };
 
 const FALLBACK_ARTWORK =
-  'https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=1400&q=80';
+  "https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=1400&q=80";
 
 export default function AudioScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
   const { playQueue, currentItem, state: playerState } = useMediaPlayer();
 
   const lastContentItemsRef = useRef<ApiContentItem[]>([]);
-  const playbackUrlCacheRef = useRef<Map<string, { url: string; ts: number }>>(new Map());
+  const playbackUrlCacheRef = useRef<Map<string, { url: string; ts: number }>>(
+    new Map()
+  );
   const prefetchingRef = useRef<Set<string>>(new Set());
 
-  const [loading, setLoading] = useState(false); // false by default; true only when cache is empty
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const isMountedRef = useRef(true);
 
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const normalizedQuery = useMemo(() => query.trim().toLowerCase(), [query]);
-  const [activeCategory, setActiveCategory] = useState<CategoryType>('All');
+  const [activeCategory, setActiveCategory] = useState<CategoryType>("All");
   const [items, setItems] = useState<AudioCard[]>([]);
 
   const [searchResults, setSearchResults] = useState<AudioCard[] | null>(null);
@@ -93,141 +96,172 @@ export default function AudioScreen({ navigation }: any) {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportSubmitting, setReportSubmitting] = useState(false);
 
-  // Pagination states for Artists
   const [artists, setArtists] = useState<any[]>([]);
   const [artistsOffset, setArtistsOffset] = useState(0);
   const [hasMoreArtists, setHasMoreArtists] = useState(true);
   const [fetchingArtists, setFetchingArtists] = useState(false);
 
-  // Pagination states for Audio (All/Trending/Albums)
   const [audioOffset, setAudioOffset] = useState(0);
   const [hasMoreAudio, setHasMoreAudio] = useState(true);
   const [fetchingAudio, setFetchingAudio] = useState(false);
 
-  const hasActiveAudio = Boolean(currentItem?.mediaType === 'audio');
+  const hasActiveAudio = Boolean(currentItem?.mediaType === "audio");
 
-  const loadAudio = useCallback(async (opts?: { refresh?: boolean; silent?: boolean }) => {
-    const isRefresh = Boolean(opts?.refresh);
-    const isSilent = Boolean(opts?.silent); // silent = background refresh, no spinner
-    // Block duplicate fetches, but allow background (silent) refreshes even if items are loaded
-    if (fetchingAudio || (!isRefresh && !hasMoreAudio)) return;
-    if (!isSilent && (refreshing)) return;
+  const loadAudio = useCallback(
+    async (opts?: { refresh?: boolean; silent?: boolean }) => {
+      const isRefresh = Boolean(opts?.refresh);
+      const isSilent = Boolean(opts?.silent);
+      if (fetchingAudio || (!isRefresh && !hasMoreAudio)) return;
+      if (!isSilent && refreshing) return;
 
-    try {
-      if (isRefresh && !isSilent) {
-        setRefreshing(true);
-        if (items.length === 0) setLoading(true);
-      } else if (!isRefresh) {
-        setFetchingAudio(true);
-      }
-
-      const limit = 20;
-      const currentOffset = isRefresh ? 0 : audioOffset;
-      const res = await apiV1.get('/content', {
-        params: { mediaType: 'audio', limit, offset: currentOffset },
-      });
-
-      const fromResponse = (data: any): ApiContentItem[] => {
-        if (!data) return [];
-        if (Array.isArray(data?.items)) return data.items;
-        if (Array.isArray(data?.data?.items)) return data.data.items;
-        if (Array.isArray(data?.result?.items)) return data.result.items;
-        if (Array.isArray(data?.content?.items)) return data.content.items;
-        if (Array.isArray(data?.content)) return data.content;
-        if (Array.isArray(data)) return data;
-        return [];
-      };
-
-      const raw: ApiContentItem[] = fromResponse(res.data);
-      if (raw.length > 0 && isRefresh) {
-        lastContentItemsRef.current = raw;
-      }
-
-      const effectiveRaw: ApiContentItem[] = raw.length > 0 ? raw : (isRefresh ? lastContentItemsRef.current : []);
-
-      const mapped: AudioCard[] = effectiveRaw.map((it) => {
-        const baseUrl = API_HOST_BASE_URL;
-        const thumbStorageKey = (it.thumbnail_storage_key ?? it.thumbnailStorageKey ?? null) as any;
-        const artworkFromStorageKey = thumbStorageKey
-          ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(String(it.id))}`
-          : '';
-        const artworkUrl = (it.thumbnailUrl ?? it.artwork ?? '').toString() || artworkFromStorageKey || FALLBACK_ARTWORK;
-        const artistIdValue = it.artistId !== null && it.artistId !== undefined ? String(it.artistId) : undefined;
-        const rawMediaUrl = (it.mediaUrl ?? it.fileUrl ?? it.audioUrl ?? '').toString();
-
-        return {
-          id: String(it.id),
-          contentId: String(it.id),
-          title: (it.title ?? 'Untitled').toString(),
-          artistName: (it.artistName ?? 'Artist').toString(),
-          artistId: artistIdValue,
-          artworkUrl,
-          mediaUrl: rawMediaUrl ? normalizePlaybackUrl(rawMediaUrl) : '',
-          useStreamAccess: Boolean(it.useStreamAccess),
-          isLocked: Boolean(it.isLocked),
-          createdAt: (it.createdAt ?? null) as any,
-        };
-      }).filter(Boolean) as AudioCard[];
-
-      if (isRefresh) {
-        if (isMountedRef.current) setItems(mapped);
-        // Persist to cache so next open is instant
-        if (mapped.length > 0) {
-          AsyncStorage.setItem(AUDIO_CACHE_KEY, JSON.stringify(mapped.slice(0, 40))).catch(() => {});
-        }
-      } else {
-        const appended = [...items, ...mapped];
-        // naive deduplication
-        const unique = Array.from(new Map(appended.map(item => [item.id, item])).values());
-        if (isMountedRef.current) setItems(unique);
-      }
-      
-      if (isMountedRef.current) {
-        setAudioOffset(currentOffset + mapped.length);
-        setHasMoreAudio(raw.length >= limit);
-      }
-
-    } catch (e) {
-      if (__DEV__) console.warn('[AudioScreen] loadAudio failed', e);
-    } finally {
-      if (isMountedRef.current) {
+      try {
         if (isRefresh && !isSilent) {
-          setRefreshing(false);
-          setLoading(false);
+          setRefreshing(true);
+          if (items.length === 0) setLoading(true);
+        } else if (!isRefresh) {
+          setFetchingAudio(true);
         }
-        setFetchingAudio(false);
-      }
-    }
-  }, [audioOffset, fetchingAudio, hasMoreAudio, items]);
 
-  const loadArtists = useCallback(async (isRefresh = false) => {
-    if (loading || refreshing || fetchingArtists || (!isRefresh && !hasMoreArtists)) return;
-    try {
-      setFetchingArtists(true);
-      const limit = 20;
-      const currentOffset = isRefresh ? 0 : artistsOffset;
-      const fetched = await fetchVerifiedArtists(limit, currentOffset);
-      
-      if (isRefresh) {
-        setArtists(fetched);
-      } else {
-        const appended = [...artists, ...fetched];
-        // naive deduplication
-        const unique = Array.from(new Map(appended.map(item => [item.id, item])).values());
-        setArtists(unique);
+        const limit = 20;
+        const currentOffset = isRefresh ? 0 : audioOffset;
+        const res = await apiV1.get("/content", {
+          params: { mediaType: "audio", limit, offset: currentOffset },
+        });
+
+        const fromResponse = (data: any): ApiContentItem[] => {
+          if (!data) return [];
+          if (Array.isArray(data?.items)) return data.items;
+          if (Array.isArray(data?.data?.items)) return data.data.items;
+          if (Array.isArray(data?.result?.items)) return data.result.items;
+          if (Array.isArray(data?.content?.items)) return data.content.items;
+          if (Array.isArray(data?.content)) return data.content;
+          if (Array.isArray(data)) return data;
+          return [];
+        };
+
+        const raw: ApiContentItem[] = fromResponse(res.data);
+        if (raw.length > 0 && isRefresh) {
+          lastContentItemsRef.current = raw;
+        }
+
+        const effectiveRaw: ApiContentItem[] =
+          raw.length > 0 ? raw : isRefresh ? lastContentItemsRef.current : [];
+
+        const mapped: AudioCard[] = effectiveRaw
+          .map((it) => {
+            const baseUrl = API_HOST_BASE_URL;
+            const thumbStorageKey = (it.thumbnail_storage_key ??
+              it.thumbnailStorageKey ??
+              null) as any;
+            const artworkFromStorageKey = thumbStorageKey
+              ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(
+                  String(it.id)
+                )}`
+              : "";
+            const artworkUrl =
+              (it.thumbnailUrl ?? it.artwork ?? "").toString() ||
+              artworkFromStorageKey ||
+              FALLBACK_ARTWORK;
+            const artistIdValue =
+              it.artistId !== null && it.artistId !== undefined
+                ? String(it.artistId)
+                : undefined;
+            const rawMediaUrl = (
+              it.mediaUrl ??
+              it.fileUrl ??
+              it.audioUrl ??
+              ""
+            ).toString();
+
+            return {
+              id: String(it.id),
+              contentId: String(it.id),
+              title: (it.title ?? "Untitled").toString(),
+              artistName: (it.artistName ?? "Artist").toString(),
+              artistId: artistIdValue,
+              artworkUrl,
+              mediaUrl: rawMediaUrl ? normalizePlaybackUrl(rawMediaUrl) : "",
+              useStreamAccess: Boolean(it.useStreamAccess),
+              isLocked: Boolean(it.isLocked),
+              createdAt: (it.createdAt ?? null) as any,
+            };
+          })
+          .filter(Boolean) as AudioCard[];
+
+        if (isRefresh) {
+          if (isMountedRef.current) setItems(mapped);
+          if (mapped.length > 0) {
+            AsyncStorage.setItem(
+              AUDIO_CACHE_KEY,
+              JSON.stringify(mapped.slice(0, 40))
+            ).catch(() => {});
+          }
+        } else {
+          const appended = [...items, ...mapped];
+          const unique = Array.from(
+            new Map(appended.map((item) => [item.id, item])).values()
+          );
+          if (isMountedRef.current) setItems(unique);
+        }
+
+        if (isMountedRef.current) {
+          setAudioOffset(currentOffset + mapped.length);
+          setHasMoreAudio(raw.length >= limit);
+        }
+      } catch (e) {
+        if (__DEV__) console.warn("[AudioScreen] loadAudio failed", e);
+      } finally {
+        if (isMountedRef.current) {
+          if (isRefresh && !isSilent) {
+            setRefreshing(false);
+            setLoading(false);
+          }
+          setFetchingAudio(false);
+        }
       }
-      
-      setArtistsOffset(currentOffset + fetched.length);
-      setHasMoreArtists(fetched.length >= limit);
-    } catch (e) {
-      if (__DEV__) console.warn('[AudioScreen] fetchVerifiedArtists failed:', e);
-    } finally {
-      setFetchingArtists(false);
-    }
-  }, [artists, artistsOffset, fetchingArtists, hasMoreArtists]);
+    },
+    [audioOffset, fetchingAudio, hasMoreAudio, items]
+  );
+
+  const loadArtists = useCallback(
+    async (isRefresh = false) => {
+      if (
+        loading ||
+        refreshing ||
+        fetchingArtists ||
+        (!isRefresh && !hasMoreArtists)
+      )
+        return;
+      try {
+        setFetchingArtists(true);
+        const limit = 20;
+        const currentOffset = isRefresh ? 0 : artistsOffset;
+        const fetched = await fetchVerifiedArtists(limit, currentOffset);
+
+        if (isRefresh) {
+          setArtists(fetched);
+        } else {
+          const appended = [...artists, ...fetched];
+          const unique = Array.from(
+            new Map(appended.map((item) => [item.id, item])).values()
+          );
+          setArtists(unique);
+        }
+
+        setArtistsOffset(currentOffset + fetched.length);
+        setHasMoreArtists(fetched.length >= limit);
+      } catch (e) {
+        if (__DEV__)
+          console.warn("[AudioScreen] fetchVerifiedArtists failed:", e);
+      } finally {
+        setFetchingArtists(false);
+      }
+    },
+    [artists, artistsOffset, fetchingArtists, hasMoreArtists]
+  );
 
   useEffect(() => {
-    if (activeCategory === 'Artists' && artists.length === 0) {
+    if (activeCategory === "Artists" && artists.length === 0) {
       loadArtists(true).catch(() => undefined);
     }
   }, [activeCategory, artists.length, loadArtists]);
@@ -248,9 +282,12 @@ export default function AudioScreen({ navigation }: any) {
 
         prefetchingRef.current.add(key);
         try {
-          const url = await getPlaybackUrl(key, 'audio');
+          const url = await getPlaybackUrl(key, "audio");
           if (!url) return;
-          playbackUrlCacheRef.current.set(key, { url: normalizePlaybackUrl(url), ts: Date.now() });
+          playbackUrlCacheRef.current.set(key, {
+            url: normalizePlaybackUrl(url),
+            ts: Date.now(),
+          });
         } catch {
         } finally {
           prefetchingRef.current.delete(key);
@@ -259,7 +296,6 @@ export default function AudioScreen({ navigation }: any) {
     );
   }, []);
 
-  // Stale-While-Revalidate: load cache instantly, then refresh from network in background
   useEffect(() => {
     isMountedRef.current = true;
 
@@ -270,15 +306,13 @@ export default function AudioScreen({ navigation }: any) {
           const parsed: AudioCard[] = JSON.parse(cached);
           if (parsed.length > 0 && isMountedRef.current) {
             setItems(parsed);
-            // Cache hit — render immediately, then silently refresh in background
             loadAudio({ refresh: true, silent: true }).catch(() => undefined);
             return;
           }
         }
       } catch {
-        // If cache read fails, fall through to normal load
+        // ignore
       }
-      // No cache — show spinner and do a normal load
       setLoading(true);
       loadAudio({ refresh: true }).catch(() => undefined);
     };
@@ -288,19 +322,20 @@ export default function AudioScreen({ navigation }: any) {
     return () => {
       isMountedRef.current = false;
     };
-  }, []); // Intentionally empty — runs only on mount
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      // Optional: Refresh on focus, but be careful of unneeded re-fetches.
-      // loadAudio({ refresh: true }).catch(() => undefined);
+      // no-op
     }, [])
   );
 
   useEffect(() => {
     if (!items.length) return;
     if (normalizedQuery) return;
-    const t = setTimeout(() => { prefetchPlaybackUrls(items).catch(() => undefined); }, 200);
+    const t = setTimeout(() => {
+      prefetchPlaybackUrls(items).catch(() => undefined);
+    }, 200);
     return () => clearTimeout(t);
   }, [items, normalizedQuery, prefetchPlaybackUrls]);
 
@@ -308,11 +343,8 @@ export default function AudioScreen({ navigation }: any) {
     const q = normalizedQuery;
     let base = items;
 
-    // Optional client-side category filtering (basic demo logic)
-    if (activeCategory !== 'All') {
-      if (activeCategory === 'Trending') {
-        // Trending: make sure newest content is properly displayed at top.
-        // We ensure sort by createdAt DESC
+    if (activeCategory !== "All") {
+      if (activeCategory === "Trending") {
         base = [...items].sort((a, b) => {
           const ta = a.createdAt ? new Date(String(a.createdAt)).getTime() : 0;
           const tb = b.createdAt ? new Date(String(b.createdAt)).getTime() : 0;
@@ -330,18 +362,18 @@ export default function AudioScreen({ navigation }: any) {
 
   const albumsData = useMemo(() => {
     const groups = new Map<string, AudioCard[]>();
-    items.forEach(song => {
-      const key = song.artistId || song.artistName || 'Unknown';
+    items.forEach((song) => {
+      const key = song.artistId || song.artistName || "Unknown";
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(song);
     });
-    return Array.from(groups.values()).map(songs => ({
-        id: `album-${songs[0].artistId || songs[0].artistName}`,
-        title: `${songs[0].artistName} Collection`,
-        artistName: songs[0].artistName,
-        coverImage: songs[0].artworkUrl,
-        tracks: songs,
-        totalTracks: songs.length,
+    return Array.from(groups.values()).map((songs) => ({
+      id: `album-${songs[0].artistId || songs[0].artistName}`,
+      title: `${songs[0].artistName} Collection`,
+      artistName: songs[0].artistName,
+      coverImage: songs[0].artworkUrl,
+      tracks: songs,
+      totalTracks: songs.length,
     }));
   }, [items]);
 
@@ -355,35 +387,41 @@ export default function AudioScreen({ navigation }: any) {
       .slice(0, 5);
   }, [items]);
 
-  const buildFullPlayerParams = useCallback((song: AudioCard) => {
-    const list = searchResults !== null ? searchResults : filtered;
-    const queue: MediaItem[] = list
-      .filter((x) => Boolean(x.mediaUrl) || x.useStreamAccess)
-      .map((x) => ({
-        id: x.id,
-        contentId: x.contentId,
-        title: x.title,
-        artistName: x.artistName,
-        artistId: x.artistId,
-        mediaType: 'audio' as const,
-        artworkUrl: x.artworkUrl,
-        mediaUrl:
-          playbackUrlCacheRef.current.get(x.contentId ?? x.id)?.url ??
-          (x.mediaUrl ? normalizePlaybackUrl(x.mediaUrl) : ''),
-        isLocked: x.isLocked ?? false,
-        useStreamAccess: x.useStreamAccess,
-      }));
-    const queueIndex = Math.max(0, queue.findIndex((q) => q.id === song.id || q.contentId === song.id));
-    return {
-      songId: song.id,
-      title: song.title,
-      artist: song.artistName,
-      imageUrl: song.artworkUrl || '',
-      audioUrl: song.mediaUrl || '',
-      queueIndex,
-      queue,
-    };
-  }, [filtered, searchResults]);
+  const buildFullPlayerParams = useCallback(
+    (song: AudioCard) => {
+      const list = searchResults !== null ? searchResults : filtered;
+      const queue: MediaItem[] = list
+        .filter((x) => Boolean(x.mediaUrl) || x.useStreamAccess)
+        .map((x) => ({
+          id: x.id,
+          contentId: x.contentId,
+          title: x.title,
+          artistName: x.artistName,
+          artistId: x.artistId,
+          mediaType: "audio" as const,
+          artworkUrl: x.artworkUrl,
+          mediaUrl:
+            playbackUrlCacheRef.current.get(x.contentId ?? x.id)?.url ??
+            (x.mediaUrl ? normalizePlaybackUrl(x.mediaUrl) : ""),
+          isLocked: x.isLocked ?? false,
+          useStreamAccess: x.useStreamAccess,
+        }));
+      const queueIndex = Math.max(
+        0,
+        queue.findIndex((q) => q.id === song.id || q.contentId === song.id)
+      );
+      return {
+        songId: song.id,
+        title: song.title,
+        artist: song.artistName,
+        imageUrl: song.artworkUrl || "",
+        audioUrl: song.mediaUrl || "",
+        queueIndex,
+        queue,
+      };
+    },
+    [filtered, searchResults]
+  );
 
   useEffect(() => {
     if (searchTimerRef.current) {
@@ -404,44 +442,66 @@ export default function AudioScreen({ navigation }: any) {
         setSearchLoading(true);
         try {
           const res = await apiV1.get(`/content?ts=${Date.now()}`, {
-            params: { mediaType: 'audio', limit: 50 },
-            headers: { 'Cache-Control': 'no-store', Pragma: 'no-cache' },
+            params: { mediaType: "audio", limit: 50 },
+            headers: { "Cache-Control": "no-store", Pragma: "no-cache" },
           });
 
-          const raw = res.data?.items || res.data?.data?.items || res.data?.result?.items || [];
+          const raw =
+            res.data?.items ||
+            res.data?.data?.items ||
+            res.data?.result?.items ||
+            [];
           if (requestId !== searchRequestIdRef.current) return;
-          
+
           if (raw.length > 0) {
             lastContentItemsRef.current = raw;
           }
 
-          const effectiveRaw: ApiContentItem[] = raw.length > 0 ? raw : lastContentItemsRef.current;
-          
+          const effectiveRaw: ApiContentItem[] =
+            raw.length > 0 ? raw : lastContentItemsRef.current;
+
           const mapped: AudioCard[] = effectiveRaw.map((it: any) => {
             const baseUrl = API_HOST_BASE_URL;
-            const thumbStorageKey = (it.thumbnail_storage_key ?? it.thumbnailStorageKey ?? null) as any;
+            const thumbStorageKey = (it.thumbnail_storage_key ??
+              it.thumbnailStorageKey ??
+              null) as any;
             const artworkFromStorageKey = thumbStorageKey
-              ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(String(it.id))}`
-              : '';
-            const artworkUrl = (it.thumbnailUrl ?? it.artwork ?? '').toString() || artworkFromStorageKey || FALLBACK_ARTWORK;
-            const artistIdValue = it.artistId !== null && it.artistId !== undefined ? String(it.artistId) : undefined;
-            const rawMediaUrl = (it.mediaUrl ?? it.fileUrl ?? it.audioUrl ?? '').toString();
+              ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(
+                  String(it.id)
+                )}`
+              : "";
+            const artworkUrl =
+              (it.thumbnailUrl ?? it.artwork ?? "").toString() ||
+              artworkFromStorageKey ||
+              FALLBACK_ARTWORK;
+            const artistIdValue =
+              it.artistId !== null && it.artistId !== undefined
+                ? String(it.artistId)
+                : undefined;
+            const rawMediaUrl = (
+              it.mediaUrl ??
+              it.fileUrl ??
+              it.audioUrl ??
+              ""
+            ).toString();
 
             return {
               id: String(it.id),
               contentId: String(it.id),
-              title: (it.title ?? 'Untitled').toString(),
-              artistName: (it.artistName ?? 'Artist').toString(),
+              title: (it.title ?? "Untitled").toString(),
+              artistName: (it.artistName ?? "Artist").toString(),
               artistId: artistIdValue,
               artworkUrl,
-              mediaUrl: rawMediaUrl ? normalizePlaybackUrl(rawMediaUrl) : '',
+              mediaUrl: rawMediaUrl ? normalizePlaybackUrl(rawMediaUrl) : "",
               useStreamAccess: Boolean(it.useStreamAccess),
               isLocked: Boolean(it.isLocked),
               createdAt: (it.createdAt ?? null) as any,
             };
           });
 
-          const final = mapped.filter((x) => `${x.title} ${x.artistName}`.toLowerCase().includes(normalizedQuery));
+          const final = mapped.filter((x) =>
+            `${x.title} ${x.artistName}`.toLowerCase().includes(normalizedQuery)
+          );
           setSearchResults(final);
         } catch {
           if (requestId !== searchRequestIdRef.current) return;
@@ -458,11 +518,13 @@ export default function AudioScreen({ navigation }: any) {
     };
   }, [normalizedQuery]);
 
-  const onPressSong = useCallback((song: AudioCard) => {
-    const params = buildFullPlayerParams(song);
-    navigation.navigate('FullPlayer', params);
-  }, [buildFullPlayerParams, navigation]);
-
+  const onPressSong = useCallback(
+    (song: AudioCard) => {
+      const params = buildFullPlayerParams(song);
+      navigation.navigate("FullPlayer", params);
+    },
+    [buildFullPlayerParams, navigation]
+  );
 
   const renderHeader = () => {
     return (
@@ -474,19 +536,27 @@ export default function AudioScreen({ navigation }: any) {
             onSelectCategory={setActiveCategory}
           />
         )}
-        
+
         {searchResults !== null ? (
           <View style={styles.sectionRow}>
             <Text style={styles.sectionTitle}>Search Results</Text>
-            {searchLoading && <ActivityIndicator color={Colors.accent} size="small" />}
+            {searchLoading && (
+              <ActivityIndicator color={Colors.accent} size="small" />
+            )}
           </View>
         ) : (
-          <FeaturedCarousel items={topSongs} onPressItem={onPressSong} isLoading={loading} />
+          <FeaturedCarousel
+            items={topSongs}
+            onPressItem={onPressSong}
+            isLoading={loading}
+          />
         )}
-        
+
         {searchResults === null && (
           <View style={[styles.sectionRow, { marginBottom: 10 }]}>
-            <Text style={styles.sectionTitle}>{activeCategory === 'All' ? 'All Audio' : activeCategory}</Text>
+            <Text style={styles.sectionTitle}>
+              {activeCategory === "All" ? "All Audio" : activeCategory}
+            </Text>
           </View>
         )}
       </View>
@@ -501,12 +571,20 @@ export default function AudioScreen({ navigation }: any) {
         </View>
       );
     }
-    
-    if (activeCategory === 'Albums') {
+
+    if (activeCategory === "Albums") {
       return (
         <View style={styles.emptyWrap}>
-          <Text style={[styles.emptyText, { fontSize: 16, color: '#fff', marginBottom: 8 }]}>No albums yet 📀</Text>
-          <Text style={styles.emptyText}>Explore music or upload your own album</Text>
+          <Text
+            style={[
+              styles.emptyText,
+              { fontSize: 16, color: "#fff", marginBottom: 8 },
+            ]}>
+            No albums yet 📀
+          </Text>
+          <Text style={styles.emptyText}>
+            Explore music or upload your own album
+          </Text>
         </View>
       );
     }
@@ -514,68 +592,92 @@ export default function AudioScreen({ navigation }: any) {
     return (
       <View style={styles.emptyWrap}>
         <Text style={styles.emptyText}>
-          {searchResults !== null ? 'No results found.' : 'No audio found.'}
+          {searchResults !== null ? "No results found." : "No audio found."}
         </Text>
       </View>
     );
   };
 
   const getListData = () => {
-    if (activeCategory === 'Artists') return artists;
-    if (activeCategory === 'Albums') {
-       if (normalizedQuery) {
-          return albumsData.filter(a => a.artistName.toLowerCase().includes(normalizedQuery) || a.title.toLowerCase().includes(normalizedQuery));
-       }
-       return albumsData;
+    if (activeCategory === "Artists") return artists;
+    if (activeCategory === "Albums") {
+      if (normalizedQuery) {
+        return albumsData.filter(
+          (a) =>
+            a.artistName.toLowerCase().includes(normalizedQuery) ||
+            a.title.toLowerCase().includes(normalizedQuery)
+        );
+      }
+      return albumsData;
     }
     return searchResults ?? filtered;
   };
 
   return (
-    <LinearGradient colors={['#0A0A0A', '#000000']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradient}>
+    <LinearGradient
+      colors={["#0A0A0A", "#000000"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradient}>
       <SafeAreaView style={styles.container}>
         <FlatList
           key={activeCategory}
           data={getListData()}
-          numColumns={activeCategory === 'Albums' ? 2 : 1}
+          numColumns={activeCategory === "Albums" ? 2 : 1}
           keyExtractor={(item: any) => item.id}
           renderItem={({ item }: any) => {
-            if (activeCategory === 'Artists') {
+            if (activeCategory === "Artists") {
               return (
-                <ArtistListItem 
-                  item={item} 
-                  onPress={() => navigation.navigate('Artist', { artistId: item.id })} 
+                <ArtistListItem
+                  item={item}
+                  onPress={() =>
+                    navigation.navigate("Artist", { artistId: item.id })
+                  }
                 />
               );
             }
-            if (activeCategory === 'Albums') {
+            if (activeCategory === "Albums") {
               return (
-                <AlbumCard 
-                  album={item} 
-                  onPress={() => navigation.navigate('AlbumDetail', item)} 
+                <AlbumCard
+                  album={item}
+                  onPress={() => navigation.navigate("AlbumDetail", item)}
                 />
               );
             }
-            const isActive = Boolean(currentItem && (item.id === currentItem.id || item.contentId === currentItem.contentId || item.id === currentItem.contentId || item.contentId === currentItem.id));
+            const isActive = Boolean(
+              currentItem &&
+                (item.id === currentItem.id ||
+                  item.contentId === currentItem.contentId ||
+                  item.id === currentItem.contentId ||
+                  item.contentId === currentItem.id)
+            );
             return (
-              <AudioListItem 
-                item={item} 
-                onPress={onPressSong} 
-                isActive={isActive} 
-                isPlaying={playerState.isPlaying} 
+              <AudioListItem
+                item={item}
+                onPress={onPressSong}
+                isActive={isActive}
+                isPlaying={playerState.isPlaying}
               />
             );
           }}
           ListHeaderComponent={renderHeader()}
           ListEmptyComponent={renderEmpty}
           ListFooterComponent={
-            ((fetchingArtists && activeCategory === 'Artists' && artists.length > 0) || 
-             (fetchingAudio && activeCategory !== 'Artists' && items.length > 0)) ? (
-              <ActivityIndicator color={Colors.accent} size="large" style={{ marginVertical: 20 }} />
+            (fetchingArtists &&
+              activeCategory === "Artists" &&
+              artists.length > 0) ||
+            (fetchingAudio &&
+              activeCategory !== "Artists" &&
+              items.length > 0) ? (
+              <ActivityIndicator
+                color={Colors.accent}
+                size="large"
+                style={{ marginVertical: 20 }}
+              />
             ) : null
           }
           onEndReached={() => {
-            if (activeCategory === 'Artists') {
+            if (activeCategory === "Artists") {
               loadArtists(false);
             } else {
               loadAudio({ refresh: false });
@@ -583,46 +685,65 @@ export default function AudioScreen({ navigation }: any) {
           }}
           onEndReachedThreshold={0.5}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: tabBarHeight + (hasActiveAudio ? 120 : 20) }}
+          contentContainerStyle={{
+            paddingBottom: tabBarHeight + (hasActiveAudio ? 120 : 20),
+          }}
           refreshControl={
-            <RefreshControl 
-              tintColor={Colors.accent} 
-              refreshing={refreshing} 
+            <RefreshControl
+              tintColor={Colors.accent}
+              refreshing={refreshing}
               onRefresh={() => {
-                if (activeCategory === 'Artists') {
+                if (activeCategory === "Artists") {
                   loadArtists(true);
                 } else {
                   loadAudio({ refresh: true });
                 }
-              }} 
+              }}
             />
           }
         />
       </SafeAreaView>
 
-      <Modal visible={reportModalOpen} transparent animationType="fade" onRequestClose={() => { if (!reportSubmitting) setReportModalOpen(false); }}>
-        <Pressable style={styles.reportModalBackdrop} onPress={() => { if (!reportSubmitting) setReportModalOpen(false); }} />
+      <Modal
+        visible={reportModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!reportSubmitting) setReportModalOpen(false);
+        }}>
+        <Pressable
+          style={styles.reportModalBackdrop}
+          onPress={() => {
+            if (!reportSubmitting) setReportModalOpen(false);
+          }}
+        />
         <View style={styles.reportModalCard}>
           <Text style={styles.reportModalTitle}>Report content</Text>
           <Text style={styles.reportModalSub}>Select a reason</Text>
 
-          {['Spam', 'Inappropriate', 'Copyright'].map((reason) => (
+          {["Spam", "Inappropriate", "Copyright"].map((reason) => (
             <Pressable
               key={reason}
-              style={({ pressed }) => [styles.reportReasonBtn, pressed && styles.reportReasonBtnPressed]}
+              style={({ pressed }) => [
+                styles.reportReasonBtn,
+                pressed && styles.reportReasonBtnPressed,
+              ]}
               disabled={reportSubmitting}
-              onPress={() => setReportModalOpen(false)}
-            >
+              onPress={() => setReportModalOpen(false)}>
               <Text style={styles.reportReasonText}>{reason}</Text>
             </Pressable>
           ))}
 
           <Pressable
-            style={({ pressed }) => [styles.reportCancelBtn, pressed && styles.reportCancelBtnPressed]}
+            style={({ pressed }) => [
+              styles.reportCancelBtn,
+              pressed && styles.reportCancelBtnPressed,
+            ]}
             disabled={reportSubmitting}
-            onPress={() => setReportModalOpen(false)}
-          >
-            <Text style={styles.reportCancelText}>{reportSubmitting ? 'Submitting...' : 'Cancel'}</Text>
+            onPress={() => setReportModalOpen(false)}>
+            <Text style={styles.reportCancelText}>
+              {reportSubmitting ? "Submitting..." : "Cancel"}
+            </Text>
           </Pressable>
         </View>
       </Modal>
@@ -632,64 +753,64 @@ export default function AudioScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   gradient: { flex: 1 },
-  container: { flex: 1, backgroundColor: 'transparent' },
+  container: { flex: 1, backgroundColor: "transparent" },
   sectionRow: {
     paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginTop: 10,
     marginBottom: 4,
   },
   sectionTitle: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   emptyWrap: {
     paddingTop: 40,
-    alignItems: 'center',
+    alignItems: "center",
   },
   emptyText: {
-    color: 'rgba(255,255,255,0.5)',
+    color: "rgba(255,255,255,0.5)",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 
   reportModalBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: "rgba(0,0,0,0.6)",
   },
   reportModalCard: {
-    position: 'absolute',
+    position: "absolute",
     left: 18,
     right: 18,
     bottom: 26,
     borderRadius: 18,
     padding: 16,
-    backgroundColor: 'rgba(20,20,20,0.96)',
+    backgroundColor: "rgba(20,20,20,0.96)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: "rgba(255,255,255,0.10)",
   },
   reportModalTitle: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '900',
+    fontWeight: "900",
   },
   reportModalSub: {
     marginTop: 6,
     marginBottom: 12,
-    color: 'rgba(255,255,255,0.65)',
+    color: "rgba(255,255,255,0.65)",
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   reportReasonBtn: {
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: "rgba(255,255,255,0.10)",
     marginBottom: 10,
   },
   reportReasonBtnPressed: {
@@ -697,26 +818,26 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.99 }],
   },
   reportReasonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   reportCancelBtn: {
     marginTop: 4,
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,255,255,0.02)',
+    backgroundColor: "rgba(255,255,255,0.02)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
+    borderColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
   },
   reportCancelBtnPressed: {
     opacity: 0.85,
   },
   reportCancelText: {
-    color: 'rgba(255,255,255,0.85)',
+    color: "rgba(255,255,255,0.85)",
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: "800",
   },
 });

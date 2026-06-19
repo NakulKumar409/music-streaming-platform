@@ -165,11 +165,13 @@ export class AuthController {
           status: dbUser?.status ?? (tokenUser as any)?.status ?? "ACTIVE"
         }
       });
-    } catch {
-      return res.status(500).json({
-        success: false,
-        message: "Session error"
-      });
-    }
+    } catch (err) {
+  console.error("SESSION API ERROR:", err);
+
+  return res.status(500).json({
+    success: false,
+    message: err instanceof Error ? err.message : "Session error"
+  });
+}
   }
 }

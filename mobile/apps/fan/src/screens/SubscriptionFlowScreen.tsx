@@ -1,4 +1,19 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import {
+  AlertTriangle,
+  BadgeCheck,
+  Check,
+  Crown,
+  Lock,
+  Share2,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  X,
+  Zap,
+} from "lucide-react-native";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,23 +25,23 @@ import {
   StyleSheet,
   Text,
   View,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
-import { BadgeCheck, Check, Crown, Sparkles, Star, X, Zap, AlertTriangle, ShieldCheck, Lock, Share2 } from 'lucide-react-native';
-import ErrorBoundary from '../ui/ErrorBoundary';
-import RazorpayCheckout from 'react-native-razorpay';
-import { apiV1 } from '../services/api';
-import logger from '../utils/logger';
-import { userService, UpsellStatus, PlatformConfig } from '../services/userService';
+} from "react-native";
+import RazorpayCheckout from "react-native-razorpay";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import { apiV1 } from "../services/api";
+import { PlatformConfig, userService } from "../services/userService";
+import ErrorBoundary from "../ui/ErrorBoundary";
+import logger from "../utils/logger";
 // import * as Sharing from 'expo-sharing'; // Moved to dynamic require to prevent crash on boot
 
-const { width: SW, height: SH } = Dimensions.get('window');
+const { width: SW, height: SH } = Dimensions.get("window");
 
-type PaymentStep = 'PLAN_SELECT' | 'PROCESSING' | 'SUCCESS';
-type PlanType = 'ARTIST' | 'PLATFORM';
-type BillingCycle = 'monthly' | 'yearly';
+type PaymentStep = "PLAN_SELECT" | "PROCESSING" | "SUCCESS";
+type PlanType = "ARTIST" | "PLATFORM";
+type BillingCycle = "monthly" | "yearly";
 
 type RouteParams = {
   artistId?: string;
@@ -37,49 +52,52 @@ type RouteParams = {
 };
 
 function showPaymentError(message: string) {
-  const msg = (message || 'Failed to start payment').toString();
-  Alert.alert('Payment Error', msg);
+  const msg = (message || "Failed to start payment").toString();
+  Alert.alert("Payment Error", msg);
 }
 
 // ─── Benefit lists ─────────────────────────────────────────────────────────────
 const PLATFORM_BENEFITS = [
-  { text: 'HD streaming (720p / 1080p)', icon: '🎬' },
-  { text: 'Crystal clear audio quality', icon: '🎵' },
-  { text: 'Works across all content', icon: '🌐' },
-  { text: 'Ad-free experience', icon: '✨' },
+  { text: "HD streaming (720p / 1080p)", icon: "🎬" },
+  { text: "Crystal clear audio quality", icon: "🎵" },
+  { text: "Works across all content", icon: "🌐" },
+  { text: "Ad-free experience", icon: "✨" },
 ];
 
 const ARTIST_BENEFITS = [
-  { text: 'Exclusive artist content', icon: '🎤' },
-  { text: 'Early access to new releases', icon: '⚡' },
-  { text: 'Direct artist support', icon: '❤️' },
-  { text: 'Behind-the-scenes access', icon: '🎭' },
+  { text: "Exclusive artist content", icon: "🎤" },
+  { text: "Early access to new releases", icon: "⚡" },
+  { text: "Direct artist support", icon: "❤️" },
+  { text: "Behind-the-scenes access", icon: "🎭" },
 ];
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
 export default function SubscriptionFlowScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
   const params: RouteParams = route?.params ?? {};
-  const artistId = params.artistId ?? '';
-  const artistName = params.artistName ?? 'Artist';
+  const artistId = params.artistId ?? "";
+  const artistName = params.artistName ?? "Artist";
   const contentId = params.contentId;
   const hasArtist = Boolean(artistId);
 
   const [selectedPlan, setSelectedPlan] = useState<PlanType>(
-    params.defaultPlan ?? (hasArtist ? 'ARTIST' : 'PLATFORM')
+    params.defaultPlan ?? (hasArtist ? "ARTIST" : "PLATFORM")
   );
-  const [paymentStep, setPaymentStep] = useState<PaymentStep>('PLAN_SELECT');
+  const [paymentStep, setPaymentStep] = useState<PaymentStep>("PLAN_SELECT");
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
-  const [processingMessage, setProcessingMessage] = useState('Processing payment…');
-  const [platformConfig, setPlatformConfig] = useState<PlatformConfig | null>(null);
+  const [processingMessage, setProcessingMessage] = useState(
+    "Processing payment…"
+  );
+  const [platformConfig, setPlatformConfig] = useState<PlatformConfig | null>(
+    null
+  );
   const [isPlatformConfigLoading, setIsPlatformConfigLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [upsellStatus, setUpsellStatus] = useState<any>(null);
   const [artistProfile, setArtistProfile] = useState<any>(null);
   const [isArtistProfileLoading, setIsArtistProfileLoading] = useState(false);
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
-
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
 
   // Fade-in on mount
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -87,22 +105,34 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
     ]).start();
 
     // Fetch dynamic config
     setIsPlatformConfigLoading(true);
-    userService.getPlatformConfig().then(cfg => {
-      if (cfg) setPlatformConfig(cfg);
-    }).catch(() => undefined).finally(() => {
-      setIsPlatformConfigLoading(false);
-    });
+    userService
+      .getPlatformConfig()
+      .then((cfg) => {
+        if (cfg) setPlatformConfig(cfg);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        setIsPlatformConfigLoading(false);
+      });
 
     // Track upsell if landing from locked content
     if (contentId) {
       userService.trackUpsellAttempt().then(() => {
-        userService.getUpsellStatus().then(status => {
+        userService.getUpsellStatus().then((status) => {
           if (status) setUpsellStatus(status);
         });
       });
@@ -111,8 +141,9 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
     // Fetch artist profile for pricing
     if (artistId && !isNaN(Number(artistId))) {
       setIsArtistProfileLoading(true);
-      userService.getArtistProfile(Number(artistId))
-        .then(profile => {
+      userService
+        .getArtistProfile(Number(artistId))
+        .then((profile) => {
           if (profile) setArtistProfile(profile);
         })
         .finally(() => setIsArtistProfileLoading(false));
@@ -121,21 +152,24 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
 
   useEffect(() => {
     if (!isVerifyingPayment && !isCreatingOrder) return;
-    setProcessingMessage('Processing payment…');
-    const t = setTimeout(() => setProcessingMessage('Almost there, verifying with server…'), 5000);
+    setProcessingMessage("Processing payment…");
+    const t = setTimeout(
+      () => setProcessingMessage("Almost there, verifying with server…"),
+      5000
+    );
     return () => clearTimeout(t);
   }, [isVerifyingPayment, isCreatingOrder]);
 
-  const isPlatform = selectedPlan === 'PLATFORM';
-  
+  const isPlatform = selectedPlan === "PLATFORM";
+
   // Dynamic pricing logic & Discounts
   const rawPrice = platformConfig?.price ?? 0;
   const discountPrice = platformConfig?.discount_price;
   const discountMonths = platformConfig?.discount_months ?? 1;
-  const platformDuration = platformConfig?.duration ?? 'monthly';
-  const platformCurrency = platformConfig?.currency ?? 'INR';
+  const platformDuration = platformConfig?.duration ?? "monthly";
+  const platformCurrency = platformConfig?.currency ?? "INR";
   const platformFeaturesRaw = platformConfig?.features ?? [];
-  
+
   const hasDiscount = Boolean(discountPrice && discountPrice < rawPrice);
   const finalPrice = hasDiscount ? Number(discountPrice) : rawPrice;
 
@@ -143,16 +177,21 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
   // Platform — use actual yearly_price from config if available
   const platformMonthlyPrice = finalPrice;
   const platformYearlyPrice = (() => {
-    if (platformConfig?.yearly_price) return Number(platformConfig.yearly_price);
+    if (platformConfig?.yearly_price)
+      return Number(platformConfig.yearly_price);
     if (hasDiscount && discountPrice) return Number(discountPrice) * 12;
     return parseFloat((finalPrice * 12 * 0.8).toFixed(2));
   })();
   const platformDisplayPrice =
-    billingCycle === 'yearly' ? platformYearlyPrice : platformMonthlyPrice;
+    billingCycle === "yearly" ? platformYearlyPrice : platformMonthlyPrice;
   const platformPriceDisplay =
     isPlatformConfigLoading || finalPrice === 0
-      ? '—'
-      : `₹${billingCycle === 'yearly' ? platformYearlyPrice.toFixed(0) : platformMonthlyPrice}`;
+      ? "—"
+      : `₹${
+          billingCycle === "yearly"
+            ? platformYearlyPrice.toFixed(0)
+            : platformMonthlyPrice
+        }`;
 
   // Artist — yearly uses artistProfile.yearlyPrice if available, else 20% off
   const artistMonthlyPrice: number = artistProfile?.subscriptionPrice ?? 49;
@@ -161,33 +200,46 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
       return Number(artistProfile.yearlyPrice);
     return parseFloat((artistMonthlyPrice * 12 * 0.8).toFixed(2));
   })();
-  const artistPriceDisplay =
-    `₹${billingCycle === 'yearly' ? artistYearlyPrice.toFixed(0) : artistMonthlyPrice}`;
+  const artistPriceDisplay = `₹${
+    billingCycle === "yearly"
+      ? artistYearlyPrice.toFixed(0)
+      : artistMonthlyPrice
+  }`;
 
-  const cycleSuffix = billingCycle === 'yearly' ? '/yr' : '/mo';
+  const cycleSuffix = billingCycle === "yearly" ? "/yr" : "/mo";
   const durationLabel = cycleSuffix;
 
   // Amount sent to Razorpay (in paise)
   const amountPaise = isPlatform
     ? Math.round(platformDisplayPrice * 100)
-    : Math.round((billingCycle === 'yearly' ? artistYearlyPrice : artistMonthlyPrice) * 100);
+    : Math.round(
+        (billingCycle === "yearly" ? artistYearlyPrice : artistMonthlyPrice) *
+          100
+      );
 
   const priceDisplay = isPlatform ? platformPriceDisplay : artistPriceDisplay;
 
-  const planLabel = isPlatform ? 'Platform Plan' : `${artistName} Plan`;
-  const accentColor = isPlatform ? '#6C63FF' : '#FF7A18';
-  const accentAlt = isPlatform ? '#4AA3FF' : '#FF3D00';
+  const planLabel = isPlatform ? "Platform Plan" : `${artistName} Plan`;
+  const accentColor = isPlatform ? "#6C63FF" : "#FF7A18";
+  const accentAlt = isPlatform ? "#4AA3FF" : "#FF3D00";
 
-  const mappedPlatformBenefits = platformFeaturesRaw.length > 0
-    ? platformFeaturesRaw.map((f, i) => ({ text: f, icon: PLATFORM_BENEFITS[i % PLATFORM_BENEFITS.length].icon }))
-    : PLATFORM_BENEFITS;
+  const mappedPlatformBenefits =
+    platformFeaturesRaw.length > 0
+      ? platformFeaturesRaw.map((f, i) => ({
+          text: f,
+          icon: PLATFORM_BENEFITS[i % PLATFORM_BENEFITS.length].icon,
+        }))
+      : PLATFORM_BENEFITS;
 
-  const hasCustomFeatures = artistProfile?.subscriptionFeatures?.length && artistProfile.subscriptionFeatures.length > 0;
+  const hasCustomFeatures =
+    artistProfile?.subscriptionFeatures?.length &&
+    artistProfile.subscriptionFeatures.length > 0;
   const mappedArtistBenefits = hasCustomFeatures
-    ? artistProfile!.subscriptionFeatures!.map((f: string, i: number) => ({ text: f, icon: ARTIST_BENEFITS[i % ARTIST_BENEFITS.length].icon }))
+    ? artistProfile!.subscriptionFeatures!.map((f: string, i: number) => ({
+        text: f,
+        icon: ARTIST_BENEFITS[i % ARTIST_BENEFITS.length].icon,
+      }))
     : ARTIST_BENEFITS;
-
-
 
   const startPayment = async () => {
     if (isCreatingOrder || isVerifyingPayment) return;
@@ -198,13 +250,22 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
       // Duplicate check
       try {
         const summary = await userService.getSubscriptionPlanSummary();
-        if (selectedPlan === 'PLATFORM' && summary.platformPlan?.status === 'ACTIVE') {
-          setErrorMessage('You already have an active Platform Plan.');
+        if (
+          selectedPlan === "PLATFORM" &&
+          summary.platformPlan?.status === "ACTIVE"
+        ) {
+          setErrorMessage("You already have an active Platform Plan.");
           setIsCreatingOrder(false);
           return;
         }
-        if (selectedPlan === 'ARTIST' && summary.artistPlan?.artistId == artistIdValue && summary.artistPlan?.status === 'ACTIVE') {
-          setErrorMessage(`You already have an active subscription for ${artistName}.`);
+        if (
+          selectedPlan === "ARTIST" &&
+          summary.artistPlan?.artistId == artistIdValue &&
+          summary.artistPlan?.status === "ACTIVE"
+        ) {
+          setErrorMessage(
+            `You already have an active subscription for ${artistName}.`
+          );
           setIsCreatingOrder(false);
           return;
         }
@@ -213,41 +274,68 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
       // Create order
       let res: any;
       try {
-        res = await apiV1.post('/subscriptions/order', {
+        res = await apiV1.post("/subscriptions/order", {
           amount: amountPaise,
-          artistId: selectedPlan === 'PLATFORM' ? '0' : (artistIdValue || '0'),
-          artistName: selectedPlan === 'PLATFORM' ? 'Platform' : artistName,
+          artistId: selectedPlan === "PLATFORM" ? "0" : artistIdValue || "0",
+          artistName: selectedPlan === "PLATFORM" ? "Platform" : artistName,
           billingCycle: billingCycle,
         });
       } catch (orderErr: any) {
         const status = orderErr?.response?.status;
-        const serverMsg = orderErr?.response?.data?.message || '';
+        const serverMsg = orderErr?.response?.data?.message || "";
         if (status === 409) {
-          setErrorMessage(`You already have an active ${isPlatform ? 'Platform' : 'Artist'} subscription.`);
+          setErrorMessage(
+            `You already have an active ${
+              isPlatform ? "Platform" : "Artist"
+            } subscription.`
+          );
           setIsCreatingOrder(false);
           return;
         }
-        throw new Error(serverMsg || orderErr?.message || 'Failed to create order');
+        throw new Error(
+          serverMsg || orderErr?.message || "Failed to create order"
+        );
       }
+      // BUG 12 FIX: Free plan (₹0) - direct success
+      if (res.data?.is_free === true) {
+        setPaymentStep("SUCCESS");
+        setIsCreatingOrder(false);
+        setTimeout(() => {
+          if (selectedPlan === "ARTIST" && artistId) {
+            navigation.navigate("Artist", {
+              artistId,
+              unlocked: true,
+              contentId,
+            });
+          } else {
+            navigation.goBack();
+          }
+        }, 2800);
+        return;
+      }
+      const nextOrderId = (res.data?.order?.id ?? "").toString();
+      if (!nextOrderId)
+        throw new Error("Order creation failed — order id missing");
 
-      const nextOrderId = (res.data?.order?.id ?? '').toString();
-      if (!nextOrderId) throw new Error('Order creation failed — order id missing');
+      const keyId =
+        process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID ||
+        (res.data?.order?.key_id ?? "").toString();
+      if (!keyId) throw new Error("Missing Razorpay key_id");
 
-      const keyId = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || (res.data?.order?.key_id ?? '').toString();
-      if (!keyId) throw new Error('Missing Razorpay key_id');
-
-      if (Platform.OS === 'web') {
-        throw new Error('Payments not supported in web preview. Please use the mobile app.');
+      if (Platform.OS === "web") {
+        throw new Error(
+          "Payments not supported in web preview. Please use the mobile app."
+        );
       }
 
       const options: any = {
         key: keyId,
         amount: Number(res.data?.order?.amount ?? amountPaise),
-        currency: (res.data?.order?.currency ?? 'INR').toString(),
-        name: 'Music Platform',
+        currency: (res.data?.order?.currency ?? "INR").toString(),
+        name: "Music Platform",
         description: planLabel,
         order_id: nextOrderId,
-        notes: { artist_id: artistIdValue || '0', plan_type: selectedPlan },
+        notes: { artist_id: artistIdValue || "0", plan_type: selectedPlan },
         theme: { color: accentColor },
       };
 
@@ -255,67 +343,100 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
       try {
         paymentData = await RazorpayCheckout.open(options);
       } catch (e: any) {
-        const msg = (e?.description ?? e?.error?.description ?? e?.message ?? '').toString();
-        if (/cancel/i.test(msg)) {
+        // ============================================
+        // BUG 13 FIX: Handle Razorpay cancellation gracefully
+        // ============================================
+        const errorMsg =
+          e?.description || e?.error?.description || e?.message || "";
+        const errorString =
+          typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg);
+
+        // Check if user cancelled the payment
+        if (
+          /cancel/i.test(errorString) ||
+          errorString.includes("payment_error")
+        ) {
           // Notify backend that payment was cancelled
           try {
-            await apiV1.post('/subscriptions/payment-failed', {
+            await apiV1.post("/subscriptions/payment-failed", {
               razorpay_order_id: nextOrderId,
-              reason: 'User cancelled'
+              reason: "User cancelled",
             });
           } catch (err) {
-            logger.warn('[Payment] Failed to record cancellation', err);
+            logger.warn("[Payment] Failed to record cancellation", err);
           }
-          setIsCreatingOrder(false);
+          // Show user-friendly message
+          Alert.alert(
+            "Payment Cancelled",
+            "You cancelled the payment. You can try again anytime.",
+            [{ text: "OK", onPress: () => setIsCreatingOrder(false) }]
+          );
           return;
         }
-        throw new Error(msg || 'Payment cancelled');
+
+        // Other errors
+        setErrorMessage(errorString || "Payment failed. Please try again.");
+        setIsCreatingOrder(false);
       }
 
-      const razorpay_order_id = (paymentData?.razorpay_order_id ?? nextOrderId).toString();
-      const razorpay_payment_id = (paymentData?.razorpay_payment_id ?? '').toString();
-      const razorpay_signature = (paymentData?.razorpay_signature ?? '').toString();
+      const razorpay_order_id = (
+        paymentData?.razorpay_order_id ?? nextOrderId
+      ).toString();
+      const razorpay_payment_id = (
+        paymentData?.razorpay_payment_id ?? ""
+      ).toString();
+      const razorpay_signature = (
+        paymentData?.razorpay_signature ?? ""
+      ).toString();
 
       if (!razorpay_payment_id || !razorpay_signature) {
-        throw new Error('Payment completed but required fields were missing');
+        throw new Error("Payment completed but required fields were missing");
       }
 
-      setPaymentStep('PROCESSING');
+      setPaymentStep("PROCESSING");
       setIsVerifyingPayment(true);
 
-      await apiV1.post('/subscriptions/confirm', {
+      await apiV1.post("/subscriptions/confirm", {
         razorpay_order_id,
         razorpay_payment_id,
         razorpay_signature,
-        artist_id: artistIdValue || '0',
+        artist_id: artistIdValue || "0",
       });
 
       // Poll for ACTIVE status (max 30 seconds)
       const deadline = Date.now() + 30_000;
       while (Date.now() < deadline) {
-        const endpoint = selectedPlan === 'PLATFORM'
-          ? '/subscriptions/platform'
-          : `/subscriptions/me?artistId=${encodeURIComponent(artistIdValue)}`;
+        const endpoint =
+          selectedPlan === "PLATFORM"
+            ? "/subscriptions/platform"
+            : `/subscriptions/me?artistId=${encodeURIComponent(artistIdValue)}`;
         const sRes = await apiV1.get(endpoint);
-        const status = (sRes.data?.subscription?.status ?? '').toString().toUpperCase();
-        if (status === 'ACTIVE') break;
-        await new Promise(r => setTimeout(r, 2000));
+        const status = (sRes.data?.subscription?.status ?? "")
+          .toString()
+          .toUpperCase();
+        if (status === "ACTIVE") break;
+        await new Promise((r) => setTimeout(r, 2000));
       }
 
-      setPaymentStep('SUCCESS');
+      setPaymentStep("SUCCESS");
 
       // Auto redirect after success
       setTimeout(() => {
-        if (selectedPlan === 'ARTIST' && artistId) {
-          navigation.navigate('Artist', { artistId, unlocked: true, contentId });
+        if (selectedPlan === "ARTIST" && artistId) {
+          navigation.navigate("Artist", {
+            artistId,
+            unlocked: true,
+            contentId,
+          });
         } else {
           navigation.goBack();
         }
       }, 2800);
-
     } catch (err: any) {
-      setPaymentStep('PLAN_SELECT');
-      setErrorMessage(err?.message || 'Failed to start payment. Please check your connection.');
+      setPaymentStep("PLAN_SELECT");
+      setErrorMessage(
+        err?.message || "Failed to start payment. Please check your connection."
+      );
     } finally {
       setIsCreatingOrder(false);
       setIsVerifyingPayment(false);
@@ -325,17 +446,23 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
   const handleShare = async () => {
     try {
       // Lazy load sharing to prevent crash if native module is not in the current dev client build
-      const Sharing = require('expo-sharing');
+      const Sharing = require("expo-sharing");
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
-        Alert.alert('Sharing not available', 'Please capture a screenshot to share your success!');
+        Alert.alert(
+          "Sharing not available",
+          "Please capture a screenshot to share your success!"
+        );
         return;
       }
       // Note: shareAsync requires a file URI.
-      Alert.alert('Success!', 'Ready to share your achievement!');
+      Alert.alert("Success!", "Ready to share your achievement!");
     } catch (e) {
-      logger.log('Sharing error:', e);
-      Alert.alert('Sharing error', 'Failed to open sharing dialog. Rebuild your dev client to enable this.');
+      logger.log("Sharing error:", e);
+      Alert.alert(
+        "Sharing error",
+        "Failed to open sharing dialog. Rebuild your dev client to enable this."
+      );
     }
   };
 
@@ -346,33 +473,46 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
           {/* ══════════════════════════════════════════════════
               PLAN SELECT SCREEN
           ══════════════════════════════════════════════════ */}
-          {paymentStep === 'PLAN_SELECT' && (
+          {paymentStep === "PLAN_SELECT" && (
             <ScrollView
               style={s.scrollWrap}
               contentContainerStyle={s.scrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-
+              showsVerticalScrollIndicator={false}>
+              <Animated.View
+                style={{
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideAnim }],
+                }}>
                 {/* Header */}
                 <View style={s.headerWrap}>
                   <View style={s.crownRing}>
-                    <LinearGradient colors={['#6C63FF', '#4AA3FF']} style={s.crownGrad}>
+                    <LinearGradient
+                      colors={["#6C63FF", "#4AA3FF"]}
+                      style={s.crownGrad}>
                       <Crown color="#fff" size={28} />
                     </LinearGradient>
                   </View>
                   <Text style={s.headline}>Upgrade Your Experience</Text>
-                  <Text style={s.subline}>Join thousands of music lovers. Cancel anytime.</Text>
+                  <Text style={s.subline}>
+                    Join thousands of music lovers. Cancel anytime.
+                  </Text>
                 </View>
 
                 {/* Strong Upsell Alert */}
                 {upsellStatus?.showStrongUpsell && (
                   <View style={s.strongUpsellAlert}>
-                    <LinearGradient colors={['#FF3D00', '#FF7A18']} style={s.strongUpsellGrad}>
+                    <LinearGradient
+                      colors={["#FF3D00", "#FF7A18"]}
+                      style={s.strongUpsellGrad}>
                       <AlertTriangle color="#fff" size={20} />
                       <View style={{ flex: 1, marginLeft: 12 }}>
-                        <Text style={s.strongUpsellTitle}>Special Reward Unlocked! 🎁</Text>
-                        <Text style={s.strongUpsellDesc}>We noticed you love our content. Subscribe now and get instant access to everything!</Text>
+                        <Text style={s.strongUpsellTitle}>
+                          Special Reward Unlocked! 🎁
+                        </Text>
+                        <Text style={s.strongUpsellDesc}>
+                          We noticed you love our content. Subscribe now and get
+                          instant access to everything!
+                        </Text>
                       </View>
                     </LinearGradient>
                   </View>
@@ -381,18 +521,30 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
                 {/* ── Billing Cycle Toggle ── */}
                 <View style={s.billingToggleWrap}>
                   <Pressable
-                    style={[s.billingToggleBtn, billingCycle === 'monthly' && s.billingToggleBtnActive]}
-                    onPress={() => setBillingCycle('monthly')}
-                  >
-                    <Text style={[s.billingToggleText, billingCycle === 'monthly' && s.billingToggleTextActive]}>
+                    style={[
+                      s.billingToggleBtn,
+                      billingCycle === "monthly" && s.billingToggleBtnActive,
+                    ]}
+                    onPress={() => setBillingCycle("monthly")}>
+                    <Text
+                      style={[
+                        s.billingToggleText,
+                        billingCycle === "monthly" && s.billingToggleTextActive,
+                      ]}>
                       Monthly
                     </Text>
                   </Pressable>
                   <Pressable
-                    style={[s.billingToggleBtn, billingCycle === 'yearly' && s.billingToggleBtnActive]}
-                    onPress={() => setBillingCycle('yearly')}
-                  >
-                    <Text style={[s.billingToggleText, billingCycle === 'yearly' && s.billingToggleTextActive]}>
+                    style={[
+                      s.billingToggleBtn,
+                      billingCycle === "yearly" && s.billingToggleBtnActive,
+                    ]}
+                    onPress={() => setBillingCycle("yearly")}>
+                    <Text
+                      style={[
+                        s.billingToggleText,
+                        billingCycle === "yearly" && s.billingToggleTextActive,
+                      ]}>
                       Yearly
                     </Text>
                     <View style={s.saveBadge}>
@@ -403,50 +555,64 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
 
                 {/* ── Plan Cards ── */}
                 <View style={s.plansWrap}>
-
                   {/* Platform Plan Card */}
                   <Pressable
-                    style={[s.planCard, selectedPlan === 'PLATFORM' && s.planCardActivePlatform]}
-                    onPress={() => setSelectedPlan('PLATFORM')}
-                    android_ripple={{ color: 'rgba(108,99,255,0.15)' }}
-                  >
+                    style={[
+                      s.planCard,
+                      selectedPlan === "PLATFORM" && s.planCardActivePlatform,
+                    ]}
+                    onPress={() => setSelectedPlan("PLATFORM")}
+                    android_ripple={{ color: "rgba(108,99,255,0.15)" }}>
                     {/* Glow effect */}
-                    {selectedPlan === 'PLATFORM' && (
-                      <View style={[s.cardGlow, { backgroundColor: 'rgba(108,99,255,0.18)' }]} />
+                    {selectedPlan === "PLATFORM" && (
+                      <View
+                        style={[
+                          s.cardGlow,
+                          { backgroundColor: "rgba(108,99,255,0.18)" },
+                        ]}
+                      />
                     )}
 
                     {/* Popular Badge */}
                     <LinearGradient
-                      colors={['#6C63FF', '#4AA3FF']}
-                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                      style={s.popularBadge}
-                    >
+                      colors={["#6C63FF", "#4AA3FF"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={s.popularBadge}>
                       <Zap color="#fff" size={10} />
-                      <Text style={s.popularBadgeText}>  MOST POPULAR</Text>
+                      <Text style={s.popularBadgeText}> MOST POPULAR</Text>
                     </LinearGradient>
 
                     <View style={s.cardInner}>
                       {/* Icon + Title + Price row */}
                       <View style={s.cardTopRow}>
-                        <LinearGradient colors={['#6C63FF', '#4AA3FF']} style={s.planIconCircle}>
+                        <LinearGradient
+                          colors={["#6C63FF", "#4AA3FF"]}
+                          style={s.planIconCircle}>
                           <Crown color="#fff" size={22} />
                         </LinearGradient>
                         <View style={s.cardTitleWrap}>
                           <Text style={s.cardTitle}>Platform Plan</Text>
-                          <Text style={s.cardSubtitle}>Unlock HD streaming across all content</Text>
+                          <Text style={s.cardSubtitle}>
+                            Unlock HD streaming across all content
+                          </Text>
                         </View>
                         <View style={s.priceBlock}>
                           {isPlatformConfigLoading ? (
                             <ActivityIndicator color="#6C63FF" size="small" />
                           ) : (
                             <>
-                              {billingCycle === 'yearly' && (
-                                <Text style={s.priceOriginal}>₹{(platformMonthlyPrice * 12).toFixed(0)}</Text>
+                              {billingCycle === "yearly" && (
+                                <Text style={s.priceOriginal}>
+                                  ₹{(platformMonthlyPrice * 12).toFixed(0)}
+                                </Text>
                               )}
-                              {billingCycle === 'monthly' && hasDiscount && (
+                              {billingCycle === "monthly" && hasDiscount && (
                                 <Text style={s.priceOriginal}>₹{rawPrice}</Text>
                               )}
-                              <Text style={s.priceMain}>{platformPriceDisplay}</Text>
+                              <Text style={s.priceMain}>
+                                {platformPriceDisplay}
+                              </Text>
                               <Text style={s.priceSub}>{cycleSuffix}</Text>
                             </>
                           )}
@@ -456,31 +622,56 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
                       {hasDiscount && (
                         <View style={s.discountRibbon}>
                           <Sparkles color="#6C63FF" size={12} />
-                          <Text style={s.discountRibbonText}>  Introductory Offer: Correct price for {discountMonths} month{discountMonths > 1 ? 's' : ''}</Text>
+                          <Text style={s.discountRibbonText}>
+                            {" "}
+                            Introductory Offer: Correct price for{" "}
+                            {discountMonths} month
+                            {discountMonths > 1 ? "s" : ""}
+                          </Text>
                         </View>
                       )}
 
                       {/* Divider */}
                       <LinearGradient
-                        colors={['transparent', 'rgba(108,99,255,0.4)', 'transparent']}
-                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                        colors={[
+                          "transparent",
+                          "rgba(108,99,255,0.4)",
+                          "transparent",
+                        ]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
                         style={s.cardDivider}
                       />
 
                       {/* Benefits */}
                       {mappedPlatformBenefits.map((b, i) => (
                         <View key={i} style={s.benefitRow}>
-                          <View style={[s.checkCircle, { backgroundColor: isPlatform ? 'rgba(108,99,255,0.2)' : 'rgba(255,122,24,0.2)' }]}>
-                            <Check color={accentColor} size={12} strokeWidth={3} />
+                          <View
+                            style={[
+                              s.checkCircle,
+                              {
+                                backgroundColor: isPlatform
+                                  ? "rgba(108,99,255,0.2)"
+                                  : "rgba(255,122,24,0.2)",
+                              },
+                            ]}>
+                            <Check
+                              color={accentColor}
+                              size={12}
+                              strokeWidth={3}
+                            />
                           </View>
-                          <Text style={s.benefitText}>{b.icon}  {b.text}</Text>
+                          <Text style={s.benefitText}>
+                            {b.icon} {b.text}
+                          </Text>
                         </View>
                       ))}
                     </View>
 
                     {/* Selected indicator */}
-                    {selectedPlan === 'PLATFORM' && (
-                      <View style={[s.selectedDot, { backgroundColor: '#6C63FF' }]}>
+                    {selectedPlan === "PLATFORM" && (
+                      <View
+                        style={[s.selectedDot, { backgroundColor: "#6C63FF" }]}>
                         <Check color="#fff" size={13} strokeWidth={3} />
                       </View>
                     )}
@@ -489,41 +680,59 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
                   {/* Artist Plan Card (only if artist context) */}
                   {hasArtist && (
                     <Pressable
-                      style={[s.planCard, selectedPlan === 'ARTIST' && s.planCardActiveArtist]}
-                      onPress={() => setSelectedPlan('ARTIST')}
-                      android_ripple={{ color: 'rgba(255,122,24,0.15)' }}
-                    >
-                      {selectedPlan === 'ARTIST' && (
-                        <View style={[s.cardGlow, { backgroundColor: 'rgba(255,122,24,0.15)' }]} />
+                      style={[
+                        s.planCard,
+                        selectedPlan === "ARTIST" && s.planCardActiveArtist,
+                      ]}
+                      onPress={() => setSelectedPlan("ARTIST")}
+                      android_ripple={{ color: "rgba(255,122,24,0.15)" }}>
+                      {selectedPlan === "ARTIST" && (
+                        <View
+                          style={[
+                            s.cardGlow,
+                            { backgroundColor: "rgba(255,122,24,0.15)" },
+                          ]}
+                        />
                       )}
 
                       <LinearGradient
-                        colors={['#FF7A18', '#FF3D00']}
-                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                        style={s.popularBadge}
-                      >
+                        colors={["#FF7A18", "#FF3D00"]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={s.popularBadge}>
                         <Star color="#fff" size={10} />
-                        <Text style={s.popularBadgeText}>  ARTIST EXCLUSIVE</Text>
+                        <Text style={s.popularBadgeText}>
+                          {" "}
+                          ARTIST EXCLUSIVE
+                        </Text>
                       </LinearGradient>
 
                       <View style={s.cardInner}>
                         <View style={s.cardTopRow}>
-                          <LinearGradient colors={['#FF7A18', '#FF3D00']} style={s.planIconCircle}>
+                          <LinearGradient
+                            colors={["#FF7A18", "#FF3D00"]}
+                            style={s.planIconCircle}>
                             <Star color="#fff" size={22} />
                           </LinearGradient>
                           <View style={s.cardTitleWrap}>
                             <Text style={s.cardTitle}>{artistName}</Text>
-                            <Text style={s.cardSubtitle}>Support this artist & unlock exclusive content</Text>
+                            <Text style={s.cardSubtitle}>
+                              Support this artist & unlock exclusive content
+                            </Text>
                           </View>
                           <View style={s.priceBlock}>
                             {isArtistProfileLoading ? (
                               <ActivityIndicator color="#FF7A18" size="small" />
                             ) : (
                               <>
-                                {billingCycle === 'yearly' && (
-                                  <Text style={s.priceOriginal}>₹{(artistMonthlyPrice * 12).toFixed(0)}</Text>
+                                {billingCycle === "yearly" && (
+                                  <Text style={s.priceOriginal}>
+                                    ₹{(artistMonthlyPrice * 12).toFixed(0)}
+                                  </Text>
                                 )}
-                                <Text style={s.priceMain}>{artistPriceDisplay}</Text>
+                                <Text style={s.priceMain}>
+                                  {artistPriceDisplay}
+                                </Text>
                                 <Text style={s.priceSub}>{cycleSuffix}</Text>
                               </>
                             )}
@@ -531,23 +740,42 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
                         </View>
 
                         <LinearGradient
-                          colors={['transparent', 'rgba(255,122,24,0.4)', 'transparent']}
-                          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                          colors={[
+                            "transparent",
+                            "rgba(255,122,24,0.4)",
+                            "transparent",
+                          ]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
                           style={s.cardDivider}
                         />
 
                         {mappedArtistBenefits.map((b, i) => (
                           <View key={i} style={s.benefitRow}>
-                            <View style={[s.checkCircle, { backgroundColor: 'rgba(255,122,24,0.2)' }]}>
-                              <Check color="#FF7A18" size={12} strokeWidth={3} />
+                            <View
+                              style={[
+                                s.checkCircle,
+                                { backgroundColor: "rgba(255,122,24,0.2)" },
+                              ]}>
+                              <Check
+                                color="#FF7A18"
+                                size={12}
+                                strokeWidth={3}
+                              />
                             </View>
-                            <Text style={s.benefitText}>{b.icon}  {b.text}</Text>
+                            <Text style={s.benefitText}>
+                              {b.icon} {b.text}
+                            </Text>
                           </View>
                         ))}
                       </View>
 
-                      {selectedPlan === 'ARTIST' && (
-                        <View style={[s.selectedDot, { backgroundColor: '#FF7A18' }]}>
+                      {selectedPlan === "ARTIST" && (
+                        <View
+                          style={[
+                            s.selectedDot,
+                            { backgroundColor: "#FF7A18" },
+                          ]}>
                           <Check color="#fff" size={13} strokeWidth={3} />
                         </View>
                       )}
@@ -560,7 +788,9 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
                   <View style={s.errorContainer}>
                     <AlertTriangle color="#EF4444" size={20} />
                     <Text style={s.errorText}>{errorMessage}</Text>
-                    <Pressable style={s.errorRetryBtn} onPress={() => setErrorMessage(null)}>
+                    <Pressable
+                      style={s.errorRetryBtn}
+                      onPress={() => setErrorMessage(null)}>
                       <Text style={s.errorRetryText}>Retry</Text>
                     </Pressable>
                   </View>
@@ -568,30 +798,65 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
 
                 {/* ── CTA Button ── */}
                 <Pressable
-                  style={[s.ctaWrap, (isCreatingOrder || isVerifyingPayment || isPlatformConfigLoading || (!isPlatform && isArtistProfileLoading)) && { opacity: 0.75 }]}
+                  style={[
+                    s.ctaWrap,
+                    (isCreatingOrder ||
+                      isVerifyingPayment ||
+                      isPlatformConfigLoading ||
+                      (!isPlatform && isArtistProfileLoading)) && {
+                      opacity: 0.75,
+                    },
+                  ]}
                   onPress={startPayment}
-                  disabled={isCreatingOrder || isVerifyingPayment || isPlatformConfigLoading || (!isPlatform && isArtistProfileLoading)}
-                  android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
-                >
+                  disabled={
+                    isCreatingOrder ||
+                    isVerifyingPayment ||
+                    isPlatformConfigLoading ||
+                    (!isPlatform && isArtistProfileLoading)
+                  }
+                  android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
                   <LinearGradient
-                    colors={isPlatform ? ['#6C63FF', '#4AA3FF'] : ['#FF7A18', '#FF3D00']}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                    style={s.ctaGrad}
-                  >
+                    colors={
+                      isPlatform
+                        ? ["#6C63FF", "#4AA3FF"]
+                        : ["#FF7A18", "#FF3D00"]
+                    }
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={s.ctaGrad}>
                     {isCreatingOrder ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <ActivityIndicator color="#fff" size="small" style={{ marginRight: 10 }} />
-                        <Text style={s.ctaText}>Initializing Secure Step...</Text>
+                      <View
+                        style={{ flexDirection: "row", alignItems: "center" }}>
+                        <ActivityIndicator
+                          color="#fff"
+                          size="small"
+                          style={{ marginRight: 10 }}
+                        />
+                        <Text style={s.ctaText}>
+                          Initializing Secure Step...
+                        </Text>
                       </View>
                     ) : isPlatformConfigLoading ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <ActivityIndicator color="#fff" size="small" style={{ marginRight: 10 }} />
+                      <View
+                        style={{ flexDirection: "row", alignItems: "center" }}>
+                        <ActivityIndicator
+                          color="#fff"
+                          size="small"
+                          style={{ marginRight: 10 }}
+                        />
                         <Text style={s.ctaText}>Loading plan details...</Text>
                       </View>
                     ) : (
                       <>
-                        <Sparkles color="#fff" size={18} style={{ marginRight: 8 }} />
-                        <Text style={s.ctaText}>Subscribe · Pay {priceDisplay}{durationLabel}</Text>
+                        <Sparkles
+                          color="#fff"
+                          size={18}
+                          style={{ marginRight: 8 }}
+                        />
+                        <Text style={s.ctaText}>
+                          Subscribe · Pay {priceDisplay}
+                          {durationLabel}
+                        </Text>
                       </>
                     )}
                   </LinearGradient>
@@ -610,7 +875,10 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
                 </View>
 
                 <Text style={s.disclaimer}>
-                  Secure payment via Razorpay · Cancel anytime ·{billingCycle === 'yearly' ? ' Auto-renews yearly' : ' Auto-renews monthly'}
+                  Secure payment via Razorpay · Cancel anytime ·
+                  {billingCycle === "yearly"
+                    ? " Auto-renews yearly"
+                    : " Auto-renews monthly"}
                 </Text>
               </Animated.View>
             </ScrollView>
@@ -619,7 +887,7 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
           {/* ══════════════════════════════════════════════════
               PROCESSING SCREEN
           ══════════════════════════════════════════════════ */}
-          {paymentStep === 'PROCESSING' && (
+          {paymentStep === "PROCESSING" && (
             <View style={s.centeredWrap}>
               <BlurView intensity={20} tint="dark" style={s.processingCard}>
                 <ActivityIndicator color="#6C63FF" size="large" />
@@ -632,27 +900,30 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
           {/* ══════════════════════════════════════════════════
               SUCCESS SCREEN
           ══════════════════════════════════════════════════ */}
-          {paymentStep === 'SUCCESS' && (
+          {paymentStep === "SUCCESS" && (
             <View style={s.centeredWrap}>
               <Animated.View style={{ opacity: fadeAnim }}>
                 <View style={s.successIconWrap}>
-                  <LinearGradient colors={['#10B981', '#059669']} style={s.successIconGrad}>
+                  <LinearGradient
+                    colors={["#10B981", "#059669"]}
+                    style={s.successIconGrad}>
                     <BadgeCheck color="#fff" size={40} />
                   </LinearGradient>
                 </View>
                 <Text style={s.successTitle}>You're all set! 🎉</Text>
                 <Text style={s.successSub}>
-                  Your {planLabel} is now active.{'\n'}Enjoy your premium experience!
+                  Your {planLabel} is now active.{"\n"}Enjoy your premium
+                  experience!
                 </Text>
                 <View style={s.successBadge}>
                   <Sparkles color="#10B981" size={14} />
-                  <Text style={s.successBadgeText}>  Premium features unlocked</Text>
+                  <Text style={s.successBadgeText}>
+                    {" "}
+                    Premium features unlocked
+                  </Text>
                 </View>
 
-                <Pressable 
-                  style={s.shareBtn} 
-                  onPress={handleShare}
-                >
+                <Pressable style={s.shareBtn} onPress={handleShare}>
                   <Share2 color="#fff" size={18} style={{ marginRight: 8 }} />
                   <Text style={s.shareBtnText}>Share Success</Text>
                 </Pressable>
@@ -664,18 +935,17 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
         </SafeAreaView>
 
         {/* ── Final Top-Level Close Button ── */}
-        {paymentStep !== 'SUCCESS' && (
-          <Pressable 
+        {paymentStep !== "SUCCESS" && (
+          <Pressable
             style={[s.closeBtn, { top: insets.top + 10 }]}
             onPress={() => {
               if (navigation.canGoBack()) {
                 navigation.goBack();
               } else {
-                navigation.navigate('Home');
+                navigation.navigate("Home");
               }
             }}
-            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-          >
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}>
             <View style={s.closeBtnInner}>
               <X color="#fff" size={22} />
             </View>
@@ -688,47 +958,54 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000000' },
+  root: { flex: 1, backgroundColor: "#000000" },
   safe: { flex: 1 },
 
   meshOverlay: {
     ...StyleSheet.absoluteFillObject,
     opacity: 0.03,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
 
   // Orbs
-  orb: { position: 'absolute', borderRadius: 999 },
+  orb: { position: "absolute", borderRadius: 999 },
   orb1: {
-    width: 320, height: 320,
-    top: -100, left: -80,
-    backgroundColor: 'rgba(108,99,255,0.28)',
+    width: 320,
+    height: 320,
+    top: -100,
+    left: -80,
+    backgroundColor: "rgba(108,99,255,0.28)",
   },
   orb2: {
-    width: 260, height: 260,
-    top: SH * 0.25, right: -100,
-    backgroundColor: 'rgba(74,163,255,0.22)',
+    width: 260,
+    height: 260,
+    top: SH * 0.25,
+    right: -100,
+    backgroundColor: "rgba(74,163,255,0.22)",
   },
   orb3: {
-    width: 240, height: 240,
-    bottom: 40, left: -40,
-    backgroundColor: 'rgba(255,122,24,0.15)',
+    width: 240,
+    height: 240,
+    bottom: 40,
+    left: -40,
+    backgroundColor: "rgba(255,122,24,0.15)",
   },
 
   // Close
-  closeBtn: { 
-    position: 'absolute', 
-    left: 16, 
-    zIndex: 999 
+  closeBtn: {
+    position: "absolute",
+    left: 16,
+    zIndex: 999,
   },
   closeBtnInner: {
-    width: 44, height: 44,
+    width: 44,
+    height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0,0,0,0.4)",
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: "rgba(255,255,255,0.2)",
   },
 
   // Scroll
@@ -740,15 +1017,16 @@ const s = StyleSheet.create({
   },
 
   // Header
-  headerWrap: { alignItems: 'center', marginBottom: 30 },
+  headerWrap: { alignItems: "center", marginBottom: 30 },
   crownRing: {
-    width: 72, height: 72,
+    width: 72,
+    height: 72,
     borderRadius: 36,
     padding: 3,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.5)',
+    borderColor: "rgba(108,99,255,0.5)",
     marginBottom: 16,
-    shadowColor: '#6C63FF',
+    shadowColor: "#6C63FF",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 20,
@@ -757,22 +1035,22 @@ const s = StyleSheet.create({
   crownGrad: {
     flex: 1,
     borderRadius: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   headline: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 28,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: -0.6,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: 10,
   },
   subline: {
-    color: 'rgba(255,255,255,0.7)',
+    color: "rgba(255,255,255,0.7)",
     fontSize: 15,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
     lineHeight: 22,
   },
 
@@ -781,91 +1059,94 @@ const s = StyleSheet.create({
   planCard: {
     borderRadius: 28,
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.2)',
-    backgroundColor: '#111111',
-    overflow: 'hidden',
-    position: 'relative',
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "#111111",
+    overflow: "hidden",
+    position: "relative",
     marginBottom: 8,
   },
   planCardActivePlatform: {
-    borderColor: '#6C63FF',
-    backgroundColor: 'rgba(108,99,255,0.12)',
-    shadowColor: '#6C63FF',
+    borderColor: "#6C63FF",
+    backgroundColor: "rgba(108,99,255,0.12)",
+    shadowColor: "#6C63FF",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.5,
     shadowRadius: 24,
     elevation: 12,
   },
   planCardActiveArtist: {
-    borderColor: '#FF7A18',
-    backgroundColor: 'rgba(255,122,24,0.1)',
-    shadowColor: '#FF7A18',
+    borderColor: "#FF7A18",
+    backgroundColor: "rgba(255,122,24,0.1)",
+    shadowColor: "#FF7A18",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.5,
     shadowRadius: 24,
     elevation: 12,
   },
   cardGlow: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
     height: 100,
     borderRadius: 22,
   },
 
   popularBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderBottomRightRadius: 16,
     marginLeft: 0,
   },
   popularBadgeText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
 
   cardInner: { padding: 18, paddingTop: 12 },
   cardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 14,
   },
   planIconCircle: {
-    width: 48, height: 48,
+    width: 48,
+    height: 48,
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 14,
   },
   cardTitleWrap: { flex: 1 },
   cardTitle: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 20,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: -0.3,
   },
   cardSubtitle: {
-    color: 'rgba(255,255,255,0.65)',
+    color: "rgba(255,255,255,0.65)",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     marginTop: 4,
   },
-  priceBlock: { alignItems: 'flex-end' },
+  priceBlock: { alignItems: "flex-end" },
   priceMain: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 28,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: -0.8,
   },
   priceSub: {
-    color: 'rgba(255,255,255,0.6)',
+    color: "rgba(255,255,255,0.6)",
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 
   cardDivider: {
@@ -874,40 +1155,43 @@ const s = StyleSheet.create({
   },
 
   benefitRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 5,
   },
   checkCircle: {
-    width: 22, height: 22,
+    width: 22,
+    height: 22,
     borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 10,
   },
   benefitText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: "700",
     flex: 1,
   },
 
   selectedDot: {
-    position: 'absolute',
-    top: 12, right: 14,
-    width: 26, height: 26,
+    position: "absolute",
+    top: 12,
+    right: 14,
+    width: 26,
+    height: 26,
     borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // CTA
   ctaWrap: {
     height: 58,
     borderRadius: 18,
-    overflow: 'hidden',
+    overflow: "hidden",
     marginBottom: 16,
-    shadowColor: '#6C63FF',
+    shadowColor: "#6C63FF",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.5,
     shadowRadius: 16,
@@ -915,20 +1199,20 @@ const s = StyleSheet.create({
   },
   ctaGrad: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
   ctaText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 17,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: 0.2,
   },
   disclaimer: {
-    color: 'rgba(255,255,255,0.55)',
+    color: "rgba(255,255,255,0.55)",
     fontSize: 12,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 20,
     marginTop: 8,
   },
@@ -936,43 +1220,44 @@ const s = StyleSheet.create({
   // Processing & Success shared
   centeredWrap: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 32,
   },
   processingCard: {
-    width: '100%',
+    width: "100%",
     borderRadius: 24,
-    overflow: 'hidden',
+    overflow: "hidden",
     padding: 32,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: "rgba(255,255,255,0.1)",
   },
   processingTitle: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: "800",
     marginTop: 20,
     marginBottom: 8,
   },
   processingDesc: {
-    color: 'rgba(255,255,255,0.55)',
+    color: "rgba(255,255,255,0.55)",
     fontSize: 13,
-    fontWeight: '500',
-    textAlign: 'center',
+    fontWeight: "500",
+    textAlign: "center",
   },
 
   // Success
   successIconWrap: {
-    alignSelf: 'center',
-    width: 88, height: 88,
+    alignSelf: "center",
+    width: 88,
+    height: 88,
     borderRadius: 44,
     padding: 4,
     borderWidth: 2,
-    borderColor: 'rgba(16,185,129,0.5)',
+    borderColor: "rgba(16,185,129,0.5)",
     marginBottom: 20,
-    shadowColor: '#10B981',
+    shadowColor: "#10B981",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 24,
@@ -980,117 +1265,117 @@ const s = StyleSheet.create({
   successIconGrad: {
     flex: 1,
     borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   successTitle: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 26,
-    fontWeight: '900',
-    textAlign: 'center',
+    fontWeight: "900",
+    textAlign: "center",
     marginBottom: 10,
   },
   successSub: {
-    color: 'rgba(255,255,255,0.65)',
+    color: "rgba(255,255,255,0.65)",
     fontSize: 15,
-    fontWeight: '500',
-    textAlign: 'center',
+    fontWeight: "500",
+    textAlign: "center",
     lineHeight: 22,
     marginBottom: 20,
   },
   successBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(16,185,129,0.12)',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(16,185,129,0.12)",
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    alignSelf: 'center',
+    alignSelf: "center",
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: 'rgba(16,185,129,0.25)',
+    borderColor: "rgba(16,185,129,0.25)",
   },
   successBadgeText: {
-    color: '#10B981',
+    color: "#10B981",
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   successRedirect: {
     marginTop: 20,
-    color: 'rgba(255,255,255,0.4)',
+    color: "rgba(255,255,255,0.4)",
     fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
   },
   shareBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.1)",
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 20,
     marginTop: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: "rgba(255,255,255,0.15)",
   },
   shareBtnText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(239,68,68,0.1)',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(239,68,68,0.1)",
     borderRadius: 12,
     padding: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.2)',
+    borderColor: "rgba(239,68,68,0.2)",
   },
   errorText: {
-    color: '#EF4444',
+    color: "#EF4444",
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
     flex: 1,
     marginLeft: 8,
   },
   errorRetryBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#EF4444',
+    backgroundColor: "#EF4444",
     borderRadius: 8,
   },
   errorRetryText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 11,
-    fontWeight: '900',
+    fontWeight: "900",
   },
   trustRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     gap: 16,
     marginTop: 8,
     marginBottom: 16,
   },
   trustItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   trustItemText: {
-    color: 'rgba(255,255,255,0.6)',
+    color: "rgba(255,255,255,0.6)",
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   strongUpsellAlert: {
     marginBottom: 24,
     borderRadius: 20,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: 'rgba(255,61,0,0.3)',
-    shadowColor: '#FF3D00',
+    borderColor: "rgba(255,61,0,0.3)",
+    shadowColor: "#FF3D00",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -1098,92 +1383,92 @@ const s = StyleSheet.create({
   },
   strongUpsellGrad: {
     padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   strongUpsellTitle: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '900',
+    fontWeight: "900",
   },
   strongUpsellDesc: {
-    color: 'rgba(255,255,255,0.85)',
+    color: "rgba(255,255,255,0.85)",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     marginTop: 4,
     lineHeight: 18,
   },
   priceOriginal: {
-    color: 'rgba(255,255,255,0.4)',
+    color: "rgba(255,255,255,0.4)",
     fontSize: 16,
-    fontWeight: '600',
-    textDecorationLine: 'line-through',
+    fontWeight: "600",
+    textDecorationLine: "line-through",
     marginBottom: -4,
   },
   discountRibbon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(108,99,255,0.1)',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(108,99,255,0.1)",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.2)',
+    borderColor: "rgba(108,99,255,0.2)",
   },
   discountRibbonText: {
-    color: '#6C63FF',
+    color: "#6C63FF",
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: "800",
   },
 
   // ── Billing cycle toggle ──────────────────────────────────────────────────
   billingToggleWrap: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    flexDirection: "row",
+    backgroundColor: "rgba(255,255,255,0.07)",
     borderRadius: 50,
     padding: 4,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    alignSelf: 'center',
+    borderColor: "rgba(255,255,255,0.1)",
+    alignSelf: "center",
   },
   billingToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     paddingVertical: 9,
     paddingHorizontal: 22,
     borderRadius: 50,
   },
   billingToggleBtnActive: {
-    backgroundColor: 'rgba(108,99,255,0.85)',
-    shadowColor: '#6C63FF',
+    backgroundColor: "rgba(108,99,255,0.85)",
+    shadowColor: "#6C63FF",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.45,
     shadowRadius: 10,
     elevation: 6,
   },
   billingToggleText: {
-    color: 'rgba(255,255,255,0.55)',
+    color: "rgba(255,255,255,0.55)",
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   billingToggleTextActive: {
-    color: '#fff',
+    color: "#fff",
   },
   saveBadge: {
-    backgroundColor: 'rgba(16,185,129,0.25)',
+    backgroundColor: "rgba(16,185,129,0.25)",
     borderRadius: 20,
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderWidth: 1,
-    borderColor: 'rgba(16,185,129,0.4)',
+    borderColor: "rgba(16,185,129,0.4)",
   },
   saveBadgeText: {
-    color: '#10B981',
+    color: "#10B981",
     fontSize: 10,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 0.4,
   },
 });

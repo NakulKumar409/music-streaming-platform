@@ -1,7 +1,12 @@
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useEffect, useMemo, useState } from 'react';
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { ArrowLeft, Check, Eye, EyeOff } from "lucide-react-native";
+import React, { useEffect, useState } from "react";
 import {
-
+  ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -11,23 +16,25 @@ import {
   TextInput,
   useWindowDimensions,
   View,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Check, Eye, EyeOff } from 'lucide-react-native';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import type { RootStackParamList } from '../navigation/types';
-import { apiV1 } from '../services/api';
-import { useAuth } from '../store/authStore';
-import { Colors } from '../theme';
+import type { RootStackParamList } from "../navigation/types";
+import { apiV1 } from "../services/api";
+import { useAuth } from "../store/authStore";
+import { Colors } from "../theme";
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Signup'>;
+type Props = NativeStackScreenProps<RootStackParamList, "Signup">;
 
-type FavoriteGenre = 'Pop' | 'Hip-Hop' | 'Sufi' | 'Rock' | 'EDM' | 'Other';
-const GENRES: FavoriteGenre[] = ['Pop', 'Hip-Hop', 'Sufi', 'Rock', 'EDM', 'Other'];
+type FavoriteGenre = "Pop" | "Hip-Hop" | "Sufi" | "Rock" | "EDM" | "Other";
+const GENRES: FavoriteGenre[] = [
+  "Pop",
+  "Hip-Hop",
+  "Sufi",
+  "Rock",
+  "EDM",
+  "Other",
+];
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -36,59 +43,73 @@ function isValidEmail(email: string) {
 export default function SignupScreen({ navigation }: Props) {
   const { login } = useAuth();
   const { width, height } = useWindowDimensions();
-  const isDesktop = Platform.OS === 'web' && width > 768;
-  const webViewportStyle = Platform.OS === 'web' ? { width, height } : null;
+  const isDesktop = Platform.OS === "web" && width > 768;
+  const webViewportStyle = Platform.OS === "web" ? { width, height } : null;
 
   const [currentStep, setCurrentStep] = useState(1);
-  const [stepError, setStepError] = useState('');
+  const [stepError, setStepError] = useState("");
 
   // Step 1
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
 
   // Step 2
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
+  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] =
+    useState(false);
 
   // Step 3
-  const [dateOfBirth, setDateOfBirth] = useState('');
-  const [locationCity, setLocationCity] = useState('');
-  const [favoriteGenre, setFavoriteGenre] = useState<FavoriteGenre | ''>('');
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [locationCity, setLocationCity] = useState("");
+  const [favoriteGenre, setFavoriteGenre] = useState<FavoriteGenre | "">("");
   const [isGenreOpen, setIsGenreOpen] = useState(false);
+  // ✅ FIX BUG 6: Date picker states
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
 
   // Step 4 Actions
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState('');
+  const [submitError, setSubmitError] = useState("");
 
   const onNextStep = () => {
-    setStepError('');
+    setStepError("");
     if (currentStep === 1) {
       if (!fullName.trim() || !email.trim() || !phoneNumber.trim()) {
-        setStepError('Please fill in all basic information fields.');
+        setStepError("Please fill in all basic information fields.");
         return;
       }
       if (!isValidEmail(email)) {
-        setStepError('Please enter a valid email address.');
+        setStepError("Please enter a valid email address.");
         return;
       }
       setCurrentStep(2);
     } else if (currentStep === 2) {
       if (!username.trim() || !password || !confirmPassword) {
-        setStepError('Please fill in all security details.');
+        setStepError("Please fill in all security details.");
+        return;
+      }
+      // ✅ FIX BUG 23: Username minimum length validation
+      if (username.trim().length < 3) {
+        setStepError("Username must be at least 3 characters long.");
         return;
       }
       if (password !== confirmPassword) {
         setStepError("Passwords don't match.");
         return;
       }
+      // ✅ FIX BUG 5 (partial): Password minimum length
+      if (password.length < 6) {
+        setStepError("Password must be at least 6 characters long.");
+        return;
+      }
       setCurrentStep(3);
     } else if (currentStep === 3) {
       if (!dateOfBirth.trim() || !favoriteGenre || !locationCity.trim()) {
-        setStepError('Please complete your personalization profile.');
+        setStepError("Please complete your personalization profile.");
         return;
       }
       setCurrentStep(4);
@@ -96,7 +117,7 @@ export default function SignupScreen({ navigation }: Props) {
   };
 
   const onBack = () => {
-    setStepError('');
+    setStepError("");
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
     } else {
@@ -106,12 +127,12 @@ export default function SignupScreen({ navigation }: Props) {
 
   const onSubmit = async () => {
     if (isSubmitting) return;
-    setSubmitError('');
+    setSubmitError("");
 
     const normalizedEmail = email.trim().toLowerCase();
     setIsSubmitting(true);
     try {
-      await apiV1.post('/auth/register', {
+      await apiV1.post("/auth/register", {
         fullName: fullName.trim(),
         email: normalizedEmail,
         phoneNumber: phoneNumber.trim(),
@@ -125,32 +146,33 @@ export default function SignupScreen({ navigation }: Props) {
       await login(normalizedEmail, password);
     } catch (err: any) {
       const status = err?.response?.status;
-      const serverMessage = err?.response?.data?.message ?? err?.response?.data?.error;
+      const serverMessage =
+        err?.response?.data?.message ?? err?.response?.data?.error;
 
       if (
         status === 400 &&
-        typeof serverMessage === 'string' &&
-        serverMessage.toLowerCase().includes('email already exists')
+        typeof serverMessage === "string" &&
+        serverMessage.toLowerCase().includes("email already exists")
       ) {
-        setSubmitError('This email is already registered. Please login.');
+        setSubmitError("This email is already registered. Please login.");
         return;
       }
 
       const message =
-        typeof serverMessage === 'string'
+        typeof serverMessage === "string"
           ? serverMessage
           : status === 400
-            ? 'Registration failed. Please check your details.'
-            : err?.message || 'Registration failed.';
+          ? "Registration failed. Please check your details."
+          : err?.message || "Registration failed.";
       setSubmitError(message);
-      Alert.alert('Sign Up Error', message);
+      Alert.alert("Sign Up Error", message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   useEffect(() => {
-    StatusBar.setBarStyle('light-content');
+    StatusBar.setBarStyle("light-content");
   }, []);
 
   const renderProgressIndicator = () => {
@@ -164,8 +186,7 @@ export default function SignupScreen({ navigation }: Props) {
                 styles.progressDot,
                 step === currentStep && styles.progressDotActive,
                 step < currentStep && styles.progressDotCompleted,
-              ]}
-            >
+              ]}>
               {step < currentStep ? (
                 <Check color="#000" size={12} strokeWidth={4} />
               ) : (
@@ -173,8 +194,7 @@ export default function SignupScreen({ navigation }: Props) {
                   style={[
                     styles.progressDotText,
                     step === currentStep && styles.progressDotTextActive,
-                  ]}
-                >
+                  ]}>
                   {step}
                 </Text>
               )}
@@ -199,7 +219,7 @@ export default function SignupScreen({ navigation }: Props) {
         return (
           <>
             <Text style={styles.stepTitle}>Basic Information</Text>
-            
+
             <Text style={styles.label}>Full Name</Text>
             <View style={styles.inputGlass}>
               <TextInput
@@ -209,7 +229,7 @@ export default function SignupScreen({ navigation }: Props) {
                 value={fullName}
                 onChangeText={(t) => {
                   setFullName(t);
-                  if (stepError) setStepError('');
+                  if (stepError) setStepError("");
                 }}
                 autoCapitalize="words"
                 autoCorrect={false}
@@ -225,7 +245,7 @@ export default function SignupScreen({ navigation }: Props) {
                 value={email}
                 onChangeText={(t) => {
                   setEmail(t);
-                  if (stepError) setStepError('');
+                  if (stepError) setStepError("");
                 }}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -242,9 +262,12 @@ export default function SignupScreen({ navigation }: Props) {
                 value={phoneNumber}
                 onChangeText={(t) => {
                   setPhoneNumber(t);
-                  if (stepError) setStepError('');
+                  if (stepError) setStepError("");
                 }}
-                keyboardType={Platform.select({ ios: 'number-pad', default: 'phone-pad' })}
+                keyboardType={Platform.select({
+                  ios: "number-pad",
+                  default: "phone-pad",
+                })}
               />
             </View>
           </>
@@ -257,13 +280,13 @@ export default function SignupScreen({ navigation }: Props) {
             <Text style={styles.label}>Username</Text>
             <View style={styles.inputGlass}>
               <TextInput
-                placeholder="Choose a username"
+                placeholder="Choose a username (min 3 characters)"
                 placeholderTextColor={Colors.textMuted}
                 style={styles.input}
                 value={username}
                 onChangeText={(t) => {
                   setUsername(t);
-                  if (stepError) setStepError('');
+                  if (stepError) setStepError("");
                 }}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -273,14 +296,14 @@ export default function SignupScreen({ navigation }: Props) {
             <Text style={styles.label}>Password</Text>
             <View style={styles.passwordContainer}>
               <TextInput
-                placeholder="Secure password"
+                placeholder="Secure password (min 6 characters)"
                 placeholderTextColor={Colors.textMuted}
                 style={styles.passwordInput}
                 secureTextEntry={!isPasswordVisible}
                 value={password}
                 onChangeText={(t) => {
                   setPassword(t);
-                  if (stepError) setStepError('');
+                  if (stepError) setStepError("");
                 }}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -288,8 +311,7 @@ export default function SignupScreen({ navigation }: Props) {
               <Pressable
                 onPress={() => setIsPasswordVisible((v) => !v)}
                 hitSlop={10}
-                style={styles.eyeButton}
-              >
+                style={styles.eyeButton}>
                 {isPasswordVisible ? (
                   <EyeOff color={Colors.textPrimary} size={18} />
                 ) : (
@@ -308,7 +330,7 @@ export default function SignupScreen({ navigation }: Props) {
                 value={confirmPassword}
                 onChangeText={(t) => {
                   setConfirmPassword(t);
-                  if (stepError) setStepError('');
+                  if (stepError) setStepError("");
                 }}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -316,8 +338,7 @@ export default function SignupScreen({ navigation }: Props) {
               <Pressable
                 onPress={() => setIsConfirmPasswordVisible((v) => !v)}
                 hitSlop={10}
-                style={styles.eyeButton}
-              >
+                style={styles.eyeButton}>
                 {isConfirmPasswordVisible ? (
                   <EyeOff color={Colors.textPrimary} size={18} />
                 ) : (
@@ -332,29 +353,39 @@ export default function SignupScreen({ navigation }: Props) {
           <>
             <Text style={styles.stepTitle}>Personalization</Text>
 
+            {/* ✅ FIX BUG 6: Date Picker for DOB */}
             <Text style={styles.label}>Date of Birth</Text>
-            <View style={styles.inputGlass}>
-              <TextInput
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={Colors.textMuted}
-                style={styles.input}
-                value={dateOfBirth}
-                onChangeText={(t) => {
-                  setDateOfBirth(t);
-                  if (stepError) setStepError('');
+            <Pressable
+              onPress={() => setShowDatePicker(true)}
+              style={styles.inputGlass}>
+              <Text
+                style={[styles.input, !dateOfBirth && styles.placeholderText]}>
+                {dateOfBirth || "Select your date of birth"}
+              </Text>
+            </Pressable>
+            {showDatePicker && (
+              <DateTimePicker
+                value={selectedDate}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                onChange={(event, selected) => {
+                  setShowDatePicker(false);
+                  if (selected) {
+                    setSelectedDate(selected);
+                    const formattedDate = selected.toISOString().split("T")[0];
+                    setDateOfBirth(formattedDate);
+                    if (stepError) setStepError("");
+                  }
                 }}
-                autoCapitalize="none"
-                autoCorrect={false}
               />
-            </View>
+            )}
 
             <Text style={styles.label}>Favorite Genre</Text>
             <Pressable
               onPress={() => setIsGenreOpen((v) => !v)}
-              style={styles.selectInput}
-            >
+              style={styles.selectInput}>
               <Text style={styles.selectText} numberOfLines={1}>
-                {favoriteGenre ? favoriteGenre : 'Select a genre'}
+                {favoriteGenre ? favoriteGenre : "Select a genre"}
               </Text>
               <Text style={styles.selectCaret}>▾</Text>
             </Pressable>
@@ -367,10 +398,9 @@ export default function SignupScreen({ navigation }: Props) {
                     onPress={() => {
                       setFavoriteGenre(g);
                       setIsGenreOpen(false);
-                      if (stepError) setStepError('');
+                      if (stepError) setStepError("");
                     }}
-                    style={styles.selectOption}
-                  >
+                    style={styles.selectOption}>
                     <Text style={styles.selectOptionText}>{g}</Text>
                     {favoriteGenre === g ? (
                       <Check color={Colors.textPrimary} size={18} />
@@ -391,7 +421,7 @@ export default function SignupScreen({ navigation }: Props) {
                 value={locationCity}
                 onChangeText={(t) => {
                   setLocationCity(t);
-                  if (stepError) setStepError('');
+                  if (stepError) setStepError("");
                 }}
                 autoCapitalize="words"
                 autoCorrect={false}
@@ -428,7 +458,11 @@ export default function SignupScreen({ navigation }: Props) {
                 <Text style={styles.previewLabel}>Genre:</Text>
                 <Text style={styles.previewValue}>{favoriteGenre}</Text>
               </View>
-              <View style={[styles.previewRow, { borderBottomWidth: 0, paddingBottom: 0 }]}>
+              <View
+                style={[
+                  styles.previewRow,
+                  { borderBottomWidth: 0, paddingBottom: 0 },
+                ]}>
                 <Text style={styles.previewLabel}>City:</Text>
                 <Text style={styles.previewValue}>{locationCity}</Text>
               </View>
@@ -436,8 +470,11 @@ export default function SignupScreen({ navigation }: Props) {
             {!!submitError && (
               <View style={styles.errorBox}>
                 <Text style={styles.errorTextInsideBig}>{submitError}</Text>
-                {submitError.includes('already registered') && (
-                  <Pressable onPress={() => navigation.navigate('Login', { prefillEmail: email })}>
+                {submitError.includes("already registered") && (
+                  <Pressable
+                    onPress={() =>
+                      navigation.navigate("Login", { prefillEmail: email })
+                    }>
                     <Text style={styles.errorLink}>Go to Login</Text>
                   </Pressable>
                 )}
@@ -453,53 +490,71 @@ export default function SignupScreen({ navigation }: Props) {
       colors={Colors.backgroundGradient}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={[styles.bg, webViewportStyle]}
-    >
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      style={[styles.bg, webViewportStyle]}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="transparent"
+        translucent
+      />
+      <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          automaticallyAdjustKeyboardInsets={true}
-        >
-          <View style={[styles.content, isDesktop ? styles.contentDesktop : styles.contentMobile]}>
-              <Pressable onPress={onBack} hitSlop={10} style={styles.backBtn}>
-                <ArrowLeft color={Colors.textPrimary} size={22} />
-                <Text style={styles.backText}>Back</Text>
-              </Pressable>
+          automaticallyAdjustKeyboardInsets={true}>
+          <View
+            style={[
+              styles.content,
+              isDesktop ? styles.contentDesktop : styles.contentMobile,
+            ]}>
+            <Pressable onPress={onBack} hitSlop={10} style={styles.backBtn}>
+              <ArrowLeft color={Colors.textPrimary} size={22} />
+              <Text style={styles.backText}>Back</Text>
+            </Pressable>
 
-              <BlurView intensity={25} tint="dark" style={[styles.cardBlur, isDesktop && styles.cardBlurDesktop]}>
-                <View style={[styles.cardInner, isDesktop && styles.cardInnerDesktop]}>
-                  <Text style={styles.title}>Create Account</Text>
-                  
-                  {renderProgressIndicator()}
-                  
-                  <View style={styles.stepContentWrap}>
-                    {renderStepContent()}
-                  </View>
+            <BlurView
+              intensity={25}
+              tint="dark"
+              style={[styles.cardBlur, isDesktop && styles.cardBlurDesktop]}>
+              <View
+                style={[
+                  styles.cardInner,
+                  isDesktop && styles.cardInnerDesktop,
+                ]}>
+                <Text style={styles.title}>Create Account</Text>
 
-                  {/* Inline Step Error */}
-                  {!!stepError && <Text style={styles.errorText}>{stepError}</Text>}
+                {renderProgressIndicator()}
 
-                  <Pressable onPress={currentStep < 4 ? onNextStep : onSubmit}>
-                    <View
-                      style={[
-                        styles.buttonWrap,
-                        isSubmitting && styles.buttonWrapDisabled,
-                      ]}
-                    >
-                      {isSubmitting ? (
-                        <ActivityIndicator color="#000" />
-                      ) : (
-                        <Text style={styles.btnText}>
-                          {currentStep < 4 ? (currentStep === 3 ? 'Preview Details' : 'Next Step') : 'Create Account'}
-                        </Text>
-                      )}
-                    </View>
-                  </Pressable>
+                <View style={styles.stepContentWrap}>
+                  {renderStepContent()}
                 </View>
-              </BlurView>
+
+                {/* Inline Step Error */}
+                {!!stepError && (
+                  <Text style={styles.errorText}>{stepError}</Text>
+                )}
+
+                <Pressable onPress={currentStep < 4 ? onNextStep : onSubmit}>
+                  <View
+                    style={[
+                      styles.buttonWrap,
+                      isSubmitting && styles.buttonWrapDisabled,
+                    ]}>
+                    {isSubmitting ? (
+                      <ActivityIndicator color="#000" />
+                    ) : (
+                      <Text style={styles.btnText}>
+                        {currentStep < 4
+                          ? currentStep === 3
+                            ? "Preview Details"
+                            : "Next Step"
+                          : "Create Account"}
+                      </Text>
+                    )}
+                  </View>
+                </Pressable>
+              </View>
+            </BlurView>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -524,54 +579,54 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   contentMobile: {
-    alignItems: 'stretch',
+    alignItems: "stretch",
   },
   contentDesktop: {
-    alignSelf: 'center',
+    alignSelf: "center",
     width: 440,
   },
   backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     marginBottom: 12,
   },
   backText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   cardBlur: {
     borderRadius: 22,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: "rgba(255,255,255,0.08)",
   },
   cardBlurDesktop: {
     borderRadius: 26,
   },
   cardInner: {
     padding: 24,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: "rgba(0,0,0,0.4)",
   },
   cardInnerDesktop: {
     padding: 28,
   },
   title: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: "800",
     marginBottom: 20,
-    textAlign: 'center',
+    textAlign: "center",
   },
   progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 26,
     paddingHorizontal: 20,
   },
@@ -579,11 +634,11 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: "rgba(255,255,255,0.2)",
   },
   progressDotActive: {
     backgroundColor: Colors.accent,
@@ -594,17 +649,17 @@ const styles = StyleSheet.create({
     borderColor: Colors.accent,
   },
   progressDotText: {
-    color: 'rgba(255,255,255,0.5)',
+    color: "rgba(255,255,255,0.5)",
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   progressDotTextActive: {
-    color: '#000000',
+    color: "#000000",
   },
   progressLine: {
     flex: 1,
     height: 2,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: "rgba(255,255,255,0.1)",
     marginHorizontal: 8,
   },
   progressLineCompleted: {
@@ -614,43 +669,46 @@ const styles = StyleSheet.create({
     minHeight: 280,
   },
   stepTitle: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: 16,
   },
   label: {
-    color: 'rgba(255,255,255,0.85)',
+    color: "rgba(255,255,255,0.85)",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     marginTop: 10,
     marginBottom: 6,
   },
   inputGlass: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: "rgba(255,255,255,0.1)",
   },
   input: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14,
   },
+  placeholderText: {
+    color: "rgba(255,255,255,0.5)",
+  },
   passwordContainer: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    flexDirection: 'row',
-    alignItems: 'center',
+    borderColor: "rgba(255,255,255,0.1)",
+    flexDirection: "row",
+    alignItems: "center",
   },
   passwordInput: {
     flex: 1,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14,
   },
   eyeButton: {
@@ -659,108 +717,108 @@ const styles = StyleSheet.create({
   },
   errorText: {
     marginTop: 12,
-    color: '#FF4D4F',
+    color: "#FF4D4F",
     fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
   },
   errorBox: {
     marginTop: 12,
     padding: 12,
-    backgroundColor: 'rgba(255,77,79,0.15)',
+    backgroundColor: "rgba(255,77,79,0.15)",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255,77,79,0.3)',
-    alignItems: 'center',
+    borderColor: "rgba(255,77,79,0.3)",
+    alignItems: "center",
   },
   errorTextInsideBig: {
-    color: '#FF4D4F',
+    color: "#FF4D4F",
     fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
   },
   errorLink: {
     marginTop: 8,
     color: Colors.accent,
     fontSize: 13,
-    fontWeight: '700',
-    textDecorationLine: 'underline',
+    fontWeight: "700",
+    textDecorationLine: "underline",
   },
   selectInput: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    borderColor: "rgba(255,255,255,0.1)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   selectText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14,
     flex: 1,
     marginRight: 10,
   },
   selectCaret: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   selectDropdown: {
     marginTop: 8,
     borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(18,18,18,0.95)',
+    overflow: "hidden",
+    backgroundColor: "rgba(18,18,18,0.95)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: "rgba(255,255,255,0.1)",
   },
   selectOption: {
     paddingVertical: 14,
     paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderBottomColor: "rgba(255,255,255,0.05)",
   },
   selectOptionText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   previewContainer: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: "rgba(255,255,255,0.05)",
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: "rgba(255,255,255,0.1)",
   },
   previewRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    borderBottomColor: "rgba(255,255,255,0.1)",
   },
   previewLabel: {
-    color: 'rgba(255,255,255,0.6)',
+    color: "rgba(255,255,255,0.6)",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   previewValue: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14,
-    fontWeight: '700',
-    maxWidth: '65%',
-    textAlign: 'right',
+    fontWeight: "700",
+    maxWidth: "65%",
+    textAlign: "right",
   },
   buttonWrap: {
     backgroundColor: Colors.accent,
     borderRadius: 14,
     paddingVertical: 16,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 24,
     shadowColor: Colors.accent,
     shadowOffset: { width: 0, height: 4 },
@@ -772,8 +830,8 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   btnText: {
-    color: '#000000',
+    color: "#000000",
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: "800",
   },
 });

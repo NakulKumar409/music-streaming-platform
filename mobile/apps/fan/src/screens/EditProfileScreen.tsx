@@ -112,20 +112,46 @@ export default function EditProfileScreen() {
 
   const uploadImage = async (asset: ImagePicker.ImagePickerAsset) => {
     setIsUploadingImage(true);
-    setErrorMsg('');
-    setSuccessMsg('');
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    // ============================================
+    // BUG FIX: Check file size before upload (2MB limit)
+    // ============================================
+    const fileSize = asset.fileSize || 0;
+    const MAX_SIZE = 2 * 1024 * 1024; // 2MB
+
+    if (fileSize > MAX_SIZE) {
+      Alert.alert(
+        "File Too Large",
+        `Please select an image under 2MB. Your file is ${(
+          fileSize /
+          (1024 * 1024)
+        ).toFixed(2)}MB.`
+      );
+      setIsUploadingImage(false);
+      return;
+    }
+
     try {
       // Create a readable filename and mimeType
-      const uriParts = asset.uri.split('.');
+      const uriParts = asset.uri.split(".");
       const fileType = uriParts[uriParts.length - 1];
-      const mimeType = asset.mimeType || (fileType === 'png' ? 'image/png' : 'image/jpeg');
+      const mimeType =
+        asset.mimeType || (fileType === "png" ? "image/png" : "image/jpeg");
       const fileName = asset.fileName || `profile-${Date.now()}.${fileType}`;
-      
-      const newImageUrl = await userService.uploadProfileImage(asset.uri, mimeType, fileName);
+
+      const newImageUrl = await userService.uploadProfileImage(
+        asset.uri,
+        mimeType,
+        fileName
+      );
       setProfileImageUri(newImageUrl);
       setSuccessMsg("Cover photo uploaded! Tap save to apply changes.");
     } catch (err: any) {
-      setErrorMsg(err.response?.data?.message || err.message || "Image upload failed");
+      setErrorMsg(
+        err.response?.data?.message || err.message || "Image upload failed"
+      );
     } finally {
       setIsUploadingImage(false);
     }
