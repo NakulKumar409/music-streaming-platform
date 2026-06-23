@@ -1,46 +1,56 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   Image,
   LayoutAnimation,
   Linking,
+  Modal,
+  Platform,
   Pressable,
-
-
-  
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
-  View,
   TouchableOpacity,
-  Platform,
   UIManager,
-  Modal,
-} from 'react-native';
-import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Path, Rect, Circle } from 'react-native-svg';
+  View,
+} from "react-native";
+import Svg, {
+  Circle,
+  Defs,
+  Path,
+  Rect,
+  Stop,
+  LinearGradient as SvgLinearGradient,
+} from "react-native-svg";
 
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { ArrowLeft, BadgeCheck, Settings, Lock, X } from 'lucide-react-native';
-import { VideoView } from 'expo-video';
-import { useIsFocused } from '@react-navigation/native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useIsFocused } from "@react-navigation/native";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { VideoView } from "expo-video";
+import { ArrowLeft, BadgeCheck, Lock, X } from "lucide-react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import { useMediaPlayer } from "../providers/MediaPlayerProvider";
+import {
+  fetchArtistById,
+  fetchArtistMedia,
+  type ArtistDetail,
+  type ArtistMediaItem,
+} from "../services/artistService";
+import { userService } from "../services/userService";
+import { Colors } from "../theme";
 import {
   LockedContentOverlay,
-  SubscriptionStatusCard,
   RetentionBanner,
-  StrongUpsellModal
-} from '../ui/SubscriptionUI';
-import SubscriptionExpiryScreen from './SubscriptionExpiryScreen';
-import { fetchArtistById, fetchArtistMedia, type ArtistDetail, type ArtistMediaItem } from '../services/artistService';
-import { userService } from '../services/userService';
-import { useMediaPlayer } from '../providers/MediaPlayerProvider';
-import YouTubeVideoControlsOverlay from '../ui/YouTubeVideoControlsOverlay';
-import { Colors } from '../theme';
-import { getOptimizedImageUrl } from '../utils/cloudinary';
+  StrongUpsellModal,
+} from "../ui/SubscriptionUI";
+import YouTubeVideoControlsOverlay from "../ui/YouTubeVideoControlsOverlay";
+import { getOptimizedImageUrl } from "../utils/cloudinary";
 
 function SpotifyIcon({ size = 18 }: { size?: number }) {
   return (
@@ -76,9 +86,13 @@ function SpotifyIcon({ size = 18 }: { size?: number }) {
 
 function YouTubeIcon({ size = 18 }: { size?: number }) {
   const w = size;
-  const h = (size * 0.78);
+  const h = size * 0.78;
   return (
-    <Svg width={w} height={h} viewBox="0 0 24 19" preserveAspectRatio="xMidYMid meet">
+    <Svg
+      width={w}
+      height={h}
+      viewBox="0 0 24 19"
+      preserveAspectRatio="xMidYMid meet">
       <Rect x="0" y="0" width="24" height="19" rx="4.2" fill="#FF0000" />
       <Path d="M10 5.2L16 9.5L10 13.8V5.2Z" fill="#ffffff" />
     </Svg>
@@ -88,7 +102,11 @@ function YouTubeIcon({ size = 18 }: { size?: number }) {
 function InstagramBrandIcon({ size = 18 }: { size?: number }) {
   const r = 5.2;
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet">
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      preserveAspectRatio="xMidYMid meet">
       <Defs>
         <SvgLinearGradient id="igGradient" x1="0" y1="0" x2="1" y2="1">
           <Stop offset="0" stopColor="#F58529" />
@@ -110,7 +128,14 @@ function InstagramBrandIcon({ size = 18 }: { size?: number }) {
         stroke="#ffffff"
         strokeWidth="1.7"
       />
-      <Circle cx="12" cy="12" r="3.0" fill="none" stroke="#ffffff" strokeWidth="1.7" />
+      <Circle
+        cx="12"
+        cy="12"
+        r="3.0"
+        fill="none"
+        stroke="#ffffff"
+        strokeWidth="1.7"
+      />
       <Circle cx="16.4" cy="7.6" r="1.0" fill="#ffffff" />
     </Svg>
   );
@@ -124,13 +149,13 @@ type Song = {
   duration: string;
   thumbnail: string;
   locked: boolean;
-  mediaType: 'audio' | 'video';
+  mediaType: "audio" | "video";
   mediaUrl: string;
   useStreamAccess?: boolean;
   createdAt?: string | null;
   likeCount?: number | null;
   dislikeCount?: number | null;
-  userReaction?: 'like' | 'dislike' | null;
+  userReaction?: "like" | "dislike" | null;
 };
 
 type Artist = {
@@ -147,15 +172,22 @@ type Artist = {
   subscriptionPrice: number;
 };
 
+type TabKey = "All" | "Audio" | "Video";
 
-type TabKey = 'All' | 'Audio' | 'Video';
+const TABS: TabKey[] = ["All", "Audio", "Video"];
 
-const TABS: TabKey[] = ['All', 'Audio', 'Video'];
+type ChannelTabKey = "Home" | "Videos" | "Playlists" | "Community";
+const CHANNEL_TABS: ChannelTabKey[] = [
+  "Home",
+  "Videos",
+  "Playlists",
+  "Community",
+];
 
-type ChannelTabKey = 'Home' | 'Videos' | 'Playlists' | 'Community';
-const CHANNEL_TABS: ChannelTabKey[] = ['Home', 'Videos', 'Playlists', 'Community'];
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
@@ -176,15 +208,24 @@ export default function ArtistScreen({ navigation, route }: any) {
   } = useMediaPlayer();
 
   useEffect(() => {
-    const isInlineVideo = isFocused && currentItem?.mediaType === 'video' && !playerState.isExpanded;
+    const isInlineVideo =
+      isFocused &&
+      currentItem?.mediaType === "video" &&
+      !playerState.isExpanded;
     setInlineVideoHostActive(isInlineVideo);
     return () => {
       setInlineVideoHostActive(false);
     };
-  }, [currentItem?.mediaType, isFocused, playerState.isExpanded, setInlineVideoHostActive]);
+  }, [
+    currentItem?.mediaType,
+    isFocused,
+    playerState.isExpanded,
+    setInlineVideoHostActive,
+  ]);
 
-  const [activeTab, setActiveTab] = useState<TabKey>('All');
-  const [activeChannelTab, setActiveChannelTab] = useState<ChannelTabKey>('Home');
+  const [activeTab, setActiveTab] = useState<TabKey>("All");
+  const [activeChannelTab, setActiveChannelTab] =
+    useState<ChannelTabKey>("Home");
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
 
   const [inlineVideoAspectRatio, setInlineVideoAspectRatio] = useState(16 / 9);
@@ -203,7 +244,10 @@ export default function ArtistScreen({ navigation, route }: any) {
   const [daysUntilExpiry, setDaysUntilExpiry] = useState<number>(0);
   const [lockedClicks, setLockedClicks] = useState(0);
   const [showStrongUpsell, setShowStrongUpsell] = useState(false);
-  const [showArtistLockModal, setShowArtistLockModal] = useState<{ visible: boolean; song: Song | null }>({
+  const [showArtistLockModal, setShowArtistLockModal] = useState<{
+    visible: boolean;
+    song: Song | null;
+  }>({
     visible: false,
     song: null,
   });
@@ -211,22 +255,23 @@ export default function ArtistScreen({ navigation, route }: any) {
   const [showDebugToggle, setShowDebugToggle] = useState(__DEV__);
 
   const handleRenewSubscription = () => {
-    navigation.navigate('SubscriptionFlow');
+    navigation.navigate("SubscriptionFlow");
     setIsSubscriptionActive(true); // Reset after navigation
   };
 
-  const artistIdParam = (route?.params?.artistId ?? '').toString();
+  const artistIdParam = (route?.params?.artistId ?? "").toString();
   const artistId = useMemo(() => {
-    const s = (artistIdParam ?? '').toString().trim();
-    if (!s) return '';
-    const base = s.includes(':') ? s.split(':')[0] : s;
+    const s = (artistIdParam ?? "").toString().trim();
+    if (!s) return "";
+    const base = s.includes(":") ? s.split(":")[0] : s;
     const n = Number.parseInt(base, 10);
     if (!Number.isFinite(n) || n <= 0) return base;
     return String(n);
   }, [artistIdParam]);
-  const initialMediaId = (route?.params?.contentId ?? '').toString();
+  const initialMediaId = (route?.params?.contentId ?? "").toString();
 
-  const activeAudioMeta = currentItem?.mediaType === 'audio' ? currentItem : null;
+  const activeAudioMeta =
+    currentItem?.mediaType === "audio" ? currentItem : null;
   const hasActiveAudio = !!activeAudioMeta;
 
   useEffect(() => {
@@ -235,10 +280,12 @@ export default function ArtistScreen({ navigation, route }: any) {
       if (!isFocused) return;
 
       if (!artistId) {
-        console.warn('[ArtistScreen] missing artistId param', { params: route?.params });
+        console.warn("[ArtistScreen] missing artistId param", {
+          params: route?.params,
+        });
         setArtist(null);
         setSongs([]);
-        setError('Artist not found');
+        setError("Artist not found");
         setLoading(false);
         return;
       }
@@ -248,39 +295,48 @@ export default function ArtistScreen({ navigation, route }: any) {
         setError(null);
 
         // Fetch subscription status
-        userService.getFullSubscriptionStatus().then(status => {
-          if (status) {
-            const artistIdS = String(artistId);
-            // Check specific artist sub
-            const targetArtistSub = status.artists?.find(s => s.artistId === artistIdS && s.status === 'ACTIVE');
-            const platformSub = status.platform;
-            const hasPlatformSub = platformSub?.status === 'ACTIVE';
+        userService
+          .getFullSubscriptionStatus()
+          .then((status) => {
+            if (status) {
+              const artistIdS = String(artistId);
+              // Check specific artist sub
+              const targetArtistSub = status.artists?.find(
+                (s) => s.artistId === artistIdS && s.status === "ACTIVE"
+              );
+              const platformSub = status.platform;
+              const hasPlatformSub = platformSub?.status === "ACTIVE";
 
-            const isSub = !!targetArtistSub || hasPlatformSub;
-            setIsSubscribedToArtist(isSub);
-            setIsSubscriptionActive(isSub);
+              const isSub = !!targetArtistSub || hasPlatformSub;
+              setIsSubscribedToArtist(isSub);
+              setIsSubscriptionActive(isSub);
 
-            const activeSub = targetArtistSub || (hasPlatformSub ? platformSub : null);
+              const activeSub =
+                targetArtistSub || (hasPlatformSub ? platformSub : null);
 
-            if (activeSub) {
-              setExpiryDate(activeSub.nextBillingDate || activeSub.endDate || null);
-              setIsExpiringSoon(activeSub.isExpiringSoon || false);
+              if (activeSub) {
+                setExpiryDate(
+                  activeSub.nextBillingDate || activeSub.endDate || null
+                );
+                setIsExpiringSoon(activeSub.isExpiringSoon || false);
 
-              if (activeSub.nextBillingDate) {
-                const now = new Date();
-                const end = new Date(activeSub.nextBillingDate);
-                const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 86400));
-                setDaysUntilExpiry(diff > 0 ? diff : 0);
+                if (activeSub.nextBillingDate) {
+                  const now = new Date();
+                  const end = new Date(activeSub.nextBillingDate);
+                  const diff = Math.ceil(
+                    (end.getTime() - now.getTime()) / (1000 * 86400)
+                  );
+                  setDaysUntilExpiry(diff > 0 ? diff : 0);
+                }
+              } else {
+                setExpiryDate(null);
+                setIsExpiringSoon(false);
               }
-            } else {
-              setExpiryDate(null);
-              setIsExpiringSoon(false);
             }
-          }
-        }).catch(() => undefined);
+          })
+          .catch(() => undefined);
 
         const artistRes = await fetchArtistById(artistId);
-
 
         if (!mounted) return;
 
@@ -288,7 +344,7 @@ export default function ArtistScreen({ navigation, route }: any) {
         if (!a) {
           setArtist(null);
           setSongs([]);
-          setError('Artist not found');
+          setError("Artist not found");
           return;
         }
 
@@ -299,20 +355,19 @@ export default function ArtistScreen({ navigation, route }: any) {
           subscribers: deriveSubscribersLabel(a.id),
           profileImage: a.profileImageUrl,
           coverImage: a.coverImageUrl,
-          bio: (a as any).bio ?? '',
+          bio: (a as any).bio ?? "",
           spotifyUrl: (a as any).spotifyUrl ?? null,
           youtubeUrl: (a as any).youtubeUrl ?? null,
           instagramUrl: (a as any).instagramUrl ?? null,
           subscriptionPrice: a.subscriptionPrice,
         };
 
-
         const toSong = (it: ArtistMediaItem): Song => ({
           id: it.id,
           contentId: it.contentId,
           title: it.title,
           artist: a.name,
-          duration: it.mediaType === 'video' ? 'Video' : 'Audio',
+          duration: it.mediaType === "video" ? "Video" : "Audio",
           thumbnail: it.artworkUrl,
           locked: it.locked,
           mediaType: it.mediaType,
@@ -332,7 +387,7 @@ export default function ArtistScreen({ navigation, route }: any) {
           setSongs(mediaRes.map(toSong));
         } catch (e: any) {
           if (!mounted) return;
-          console.warn('[ArtistScreen] fetchArtistMedia failed', {
+          console.warn("[ArtistScreen] fetchArtistMedia failed", {
             artistId,
             message: e?.message,
             status: e?.response?.status,
@@ -342,13 +397,13 @@ export default function ArtistScreen({ navigation, route }: any) {
         }
       } catch (e: any) {
         if (!mounted) return;
-        console.warn('[ArtistScreen] fetchArtistById failed', {
+        console.warn("[ArtistScreen] fetchArtistById failed", {
           artistId,
           message: e?.message,
           status: e?.response?.status,
           data: e?.response?.data,
         });
-        setError('Failed to load artist');
+        setError("Failed to load artist");
         setArtist(null);
         setSongs([]);
       } finally {
@@ -367,11 +422,13 @@ export default function ArtistScreen({ navigation, route }: any) {
     if (!initialMediaId) return;
     if (!songs.length) return;
 
-    const match = songs.find((s) => s.id === initialMediaId || s.contentId === initialMediaId);
+    const match = songs.find(
+      (s) => s.id === initialMediaId || s.contentId === initialMediaId
+    );
     if (!match) return;
 
-    if (match.mediaType === 'audio') setActiveTab('Audio');
-    if (match.mediaType === 'video') setActiveTab('Video');
+    if (match.mediaType === "audio") setActiveTab("Audio");
+    if (match.mediaType === "video") setActiveTab("Video");
 
     const queue = songs
       .filter((s) => Boolean(s.mediaUrl) || s.useStreamAccess)
@@ -383,11 +440,13 @@ export default function ArtistScreen({ navigation, route }: any) {
         artistId: artist.id,
         mediaType: s.mediaType,
         artworkUrl: s.thumbnail,
-        mediaUrl: s.mediaUrl || '',
+        mediaUrl: s.mediaUrl || "",
         isLocked: s.locked ?? false,
         useStreamAccess: s.useStreamAccess,
       }));
-    const idx = queue.findIndex((q) => q.id === initialMediaId || q.contentId === initialMediaId);
+    const idx = queue.findIndex(
+      (q) => q.id === initialMediaId || q.contentId === initialMediaId
+    );
     if (idx < 0) return;
 
     playQueue(queue, idx).catch(() => undefined);
@@ -395,7 +454,7 @@ export default function ArtistScreen({ navigation, route }: any) {
   }, [artist, initialMediaId, playQueue, songs]);
 
   useEffect(() => {
-    const nextIsVideoPlaying = currentItem?.mediaType === 'video';
+    const nextIsVideoPlaying = currentItem?.mediaType === "video";
     if (nextIsVideoPlaying === isVideoPlaying) return;
 
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -406,10 +465,13 @@ export default function ArtistScreen({ navigation, route }: any) {
   const isTemporarilyUnlocked = isUnlocked;
 
   const filteredSongs = useMemo(() => {
-    const baseSongs = isTemporarilyUnlocked ? songs.map((s) => ({ ...s, locked: false })) : songs;
-    if (activeTab === 'All') return baseSongs;
-    if (activeTab === 'Audio') return baseSongs.filter((s) => s.mediaType === 'audio');
-    return baseSongs.filter((s) => s.mediaType === 'video');
+    const baseSongs = isTemporarilyUnlocked
+      ? songs.map((s) => ({ ...s, locked: false }))
+      : songs;
+    if (activeTab === "All") return baseSongs;
+    if (activeTab === "Audio")
+      return baseSongs.filter((s) => s.mediaType === "audio");
+    return baseSongs.filter((s) => s.mediaType === "video");
   }, [activeTab, isTemporarilyUnlocked, songs]);
 
   // Build navigation params for FullPlayerScreen — Move after filteredSongs
@@ -426,7 +488,7 @@ export default function ArtistScreen({ navigation, route }: any) {
           artistId: artist.id,
           mediaType: s.mediaType,
           artworkUrl: s.thumbnail,
-          mediaUrl: s.mediaUrl || '',
+          mediaUrl: s.mediaUrl || "",
           isLocked: s.locked ?? false,
           useStreamAccess: s.useStreamAccess,
         }));
@@ -436,7 +498,7 @@ export default function ArtistScreen({ navigation, route }: any) {
         title: song.title,
         artist: song.artist,
         imageUrl: song.thumbnail,
-        audioUrl: song.mediaUrl || '',
+        audioUrl: song.mediaUrl || "",
         queueIndex: idx >= 0 ? idx : 0,
         queue,
       };
@@ -444,10 +506,9 @@ export default function ArtistScreen({ navigation, route }: any) {
     [artist, filteredSongs]
   );
 
-
   const channelContent = useMemo(() => {
-    if (activeChannelTab === 'Playlists') return [];
-    if (activeChannelTab === 'Community') return [];
+    if (activeChannelTab === "Playlists") return [];
+    if (activeChannelTab === "Community") return [];
     return filteredSongs;
   }, [activeChannelTab, filteredSongs]);
 
@@ -472,19 +533,19 @@ export default function ArtistScreen({ navigation, route }: any) {
       return; // Block playback when locked
     }
 
-    if (song.mediaType === 'video') {
-      navigation.navigate('VideoTab', {
-        screen: 'VideoIndex',
+    if (song.mediaType === "video") {
+      navigation.navigate("VideoTab", {
+        screen: "VideoIndex",
         params: {
           autoplayVideo: {
-            id: song.contentId || song.id.replace(':video', ''),
+            id: song.contentId || song.id.replace(":video", ""),
             title: song.title,
             artistName: song.artist,
             artistId: artist.id,
             artworkUrl: song.thumbnail,
-            mediaUrl: song.mediaUrl || '',
+            mediaUrl: song.mediaUrl || "",
             useStreamAccess: song.useStreamAccess,
-            category: 'Artist Upload',
+            category: "Artist Upload",
             likeCount: song.likeCount ?? 0,
             dislikeCount: song.dislikeCount ?? 0,
             userReaction: song.userReaction ?? null,
@@ -496,7 +557,7 @@ export default function ArtistScreen({ navigation, route }: any) {
 
     const params = buildFullPlayerParams(song);
     if (params) {
-      navigation.navigate('FullPlayer', params);
+      navigation.navigate("FullPlayer", params);
     }
     setCurrentSong(song);
   };
@@ -518,12 +579,11 @@ export default function ArtistScreen({ navigation, route }: any) {
       colors={Colors.backgroundGradient}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={styles.gradientBackground}
-    >
+      style={styles.gradientBackground}>
       <StatusBar barStyle="light-content" />
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={["top"]}>
         <View style={styles.container}>
-          {isVideoPlaying && currentItem?.mediaType === 'video' ? (
+          {isVideoPlaying && currentItem?.mediaType === "video" ? (
             <View style={styles.stickyVideoHost}>
               <InlineVideoPlayer
                 mediaUrl={currentItem.mediaUrl}
@@ -542,15 +602,15 @@ export default function ArtistScreen({ navigation, route }: any) {
             </View>
           ) : null}
 
-
-
           {loading ? (
             <View style={styles.loadingWrap}>
               <ActivityIndicator color={Colors.accent} />
             </View>
           ) : error || !artist ? (
             <View style={styles.loadingWrap}>
-              <Text style={styles.errorText}>{error || 'Unable to load artist.'}</Text>
+              <Text style={styles.errorText}>
+                {error || "Unable to load artist."}
+              </Text>
             </View>
           ) : (
             <>
@@ -576,45 +636,85 @@ export default function ArtistScreen({ navigation, route }: any) {
                         youtubeUrl={artist.youtubeUrl}
                         instagramUrl={artist.instagramUrl}
                         onBack={() => navigation.goBack()}
-                        onSubscribe={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name, amount: artist.subscriptionPrice })}
-                        onJoin={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name, amount: artist.subscriptionPrice })}
+                        onSubscribe={() =>
+                          navigation.navigate("SubscriptionFlow", {
+                            artistId: artist.id,
+                            artistName: artist.name,
+                            amount: artist.subscriptionPrice,
+                          })
+                        }
+                        onJoin={() =>
+                          navigation.navigate("SubscriptionFlow", {
+                            artistId: artist.id,
+                            artistName: artist.name,
+                            amount: artist.subscriptionPrice,
+                          })
+                        }
                         isSubscribed={isSubscribedToArtist}
                         expiryDate={expiryDate}
                         subscriptionPrice={artist.subscriptionPrice}
                       />
-
                     ) : (
                       <InlineArtistMetaSection
                         avatarUrl={artist.profileImage || artist.coverImage}
                         name={artist.name}
                         verified={artist.verified}
                         subscribersLabel={artist.subscribers}
-                        videoTitle={currentItem?.title ?? currentSong?.title ?? ''}
-                        onSubscribe={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name, amount: artist.subscriptionPrice })}
-                        onJoin={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name, amount: artist.subscriptionPrice })}
+                        videoTitle={
+                          currentItem?.title ?? currentSong?.title ?? ""
+                        }
+                        onSubscribe={() =>
+                          navigation.navigate("SubscriptionFlow", {
+                            artistId: artist.id,
+                            artistName: artist.name,
+                            amount: artist.subscriptionPrice,
+                          })
+                        }
+                        onJoin={() =>
+                          navigation.navigate("SubscriptionFlow", {
+                            artistId: artist.id,
+                            artistName: artist.name,
+                            amount: artist.subscriptionPrice,
+                          })
+                        }
                         isSubscribed={isSubscribedToArtist}
                         expiryDate={expiryDate}
                       />
-
                     )}
 
                     <ChannelNavTabs
                       active={activeChannelTab}
                       onChange={(k) => {
                         setActiveChannelTab(k);
-                        if (k === 'Home') setActiveTab('All');
-                        if (k === 'Videos') setActiveTab('Video');
+
+                        // ✅ Reset filter based on tab
+                        if (k === "Home") {
+                          setActiveTab("All");
+                        } else if (k === "Videos") {
+                          setActiveTab("Video");
+                        } else {
+                          // Playlists & Community - reset to All
+                          setActiveTab("All");
+                        }
                       }}
                     />
 
                     {isExpiringSoon && isSubscribedToArtist && (
                       <RetentionBanner
                         daysLeft={daysUntilExpiry}
-                        onRenew={() => navigation.navigate('SubscriptionFlow', { artistId: artist.id, artistName: artist.name })}
+                        onRenew={() =>
+                          navigation.navigate("SubscriptionFlow", {
+                            artistId: artist.id,
+                            artistName: artist.name,
+                          })
+                        }
                       />
                     )}
 
-                    <MediaFilterPills active={activeTab} onChange={setActiveTab} />
+                    <MediaFilterPills
+                      active={activeTab}
+                      onChange={setActiveTab}
+                    />
                   </>
                 }
                 contentContainerStyle={{
@@ -633,27 +733,29 @@ export default function ArtistScreen({ navigation, route }: any) {
                 ListEmptyComponent={
                   <View style={styles.loadingWrap}>
                     <Text style={styles.emptyText}>
-                      {activeChannelTab === 'Playlists'
-                        ? 'No playlists yet.'
-                        : activeChannelTab === 'Community'
-                          ? 'No community posts yet.'
-                          : 'No uploads yet.'}
+                      {activeChannelTab === "Playlists"
+                        ? "No playlists yet."
+                        : activeChannelTab === "Community"
+                        ? "No community posts yet."
+                        : "No uploads yet."}
                     </Text>
                   </View>
                 }
               />
             </>
           )}
-
         </View>
 
         {showStrongUpsell && (
           <StrongUpsellModal
-            artistName={artist?.name || 'Artist'}
+            artistName={artist?.name || "Artist"}
             onSubscribe={() => {
               setShowStrongUpsell(false);
               setLockedClicks(0);
-              navigation.navigate('SubscriptionFlow', { artistId: artist?.id, artistName: artist?.name });
+              navigation.navigate("SubscriptionFlow", {
+                artistId: artist?.id,
+                artistName: artist?.name,
+              });
             }}
           />
         )}
@@ -663,13 +765,14 @@ export default function ArtistScreen({ navigation, route }: any) {
             transparent
             visible={true}
             animationType="fade"
-            onRequestClose={() => setShowArtistLockModal({ visible: false, song: null })}
-          >
+            onRequestClose={() =>
+              setShowArtistLockModal({ visible: false, song: null })
+            }>
             <LockedContentOverlay
               artistName={artist?.name}
               onSubscribe={() => {
                 setShowArtistLockModal({ visible: false, song: null });
-                navigation.navigate('SubscriptionFlow', {
+                navigation.navigate("SubscriptionFlow", {
                   artistId: artist?.id,
                   artistName: artist?.name,
                   amount: artist?.subscriptionPrice,
@@ -678,14 +781,15 @@ export default function ArtistScreen({ navigation, route }: any) {
             />
             <Pressable
               style={{
-                position: 'absolute',
+                position: "absolute",
                 top: 50,
                 right: 20,
                 zIndex: 100,
                 padding: 10,
               }}
-              onPress={() => setShowArtistLockModal({ visible: false, song: null })}
-            >
+              onPress={() =>
+                setShowArtistLockModal({ visible: false, song: null })
+              }>
               <X color="#fff" size={28} />
             </Pressable>
           </Modal>
@@ -729,7 +833,7 @@ function InlineVideoPlayer({
     <View style={[styles.youtubeVideoWrap, { aspectRatio }]}>
       <VideoView
         player={videoPlayer}
-        style={{ width: '100%', height: undefined, aspectRatio }}
+        style={{ width: "100%", height: undefined, aspectRatio }}
         contentFit="contain"
         nativeControls={false}
         allowsVideoFrameAnalysis={false}
@@ -747,8 +851,15 @@ function InlineVideoPlayer({
         onToggleVisibility={toggleControls}
       />
 
-      <LinearGradient colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0)']} style={styles.youtubeVideoTopGradient} />
-      <View style={[styles.youtubeVideoTopRow, { paddingTop: Math.max(10, topInset + 6) }]}>
+      <LinearGradient
+        colors={["rgba(0,0,0,0.55)", "rgba(0,0,0,0)"]}
+        style={styles.youtubeVideoTopGradient}
+      />
+      <View
+        style={[
+          styles.youtubeVideoTopRow,
+          { paddingTop: Math.max(10, topInset + 6) },
+        ]}>
         <Pressable onPress={onBack} style={styles.backBtn}>
           <ArrowLeft color="#fff" size={22} />
         </Pressable>
@@ -791,9 +902,12 @@ function ProfileHeaderSection({
   subscriptionPrice: number;
 }) {
   const openUrl = async (raw: string) => {
-    const trimmed = (raw || '').toString().trim();
+    const trimmed = (raw || "").toString().trim();
     if (!trimmed) return;
-    const url = trimmed.startsWith('http://') || trimmed.startsWith('https://') ? trimmed : `https://${trimmed}`;
+    const url =
+      trimmed.startsWith("http://") || trimmed.startsWith("https://")
+        ? trimmed
+        : `https://${trimmed}`;
     try {
       const ok = await Linking.canOpenURL(url);
       if (!ok) return;
@@ -806,8 +920,14 @@ function ProfileHeaderSection({
   return (
     <View style={styles.profileWrap}>
       <View style={styles.bannerWrap}>
-        <Image source={{ uri: getOptimizedImageUrl(bannerUrl) }} style={styles.bannerImg} />
-        <LinearGradient colors={['rgba(0,0,0,0.08)', 'rgba(0,0,0,0.75)']} style={styles.bannerGradient} />
+        <Image
+          source={{ uri: getOptimizedImageUrl(bannerUrl) }}
+          style={styles.bannerImg}
+        />
+        <LinearGradient
+          colors={["rgba(0,0,0,0.08)", "rgba(0,0,0,0.75)"]}
+          style={styles.bannerGradient}
+        />
         <View style={styles.bannerTopRow}>
           <Pressable onPress={onBack} style={styles.backBtn}>
             <ArrowLeft color="#fff" size={22} />
@@ -817,7 +937,10 @@ function ProfileHeaderSection({
 
       <View style={styles.avatarRow}>
         <View style={styles.avatarWrap}>
-          <Image source={{ uri: getOptimizedImageUrl(avatarUrl) }} style={styles.avatarImg} />
+          <Image
+            source={{ uri: getOptimizedImageUrl(avatarUrl) }}
+            style={styles.avatarImg}
+          />
         </View>
       </View>
 
@@ -833,7 +956,6 @@ function ProfileHeaderSection({
           ) : null}
         </View>
 
-
         {bio ? (
           <Text style={styles.profileBio} numberOfLines={4}>
             {bio}
@@ -846,24 +968,21 @@ function ProfileHeaderSection({
               {spotifyUrl ? (
                 <Pressable
                   onPress={() => openUrl(spotifyUrl)}
-                  style={styles.socialIconBtn}
-                >
+                  style={styles.socialIconBtn}>
                   <SpotifyIcon size={18} />
                 </Pressable>
               ) : null}
               {youtubeUrl ? (
                 <Pressable
                   onPress={() => openUrl(youtubeUrl)}
-                  style={styles.socialIconBtn}
-                >
+                  style={styles.socialIconBtn}>
                   <YouTubeIcon size={18} />
                 </Pressable>
               ) : null}
               {instagramUrl ? (
                 <Pressable
                   onPress={() => openUrl(instagramUrl)}
-                  style={styles.socialIconBtn}
-                >
+                  style={styles.socialIconBtn}>
                   <InstagramBrandIcon size={18} />
                 </Pressable>
               ) : null}
@@ -873,14 +992,24 @@ function ProfileHeaderSection({
 
         <View style={styles.actionRow}>
           {isSubscribed ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <View style={styles.subscribedBadge}>
                 <BadgeCheck color="#fff" size={14} />
                 <Text style={styles.subscribedText}>Subscribed</Text>
               </View>
               {expiryDate && (
-                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '500' }}>
-                  Expires: {new Date(expiryDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                <Text
+                  style={{
+                    color: "rgba(255,255,255,0.6)",
+                    fontSize: 13,
+                    fontWeight: "500",
+                  }}>
+                  Expires:{" "}
+                  {new Date(expiryDate).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                  })}
                 </Text>
               )}
             </View>
@@ -891,7 +1020,6 @@ function ProfileHeaderSection({
           )}
         </View>
       </View>
-
     </View>
   );
 }
@@ -927,7 +1055,10 @@ function InlineArtistMetaSection({
 
       <View style={styles.inlineMetaRow}>
         <View style={styles.inlineAvatarWrap}>
-          <Image source={{ uri: getOptimizedImageUrl(avatarUrl) }} style={styles.inlineAvatarImg} />
+          <Image
+            source={{ uri: getOptimizedImageUrl(avatarUrl) }}
+            style={styles.inlineAvatarImg}
+          />
         </View>
 
         <View style={styles.inlineMetaTextWrap}>
@@ -941,19 +1072,27 @@ function InlineArtistMetaSection({
               </View>
             ) : null}
           </View>
-
         </View>
         <View style={styles.inlineActionRow}>
           {!isSubscribed ? (
-            <TouchableOpacity style={styles.inlineSubscribeBtn} onPress={onSubscribe}>
+            <TouchableOpacity
+              style={styles.inlineSubscribeBtn}
+              onPress={onSubscribe}>
               <Text style={styles.inlineSubscribeText}>Subscribe</Text>
             </TouchableOpacity>
           ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Subscribed</Text>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>
+                Subscribed
+              </Text>
               {expiryDate && (
                 <Text style={styles.inlineExpiryText}>
-                  Expires: {new Date(expiryDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  Expires:{" "}
+                  {new Date(expiryDate).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                  })}
                 </Text>
               )}
             </View>
@@ -964,23 +1103,36 @@ function InlineArtistMetaSection({
   );
 }
 
-function ChannelNavTabs({ active, onChange }: { active: ChannelTabKey; onChange: (k: ChannelTabKey) => void }) {
+function ChannelNavTabs({
+  active,
+  onChange,
+}: {
+  active: ChannelTabKey;
+  onChange: (k: ChannelTabKey) => void;
+}) {
   return (
     <BlurView intensity={22} tint="dark" style={styles.channelTabsWrap}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.channelTabsContent}
-      >
+        contentContainerStyle={styles.channelTabsContent}>
         {CHANNEL_TABS.map((t) => {
           const isActive = active === t;
           return (
             <Pressable
               key={t}
               onPress={() => onChange(t)}
-              style={[styles.channelTabPill, isActive ? styles.channelTabPillActive : null]}
-            >
-              <Text style={[styles.channelTabText, isActive ? styles.channelTabTextActive : null]}>{t}</Text>
+              style={[
+                styles.channelTabPill,
+                isActive ? styles.channelTabPillActive : null,
+              ]}>
+              <Text
+                style={[
+                  styles.channelTabText,
+                  isActive ? styles.channelTabTextActive : null,
+                ]}>
+                {t}
+              </Text>
             </Pressable>
           );
         })}
@@ -989,7 +1141,13 @@ function ChannelNavTabs({ active, onChange }: { active: ChannelTabKey; onChange:
   );
 }
 
-function MediaFilterPills({ active, onChange }: { active: TabKey; onChange: (k: TabKey) => void }) {
+function MediaFilterPills({
+  active,
+  onChange,
+}: {
+  active: TabKey;
+  onChange: (k: TabKey) => void;
+}) {
   return (
     <View style={styles.filterWrap}>
       <View style={styles.filterRow}>
@@ -999,9 +1157,17 @@ function MediaFilterPills({ active, onChange }: { active: TabKey; onChange: (k: 
             <Pressable
               key={t}
               onPress={() => onChange(t)}
-              style={[styles.filterPill, isActive ? styles.filterPillActive : null]}
-            >
-              <Text style={[styles.filterText, isActive ? styles.filterTextActive : null]}>{t}</Text>
+              style={[
+                styles.filterPill,
+                isActive ? styles.filterPillActive : null,
+              ]}>
+              <Text
+                style={[
+                  styles.filterText,
+                  isActive ? styles.filterTextActive : null,
+                ]}>
+                {t}
+              </Text>
             </Pressable>
           );
         })}
@@ -1011,24 +1177,24 @@ function MediaFilterPills({ active, onChange }: { active: TabKey; onChange: (k: 
 }
 
 function formatDateLabel(raw?: string | null): string {
-  if (!raw) return '';
+  if (!raw) return "";
   const d = new Date(raw);
-  if (!Number.isFinite(d.getTime())) return '';
+  if (!Number.isFinite(d.getTime())) return "";
   const now = Date.now();
   const diff = Math.max(0, now - d.getTime());
   const day = 24 * 60 * 60 * 1000;
   const days = Math.floor(diff / day);
-  if (days <= 0) return 'Today';
-  if (days === 1) return '1 day ago';
+  if (days <= 0) return "Today";
+  if (days === 1) return "1 day ago";
   if (days < 7) return `${days} days ago`;
   const weeks = Math.floor(days / 7);
-  if (weeks === 1) return '1 week ago';
+  if (weeks === 1) return "1 week ago";
   if (weeks < 5) return `${weeks} weeks ago`;
   const months = Math.floor(days / 30);
-  if (months === 1) return '1 month ago';
+  if (months === 1) return "1 month ago";
   if (months < 12) return `${months} months ago`;
   const years = Math.floor(days / 365);
-  return years <= 1 ? '1 year ago' : `${years} years ago`;
+  return years <= 1 ? "1 year ago" : `${years} years ago`;
 }
 
 function MediaCard({
@@ -1043,25 +1209,27 @@ function MediaCard({
   onPress: () => void;
 }) {
   const dateLabel = formatDateLabel(item.createdAt);
-  const badgeText = item.mediaType === 'video' ? 'VIDEO' : 'AUDIO';
+  const badgeText = item.mediaType === "video" ? "VIDEO" : "AUDIO";
 
   return (
     <Pressable
       onPress={onPress}
-      style={[
-        styles.cardPressable,
-        styles.cardPressableList,
-      ]}
-    >
+      style={[styles.cardPressable, styles.cardPressableList]}>
       <View style={styles.card}>
         <View style={styles.cardThumbWrap}>
-          <Image source={{ uri: getOptimizedImageUrl(item.thumbnail) }} style={styles.cardThumb} />
+          <Image
+            source={{ uri: getOptimizedImageUrl(item.thumbnail) }}
+            style={styles.cardThumb}
+          />
           {item.locked && (
             <View style={styles.lockOverlay}>
               <Lock size={12} color="#fff" fill="rgba(255,255,255,0.2)" />
             </View>
           )}
-          <LinearGradient colors={['rgba(0,0,0,0.00)', 'rgba(0,0,0,0.55)']} style={styles.cardThumbGradient} />
+          <LinearGradient
+            colors={["rgba(0,0,0,0.00)", "rgba(0,0,0,0.55)"]}
+            style={styles.cardThumbGradient}
+          />
 
           <View style={styles.cardBadgeRight}>
             <Text style={styles.cardBadgeText}>{badgeText}</Text>
@@ -1089,18 +1257,20 @@ function stableHash(input: string) {
 }
 
 function compactNumber(n: number) {
-  if (n >= 1_000_000_000) return `${stripTrailingZero((n / 1_000_000_000).toFixed(1))}B`;
-  if (n >= 1_000_000) return `${stripTrailingZero((n / 1_000_000).toFixed(1))}M`;
+  if (n >= 1_000_000_000)
+    return `${stripTrailingZero((n / 1_000_000_000).toFixed(1))}B`;
+  if (n >= 1_000_000)
+    return `${stripTrailingZero((n / 1_000_000).toFixed(1))}M`;
   if (n >= 1_000) return `${stripTrailingZero((n / 1_000).toFixed(1))}K`;
   return `${n}`;
 }
 
 function stripTrailingZero(s: string) {
-  return s.endsWith('.0') ? s.slice(0, -2) : s;
+  return s.endsWith(".0") ? s.slice(0, -2) : s;
 }
 
 function deriveSubscribersLabel(seed: string | number) {
-  const key = String(seed || '');
+  const key = String(seed || "");
   const n = (stableHash(`subs:${key}`) % 9_000_000) + 120_000;
   return `${compactNumber(n)} subscribers`;
 }
@@ -1108,10 +1278,10 @@ function deriveSubscribersLabel(seed: string | number) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   stickyVideoHost: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
@@ -1123,64 +1293,64 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
 
   youtubeVideoWrap: {
-    width: '100%',
+    width: "100%",
     backgroundColor: Colors.backgroundAlt,
-    alignSelf: 'center',
+    alignSelf: "center",
     borderBottomLeftRadius: 18,
     borderBottomRightRadius: 18,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   youtubeVideo: {
     // unused; inline style on <Video />
   },
   youtubeVideoTopGradient: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     height: 120,
   },
   youtubeVideoTopRow: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start",
   },
 
   loadingWrap: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     padding: 22,
   },
   errorText: {
-    color: 'rgba(255,255,255,0.75)',
+    color: "rgba(255,255,255,0.75)",
     fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
   },
   emptyText: {
-    color: 'rgba(255,255,255,0.55)',
+    color: "rgba(255,255,255,0.55)",
     fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
   },
 
   backBtn: {
     width: 36,
     height: 36,
     borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0,0,0,0.35)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   verifiedBadge: {
     marginLeft: 10,
@@ -1194,137 +1364,136 @@ const styles = StyleSheet.create({
     height: 170,
     marginHorizontal: 14,
     borderRadius: 18,
-    overflow: 'hidden',
-    backgroundColor: '#121212',
+    overflow: "hidden",
+    backgroundColor: "#121212",
   },
   bannerImg: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'contain',
+    width: "100%",
+    height: "100%",
+    resizeMode: "contain",
   },
   bannerGradient: {
     ...StyleSheet.absoluteFillObject,
   },
   bannerTopRow: {
-    position: 'absolute',
+    position: "absolute",
     top: 12,
     left: 12,
     right: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   avatarRow: {
     marginTop: -44,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarWrap: {
     width: 92,
     height: 92,
     borderRadius: 46,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.9)',
-    backgroundColor: '#121212',
+    borderColor: "rgba(255,255,255,0.9)",
+    backgroundColor: "#121212",
   },
   avatarImg: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   profileMeta: {
     paddingHorizontal: 18,
     paddingTop: 10,
-    alignItems: 'center',
+    alignItems: "center",
   },
   nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    maxWidth: '100%',
+    flexDirection: "row",
+    alignItems: "center",
+    maxWidth: "100%",
   },
   profileName: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 26,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 0.2,
     maxWidth: 260,
   },
   profileSubs: {
     marginTop: 6,
-    color: 'rgba(255,255,255,0.70)',
+    color: "rgba(255,255,255,0.70)",
     fontSize: 13,
   },
   profileBio: {
     marginTop: 10,
     paddingHorizontal: 18,
-    color: 'rgba(255,255,255,0.82)',
+    color: "rgba(255,255,255,0.82)",
     fontSize: 13,
     lineHeight: 18,
-    textAlign: 'center',
+    textAlign: "center",
   },
   socialRow: {
     marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 10,
   },
   socialWrap: {
     marginTop: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   socialIconBtn: {
     width: 38,
     height: 38,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: "rgba(255,255,255,0.10)",
   },
   socialIconBtnPressed: {
     transform: [{ scale: 0.98 }],
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: "rgba(255,255,255,0.10)",
   },
-
 
   channelTabsWrap: {
     marginTop: 14,
     marginHorizontal: 14,
     borderRadius: 18,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.05)",
   },
   channelTabsContent: {
     paddingHorizontal: 10,
     paddingVertical: 10,
-    alignItems: 'center',
+    alignItems: "center",
   },
   channelTabPill: {
     marginRight: 10,
     paddingHorizontal: 14,
     height: 34,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "rgba(255,255,255,0.10)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   channelTabPillActive: {
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    borderColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderColor: "rgba(255,255,255,0.22)",
   },
   channelTabText: {
-    color: 'rgba(255,255,255,0.70)',
+    color: "rgba(255,255,255,0.70)",
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   channelTabTextActive: {
-    color: '#fff',
+    color: "#fff",
   },
 
   filterWrap: {
@@ -1332,161 +1501,160 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   filterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   filterPill: {
     marginRight: 10,
     paddingHorizontal: 14,
     height: 30,
     borderRadius: 999,
-    backgroundColor: 'rgba(18,18,18,0.80)',
+    backgroundColor: "rgba(18,18,18,0.80)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   filterPillActive: {
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    borderColor: 'rgba(255,255,255,0.22)',
-  },
-  filterText: {
-    color: 'rgba(255,255,255,0.70)',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 0.3,
+    backgroundColor: "rgba(255,182,8,0.20)",
+    borderColor: "#FFB608",
   },
   filterTextActive: {
-    color: '#fff',
+    color: "#FFB608",
   },
-
+  filterText: {
+    color: "rgba(255,255,255,0.70)",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.3,
+  },
+  
   inlineMetaWrap: {
     paddingTop: 12,
     paddingHorizontal: 14,
   },
   inlineVideoTitle: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '900',
+    fontWeight: "900",
     lineHeight: 20,
   },
   inlineMetaRow: {
     marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   inlineAvatarWrap: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    overflow: 'hidden',
-    backgroundColor: '#121212',
+    overflow: "hidden",
+    backgroundColor: "#121212",
   },
   inlineAvatarImg: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   inlineMetaTextWrap: {
     flex: 1,
     marginLeft: 10,
   },
   inlineNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   inlineArtistName: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: "800",
     maxWidth: 180,
   },
   inlineSubs: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   subscribedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1DB954',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1DB954",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     gap: 6,
   },
   subscribedText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     marginTop: 16,
   },
   subscribeBtn: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 24,
     minWidth: 140,
-    alignItems: 'center',
+    alignItems: "center",
   },
   subscribeBtnText: {
-    color: '#000',
+    color: "#000",
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   joinBtn: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: "rgba(255,255,255,0.1)",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: "rgba(255,255,255,0.2)",
   },
   joinBtnText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   inlineJoinBtnSubscribed: {
-    backgroundColor: 'rgba(255,106,0,0.15)',
-    borderColor: 'rgba(255,106,0,0.5)',
+    backgroundColor: "rgba(255,106,0,0.15)",
+    borderColor: "rgba(255,106,0,0.5)",
   },
   expiryBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: "rgba(255,255,255,0.1)",
     borderRadius: 4,
     marginTop: 2,
   },
   expiryBadgeText: {
-    color: 'rgba(255,255,255,0.5)',
+    color: "rgba(255,255,255,0.5)",
     fontSize: 9,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   inlineExpiryText: {
-    color: 'rgba(255,255,255,0.4)',
+    color: "rgba(255,255,255,0.4)",
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: "700",
     marginTop: 4,
-    textAlign: 'center',
+    textAlign: "center",
   },
   inlineActionRow: {
-
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   inlineSubscribeBtn: {
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   inlineSubscribeText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: 0.2,
   },
   inlineJoinBtn: {
@@ -1494,16 +1662,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     height: 34,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "rgba(255,255,255,0.14)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   inlineJoinText: {
-    color: 'rgba(255,255,255,0.92)',
+    color: "rgba(255,255,255,0.92)",
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: "800",
   },
 
   gridRow: {
@@ -1523,119 +1691,119 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 16,
-    backgroundColor: 'rgba(18,18,18,0.86)',
+    backgroundColor: "rgba(18,18,18,0.86)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    overflow: 'hidden',
+    borderColor: "rgba(255,255,255,0.10)",
+    overflow: "hidden",
   },
   cardThumbWrap: {
-    width: '100%',
+    width: "100%",
     aspectRatio: 16 / 9,
-    backgroundColor: '#0B0B0B',
+    backgroundColor: "#0B0B0B",
   },
   cardThumb: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   cardThumbGradient: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
     height: 70,
   },
   cardBadgeRight: {
-    position: 'absolute',
+    position: "absolute",
     right: 10,
     bottom: 10,
     paddingHorizontal: 10,
     height: 24,
     borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: "rgba(0,0,0,0.55)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "rgba(255,255,255,0.14)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   cardBadgeLeft: {
-    position: 'absolute',
+    position: "absolute",
     left: 10,
     bottom: 10,
     paddingHorizontal: 10,
     height: 24,
     borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: "rgba(0,0,0,0.55)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "rgba(255,255,255,0.14)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
   cardBadgeLeftIcon: {
     marginRight: 6,
   },
   cardBadgeText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 11,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 0.4,
   },
   cardTitle: {
     paddingHorizontal: 12,
     paddingTop: 12,
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: "900",
     lineHeight: 18,
   },
   cardMeta: {
     paddingHorizontal: 12,
     paddingTop: 6,
     paddingBottom: 12,
-    color: 'rgba(255,255,255,0.62)',
+    color: "rgba(255,255,255,0.62)",
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 
   // Debug styles
   debugToggle: {
-    position: 'absolute',
+    position: "absolute",
     top: 10,
     right: 14,
     zIndex: 1000,
   },
   debugButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     gap: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: "rgba(255, 255, 255, 0.2)",
   },
   debugButtonActive: {
-    backgroundColor: 'rgba(255, 182, 8, 0.25)',
+    backgroundColor: "rgba(255, 182, 8, 0.25)",
     borderColor: Colors.accent,
   },
   debugButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   lockOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 6,
     left: 6,
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: "rgba(0,0,0,0.65)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
     zIndex: 10,
   },
 });
