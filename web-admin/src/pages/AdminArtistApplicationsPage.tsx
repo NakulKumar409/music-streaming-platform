@@ -1,282 +1,546 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
 import { http } from "../services/http";
+import PageWrapper from "../components/PageWrapper";
+import {
+  Search,
+  RefreshCw,
+  X,
+  FileJson,
+  Activity,
+  Terminal,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Clock,
+  User,
+  Shield,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+} from "lucide-react";
 
-type PendingItem = {
-  id: number;
-  name: string | null;
-  email: string;
-  submittedAt: string | null;
-  artistStatus?: string;
-  artistBio: string;
-  portfolioLinks: string[];
-  appealMessage?: string | null;
-  appealed?: boolean;
-  adminNote?: string | null;
-};
+interface AuditLog {
+  id: string;
+  action: string;
+  entity: string;
+  entity_id: string;
+  actor_id: number | null;
+  actor_role: string;
+  status: string;
+  correlation_id: string | null;
+  ip_address: string | null;
+  metadata: any;
+  created_at: string;
+}
 
-type PendingArtistsResponse = {
-  success: boolean;
-  items?: PendingItem[];
-  message?: string;
-};
-
-function PremiumPlayLogo() {
+function StatusBadge({ status }: { status: string }) {
+  if (status === "success") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
+        <CheckCircle size={12} />
+        Success
+      </span>
+    );
+  }
+  if (status === "failed") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+        <XCircle size={12} />
+        Failed
+      </span>
+    );
+  }
   return (
-    <div className="h-[44px] w-[44px] rounded-full bg-gradient-to-b from-[#7d4a41] to-[#2d1b18] p-[2px]">
-      <div className="h-full w-full rounded-full bg-[#1a1414]/80 border border-white/10 flex items-center justify-center">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M9 7.5V16.5L17 12L9 7.5Z" fill="#b16e5b" />
-        </svg>
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+      <Clock size={12} />
+      Pending
+    </span>
+  );
+}
+
+function RoleBadge({ role }: { role: string }) {
+  const colors: Record<string, string> = {
+    admin: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+    system: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    artist: "bg-green-500/10 text-green-400 border-green-500/20",
+    fan: "bg-orange-500/10 text-orange-400 border-orange-500/20",
+  };
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${
+        colors[role] || "bg-white/10 text-[#8D7B77] border-white/10"
+      }`}>
+      <User size={12} />
+      {role}
+    </span>
+  );
+}
+
+// Premium Pagination Component
+function PremiumPagination({
+  currentPage,
+  totalPages,
+  totalItems,
+  itemsPerPage,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  onPageChange: (page: number) => void;
+}) {
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+  // Generate page numbers
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxVisible = 5;
+
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      pages.push(1);
+
+      let start = Math.max(2, currentPage - 1);
+      let end = Math.min(totalPages - 1, currentPage + 1);
+
+      if (currentPage <= 3) {
+        end = 4;
+      }
+      if (currentPage >= totalPages - 2) {
+        start = totalPages - 3;
+      }
+
+      if (start > 2) {
+        pages.push("...");
+      }
+
+      for (let i = start; i <= end; i++) {
+        if (i > 1 && i < totalPages) {
+          pages.push(i);
+        }
+      }
+
+      if (end < totalPages - 1) {
+        pages.push("...");
+      }
+
+      if (totalPages > 1) {
+        pages.push(totalPages);
+      }
+    }
+
+    return pages;
+  };
+
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-white/5">
+      {/* Left - Items info */}
+      <div className="text-sm text-[#B8A6A1] bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+        Showing <span className="text-white font-semibold">{startItem}</span> to{" "}
+        <span className="text-white font-semibold">{endItem}</span> of{" "}
+        <span className="text-white font-semibold">{totalItems}</span> results
+      </div>
+
+      {/* Right - Pagination controls */}
+      <div className="flex items-center gap-1">
+        {/* First page */}
+        <button
+          type="button"
+          onClick={() => onPageChange(1)}
+          disabled={currentPage === 1}
+          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-[#E85D2C]/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-white/10"
+          aria-label="First page">
+          <ChevronsLeft size={16} />
+        </button>
+
+        {/* Previous page */}
+        <button
+          type="button"
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-[#E85D2C]/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-white/10"
+          aria-label="Previous page">
+          <ChevronLeft size={16} />
+        </button>
+
+        {/* Page numbers */}
+        <div className="flex items-center gap-1 px-1">
+          {getPageNumbers().map((page, index) => {
+            if (page === "...") {
+              return (
+                <span
+                  key={`ellipsis-${index}`}
+                  className="h-10 w-10 flex items-center justify-center text-[#8D7B77] text-sm">
+                  …
+                </span>
+              );
+            }
+
+            const isActive = currentPage === page;
+            return (
+              <button
+                key={index}
+                type="button"
+                onClick={() => typeof page === "number" && onPageChange(page)}
+                className={`h-10 min-w-[40px] px-2 flex items-center justify-center rounded-xl text-sm font-medium transition-all ${
+                  isActive
+                    ? "bg-[#E85D2C] text-white shadow-lg shadow-[#E85D2C]/30 border border-[#E85D2C]"
+                    : "text-[#B8A6A1] hover:text-white hover:bg-white/10 border border-transparent hover:border-white/10"
+                }`}>
+                {page}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Next page */}
+        <button
+          type="button"
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-[#E85D2C]/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-white/10"
+          aria-label="Next page">
+          <ChevronRight size={16} />
+        </button>
+
+        {/* Last page */}
+        <button
+          type="button"
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages}
+          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-[#E85D2C]/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-white/10"
+          aria-label="Last page">
+          <ChevronsRight size={16} />
+        </button>
       </div>
     </div>
   );
 }
 
-export default function AdminArtistApplicationsPage() {
-  const navigate = useNavigate();
+export default function AdminAuditPage() {
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const limit = 50;
 
-  const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<PendingItem[]>([]);
-  const [apiError, setApiError] = useState<string | null>(null);
-
-  const [active, setActive] = useState<PendingItem | null>(null);
-  const [resolveBusy, setResolveBusy] = useState(false);
-  const [rejectReason, setRejectReason] = useState("");
-
-  const backgroundStyle = useMemo(() => {
-    return {
-      backgroundImage:
-        "radial-gradient(circle at 30% 10%, rgba(193,117,86,0.16) 0%, rgba(75,25,39,0.88) 55%, rgba(10,8,8,0.97) 100%)"
-    } as const;
-  }, []);
-
-  const load = async () => {
+  const fetchLogs = async () => {
     setLoading(true);
-    setApiError(null);
     try {
-      const res = await http.get<PendingArtistsResponse>("/api/v1/admin/pending-artists");
-      const next = Array.isArray(res.data?.items) ? (res.data.items as PendingItem[]) : [];
-      setItems(next);
-      setActive(next[0] ?? null);
-    } catch (e: any) {
-      const status = e?.response?.status;
-      if (status === 401 || status === 403) {
-        localStorage.removeItem("adminToken");
-        navigate("/admin/login", { replace: true });
-        return;
+      const { data } = await http.get(`/api/v1/admin/audit`, {
+        params: {
+          page,
+          limit,
+          search: search || undefined,
+          role: roleFilter || undefined,
+          status: statusFilter || undefined,
+        },
+      });
+      if (data.success) {
+        setLogs(data.data);
+        setTotal(data.meta.total);
       }
-      setApiError(e?.response?.data?.message || e?.message || "Failed to load pending applications");
+    } catch (err) {
+      console.error("Failed to fetch audit logs", err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    fetchLogs();
+  }, [page, roleFilter, statusFilter]);
 
-  const resolve = async (action: "APPROVE" | "REJECT") => {
-    if (!active) return;
-
-    if (action === "REJECT" && !rejectReason.trim()) {
-      setApiError("Rejection reason is required.");
-      return;
-    }
-
-    setResolveBusy(true);
-    setApiError(null);
-
-    try {
-      const res = await http.patch(`/api/v1/admin/resolve-artist/${active.id}`, {
-        action,
-        reason: action === "REJECT" ? rejectReason.trim() : undefined
-      });
-
-      if (!res.data?.success) {
-        setApiError(res.data?.message || "Failed to resolve application");
-        return;
-      }
-
-      const next = items.filter((x) => x.id !== active.id);
-      setItems(next);
-      setActive(next[0] ?? null);
-      setRejectReason("");
-    } catch (e: any) {
-      setApiError(e?.response?.data?.message || e?.message || "Failed to resolve application");
-    } finally {
-      setResolveBusy(false);
-    }
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(1);
+    fetchLogs();
   };
 
+  const totalPages = Math.ceil(total / limit);
+
   return (
-    <div className="min-h-screen w-full bg-[#0a0808] text-white" style={backgroundStyle}>
-      <div className="mx-auto w-full max-w-[1200px] px-4 sm:px-6 py-6 sm:py-8">
-        <div className="mt-10 flex items-end justify-between">
-          <div>
-            <div className="text-[38px] leading-[46px] font-light tracking-wide text-[#e6d6d2]">
-              Artist Applications
-            </div>
-            <div className="mt-2 text-[13px] text-[#b8a6a1]">Review, approve, or reject pending artist applications.</div>
+    <PageWrapper
+      title="Audit Logs"
+      subtitle="Monitor all system events and admin actions">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-4 mb-6">
+        <form onSubmit={handleSearch} className="flex-1 min-w-[280px]">
+          <div className="relative">
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8D7B77]"
+            />
+            <input
+              type="text"
+              placeholder="Search by ID, action, or correlation..."
+              className="w-full h-[42px] rounded-xl bg-white/5 border border-white/10 pl-9 pr-4 text-sm text-white placeholder:text-[#8D7B77] outline-none focus:border-[#E85D2C]/50 transition-all"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
+        </form>
 
-          <button
-            type="button"
-            onClick={load}
-            disabled={loading}
-            className="h-[36px] px-4 rounded-[6px] border border-white/10 bg-[#141010]/35 text-[13px] text-[#d8c7c3] disabled:opacity-60"
-          >
-            {loading ? "Refreshing..." : "Refresh"}
-          </button>
+        <div className="flex items-center gap-2">
+          <Filter size={16} className="text-[#8D7B77]" />
+          <select
+            className="h-[42px] rounded-xl bg-white/5 border border-white/10 px-4 text-sm text-white outline-none focus:border-[#E85D2C]/50 transition-all"
+            value={roleFilter}
+            onChange={(e) => {
+              setPage(1);
+              setRoleFilter(e.target.value);
+            }}>
+            <option value="">All Roles</option>
+            <option value="system">System</option>
+            <option value="admin">Admin</option>
+            <option value="fan">Fan</option>
+            <option value="artist">Artist</option>
+          </select>
         </div>
 
-        {apiError ? (
-          <div className="mt-4 rounded-[6px] border border-[#e3a1a1]/25 bg-[#7a4b28]/30 px-4 py-3 text-[13px] text-[#e3a1a1]">
-            Error: {apiError}
-          </div>
-        ) : null}
-
-        <div className="mt-6 grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-4">
-          <div className="rounded-[10px] border border-white/10 bg-[#141010]/35 backdrop-blur shadow-[0_20px_50px_rgba(0,0,0,0.35)] overflow-hidden">
-            <div className="px-5 py-4 border-b border-white/10 text-[13px] text-[#a99792]">
-              Pending ({items.length})
-            </div>
-
-            {loading ? (
-              <div className="px-5 py-6 text-[13px] text-[#a99792]">Loading...</div>
-            ) : items.length ? (
-              <div className="max-h-[560px] overflow-auto">
-                {items.map((it) => (
-                  <button
-                    key={it.id}
-                    type="button"
-                    onClick={() => {
-                      setActive(it);
-                      setRejectReason("");
-                      setApiError(null);
-                    }}
-                    className={`w-full text-left px-5 py-4 border-b border-white/5 hover:bg-white/5 ${active?.id === it.id ? "bg-white/5" : ""}`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0 text-[13px] text-[#e6d6d2] truncate">{it.name ?? it.email}</div>
-                      {it.appealed ? (
-                        <span className="shrink-0 inline-flex items-center rounded-[999px] bg-[#2d2230]/70 border border-[#c9853b]/25 px-2.5 py-[2px] text-[11px] text-[#d8b58a]">
-                          Appealed
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="mt-1 text-[12px] text-[#8d7b77] truncate">{it.email}</div>
-                    <div className="mt-2 text-[11px] text-[#6e5c59]">Submitted: {it.submittedAt ? new Date(it.submittedAt).toLocaleString() : "-"}</div>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="px-5 py-10 text-[13px] text-[#a99792]">No pending applications.</div>
-            )}
-          </div>
-
-          <div className="rounded-[10px] border border-white/10 bg-[#141010]/35 backdrop-blur shadow-[0_20px_50px_rgba(0,0,0,0.35)] overflow-hidden">
-            <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
-              <div className="text-[13px] text-[#a99792]">Application details</div>
-              <div className="text-[12px] text-[#6e5c59]">{active ? `ID: ${active.id}` : ""}</div>
-            </div>
-
-            {!active ? (
-              <div className="px-6 py-10 text-[13px] text-[#a99792]">Select an application to review.</div>
-            ) : (
-              <div className="px-6 py-6 space-y-6">
-                <div>
-                  <div className="text-[12px] tracking-wide text-[#b8a6a1]">Name</div>
-                  <div className="mt-2 text-[14px] text-[#e6d6d2]">{active.name ?? "(No name)"}</div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-[12px] tracking-wide text-[#b8a6a1]">Status</div>
-                    <div className="mt-2 text-[13px] text-[#cdbdb8]">
-                      {(active.artistStatus ?? "PENDING").toString().toUpperCase()}
-                    </div>
-                  </div>
-                  {active.appealed ? (
-                    <span className="inline-flex items-center rounded-[999px] bg-[#2d2230]/70 border border-[#c9853b]/25 px-3 py-[3px] text-[12px] text-[#d8b58a]">
-                      Appealed
-                    </span>
-                  ) : null}
-                </div>
-
-                <div>
-                  <div className="text-[12px] tracking-wide text-[#b8a6a1]">Email</div>
-                  <div className="mt-2 text-[14px] text-[#e6d6d2]">{active.email}</div>
-                </div>
-
-                <div>
-                  <div className="text-[12px] tracking-wide text-[#b8a6a1]">Bio</div>
-                  <div className="mt-2 text-[13px] text-[#cdbdb8] leading-6 whitespace-pre-wrap">{active.artistBio || "-"}</div>
-                </div>
-
-                {active.appealMessage ? (
-                  <div className="rounded-[8px] border border-white/10 bg-black/20 px-5 py-4">
-                    <div className="text-[12px] tracking-wide text-[#b8a6a1]">Appeal message</div>
-                    <div className="mt-2 text-[13px] text-[#e6d6d2] leading-6 whitespace-pre-wrap">{active.appealMessage}</div>
-                  </div>
-                ) : null}
-
-                <div>
-                  <div className="text-[12px] tracking-wide text-[#b8a6a1]">Portfolio</div>
-                  {active.portfolioLinks?.length ? (
-                    <div className="mt-2 space-y-2">
-                      {active.portfolioLinks.map((u) => (
-                        <a
-                          key={u}
-                          href={u}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block text-[13px] text-[#cdbdb8] hover:text-white truncate"
-                        >
-                          {u}
-                        </a>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="mt-2 text-[13px] text-[#8d7b77]">-</div>
-                  )}
-                </div>
-
-                <div className="pt-2 border-t border-white/10">
-                  <div className="text-[12px] tracking-wide text-[#b8a6a1]">Reject reason (required if rejecting)</div>
-                  <textarea
-                    value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
-                    className="mt-2 w-full min-h-[90px] rounded-[6px] bg-[#0e0a0a]/35 border border-white/10 px-4 py-3 text-[13px] text-[#e6d6d2] outline-none focus:border-white/20"
-                    placeholder="Explain why this application is rejected..."
-                  />
-
-                  <div className="mt-4 flex items-center justify-end gap-3">
-                    <button
-                      type="button"
-                      disabled={resolveBusy}
-                      onClick={() => resolve("REJECT")}
-                      className="h-[38px] px-4 rounded-[7px] border border-[#e3a1a1]/25 bg-[#2a1010]/35 text-[13px] text-[#e3a1a1] disabled:opacity-60"
-                    >
-                      {resolveBusy ? "Working..." : "Reject"}
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={resolveBusy}
-                      onClick={() => resolve("APPROVE")}
-                      className="h-[38px] px-5 rounded-[7px] border border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] text-[13px] font-light tracking-wide text-[#e6d6d2] shadow-[0_10px_25px_rgba(0,0,0,0.35)] disabled:opacity-60"
-                    >
-                      {resolveBusy ? "Working..." : "Approve"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+        <div className="flex items-center gap-2">
+          <select
+            className="h-[42px] rounded-xl bg-white/5 border border-white/10 px-4 text-sm text-white outline-none focus:border-[#E85D2C]/50 transition-all"
+            value={statusFilter}
+            onChange={(e) => {
+              setPage(1);
+              setStatusFilter(e.target.value);
+            }}>
+            <option value="">All Statuses</option>
+            <option value="success">Success</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed</option>
+          </select>
         </div>
+
+        <button
+          onClick={fetchLogs}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-[#8D7B77] hover:text-white hover:bg-white/10 transition-all">
+          <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+          Refresh
+        </button>
       </div>
-    </div>
+
+      {/* Table */}
+      <div className="rounded-2xl border border-white/5 bg-[#15100E] overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/5 bg-white/5">
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-left">
+                  Timestamp
+                </th>
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-left">
+                  Action
+                </th>
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-left">
+                  Actor
+                </th>
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-left">
+                  Entity
+                </th>
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-left">
+                  Status
+                </th>
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-right">
+                  Details
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center">
+                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-[#E85D2C]/20 border-t-[#E85D2C]"></div>
+                    <p className="text-sm text-[#8D7B77] mt-2">
+                      Loading logs...
+                    </p>
+                  </td>
+                </tr>
+              ) : logs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center">
+                    <div className="inline-flex p-4 rounded-full bg-white/5 mb-3">
+                      <Activity size={24} className="text-[#8D7B77]" />
+                    </div>
+                    <p className="text-sm font-medium text-white">
+                      No logs found
+                    </p>
+                    <p className="text-xs text-[#8D7B77] mt-1">
+                      Try adjusting your filters
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                logs.map((log) => (
+                  <tr
+                    key={log.id}
+                    className="hover:bg-white/5 transition-all cursor-pointer"
+                    onClick={() => setSelectedLog(log)}>
+                    <td className="px-6 py-4 text-[#B8A6A1] whitespace-nowrap">
+                      {new Date(log.created_at).toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4">
+                      <code className="px-2 py-1 rounded-md bg-[#E85D2C]/10 text-[#E85D2C] text-xs font-mono">
+                        {log.action}
+                      </code>
+                    </td>
+                    <td className="px-6 py-4">
+                      <RoleBadge role={log.actor_role} />
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-[#B8A6A1]">{log.entity}</span>
+                      <span className="text-[#8D7B77] text-xs ml-1">
+                        #{log.entity_id}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <StatusBadge status={log.status} />
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button className="text-[#E85D2C] hover:text-[#C97A54] transition-all text-xs font-medium">
+                        View →
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Premium Pagination */}
+        {total > 0 && (
+          <PremiumPagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={total}
+            itemsPerPage={limit}
+            onPageChange={setPage}
+          />
+        )}
+      </div>
+
+      {/* Detail Drawer */}
+      {selectedLog && (
+        <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[480px] lg:w-[560px] bg-[#15100E] border-l border-white/10 shadow-2xl animate-in slide-in-from-right">
+          <div className="flex items-center justify-between p-6 border-b border-white/5">
+            <div>
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                Log Details
+                <StatusBadge status={selectedLog.status} />
+              </h3>
+              <p className="text-xs text-[#8D7B77] font-mono mt-1">
+                {selectedLog.id}
+              </p>
+            </div>
+            <button
+              onClick={() => setSelectedLog(null)}
+              className="p-2 rounded-xl hover:bg-white/10 transition-all">
+              <X size={20} className="text-[#8D7B77]" />
+            </button>
+          </div>
+
+          <div className="p-6 overflow-y-auto max-h-[calc(100vh-100px)] space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider">
+                  Timestamp
+                </p>
+                <p className="text-sm text-white mt-1">
+                  {new Date(selectedLog.created_at).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider">
+                  Action
+                </p>
+                <code className="inline-block mt-1 px-2 py-1 rounded-md bg-[#E85D2C]/10 text-[#E85D2C] text-xs font-mono">
+                  {selectedLog.action}
+                </code>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider">
+                  Entity
+                </p>
+                <p className="text-sm text-white mt-1">
+                  {selectedLog.entity}{" "}
+                  <span className="text-[#8D7B77]">
+                    #{selectedLog.entity_id}
+                  </span>
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider">
+                  Actor
+                </p>
+                <RoleBadge role={selectedLog.actor_role} />
+              </div>
+            </div>
+
+            {selectedLog.correlation_id && (
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-1">
+                  Correlation ID
+                </p>
+                <code className="block p-3 rounded-xl bg-black/30 border border-white/10 text-xs font-mono text-[#B8A6A1] break-all">
+                  {selectedLog.correlation_id}
+                </code>
+              </div>
+            )}
+
+            <div>
+              <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-2 flex items-center gap-2">
+                <FileJson size={14} />
+                Metadata
+              </p>
+              <pre className="p-4 rounded-xl bg-black/30 border border-white/10 text-xs font-mono text-[#B8A6A1] overflow-x-auto max-h-[300px] overflow-y-auto">
+                {JSON.stringify(selectedLog.metadata, null, 2)}
+              </pre>
+            </div>
+
+            {selectedLog.metadata?.before && selectedLog.metadata?.after && (
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-2">
+                  State Diff
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-xl bg-red-500/5 border border-red-500/20">
+                    <p className="text-xs font-medium text-red-400 mb-2">
+                      Before
+                    </p>
+                    <pre className="text-xs text-red-300/80 font-mono overflow-x-auto">
+                      {JSON.stringify(selectedLog.metadata.before, null, 2)}
+                    </pre>
+                  </div>
+                  <div className="p-3 rounded-xl bg-green-500/5 border border-green-500/20">
+                    <p className="text-xs font-medium text-green-400 mb-2">
+                      After
+                    </p>
+                    <pre className="text-xs text-green-300/80 font-mono overflow-x-auto">
+                      {JSON.stringify(selectedLog.metadata.after, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </PageWrapper>
   );
 }
