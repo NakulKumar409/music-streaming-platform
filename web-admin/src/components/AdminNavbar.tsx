@@ -1,11 +1,27 @@
 import { useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Menu, X } from "lucide-react";
+import { 
+  LayoutDashboard, 
+  Users, 
+  UserPlus, 
+  Star, 
+  Shield, 
+  CreditCard, 
+  BarChart3, 
+  FileText, 
+  LogOut,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+  X
+} from "lucide-react";
+import { useSidebar } from "./AdminLayout";
 
 type NavItem = {
   label: string;
   to: string;
   matchPrefix?: string;
+  icon: React.ReactNode;
 };
 
 function BrandLogo() {
@@ -13,7 +29,7 @@ function BrandLogo() {
     <img 
       src="/logo.png" 
       alt="Brand Logo" 
-      className="h-[44px] w-[44px] rounded-full object-cover"
+      className="h-10 w-10 rounded-full object-cover"
     />
   );
 }
@@ -26,22 +42,53 @@ function isActivePath(pathname: string, item: NavItem) {
 export default function AdminNavbar() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const { isCollapsed, toggleSidebar } = useSidebar();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const navItems: NavItem[] = useMemo(
     () => [
-      { label: "Home", to: "/admin/home" },
-      {
-        label: "Artist Applications",
-        to: "/admin/artist-applications",
-        matchPrefix: "/admin/artist-applications"
+      { 
+        label: "Dashboard", 
+        to: "/admin/home", 
+        icon: <LayoutDashboard size={20} /> 
       },
-      { label: "Artists", to: "/admin/artists", matchPrefix: "/admin/artists" },
-      { label: "Featured Artists", to: "/admin/featured-artists" },
-      { label: "Content Moderation", to: "/admin/moderation" },
-      { label: "Platform Plan", to: "/admin/subscription-settings" },
-      { label: "Analytics", to: "/admin/analytics" },
-      { label: "Audit Logs", to: "/admin/audit" }
+      { 
+        label: "Artist Applications", 
+        to: "/admin/artist-applications",
+        matchPrefix: "/admin/artist-applications",
+        icon: <UserPlus size={20} />
+      },
+      { 
+        label: "Artists", 
+        to: "/admin/artists", 
+        matchPrefix: "/admin/artists",
+        icon: <Users size={20} />
+      },
+      { 
+        label: "Featured Artists", 
+        to: "/admin/featured-artists",
+        icon: <Star size={20} />
+      },
+      { 
+        label: "Content Moderation", 
+        to: "/admin/moderation",
+        icon: <Shield size={20} />
+      },
+      { 
+        label: "Platform Plan", 
+        to: "/admin/subscription-settings",
+        icon: <CreditCard size={20} />
+      },
+      { 
+        label: "Analytics", 
+        to: "/admin/analytics",
+        icon: <BarChart3 size={20} />
+      },
+      { 
+        label: "Audit Logs", 
+        to: "/admin/audit",
+        icon: <FileText size={20} />
+      }
     ],
     []
   );
@@ -52,71 +99,49 @@ export default function AdminNavbar() {
   };
 
   return (
-    <div className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#4b1927]">
-      <div className="relative">
-        <div
-          className="pointer-events-none absolute inset-0 opacity-25"
-          style={{
-            backgroundImage: "url(/image_77cf67.jpg)",
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            backgroundRepeat: "no-repeat"
-          }}
-        />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_10%,rgba(193,117,86,0.18)_0%,rgba(75,25,39,0.85)_55%,rgba(10,8,8,0.95)_100%)]" />
-      </div>
-
-      <div className="relative mx-auto w-full max-w-[1200px] px-4 sm:px-6">
-        <div className="flex items-center justify-between py-3">
+    <>
+      {/* Mobile Header */}
+      <div className="md:hidden sticky top-0 z-50 w-full border-b border-white/10 bg-[#0A0A0A] backdrop-blur-xl">
+        <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <BrandLogo />
-            <div className="hidden sm:block">
-              <div className="text-[13px] tracking-wide text-[#e6d6d2]">Admin</div>
-            </div>
+            <span className="text-sm font-medium text-white/80">Admin Panel</span>
           </div>
-
-          <div className="hidden md:flex items-center gap-1">
-            {navItems.map((item) => {
-              const active = isActivePath(pathname, item);
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={`px-3 py-2 text-[13px] tracking-wide transition-colors border-b-2 ${
-                    active
-                      ? "text-white border-[#cfa99f]"
-                      : "text-[#e0c7c0] border-transparent hover:text-white hover:border-white/30"
-                  }`}
-                >
-                  {item.label}
-                </NavLink>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onLogout}
-              className="hidden md:inline-flex h-[38px] items-center rounded-[8px] border border-white/10 bg-[#141010]/35 px-4 text-[13px] text-[#d8c7c3] hover:text-white hover:bg-white/5"
-            >
-              Logout
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setMobileOpen((v) => !v)}
-              className="md:hidden inline-flex h-[38px] w-[42px] items-center justify-center rounded-[8px] border border-white/10 bg-[#141010]/35 text-[#d8c7c3] hover:text-white hover:bg-white/5"
-              aria-label={mobileOpen ? "Close menu" : "Open menu"}
-            >
-              {mobileOpen ? <X size={18} /> : <Menu size={18} />}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            className="p-2 rounded-lg border border-white/10 bg-white/5 text-white/70 hover:text-white hover:bg-white/10 transition-all"
+          >
+            <Menu size={22} />
+          </button>
         </div>
+      </div>
 
-        {mobileOpen ? (
-          <div className="border-t border-white/10 pb-3 md:hidden">
-            <div className="grid gap-1 pt-3">
+      {/* Mobile Sidebar Overlay */}
+      {mobileOpen && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm md:hidden"
+          onClick={() => setMobileOpen(false)}
+        >
+          <div 
+            className="fixed top-0 left-0 h-full w-72 bg-[#0A0A0A] border-r border-white/10 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <BrandLogo />
+                <span className="text-sm font-semibold text-white">Admin Panel</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileOpen(false)}
+                className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                <X size={20} className="text-white/70" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-1 overflow-y-auto max-h-[calc(100vh-200px)]">
               {navItems.map((item) => {
                 const active = isActivePath(pathname, item);
                 return (
@@ -124,31 +149,98 @@ export default function AdminNavbar() {
                     key={item.to}
                     to={item.to}
                     onClick={() => setMobileOpen(false)}
-                    className={`px-3 py-2 rounded-[8px] text-[14px] transition-colors border border-transparent ${
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                       active
-                        ? "bg-white/10 text-white border-white/10"
-                        : "text-[#d8c7c3] hover:text-white hover:bg-white/5"
+                        ? "bg-[#E85D2C]/10 text-[#E85D2C] border border-[#E85D2C]/20"
+                        : "text-white/60 hover:text-white hover:bg-white/5"
                     }`}
                   >
-                    {item.label}
+                    {item.icon}
+                    <span>{item.label}</span>
                   </NavLink>
                 );
               })}
+            </div>
 
+            <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10 bg-[#0A0A0A]">
               <button
                 type="button"
-                onClick={() => {
-                  setMobileOpen(false);
-                  onLogout();
-                }}
-                className="mt-2 px-3 py-2 rounded-[8px] text-left text-[14px] text-[#d8c7c3] border border-white/10 bg-[#141010]/35 hover:text-white hover:bg-white/5"
+                onClick={onLogout}
+                className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all"
               >
-                Logout
+                <LogOut size={20} />
+                <span>Logout</span>
               </button>
             </div>
           </div>
-        ) : null}
+        </div>
+      )}
+
+      {/* Desktop Sidebar */}
+      <div 
+        className={`hidden md:flex fixed left-0 top-0 h-full bg-[#0A0A0A] border-r border-white/10 shadow-2xl transition-all duration-300 z-50 ${
+          isCollapsed ? "w-20" : "w-64"
+        }`}
+      >
+        <div className="flex flex-col h-full">
+          {/* Logo Section */}
+          <div className={`flex items-center gap-3 p-4 border-b border-white/10 ${
+            isCollapsed ? "justify-center" : ""
+          }`}>
+            <BrandLogo />
+            {!isCollapsed && (
+              <span className="text-sm font-semibold text-white">Admin Panel</span>
+            )}
+          </div>
+
+          {/* Navigation */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-1">
+            {navItems.map((item) => {
+              const active = isActivePath(pathname, item);
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all ${
+                    active
+                      ? "bg-[#E85D2C]/10 text-[#E85D2C] border border-[#E85D2C]/20"
+                      : "text-white/60 hover:text-white hover:bg-white/5"
+                  } ${isCollapsed ? "justify-center" : ""}`}
+                  title={isCollapsed ? item.label : ""}
+                >
+                  {item.icon}
+                  {!isCollapsed && <span>{item.label}</span>}
+                </NavLink>
+              );
+            })}
+          </div>
+
+          {/* Bottom Section */}
+          <div className="border-t border-white/10 p-3 space-y-2">
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className={`flex items-center gap-3 px-3 py-3 w-full rounded-xl text-sm font-medium text-white/40 hover:text-white hover:bg-white/5 transition-all ${
+                isCollapsed ? "justify-center" : ""
+              }`}
+            >
+              {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+              {!isCollapsed && <span>Collapse</span>}
+            </button>
+
+            <button
+              type="button"
+              onClick={onLogout}
+              className={`flex items-center gap-3 px-3 py-3 w-full rounded-xl text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all ${
+                isCollapsed ? "justify-center" : ""
+              }`}
+            >
+              <LogOut size={20} />
+              {!isCollapsed && <span>Logout</span>}
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

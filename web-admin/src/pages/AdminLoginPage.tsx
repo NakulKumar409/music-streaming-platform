@@ -1,65 +1,20 @@
+import {
+  Activity,
+  BarChart3,
+  Eye,
+  EyeOff,
+  Lock,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Users,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { http } from "../services/http";
 
 function EyeIcon({ open }: { open: boolean }) {
-  if (open) {
-    return (
-      <svg
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="M2 12C2 12 5.5 5 12 5C18.5 5 22 12 22 12C22 12 18.5 19 12 19C5.5 19 2 12 2 12Z"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        />
-        <path
-          d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        />
-      </svg>
-    );
-  }
-
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M3 3L21 21"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M10.4 10.4C10.1 10.7 9.9 11.3 9.9 12C9.9 13.7 11.3 15.1 13 15.1C13.7 15.1 14.3 14.9 14.6 14.6"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M6.5 6.5C4.3 8 2.8 10.5 2 12C2 12 5.5 19 12 19C13.8 19 15.4 18.5 16.8 17.8"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M9.3 5.3C10.1 5.1 11 5 12 5C18.5 5 22 12 22 12C22 12 20.8 14.8 18.6 16.8"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
+  return open ? <Eye size={18} /> : <EyeOff size={18} />;
 }
 
 export default function AdminLoginPage() {
@@ -76,7 +31,7 @@ export default function AdminLoginPage() {
       backgroundImage: "url(/image_3e012a.jpg)",
       backgroundSize: "cover",
       backgroundPosition: "center",
-      backgroundRepeat: "no-repeat"
+      backgroundRepeat: "no-repeat",
     } as const;
   }, []);
 
@@ -88,7 +43,7 @@ export default function AdminLoginPage() {
     try {
       const res = await http.post("/api/v1/admin/login", {
         email,
-        password
+        password,
       });
 
       const token = res.data?.token as string | undefined;
@@ -109,83 +64,232 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-[#0a0808]">
+    <div className="relative min-h-screen w-full overflow-hidden bg-[#0A0A0A]">
+      {/* Background image with subtle overlay */}
       <div
-        className="absolute inset-0 grayscale opacity-40"
+        className="absolute inset-0 grayscale opacity-25"
         style={backgroundStyle}
       />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(#4b1927)_0%,rgba(75, 25, 39)_45%,
-343, 50, 20_100%)]" />
+      {/* Enhanced radial orange glow + deep shadow */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_40%_50%,rgba(232,93,44,0.15)_0%,rgba(10,10,10,0.85)_60%,#0A0A0A_100%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_80%,rgba(232,93,44,0.08)_0%,transparent_50%)]" />
+      {/* Subtle grid overlay */}
+      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48cGF0aCBkPSJNMzkuNSAwLjVMMC41IDM5LjUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjAxNSkiIHN0cm9rZS13aWR0aD0iMSIvPjwvc3ZnPg==')] opacity-40" />
 
-      <div className="relative min-h-screen flex items-center justify-center px-6">
-        {/* Login card with better visibility */}
-        <div className="w-full max-w-[480px] bg-[#1a1414]/80 backdrop-blur-md rounded-2xl p-8 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-white/10">
-          <div className="flex flex-col items-center">
-            <div className="mb-6">
-              <img
-                src="/logo.png"
-                alt="Brand Logo"
-                className="h-[100px] w-[100px] object-contain"
-              />
+      <div className="relative min-h-screen flex items-center justify-center px-4 sm:px-8 py-8">
+        {/* Two-column container with enhanced spacing */}
+        <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+          {/* LEFT COLUMN – Enhanced Admin Branding */}
+          <div className="order-2 lg:order-1 space-y-8 text-center lg:text-left">
+            {/* Premium badge */}
+            <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm text-[#E85D2C] text-sm font-medium tracking-wide mx-auto lg:mx-0 hover:bg-white/10 transition-all duration-300">
+              <ShieldCheck size={16} className="text-[#E85D2C]" />
+              <span>Secure Admin Portal</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#E85D2C]/50"></span>
+              <span className="text-[#8D7B77] text-xs">v3.2</span>
             </div>
 
-            <div className="mb-8 text-[32px] leading-[38px] font-light tracking-[2px] text-[#e8c4b8]">
-              Admin Login
+            {/* Main headline with enhanced typography */}
+            <div className="space-y-3">
+              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.05]">
+                <span className="text-white">Control</span>
+                <br />
+                <span className="bg-gradient-to-r from-[#E85D2C] via-[#E85D2C] to-[#C97A54] bg-clip-text text-transparent relative">
+                  Dashboard
+                  <span className="absolute -inset-1 blur-2xl bg-[#E85D2C]/20 rounded-full -z-10"></span>
+                </span>
+              </h1>
+              <p className="text-[#B8A6A1] text-lg lg:text-xl max-w-md mx-auto lg:mx-0 leading-relaxed font-light">
+                Enterprise-grade admin interface for managing your entire
+                platform with precision and speed.
+              </p>
             </div>
 
-            <form onSubmit={onSubmit} className="w-full">
-              <div className="mb-2 text-[12px] uppercase tracking-widest text-[#a08078] font-medium">
-                Email
-              </div>
-              <div className="mb-5">
-                <input
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@example.com"
-                  type="email"
-                  className="w-full h-[50px] rounded-lg bg-[#241e1e]/90 border border-white/15 px-4 text-[15px] text-[#f0e0dc] placeholder:text-[#5a4a46] outline-none focus:border-[#b16e5b]/50 focus:bg-[#2a2424]/90 transition-all"
-                  autoComplete="email"
-                />
-              </div>
+            {/* Enhanced feature grid with icons */}
+            <div className="grid grid-cols-2 gap-3 max-w-lg mx-auto lg:mx-0">
+              {[
+                {
+                  icon: BarChart3,
+                  label: "Analytics",
+                  desc: "Real-time metrics",
+                },
+                { icon: Users, label: "Users", desc: "Role management" },
+                { icon: Settings, label: "Settings", desc: "System config" },
+                { icon: Activity, label: "Activity", desc: "Audit logs" },
+              ].map((item, idx) => (
+                <div
+                  key={idx}
+                  className="group flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 border border-white/5 backdrop-blur-sm hover:bg-white/10 hover:border-[#E85D2C]/20 transition-all duration-300 cursor-default">
+                  <div className="p-1.5 rounded-lg bg-[#E85D2C]/10 group-hover:bg-[#E85D2C]/20 transition-colors">
+                    <item.icon size={18} className="text-[#E85D2C]" />
+                  </div>
+                  <div className="text-left">
+                    <span className="text-sm font-medium text-white/90 block">
+                      {item.label}
+                    </span>
+                    <span className="text-xs text-[#8D7B77]">{item.desc}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
 
-              <div className="mb-2 text-[12px] uppercase tracking-widest text-[#a08078] font-medium">
-                Password
-              </div>
-              <div className="mb-6 relative">
-                <input
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••"
-                  type={showPassword ? "text" : "password"}
-                  className="w-full h-[50px] rounded-lg bg-[#241e1e]/90 border border-white/15 pl-4 pr-12 text-[15px] text-[#f0e0dc] placeholder:text-[#5a4a46] outline-none focus:border-[#b16e5b]/50 focus:bg-[#2a2424]/90 transition-all"
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#6e5c59] hover:text-[#d3c2be]"
-                >
-                  <EyeIcon open={showPassword} />
-                </button>
-              </div>
+            {/* Trust indicators with enhanced styling */}
+            <div className="flex flex-wrap items-center gap-6 text-sm text-[#8D7B77] justify-center lg:justify-start pt-2">
+              <span className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+                System online
+              </span>
+              <span className="flex items-center gap-2">
+                <Lock size={14} />
+                256-bit encryption
+              </span>
+              <span className="flex items-center gap-2">
+                <Sparkles size={14} className="text-[#E85D2C]" />
+                Enterprise grade
+              </span>
+            </div>
+          </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full h-[52px] rounded-lg text-[16px] font-medium text-white border border-[#b16e5b]/40 bg-gradient-to-r from-[#8b4a3a] to-[#6a352c] shadow-[0_4px_20px_rgba(139,74,58,0.3)] hover:from-[#9b5a4a] hover:to-[#7a453c] hover:shadow-[0_6px_25px_rgba(139,74,58,0.4)] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
-              >
-                {loading ? "Logging in..." : "Log in"}
-              </button>
+          {/* RIGHT COLUMN – Enhanced Login Card */}
+          <div className="order-1 lg:order-2 w-full max-w-md mx-auto lg:mx-0 justify-self-center lg:justify-self-end">
+            <div className="bg-[#15100E]/80 backdrop-blur-xl rounded-3xl p-8 shadow-[0_20px_60px_-12px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.05)] border border-white/5 hover:border-white/10 transition-all duration-500">
+              <div className="flex flex-col items-center">
+                {/* Logo with enhanced glow */}
+                <div className="mb-5 relative">
+                  <div className="absolute -inset-4 bg-[#E85D2C]/10 blur-2xl rounded-full"></div>
+                  <img
+                    src="/logo.png"
+                    alt="Brand Logo"
+                    className="h-[90px] w-[90px] object-contain relative z-10"
+                  />
+                </div>
 
-              <div className="h-5 mt-4 text-center text-[13px] tracking-wide text-[#ff8a8a] font-medium">
-                {error ? error : ""}
-              </div>
+                {/* Enhanced heading */}
+                <div className="mb-7 text-center">
+                  <div className="text-[28px] sm:text-[32px] leading-[1.2] font-light tracking-[0.04em]">
+                    <span className="bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
+                      Admin
+                    </span>
+                    <span className="text-[#E85D2C] ml-2 font-medium">
+                      Login
+                    </span>
+                  </div>
+                  <p className="text-[#8D7B77] text-sm mt-1">
+                    Sign in to access your dashboard
+                  </p>
+                </div>
 
-              <div className="mt-5 text-center text-[11px] uppercase tracking-[2px] text-[#6a5a56]">
-                Authorized access only
+                <form onSubmit={onSubmit} className="w-full space-y-5">
+                  {/* Email field with enhanced styling */}
+                  <div>
+                    <label className="block text-[11px] uppercase tracking-[0.12em] text-[#B8A6A1] font-semibold mb-1.5">
+                      Email Address
+                    </label>
+                    <input
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="admin@example.com"
+                      type="email"
+                      className="w-full h-[52px] rounded-xl bg-[#0A0A0A]/60 border border-white/10 px-4 text-[15px] text-white placeholder:text-[#8D7B77] outline-none focus:border-[#E85D2C]/50 focus:ring-2 focus:ring-[#E85D2C]/10 focus:bg-[#0A0A0A]/80 transition-all duration-200"
+                      autoComplete="email"
+                    />
+                  </div>
+
+                  {/* Password field with enhanced styling */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[11px] uppercase tracking-[0.12em] text-[#B8A6A1] font-semibold">
+                        Password
+                      </label>
+                      <button
+                        type="button"
+                        className="text-[11px] text-[#8D7B77] hover:text-[#E85D2C] transition-colors">
+                        Forgot?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••"
+                        type={showPassword ? "text" : "password"}
+                        className="w-full h-[52px] rounded-xl bg-[#0A0A0A]/60 border border-white/10 pl-4 pr-12 text-[15px] text-white placeholder:text-[#8D7B77] outline-none focus:border-[#E85D2C]/50 focus:ring-2 focus:ring-[#E85D2C]/10 focus:bg-[#0A0A0A]/80 transition-all duration-200"
+                        autoComplete="current-password"
+                      />
+                      <button
+                        type="button"
+                        aria-label={
+                          showPassword ? "Hide password" : "Show password"
+                        }
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8D7B77] hover:text-[#E85D2C] transition-colors">
+                        <EyeIcon open={showPassword} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Enhanced submit button */}
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full h-[54px] rounded-xl text-[16px] font-semibold text-white bg-gradient-to-r from-[#E85D2C] to-[#C97A54] shadow-[0_8px_24px_-6px_rgba(232,93,44,0.4)] hover:shadow-[0_12px_32px_-8px_rgba(232,93,44,0.6)] hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-300 relative overflow-hidden group">
+                    <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></span>
+                    {loading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <svg
+                          className="animate-spin h-5 w-5 text-white"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24">
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          />
+                        </svg>
+                        Logging in...
+                      </span>
+                    ) : (
+                      "Access Dashboard"
+                    )}
+                  </button>
+
+                  {/* Error message with enhanced styling */}
+                  <div className="h-5 text-center text-[13px] font-medium text-[#E85D2C]">
+                    {error ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#E85D2C]"></span>
+                        {error}
+                      </span>
+                    ) : (
+                      ""
+                    )}
+                  </div>
+
+                  {/* Footer note with enhanced styling */}
+                  <div className="pt-2 text-center">
+                    <span className="text-[10px] uppercase tracking-[0.15em] text-[#8D7B77]">
+                      Authorized access only
+                    </span>
+                    <span className="mx-2 text-[#8D7B77]/30">•</span>
+                    <span className="text-[10px] uppercase tracking-[0.15em] text-[#8D7B77]">
+                      Protected by SSL
+                    </span>
+                  </div>
+                </form>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       </div>
