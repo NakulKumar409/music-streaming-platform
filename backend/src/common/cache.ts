@@ -52,26 +52,34 @@ export const invalidateCache = deleteCache;
  * Invalidate all cache keys matching a specific pattern using non-blocking SCAN.
  */
 export async function invalidateCachePattern(pattern: string): Promise<void> {
+  const startTime = Date.now();
   try {
-    if (!redis) return;
+    if (!redis) {
+      console.log(`[CACHE] Redis disabled, skipping invalidate for pattern ${pattern}`);
+      return;
+    }
     let cursor = "0";
     let deletedCount = 0;
+    let scanCount = 0;
     
     do {
+      const scanStart = Date.now();
       const [nextCursor, keys] = await redis.scan(cursor, "MATCH", pattern, "COUNT", 100);
       cursor = nextCursor;
+      scanCount++;
+      console.log(`[CACHE] SCAN #${scanCount} for pattern ${pattern} took ${Date.now() - scanStart}ms, found ${keys.length} keys`);
       
       if (keys.length > 0) {
+        const delStart = Date.now();
         await redis.del(...keys);
+        console.log(`[CACHE] DEL ${keys.length} keys took ${Date.now() - delStart}ms`);
         deletedCount += keys.length;
       }
     } while (cursor !== "0");
 
-    if (deletedCount > 0) {
-      console.log(`[CACHE INVALIDATED] pattern ${pattern} matched ${deletedCount} keys`);
-    }
+    console.log(`[CACHE INVALIDATED] pattern ${pattern} matched ${deletedCount} keys in ${Date.now() - startTime}ms total`);
   } catch (err: any) {
-    console.warn(`[Redis] pattern DEL error for ${pattern}`, err.message);
+    console.error(`[Redis] pattern DEL error for ${pattern} after ${Date.now() - startTime}ms:`, err.message);
   }
 }
 
@@ -88,7 +96,21 @@ export async function invalidateArtistCache(): Promise<void> {
 
 /**
  * Invalidate content-related caches.
+ * Non-blocking - runs in background with timeout protection.
  */
 export async function invalidateContentCache(): Promise<void> {
-  await invalidateCachePattern("home_content_feed_rows*");
+  // Fire and forget - don't await this in API routes
+  setImmediate(async () => {
+    try {
+      // Add timeout wrapper to prevent indefinite blocking
+      await Promise.race([
+        invalidateCachePattern("home_content_feed_rows*"),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Cache invalidate timeout")), 5000)
+        )
+      ]);
+    } catch (err: any) {
+      console.error("[CACHE] Background invalidate failed:", err.message);
+    }
+  });
 }

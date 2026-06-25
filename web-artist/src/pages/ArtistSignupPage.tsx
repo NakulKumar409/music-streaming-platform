@@ -1,6 +1,21 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { http } from "../services/http";
+import {
+  ArrowLeft,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  CheckCircle2,
+  Upload,
+  Music2,
+  User,
+  Mail,
+  Phone,
+  Lock,
+  Sparkles,
+  Shield,
+} from "lucide-react";
 
 type OnboardResponse = {
   success: boolean;
@@ -10,17 +25,33 @@ type OnboardResponse = {
 };
 
 const GENRES = [
-  "Pop", "Hip-Hop", "Rock", "R&B", "Electronic", "Jazz", "Classical", "Country", "Indie", "Other"
+  "Pop",
+  "Hip-Hop",
+  "Rock",
+  "R&B",
+  "Electronic",
+  "Jazz",
+  "Classical",
+  "Country",
+  "Indie",
+  "Other",
 ];
 
-function PremiumPlayLogo() {
+function BrandLogo() {
   return (
-    <div className="h-[40px] w-[40px] rounded-full bg-gradient-to-b from-[#c97a54] to-[#7d4a41] p-[1px]">
-      <div className="h-full w-full rounded-full bg-[#141010] flex items-center justify-center">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M9 7V17L16 12L9 7Z" fill="#c97a54" />
-        </svg>
+    <div className="flex items-center gap-3">
+      <div className="relative">
+        <div className="absolute inset-0 bg-[#e85d2c]/30 blur-2xl rounded-full animate-pulse" />
+        <div className="absolute inset-0 bg-gradient-to-tr from-[#e85d2c]/20 to-transparent rounded-full" />
+        <img
+          src="/logo.png"
+          alt="Brand Logo"
+          className="h-[40px] w-[40px] sm:h-[44px] sm:w-[44px] object-contain relative z-10"
+        />
       </div>
+      <span className="text-lg sm:text-xl font-['Playfair_Display'] font-bold tracking-wide bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+        Artist Studio
+      </span>
     </div>
   );
 }
@@ -52,7 +83,7 @@ export default function ArtistSignupPage() {
   const backgroundStyle = useMemo(() => {
     return {
       backgroundImage:
-        "radial-gradient(circle at 50% 0%, rgba(201,122,84,0.15) 0%, rgba(30,18,18,0.8) 50%, rgba(10,8,8,1) 100%)"
+        "radial-gradient(circle at 50% 0%, rgba(201,122,84,0.15) 0%, rgba(30,18,18,0.8) 50%, rgba(10,8,8,1) 100%)",
     } as const;
   }, []);
 
@@ -106,7 +137,7 @@ export default function ArtistSignupPage() {
         phone: phone.trim(),
         genre,
         bio: "",
-        portfolioLinks: []
+        portfolioLinks: [],
       });
 
       if (!res.data?.success) {
@@ -119,7 +150,10 @@ export default function ArtistSignupPage() {
 
       setStep(3);
     } catch (e: any) {
-      const msg = e?.response?.data?.message || e?.message || "Failed to submit application";
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "Failed to submit application";
       setError(msg);
     } finally {
       setBusy(false);
@@ -131,7 +165,7 @@ export default function ArtistSignupPage() {
     fd.append("image", file);
     fd.append("kind", "profile");
     const r = await http.post("/api/v1/artist/uploads/image", fd, {
-      headers: { "Content-Type": undefined as any }
+      headers: { "Content-Type": undefined as any },
     });
     if (!r.data?.success) throw new Error(r.data?.message || "Upload failed");
     return r.data.url;
@@ -149,12 +183,15 @@ export default function ArtistSignupPage() {
       if (bio.trim() || profileImageUrl) {
         await http.patch("/api/v1/artist/me", {
           bio: bio.trim(),
-          profileImageUrl
+          profileImageUrl,
         });
       }
       setStep(4);
     } catch (e: any) {
-      const msg = e?.response?.data?.message || e?.message || "Failed to complete profile";
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "Failed to complete profile";
       setError(msg);
       // Even if upload fails, we created the account. Let them pass to Step 4 so they aren't stuck.
       setStep(4);
@@ -164,31 +201,112 @@ export default function ArtistSignupPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#141010] text-[#e6d6d2] relative" style={backgroundStyle}>
+    <div className="min-h-screen w-full bg-[#080505] text-white overflow-hidden font-sans relative">
+      {/* Google Fonts Import */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,700&family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800&display=swap');
+        
+        .font-playfair {
+          font-family: 'Playfair Display', serif;
+        }
+        .font-outfit {
+          font-family: 'Outfit', sans-serif;
+        }
+        .font-inter {
+          font-family: 'Inter', sans-serif;
+        }
+        
+        @keyframes float {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-20px) rotate(10deg); }
+        }
+        @keyframes gradient {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-5px); }
+          75% { transform: translateX(5px); }
+        }
+        @keyframes pulse-ring {
+          0% { transform: scale(0.95); opacity: 0.7; }
+          50% { transform: scale(1.05); opacity: 0.3; }
+          100% { transform: scale(0.95); opacity: 0.7; }
+        }
+        .animate-float {
+          animation: float 6s ease-in-out infinite;
+        }
+        .animate-gradient {
+          background-size: 200% 200%;
+          animation: gradient 3s ease infinite;
+        }
+        .animate-shake {
+          animation: shake 0.5s ease-in-out;
+        }
+        .animate-pulse-ring {
+          animation: pulse-ring 3s ease-in-out infinite;
+        }
+        .glass-effect {
+          background: rgba(15, 9, 8, 0.7);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .text-gradient-gold {
+          background: linear-gradient(135deg, #e85d2c 0%, #f06d3c 25%, #c97a54 50%, #e85d2c 75%, #f06d3c 100%);
+          background-size: 300% 300%;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: gradient 4s ease infinite;
+        }
+      `}</style>
+
+      {/* Ambient Background */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-full opacity-30">
+          <div className="absolute top-[10%] left-[5%] w-64 h-64 bg-[#e85d2c]/10 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute bottom-[20%] right-[10%] w-80 h-80 bg-[#c97a54]/10 rounded-full blur-3xl animate-pulse delay-1000" />
+          <div className="absolute top-[50%] left-[50%] w-96 h-96 bg-[#e85d2c]/5 rounded-full blur-3xl animate-pulse delay-500" />
+        </div>
+        {/* Floating music notes */}
+        {[...Array(6)].map((_, i) => (
+          <div
+            key={i}
+            className="absolute text-[#e85d2c]/10 animate-float font-playfair"
+            style={{
+              left: `${10 + Math.random() * 80}%`,
+              top: `${10 + Math.random() * 80}%`,
+              animationDelay: `${i * 0.5}s`,
+              fontSize: `${20 + Math.random() * 30}px`,
+              transform: `rotate(${Math.random() * 360}deg)`,
+            }}>
+            ♪
+          </div>
+        ))}
+      </div>
+
+      {/* Back Button */}
       <Link
         to="/artist/landing"
-        className="absolute top-6 left-6 text-[#b8a6a1] hover:text-[#e6d6d2] flex items-center gap-2 text-sm font-medium transition-colors z-50"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        className="absolute top-4 sm:top-6 left-4 sm:left-6 text-[#8d7b77] hover:text-[#e6d6d2] flex items-center gap-2 text-sm font-inter font-medium transition-all group z-50 hover:gap-3">
+        <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
         Back to Landing Page
       </Link>
-      
-      <div className="min-h-screen w-full flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-[500px]">
-          
+
+      <div className="min-h-screen w-full flex items-center justify-center px-4 sm:px-6 py-12 sm:py-16">
+        <div className="w-full max-w-[500px] relative z-10">
           {step < 4 && (
-            <div className="mb-8">
-              <div className="flex items-center gap-4 mb-4">
-                <PremiumPlayLogo />
-                <h1 className="text-2xl font-semibold text-white">Create Account</h1>
+            <div className="mb-6 sm:mb-8">
+              <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <BrandLogo />
               </div>
-              <div className="flex items-center gap-2 text-sm text-[#8d7b77] mb-6">
+              <div className="flex items-center gap-2 text-sm font-inter text-[#8d7b77]">
                 <span>Step {step} of 3</span>
                 <div className="flex-1 h-1 bg-[#1a1514] rounded-full overflow-hidden ml-2">
-                  <div 
-                    className="h-full bg-gradient-to-r from-[#a3512e] to-[#c97a54] transition-all duration-300 ease-out"
+                  <div
+                    className="h-full bg-gradient-to-r from-[#e85d2c] to-[#c97a54] transition-all duration-300 ease-out"
                     style={{ width: `${(step / 3) * 100}%` }}
                   />
                 </div>
@@ -196,259 +314,376 @@ export default function ArtistSignupPage() {
             </div>
           )}
 
-          <div className="rounded-[16px] border border-white/5 bg-[#1a1514]/80 backdrop-blur-md shadow-2xl p-8 sm:p-10 relative overflow-hidden">
-            {/* Busy Overlay */}
-            {busy && (
-              <div className="absolute inset-0 z-10 bg-[#1a1514]/80 backdrop-blur-sm flex items-center justify-center rounded-[16px]">
-                <div className="text-center">
-                  <div className="w-8 h-8 border-4 border-[#c97a54]/30 border-t-[#c97a54] rounded-full animate-spin mx-auto mb-3" />
-                  <p className="text-sm font-medium text-[#c97a54]">Processing...</p>
-                </div>
-              </div>
-            )}
+          <div className="relative">
+            {/* Card Glow */}
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-[#e85d2c]/20 via-[#c97a54]/10 to-[#e85d2c]/20 blur-2xl rounded-3xl animate-pulse" />
 
-            {step === 1 && (
-              <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <h2 className="text-lg font-medium text-white mb-2">Account Details</h2>
-                
-                <div>
-                  <label className="block text-xs uppercase tracking-wider text-[#8d7b77] mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full h-[48px] rounded-[10px] bg-[#141010] border border-white/10 px-4 text-[15px] text-white outline-none focus:border-[#c97a54]/50 transition-colors"
-                    placeholder="artist@example.com"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                  />
-                </div>
+            <div className="relative glass-effect rounded-2xl p-6 sm:p-8 md:p-10 shadow-2xl">
+              {/* Decorative Elements */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-[#e85d2c]/5 rounded-full blur-2xl" />
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-[#c97a54]/5 rounded-full blur-2xl" />
 
-                <div>
-                  <label className="block text-xs uppercase tracking-wider text-[#8d7b77] mb-1">Mobile Number</label>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full h-[48px] rounded-[10px] bg-[#141010] border border-white/10 px-4 text-[15px] text-white outline-none focus:border-[#c97a54]/50 transition-colors"
-                    placeholder="+1 (555) 000-0000"
-                  />
-                </div>
+              {/* Top Gradient Line */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-0.5 bg-gradient-to-r from-transparent via-[#e85d2c] to-transparent rounded-full" />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {/* Busy Overlay */}
+              {busy && (
+                <div className="absolute inset-0 z-10 bg-[#1a1210]/80 backdrop-blur-sm flex items-center justify-center rounded-2xl">
+                  <div className="text-center">
+                    <div className="w-10 h-10 border-4 border-[#e85d2c]/30 border-t-[#e85d2c] rounded-full animate-spin mx-auto mb-3" />
+                    <p className="text-sm font-inter font-medium text-[#e85d2c]">
+                      Processing...
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {step === 1 && (
+                <div className="space-y-4 sm:space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div className="text-center mb-4 sm:mb-6">
+                    <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[#e8c4b8]">
+                      Create Account
+                    </h2>
+                    <p className="font-inter text-[#8d7b77] text-[13px] sm:text-[14px] mt-1">
+                      Start your journey as an artist
+                    </p>
+                  </div>
+
                   <div>
-                    <label className="block text-xs uppercase tracking-wider text-[#8d7b77] mb-1">Password</label>
-                    <div className="relative">
+                    <label className="block text-[11px] sm:text-[12px] uppercase tracking-wider text-[#8d7b77] font-inter font-medium mb-1.5 sm:mb-2">
+                      Email Address
+                    </label>
+                    <div className="relative group">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5a4a46] group-focus-within:text-[#e85d2c] transition-colors" />
                       <input
-                        type={showPassword ? "text" : "password"}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full h-[48px] rounded-[10px] bg-[#141010] border border-white/10 pl-4 pr-11 text-[15px] text-white outline-none focus:border-[#c97a54]/50 transition-colors"
-                        placeholder="••••••••"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 pl-10 pr-4 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:border-[#e85d2c]/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20"
+                        placeholder="artist@example.com"
                         autoCapitalize="none"
                         autoCorrect="off"
                       />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((s) => !s)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center text-[#b8a6a1] hover:text-[#e6d6d2] transition-colors"
-                      >
-                        {showPassword ? (
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3L21 21" /><path d="M10.6 10.6C10.2 11 10 11.5 10 12C10 13.1 10.9 14 12 14C12.5 14 13 13.8 13.4 13.4" /><path d="M9.9 5.1C10.6 4.9 11.3 4.8 12 4.8C18 4.8 21.5 12 21.5 12C20.7 13.6 19.6 15 18.3 16.2M6.8 6.8C4.2 8.7 2.5 12 2.5 12C2.5 12 4.2 15.3 6.8 17.2C8.3 18.3 10.1 19.2 12 19.2C12.9 19.2 13.8 19 14.6 18.7" /></svg>
-                        ) : (
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 12C2.5 12 6 4.8 12 4.8C18 4.8 21.5 12 21.5 12C21.5 12 18 19.2 12 19.2C6 19.2 2.5 12 2.5 12Z" /><path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" /></svg>
-                        )}
-                      </button>
                     </div>
                   </div>
+
                   <div>
-                    <label className="block text-xs uppercase tracking-wider text-[#8d7b77] mb-1">Confirm Password</label>
-                    <div className="relative">
+                    <label className="block text-[11px] sm:text-[12px] uppercase tracking-wider text-[#8d7b77] font-inter font-medium mb-1.5 sm:mb-2">
+                      Mobile Number
+                    </label>
+                    <div className="relative group">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5a4a46] group-focus-within:text-[#e85d2c] transition-colors" />
                       <input
-                        type={showConfirmPassword ? "text" : "password"}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        className={`w-full h-[48px] rounded-[10px] bg-[#141010] border pl-4 pr-11 text-[15px] text-white outline-none transition-colors ${confirmPassword && password !== confirmPassword ? 'border-red-500/50 focus:border-red-500/50' : 'border-white/10 focus:border-[#c97a54]/50'}`}
-                        placeholder="••••••••"
-                        autoCapitalize="none"
-                        autoCorrect="off"
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 pl-10 pr-4 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:border-[#e85d2c]/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20"
+                        placeholder="+1 (555) 000-0000"
                       />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword((s) => !s)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center text-[#b8a6a1] hover:text-[#e6d6d2] transition-colors"
-                      >
-                        {showConfirmPassword ? (
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3L21 21" /><path d="M10.6 10.6C10.2 11 10 11.5 10 12C10 13.1 10.9 14 12 14C12.5 14 13 13.8 13.4 13.4" /><path d="M9.9 5.1C10.6 4.9 11.3 4.8 12 4.8C18 4.8 21.5 12 21.5 12C20.7 13.6 19.6 15 18.3 16.2M6.8 6.8C4.2 8.7 2.5 12 2.5 12C2.5 12 4.2 15.3 6.8 17.2C8.3 18.3 10.1 19.2 12 19.2C12.9 19.2 13.8 19 14.6 18.7" /></svg>
-                        ) : (
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 12C2.5 12 6 4.8 12 4.8C18 4.8 21.5 12 21.5 12C21.5 12 18 19.2 12 19.2C6 19.2 2.5 12 2.5 12Z" /><path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" /></svg>
-                        )}
-                      </button>
                     </div>
                   </div>
-                </div>
 
-                {error && <div className="text-[13px] text-red-400 bg-red-400/10 border border-red-400/20 p-3 rounded-[8px]">{error}</div>}
-
-                <button
-                  type="button"
-                  onClick={handleStep1Next}
-                  className="w-full mt-4 h-[52px] rounded-[10px] bg-[#c97a54] text-[15px] font-bold tracking-wide text-[#141010] hover:bg-[#d98b65] transition-colors"
-                >
-                  Continue
-                </button>
-              </div>
-            )}
-
-            {step === 2 && (
-              <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
-                <h2 className="text-lg font-medium text-white mb-2">Artist Identity</h2>
-                
-                <div>
-                  <label className="block text-xs uppercase tracking-wider text-[#8d7b77] mb-1">Artist / Stage Name</label>
-                  <input
-                    type="text"
-                    value={artistName}
-                    onChange={(e) => setArtistName(e.target.value)}
-                    className="w-full h-[48px] rounded-[10px] bg-[#141010] border border-white/10 px-4 text-[15px] text-white outline-none focus:border-[#c97a54]/50 transition-colors"
-                    placeholder="e.g. The Midnight"
-                    autoFocus
-                  />
-                  <p className="mt-2 text-xs text-[#8d7b77]">This is how you will appear to fans globally.</p>
-                </div>
-
-                <div>
-                  <label className="block text-xs uppercase tracking-wider text-[#8d7b77] mb-1">Primary Genre</label>
-                  <select
-                    value={genre}
-                    onChange={(e) => setGenre(e.target.value)}
-                    className="w-full h-[48px] rounded-[10px] bg-[#141010] border border-white/10 px-4 text-[15px] text-white outline-none focus:border-[#c97a54]/50 transition-colors appearance-none"
-                  >
-                    <option value="" disabled>Select your main genre</option>
-                    {GENRES.map(g => (
-                      <option key={g} value={g}>{g}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {error && <div className="text-[13px] text-red-400 bg-red-400/10 border border-red-400/20 p-3 rounded-[8px]">{error}</div>}
-
-                <div className="flex gap-4 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setStep(1)}
-                    className="w-1/3 h-[52px] rounded-[10px] border border-white/10 bg-white/5 text-[15px] font-medium text-white hover:bg-white/10 transition-colors"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleStep2Submit}
-                    className="w-2/3 h-[52px] rounded-[10px] bg-[#c97a54] text-[15px] font-bold tracking-wide text-[#141010] hover:bg-[#d98b65] transition-colors"
-                  >
-                    Create Account
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {step === 3 && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                <div className="text-center mb-6">
-                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 mb-3">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  </div>
-                  <h2 className="text-xl font-bold text-white">Account Created!</h2>
-                  <p className="text-sm text-[#8d7b77] mt-1">Let's set up your public profile (Optional).</p>
-                </div>
-
-                <div className="flex flex-col items-center">
-                  <div 
-                    className="w-28 h-28 rounded-full border-2 border-dashed border-white/20 bg-[#141010] flex items-center justify-center cursor-pointer overflow-hidden group relative hover:border-[#c97a54]/50 transition-colors"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    {profilePreviewUrl ? (
-                      <img src={profilePreviewUrl} alt="Profile preview" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="text-[#8d7b77] flex flex-col items-center">
-                        <span className="text-2xl mb-1">📷</span>
-                        <span className="text-[10px] uppercase font-medium tracking-wider">Upload</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+                    <div>
+                      <label className="block text-[11px] sm:text-[12px] uppercase tracking-wider text-[#8d7b77] font-inter font-medium mb-1.5 sm:mb-2">
+                        Password
+                      </label>
+                      <div className="relative group">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5a4a46] group-focus-within:text-[#e85d2c] transition-colors" />
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 pl-10 pr-10 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:border-[#e85d2c]/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20"
+                          placeholder="••••••••"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((s) => !s)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-lg flex items-center justify-center text-[#8d7b77] hover:text-[#e6d6d2] hover:bg-white/10 transition-all duration-300">
+                          {showPassword ? (
+                            <EyeOff className="w-4 h-4" />
+                          ) : (
+                            <Eye className="w-4 h-4" />
+                          )}
+                        </button>
                       </div>
-                    )}
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                      <span className="text-xs text-white font-medium">Change</span>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] sm:text-[12px] uppercase tracking-wider text-[#8d7b77] font-inter font-medium mb-1.5 sm:mb-2">
+                        Confirm Password
+                      </label>
+                      <div className="relative group">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5a4a46] group-focus-within:text-[#e85d2c] transition-colors" />
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          className={`w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border pl-10 pr-10 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20 ${
+                            confirmPassword && password !== confirmPassword
+                              ? "border-red-500/50 focus:border-red-500/50"
+                              : "border-white/10 focus:border-[#e85d2c]/50 focus:bg-[#1a1210]/80"
+                          }`}
+                          placeholder="••••••••"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword((s) => !s)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-lg flex items-center justify-center text-[#8d7b77] hover:text-[#e6d6d2] hover:bg-white/10 transition-all duration-300">
+                          {showConfirmPassword ? (
+                            <EyeOff className="w-4 h-4" />
+                          ) : (
+                            <Eye className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    className="hidden" 
-                    ref={fileInputRef}
-                    onChange={e => setProfileFile(e.target.files?.[0] || null)}
-                  />
-                </div>
 
-                <div>
-                  <label className="block text-xs uppercase tracking-wider text-[#8d7b77] mb-1">Short Bio</label>
-                  <textarea
-                    value={bio}
-                    onChange={(e) => setBio(e.target.value)}
-                    className="w-full h-24 p-4 rounded-[10px] bg-[#141010] border border-white/10 text-[14px] text-white outline-none focus:border-[#c97a54]/50 transition-colors resize-none"
-                    placeholder="Tell your fans a bit about yourself..."
-                  />
-                </div>
+                  {error && (
+                    <div className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-[12px] sm:text-[13px] font-inter backdrop-blur-sm animate-shake">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                  )}
 
-                {error && <div className="text-[13px] text-red-400 bg-red-400/10 border border-red-400/20 p-3 rounded-[8px]">{error}</div>}
-
-                <div className="flex gap-4 pt-2">
                   <button
                     type="button"
-                    onClick={() => handleStep3Complete()}
-                    className="w-1/3 h-[52px] rounded-[10px] border border-white/10 bg-white/5 text-[15px] font-medium text-white hover:bg-white/10 transition-colors"
-                  >
-                    Skip
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleStep3Complete()}
-                    className="w-2/3 h-[52px] rounded-[10px] bg-[#c97a54] text-[15px] font-bold tracking-wide text-[#141010] hover:bg-[#d98b65] transition-colors"
-                  >
-                    Complete Profile
+                    onClick={handleStep1Next}
+                    className="relative w-full h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300 mt-2">
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                    <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
+                    <span className="relative z-10 flex items-center justify-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      Continue
+                    </span>
                   </button>
                 </div>
-              </div>
-            )}
+              )}
 
-            {step === 4 && (
-              <div className="text-center py-8 animate-in zoom-in-95 duration-500">
-                <div className="w-24 h-24 bg-gradient-to-br from-[#c97a54] to-[#7d4a41] rounded-full mx-auto flex items-center justify-center shadow-[0_0_50px_rgba(201,122,84,0.4)] mb-8">
-                  <span className="text-4xl">🚀</span>
-                </div>
-                
-                <h2 className="text-3xl font-bold text-white mb-3">Your artist account is ready!</h2>
-                <p className="text-[16px] text-[#b8a6a1] leading-relaxed mb-10 max-w-sm mx-auto">
-                  You're officially part of the platform. The next step is getting your amazing music out to the world.
-                </p>
+              {step === 2 && (
+                <div className="space-y-4 sm:space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                  <div className="text-center mb-4 sm:mb-6">
+                    <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[#e8c4b8]">
+                      Artist Identity
+                    </h2>
+                    <p className="font-inter text-[#8d7b77] text-[13px] sm:text-[14px] mt-1">
+                      Tell us about your artist persona
+                    </p>
+                  </div>
 
-                <div className="space-y-3">
-                  <button
-                    type="button"
-                    onClick={() => navigate("/artist/content-upload", { replace: true })}
-                    className="w-full h-[56px] rounded-[12px] bg-white text-[16px] font-bold tracking-wide text-[#141010] shadow-[0_4px_14px_rgba(255,255,255,0.25)] hover:bg-[#f0f0f0] transition-colors"
-                  >
-                    Upload First Song
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate("/artist/dashboard", { replace: true })}
-                    className="w-full h-[56px] rounded-[12px] border border-white/10 bg-transparent text-[15px] font-medium tracking-wide text-[#e6d6d2] hover:bg-white/5 transition-colors"
-                  >
-                    Go to Dashboard
-                  </button>
+                  <div>
+                    <label className="block text-[11px] sm:text-[12px] uppercase tracking-wider text-[#8d7b77] font-inter font-medium mb-1.5 sm:mb-2">
+                      Artist / Stage Name
+                    </label>
+                    <div className="relative group">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5a4a46] group-focus-within:text-[#e85d2c] transition-colors" />
+                      <input
+                        type="text"
+                        value={artistName}
+                        onChange={(e) => setArtistName(e.target.value)}
+                        className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 pl-10 pr-4 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:border-[#e85d2c]/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20"
+                        placeholder="e.g. The Midnight"
+                        autoFocus
+                      />
+                    </div>
+                    <p className="mt-1.5 sm:mt-2 text-[11px] sm:text-xs font-inter text-[#5a4a46]">
+                      This is how you will appear to fans globally.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] sm:text-[12px] uppercase tracking-wider text-[#8d7b77] font-inter font-medium mb-1.5 sm:mb-2">
+                      Primary Genre
+                    </label>
+                    <select
+                      value={genre}
+                      onChange={(e) => setGenre(e.target.value)}
+                      className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 px-4 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 focus:border-[#e85d2c]/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20 appearance-none">
+                      <option value="" disabled className="text-[#5a4a46]">
+                        Select your main genre
+                      </option>
+                      {GENRES.map((g) => (
+                        <option
+                          key={g}
+                          value={g}
+                          className="text-white bg-[#1a1210]">
+                          {g}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {error && (
+                    <div className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-[12px] sm:text-[13px] font-inter backdrop-blur-sm animate-shake">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setStep(1)}
+                      className="w-full sm:w-1/3 h-[48px] sm:h-[52px] rounded-xl border border-white/10 bg-white/5 text-[14px] sm:text-[15px] font-inter font-medium text-white hover:bg-white/10 transition-all duration-300">
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleStep2Submit}
+                      className="relative w-full sm:w-2/3 h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300">
+                      <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                      <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
+                      <span className="relative z-10 flex items-center justify-center gap-2">
+                        <Sparkles className="w-4 h-4" />
+                        Create Account
+                      </span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
-            
+              )}
+
+              {step === 3 && (
+                <div className="space-y-5 sm:space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                  <div className="text-center mb-4 sm:mb-6">
+                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-500/20 text-emerald-400 mb-3">
+                      <CheckCircle2 className="w-7 h-7" />
+                    </div>
+                    <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[#e8c4b8]">
+                      Account Created!
+                    </h2>
+                    <p className="font-inter text-[#8d7b77] text-[13px] sm:text-[14px] mt-1">
+                      Let's set up your public profile (Optional)
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col items-center">
+                    <div
+                      className="relative w-28 h-28 rounded-full border-2 border-dashed border-white/20 bg-[#1a1210]/60 flex items-center justify-center cursor-pointer overflow-hidden group hover:border-[#e85d2c]/50 transition-all duration-300"
+                      onClick={() => fileInputRef.current?.click()}>
+                      {profilePreviewUrl ? (
+                        <img
+                          src={profilePreviewUrl}
+                          alt="Profile preview"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="text-[#8d7b77] flex flex-col items-center">
+                          <Upload className="w-8 h-8 mb-1" />
+                          <span className="text-[10px] font-inter font-medium uppercase tracking-wider">
+                            Upload
+                          </span>
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
+                        <span className="text-xs font-inter font-medium text-white">
+                          Change
+                        </span>
+                      </div>
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      ref={fileInputRef}
+                      onChange={(e) =>
+                        setProfileFile(e.target.files?.[0] || null)
+                      }
+                    />
+                    <p className="text-[11px] font-inter text-[#5a4a46] mt-3">
+                      Upload a profile picture (optional)
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] sm:text-[12px] uppercase tracking-wider text-[#8d7b77] font-inter font-medium mb-1.5 sm:mb-2">
+                      Short Bio
+                    </label>
+                    <textarea
+                      value={bio}
+                      onChange={(e) => setBio(e.target.value)}
+                      className="w-full h-24 p-4 rounded-xl bg-[#1a1210]/60 border border-white/10 text-[14px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 focus:border-[#e85d2c]/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20 resize-none"
+                      placeholder="Tell your fans a bit about yourself..."
+                    />
+                  </div>
+
+                  {error && (
+                    <div className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-[12px] sm:text-[13px] font-inter backdrop-blur-sm animate-shake">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => handleStep3Complete()}
+                      className="w-full sm:w-1/3 h-[48px] sm:h-[52px] rounded-xl border border-white/10 bg-white/5 text-[14px] sm:text-[15px] font-inter font-medium text-white hover:bg-white/10 transition-all duration-300">
+                      Skip
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleStep3Complete()}
+                      className="relative w-full sm:w-2/3 h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300">
+                      <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                      <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
+                      <span className="relative z-10 flex items-center justify-center gap-2">
+                        <Sparkles className="w-4 h-4" />
+                        Complete Profile
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {step === 4 && (
+                <div className="text-center py-6 sm:py-8 animate-in zoom-in-95 duration-500">
+                  <div className="w-24 h-24 bg-gradient-to-br from-[#e85d2c] to-[#c97a54] rounded-full mx-auto flex items-center justify-center shadow-[0_0_50px_rgba(232,93,44,0.4)] mb-6 sm:mb-8">
+                    <Music2 className="w-12 h-12 text-white" />
+                  </div>
+
+                  <h2 className="font-playfair text-3xl sm:text-4xl font-bold text-[#e8c4b8] mb-3">
+                    Your artist account is ready!
+                  </h2>
+                  <p className="text-[15px] sm:text-[16px] font-inter text-[#8d7b77] leading-relaxed mb-8 sm:mb-10 max-w-sm mx-auto">
+                    You're officially part of the platform. The next step is
+                    getting your amazing music out to the world.
+                  </p>
+
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate("/artist/content-upload", { replace: true })
+                      }
+                      className="relative w-full h-[52px] sm:h-[56px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300">
+                      <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                      <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
+                      <span className="relative z-10 flex items-center justify-center gap-2">
+                        <Music2 className="w-4 h-4" />
+                        Upload First Song
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate("/artist/dashboard", { replace: true })
+                      }
+                      className="w-full h-[52px] sm:h-[56px] rounded-xl border border-white/10 bg-white/5 text-[14px] sm:text-[15px] font-inter font-medium text-white hover:bg-white/10 transition-all duration-300">
+                      Go to Dashboard
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
