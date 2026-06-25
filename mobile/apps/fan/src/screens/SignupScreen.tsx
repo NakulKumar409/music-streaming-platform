@@ -77,45 +77,62 @@ export default function SignupScreen({ navigation }: Props) {
 
   const onNextStep = () => {
     setStepError("");
+
     if (currentStep === 1) {
       if (!fullName.trim() || !email.trim() || !phoneNumber.trim()) {
         setStepError("Please fill in all basic information fields.");
         return;
       }
+
       if (!isValidEmail(email)) {
         setStepError("Please enter a valid email address.");
         return;
       }
+
+      // Full Name validation
+      if (!/^[A-Za-z ]+$/.test(fullName.trim())) {
+        setStepError("Name should contain only letters.");
+        return;
+      }
+
+      // Phone Number validation (exactly 10 digits)
+      if (!/^\d{10}$/.test(phoneNumber.trim())) {
+        setStepError("Phone number must be exactly 10 digits.");
+        return;
+      }
+
       setCurrentStep(2);
     } else if (currentStep === 2) {
       if (!username.trim() || !password || !confirmPassword) {
         setStepError("Please fill in all security details.");
         return;
       }
-      // ✅ FIX BUG 23: Username minimum length validation
+
       if (username.trim().length < 3) {
         setStepError("Username must be at least 3 characters long.");
         return;
       }
+
       if (password !== confirmPassword) {
         setStepError("Passwords don't match.");
         return;
       }
-      // ✅ FIX BUG 5 (partial): Password minimum length
+
       if (password.length < 6) {
         setStepError("Password must be at least 6 characters long.");
         return;
       }
+
       setCurrentStep(3);
     } else if (currentStep === 3) {
       if (!dateOfBirth.trim() || !favoriteGenre || !locationCity.trim()) {
         setStepError("Please complete your personalization profile.");
         return;
       }
+
       setCurrentStep(4);
     }
   };
-
   const onBack = () => {
     setStepError("");
     if (currentStep > 1) {
@@ -280,7 +297,7 @@ export default function SignupScreen({ navigation }: Props) {
             <Text style={styles.label}>Username</Text>
             <View style={styles.inputGlass}>
               <TextInput
-                placeholder="Choose a username (min 3 characters)"
+                placeholder="Choose a username "
                 placeholderTextColor={Colors.textMuted}
                 style={styles.input}
                 value={username}
@@ -296,7 +313,7 @@ export default function SignupScreen({ navigation }: Props) {
             <Text style={styles.label}>Password</Text>
             <View style={styles.passwordContainer}>
               <TextInput
-                placeholder="Secure password (min 6 characters)"
+                placeholder="Enter password "
                 placeholderTextColor={Colors.textMuted}
                 style={styles.passwordInput}
                 secureTextEntry={!isPasswordVisible}
@@ -357,11 +374,12 @@ export default function SignupScreen({ navigation }: Props) {
             <Text style={styles.label}>Date of Birth</Text>
             <Pressable
               onPress={() => setShowDatePicker(true)}
-              style={styles.inputGlass}>
-              <Text
-                style={[styles.input, !dateOfBirth && styles.placeholderText]}>
+              style={styles.selectInput}>
+              <Text style={styles.selectText}>
                 {dateOfBirth || "Select your date of birth"}
               </Text>
+
+              <Text style={styles.selectCaret}>▾</Text>
             </Pressable>
             {showDatePicker && (
               <DateTimePicker
@@ -685,7 +703,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 4,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
   },
@@ -700,7 +718,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 4,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     flexDirection: "row",

@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Alert, AppState } from "react-native";
+import { Alert, AppState, Platform } from "react-native";
 
 import { createVideoPlayer, VideoPlayer } from "expo-video";
 
@@ -1067,28 +1067,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, isExpanded: expanded }));
   }, []);
 
-  useEffect(() => {
-    // Skip polling if TrackPlayer not available (Expo Go compatibility)
-    if (!TrackPlayerAvailable) return;
-
-    const interval = setInterval(async () => {
-      if (!isPlayerReady) return;
-      try {
-        const progress = await TrackPlayer.getProgress();
-        const pos = Math.max(0, Math.round(progress.position * 1000));
-        const dur = Math.max(0, Math.round(progress.duration * 1000));
-
-        setState((s) => {
-          // Update state with new position
-          return { ...s, positionMs: pos, durationMs: dur };
-        });
-      } catch {
-        // ignore
-      }
-    }, 100); // Har 100ms mein update
-    return () => clearInterval(interval);
-  }, [isPlayerReady, handleDidJustFinish, preloadNextItem]);
-
   // Retry effect: if state says we should be playing but native isn't playing yet,
   // retry calling play(). This handles cases where the direct play() call in
   // loadAndPlayAudio fired before the native player finished initializing.
@@ -1208,6 +1186,21 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       }
     );
 
+    // Playback progress tracking for real-time position updates
+    const playbackProgressSubscription = TrackPlayer.addEventListener(
+      Event?.PlaybackProgress,
+      (event: any) => {
+        const pos = Math.round(event.position * 1000);
+        const dur = Math.round(event.duration * 1000);
+        console.log("[MediaPlayer] PlaybackProgress event:", { pos, dur });
+        setState((s) => ({
+          ...s,
+          positionMs: pos,
+          durationMs: dur,
+        }));
+      }
+    );
+
     // Playback state change tracking
     const playbackStateSubscription = TrackPlayer.addEventListener(
       Event?.PlaybackState,
@@ -1255,11 +1248,47 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       remotePrevSubscription.remove();
       remoteSeekSubscription.remove();
       remoteDuckSubscription.remove();
+      playbackProgressSubscription.remove();
       playbackStateSubscription.remove();
       trackChangedSubscription.remove();
       playbackErrorSubscription.remove();
     };
   }, [isPlayerReady, skipToIndex]);
+
+  // Polling for progress updates - works on both web and native
+  // PlaybackProgress events may not fire consistently on all platforms
+  useEffect(() => {
+    console.log("[MediaPlayer] Progress polling effect - TrackPlayerAvailable:", TrackPlayerAvailable, "isPlayerReady:", isPlayerReady);
+    if (!TrackPlayerAvailable || !isPlayerReady) return;
+
+    let isPolling = false;
+    const interval = setInterval(async () => {
+      if (!isPlayerReady || isPolling) return;
+
+      isPolling = true;
+      try {
+        const progress = await TrackPlayer.getProgress();
+        const pos = Math.max(0, Math.round(progress.position * 1000));
+        const dur = Math.max(0, Math.round(progress.duration * 1000));
+
+        console.log("[MediaPlayer] Polling progress:", { pos, dur, isPlaying: stateRef.current.isPlaying });
+
+        setState((s) => ({
+          ...s,
+          positionMs: pos,
+          durationMs: dur,
+        }));
+      } catch (e) {
+        console.log("[MediaPlayer] Polling error:", e);
+      } finally {
+        isPolling = false;
+      }
+    }, 100); // 100ms for smooth updates
+    return () => {
+      clearInterval(interval);
+      isPolling = false;
+    };
+  }, [isPlayerReady]);
 
   const value = useMemo<MediaPlayerContextValue>(
     () => ({

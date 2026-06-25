@@ -25,10 +25,25 @@ const isValidPhoneNumber = (phoneNumber: string) => {
   return /^\+?[0-9]{7,15}$/.test(trimmed);
 };
 
+// ============================================
+// PROFESSIONAL VALIDATION FUNCTIONS
+// ============================================
+
+const isValidEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+};
+
+const isValidPassword = (password: string): boolean => {
+  return password && password.length >= 6;
+};
+
+const isValidUsername = (username: string): boolean => {
+  return username && username.trim().length >= 3;
+};
+
 export const registerFan = async (req: Request, res: Response) => {
   const correlationId = (req as any)?.correlationId || "-";
 
-  // Log raw request body for debugging
   console.error("[REGISTER_FAN] Request received", {
     correlationId,
     body: req.body,
@@ -60,54 +75,129 @@ export const registerFan = async (req: Request, res: Response) => {
       locationCity?: string;
     };
 
-    // Support both dob and dateOfBirth from different clients
     const effectiveDob = dob || dateOfBirth;
-    // Support both location and locationCity from different clients
     const effectiveLocation = location || locationCity;
 
+    // ============================================
+    // 1. REQUIRED FIELD VALIDATION
+    // ============================================
+
     if (!fullName || !email || !phoneNumber || !username || !password || !effectiveDob) {
-      console.error("[REGISTER_FAN] Validation failed - missing required fields", {
-        correlationId,
-        hasFullName: !!fullName,
-        hasEmail: !!email,
-        hasPhoneNumber: !!phoneNumber,
-        hasUsername: !!username,
-        hasPassword: !!password,
-        hasDob: !!effectiveDob,
-        dobValue: effectiveDob
-      });
+      const errors: any = {};
+      if (!fullName) errors.fullName = "Full name is required";
+      if (!email) errors.email = "Email is required";
+      if (!phoneNumber) errors.phoneNumber = "Phone number is required";
+      if (!username) errors.username = "Username is required";
+      if (!password) errors.password = "Password is required";
+      if (!effectiveDob) errors.dob = "Date of birth is required";
+
       return res.status(400).json({
         success: false,
-        message:
-          "fullName, email, phoneNumber, username, password, and dob are required",
+        message: "All fields are required",
+        errors,
         correlationId
       });
     }
 
-    if (!isValidDob(effectiveDob)) {
-      console.error("[REGISTER_FAN] Validation failed - invalid DOB format", {
-        correlationId,
-        dobValue: effectiveDob
-      });
+    // ============================================
+    // 2. FORMAT VALIDATION
+    // ============================================
+
+    // Email format validation
+    if (!isValidEmail(email)) {
       return res.status(400).json({
         success: false,
-        message: "dob must be in YYYY-MM-DD format",
+        message: "Invalid email address",
+        errors: { email: "Invalid email address" },
         correlationId
       });
     }
 
+    // Phone number validation
     if (!isValidPhoneNumber(phoneNumber)) {
-      console.error("[REGISTER_FAN] Validation failed - invalid phone number", {
-        correlationId,
-        phoneNumber
-      });
       return res.status(400).json({
         success: false,
-        message:
-          "phoneNumber must be a valid phone number (7-15 digits, optional leading +)",
+        message: "Phone number must be 7-15 digits",
+        errors: { phoneNumber: "Phone number must be 7-15 digits" },
         correlationId
       });
     }
+
+    // DOB validation
+    if (!isValidDob(effectiveDob)) {
+      return res.status(400).json({
+        success: false,
+        message: "Date of birth must be in YYYY-MM-DD format",
+        errors: { dob: "Date of birth must be in YYYY-MM-DD format" },
+        correlationId
+      });
+    }
+
+    // ============================================
+    // 3. LENGTH VALIDATION
+    // ============================================
+
+    // Password length validation
+    if (!isValidPassword(password)) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters",
+        errors: { password: "Password must be at least 6 characters" },
+        correlationId
+      });
+    }
+
+    if (password.length > 50) {
+      return res.status(400).json({
+        success: false,
+        message: "Password cannot exceed 50 characters",
+        errors: { password: "Password cannot exceed 50 characters" },
+        correlationId
+      });
+    }
+
+    // Username length validation
+    if (!isValidUsername(username)) {
+      return res.status(400).json({
+        success: false,
+        message: "Username must be at least 3 characters",
+        errors: { username: "Username must be at least 3 characters" },
+        correlationId
+      });
+    }
+
+    if (username.length > 20) {
+      return res.status(400).json({
+        success: false,
+        message: "Username cannot exceed 20 characters",
+        errors: { username: "Username cannot exceed 20 characters" },
+        correlationId
+      });
+    }
+
+    // Username characters validation
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      return res.status(400).json({
+        success: false,
+        message: "Username can only contain letters, numbers, and underscore",
+        errors: { username: "Username can only contain letters, numbers, and underscore" },
+        correlationId
+      });
+    }
+
+    // Full name length validation
+    if (fullName.trim().length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: "Full name must be at least 2 characters",
+        errors: { fullName: "Full name must be at least 2 characters" },
+        correlationId
+      });
+    }
+
+    // ============================================
+    // 4. UNIQUE VALIDATION
+    // ============================================
 
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedUsername = username.trim();
@@ -118,7 +208,8 @@ export const registerFan = async (req: Request, res: Response) => {
     if (emailExists.rows.length > 0) {
       return res.status(409).json({
         success: false,
-        message: "Email already exists",
+        message: "Email already registered",
+        errors: { email: "Email already registered" },
         correlationId
       });
     }
@@ -130,10 +221,15 @@ export const registerFan = async (req: Request, res: Response) => {
     if (usernameExists.rows.length > 0) {
       return res.status(409).json({
         success: false,
-        message: "Username already exists",
+        message: "Username already taken",
+        errors: { username: "Username already taken" },
         correlationId
       });
     }
+
+    // ============================================
+    // 5. CREATE USER
+    // ============================================
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -167,6 +263,10 @@ export const registerFan = async (req: Request, res: Response) => {
 
     const user = result.rows?.[0];
 
+    // ============================================
+    // 6. GENERATE TOKEN
+    // ============================================
+
     const token = jwt.sign(
       {
         id: user.id,
@@ -188,9 +288,13 @@ export const registerFan = async (req: Request, res: Response) => {
       metadata: { username: user.username, email: user.email }
     });
 
+    // ============================================
+    // 7. SUCCESS RESPONSE
+    // ============================================
+
     return res.status(201).json({
       success: true,
-      message: "Fan registered successfully",
+      message: "Account created successfully",
       token,
       user: {
         id: user.id,
@@ -221,7 +325,7 @@ export const registerFan = async (req: Request, res: Response) => {
 
     return res.status(500).json({
       success: false,
-      message: "Registration failed: " + (err?.message || "Unknown error"),
+      message: "Registration failed. Try again.",
       correlationId
     });
   }
