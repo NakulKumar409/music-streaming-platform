@@ -1,6 +1,26 @@
+// src/pages/ArtistContentUploadPage.tsx
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { http } from "../services/http";
+import {
+  Upload,
+  Music,
+  Video,
+  Image as ImageIcon,
+  Lock,
+  Unlock,
+  ChevronDown,
+  Sparkles,
+  AlertCircle,
+  CheckCircle,
+  Loader2,
+  ArrowLeft,
+  Play,
+  FileAudio,
+  FileVideo,
+  Album,
+  Radio,
+} from "lucide-react";
 
 type UploadResponse = {
   success: boolean;
@@ -20,7 +40,6 @@ type UploadFormState = {
   isSubscriberOnly: boolean;
 };
 
-
 const GENRES = [
   "Pop",
   "Hip-Hop",
@@ -31,7 +50,7 @@ const GENRES = [
   "Classical",
   "Country",
   "Indie",
-  "Other"
+  "Other",
 ];
 
 function buildObjectUrl(file: File | null) {
@@ -55,15 +74,16 @@ function GenreCombobox({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // Sync external value changes
   useEffect(() => {
     setInputValue(value);
   }, [value]);
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
       }
     };
@@ -94,9 +114,8 @@ function GenreCombobox({
   const suggestions = filtered();
 
   return (
-    <div ref={containerRef} className="relative mt-2">
-      {/* Input row */}
-      <div className="flex h-[48px] w-full rounded-[8px] border border-white/10 bg-[#141010]/55 overflow-hidden focus-within:border-[#7a3f31]/60 transition-colors">
+    <div ref={containerRef} className="relative">
+      <div className="flex h-[52px] w-full rounded-xl border border-white/10 bg-[#0A0A0A]/60 overflow-hidden focus-within:border-[#E85D2C]/50 transition-all">
         <input
           ref={inputRef}
           type="text"
@@ -104,72 +123,121 @@ function GenreCombobox({
           onChange={handleInput}
           onFocus={() => setOpen(true)}
           placeholder="Type or select a genre…"
-          className="flex-1 h-full bg-transparent px-4 text-[14px] text-[#f0e5e2] placeholder-[#6b5b57] outline-none"
+          className="flex-1 h-full bg-transparent px-4 text-sm text-white placeholder-[#6b5b57] outline-none"
         />
-        {/* Chevron toggle button */}
         <button
           type="button"
-          tabIndex={-1}
           onClick={() => {
             setOpen((prev) => !prev);
             if (!open) inputRef.current?.focus();
           }}
-          className="flex items-center justify-center px-3 text-[#8d7b77] hover:text-[#c9a89e] transition-colors"
-          aria-label="Toggle genre list"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
+          className="flex items-center justify-center px-3 text-[#8D7B77] hover:text-[#E85D2C] transition-colors">
+          <ChevronDown
+            className={`w-4 h-4 transition-transform duration-200 ${
+              open ? "rotate-180" : ""
+            }`}
+          />
         </button>
       </div>
 
-      {/* Dropdown list */}
       {open && (
-        <div className="absolute z-50 left-0 right-0 mt-1 rounded-[10px] border border-white/10 bg-[#1a0f0f] shadow-[0_12px_40px_rgba(0,0,0,0.6)] overflow-hidden">
-          {/* "Use custom" hint when typing something not in list */}
-          {inputValue.trim() && !GENRES.map(g => g.toLowerCase()).includes(inputValue.trim().toLowerCase()) && (
-            <button
-              type="button"
-              onMouseDown={(e) => { e.preventDefault(); handleSelect(inputValue.trim()); }}
-              className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] text-[#c97a54] hover:bg-[#2a1210]/60 transition-colors border-b border-white/5"
-            >
-              <span className="text-[15px]">✏️</span>
-              Use &quot;<strong>{inputValue.trim()}</strong>&quot; as custom genre
-            </button>
-          )}
-
+        <div className="absolute z-50 left-0 right-0 mt-1 rounded-xl border border-white/10 bg-[#0A0A0A] shadow-2xl overflow-hidden">
+          {inputValue.trim() &&
+            !GENRES.map((g) => g.toLowerCase()).includes(
+              inputValue.trim().toLowerCase()
+            ) && (
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleSelect(inputValue.trim());
+                }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-[#E85D2C] hover:bg-white/5 transition-colors border-b border-white/5">
+                <span className="text-sm">✏️</span>
+                Use "<strong>{inputValue.trim()}</strong>" as custom genre
+              </button>
+            )}
           {suggestions.length > 0 ? (
-            <ul className="max-h-[220px] overflow-y-auto custom-scroll">
+            <ul className="max-h-[220px] overflow-y-auto">
               {suggestions.map((g) => (
                 <li key={g}>
                   <button
                     type="button"
-                    onMouseDown={(e) => { e.preventDefault(); handleSelect(g); }}
-                    className={`w-full text-left px-4 py-2.5 text-[14px] transition-colors hover:bg-[#2a1210]/60 ${
-                      inputValue === g ? "text-[#c97a54] bg-[#2a1210]/40" : "text-[#e6d6d2]"
-                    }`}
-                  >
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleSelect(g);
+                    }}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-white/5 ${
+                      inputValue === g
+                        ? "text-[#E85D2C] bg-[#E85D2C]/10"
+                        : "text-white"
+                    }`}>
                     {g}
                   </button>
                 </li>
               ))}
             </ul>
           ) : (
-            <div className="px-4 py-3 text-[13px] text-[#6b5b57]">No matching genres — your custom genre will be used.</div>
+            <div className="px-4 py-3 text-sm text-[#6b5b57]">
+              No matching genres
+            </div>
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function FileDropZone({
+  label,
+  icon: Icon,
+  file,
+  onFileSelect,
+  accept,
+  className = "",
+}: {
+  label: string;
+  icon: React.ElementType;
+  file: File | null;
+  onFileSelect: (file: File | null) => void;
+  accept: string;
+  className?: string;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  return (
+    <div>
+      <label className="block text-xs uppercase tracking-wider text-[#B8A6A1] mb-2 font-medium">
+        {label}
+      </label>
+      <div
+        className={`h-[120px] rounded-xl border-2 border-dashed border-white/20 bg-[#0A0A0A]/40 flex flex-col items-center justify-center cursor-pointer hover:border-[#E85D2C]/40 hover:bg-[#E85D2C]/5 transition-all ${className}`}
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          const files = Array.from(e.dataTransfer?.files ?? []);
+          if (files.length) onFileSelect(files[0]);
+        }}>
+        <input
+          ref={inputRef}
+          type="file"
+          accept={accept}
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0] || null;
+            onFileSelect(f);
+            if (e.target) e.target.value = "";
+          }}
+        />
+        <Icon className="w-8 h-8 text-[#6b5b57] mb-2" />
+        <div className="text-sm font-medium text-white text-center px-2">
+          {file?.name || `Click or drag to upload ${label.toLowerCase()}`}
+        </div>
+        <div className="text-xs text-[#6b5b57] mt-1">
+          {accept.split(",").join(" ")}
+        </div>
+      </div>
     </div>
   );
 }
@@ -179,7 +247,7 @@ function UnifiedUploadSection({
   onChange,
   onPost,
   onError,
-  busy
+  busy,
 }: {
   value: UploadFormState;
   onChange: (next: UploadFormState) => void;
@@ -187,119 +255,18 @@ function UnifiedUploadSection({
   onError: (message: string | null) => void;
   busy: boolean;
 }) {
-  const thumbnailPreviewUrl = useMemo(() => buildObjectUrl(value.thumbnailFile), [value.thumbnailFile]);
-  const audioPreviewUrl = useMemo(() => buildObjectUrl(value.audioFile), [value.audioFile]);
-  const videoPreviewUrl = useMemo(() => buildObjectUrl(value.videoFile), [value.videoFile]);
-
-  const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
-  const audioInputRef = useRef<HTMLInputElement | null>(null);
-  const videoInputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (thumbnailPreviewUrl) URL.revokeObjectURL(thumbnailPreviewUrl);
-      if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
-      if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
-    };
-  }, [thumbnailPreviewUrl, audioPreviewUrl, videoPreviewUrl]);
-
-  const validateAudioFile = (file: File) => {
-    const name = (file?.name || "").toLowerCase();
-    const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
-    return ext === ".mp3";
-  };
-
-  const validateVideoFile = (file: File) => {
-    const name = (file?.name || "").toLowerCase();
-    const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
-    return ext === ".mp4" || ext === ".webm" || file.type.startsWith("video/");
-  };
-
-  const setAudioFile = (file: File | null) => {
-    onError(null);
-    if (!file) {
-      onChange({ ...value, audioFile: null });
-      return;
-    }
-    if (!validateAudioFile(file)) {
-      onError("Invalid audio file type. Please select a .mp3 file.");
-      if (audioInputRef.current) audioInputRef.current.value = "";
-      return;
-    }
-    onChange({ ...value, audioFile: file });
-  };
-
-  const setVideoFile = (file: File | null) => {
-    onError(null);
-    if (!file) {
-      onChange({ ...value, videoFile: null });
-      return;
-    }
-    if (!validateVideoFile(file)) {
-      onError("Invalid video file type. Please select a .mp4 or .webm file.");
-      if (videoInputRef.current) videoInputRef.current.value = "";
-      return;
-    }
-    onChange({ ...value, videoFile: file });
-  };
-
-  const setThumbnailFile = (file: File | null) => {
-    onError(null);
-    onChange({ ...value, thumbnailFile: file });
-  };
-
-  const onPasteZone = (e: React.ClipboardEvent<HTMLDivElement>, kind: "THUMBNAIL" | "AUDIO" | "VIDEO") => {
-    const files = Array.from(e.clipboardData?.files ?? []);
-    if (!files.length) return;
-    e.preventDefault();
-
-    const f = files[0];
-    if (kind === "THUMBNAIL") {
-      if (!f.type.startsWith("image/")) {
-        onError("Pasted file is not an image.");
-        return;
-      }
-      setThumbnailFile(f);
-      return;
-    }
-
-    if (kind === "AUDIO") {
-      setAudioFile(f);
-      return;
-    }
-
-    if (kind === "VIDEO") {
-      setVideoFile(f);
-      return;
-    }
-  };
-
-  const onDropZone = (e: React.DragEvent<HTMLDivElement>, kind: "THUMBNAIL" | "AUDIO" | "VIDEO") => {
-    e.preventDefault();
-    e.stopPropagation();
-    const files = Array.from(e.dataTransfer?.files ?? []);
-    if (!files.length) return;
-    const f = files[0];
-
-    if (kind === "THUMBNAIL") {
-      if (!f.type.startsWith("image/")) {
-        onError("Dropped file is not an image.");
-        return;
-      }
-      setThumbnailFile(f);
-      return;
-    }
-
-    if (kind === "AUDIO") {
-      setAudioFile(f);
-      return;
-    }
-
-    if (kind === "VIDEO") {
-      setVideoFile(f);
-      return;
-    }
-  };
+  const thumbnailPreviewUrl = useMemo(
+    () => buildObjectUrl(value.thumbnailFile),
+    [value.thumbnailFile]
+  );
+  const audioPreviewUrl = useMemo(
+    () => buildObjectUrl(value.audioFile),
+    [value.audioFile]
+  );
+  const videoPreviewUrl = useMemo(
+    () => buildObjectUrl(value.videoFile),
+    [value.videoFile]
+  );
 
   const canPost = Boolean(
     (value.title || "").trim() &&
@@ -310,218 +277,200 @@ function UnifiedUploadSection({
   );
 
   return (
-    <div className="rounded-[10px] border border-white/10 bg-[#0e0a0a]/22 overflow-hidden">
-      <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+    <div className="rounded-2xl border border-white/10 bg-[#15100E] overflow-hidden">
+      <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between">
         <div>
-          <div className="text-[17px] font-medium tracking-wide text-[#e6d6d2]">Upload Track</div>
-          <div className="mt-1 text-[13px] text-[#b8a6a1]">
-            Upload your audio, video, and cover art. Your release will be processed and live in seconds.
+          <div className="text-lg font-semibold text-white flex items-center gap-2">
+            <Upload className="w-5 h-5 text-[#E85D2C]" />
+            Upload Track
+          </div>
+          <div className="mt-0.5 text-sm text-[#B8A6A1]">
+            Upload your audio, video, and cover art. Your release will be
+            processed and live in seconds.
           </div>
         </div>
       </div>
 
       <div className="p-6 grid grid-cols-1 lg:grid-cols-5 gap-8">
         <div className="space-y-6 lg:col-span-3">
+          {/* Track Title */}
           <div>
-            <label className="block text-[13px] uppercase tracking-widest text-[#b8a6a1]">Track Title</label>
+            <label className="block text-xs uppercase tracking-wider text-[#B8A6A1] mb-2 font-medium">
+              Track Title <span className="text-[#E85D2C]">*</span>
+            </label>
             <input
               value={value.title}
               onChange={(e) => onChange({ ...value, title: e.target.value })}
-              className="mt-2 w-full h-[48px] rounded-[8px] border border-white/10 bg-[#141010]/55 px-4 text-[14px] text-[#f0e5e2] outline-none focus:border-[#7a3f31]/60 transition-colors"
+              className="w-full h-[52px] rounded-xl bg-[#0A0A0A]/60 border border-white/10 px-5 text-sm text-white placeholder-[#6b5b57] outline-none focus:border-[#E85D2C]/50 transition-all"
               placeholder="e.g. Midnight City"
               autoFocus
             />
           </div>
 
+          {/* Genre */}
           <div>
-            <label className="block text-[13px] uppercase tracking-widest text-[#b8a6a1]">Genre</label>
+            <label className="block text-xs uppercase tracking-wider text-[#B8A6A1] mb-2 font-medium">
+              Genre <span className="text-[#E85D2C]">*</span>
+            </label>
             <GenreCombobox
               value={value.genre}
               onChange={(g) => onChange({ ...value, genre: g })}
             />
-            <p className="mt-1.5 text-[11px] text-[#8d7b77]">
-              Type your own genre or choose from the list below.
-            </p>
           </div>
 
-          <div>
-            <label className="block text-[13px] uppercase tracking-widest text-[#b8a6a1]">Cover Art</label>
-            <div
-              tabIndex={0}
-              onPaste={(e) => onPasteZone(e, "THUMBNAIL")}
-              onDragOver={(e) => {
-                e.preventDefault();
-              }}
-              onDrop={(e) => onDropZone(e, "THUMBNAIL")}
-              className="mt-2 h-[120px] rounded-[10px] border border-dashed border-white/20 bg-[#141010]/35 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors"
-              onClick={() => thumbnailInputRef.current?.click()}
-            >
-              <input
-                ref={thumbnailInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0] || null;
-                  setThumbnailFile(f);
-                }}
-              />
-              <div className="text-[28px] mb-2 opacity-60">🖼️</div>
-              <div className="text-[13px] font-medium text-[#e6d6d2]">
-                {value.thumbnailFile?.name || "Click or drop image"}
-              </div>
-            </div>
-          </div>
+          {/* Cover Art */}
+          <FileDropZone
+            label="Cover Art"
+            icon={ImageIcon}
+            file={value.thumbnailFile}
+            onFileSelect={(f) => onChange({ ...value, thumbnailFile: f })}
+            accept="image/*"
+          />
 
+          {/* Audio & Video */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[13px] uppercase tracking-widest text-[#b8a6a1]">Audio File (MP3)</label>
-              <div
-                tabIndex={0}
-                onPaste={(e) => onPasteZone(e, "AUDIO")}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                }}
-                onDrop={(e) => onDropZone(e, "AUDIO")}
-                className="mt-2 h-[120px] rounded-[10px] border border-dashed border-white/20 bg-[#141010]/35 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors p-4 text-center"
-                onClick={() => audioInputRef.current?.click()}
-              >
-                <input
-                  ref={audioInputRef}
-                  type="file"
-                  accept=".mp3"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0] || null;
-                    setAudioFile(f);
-                  }}
-                />
-                <div className="text-[28px] mb-2 opacity-60">🎵</div>
-                <div className="text-[13px] font-medium text-[#e6d6d2] line-clamp-2">
-                  {value.audioFile?.name || "Click or drop .mp3 file"}
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-[13px] uppercase tracking-widest text-[#b8a6a1]">Video File (MP4/WEBM)</label>
-              <div
-                tabIndex={0}
-                onPaste={(e) => onPasteZone(e, "VIDEO")}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                }}
-                onDrop={(e) => onDropZone(e, "VIDEO")}
-                className="mt-2 h-[120px] rounded-[10px] border border-dashed border-white/20 bg-[#141010]/35 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors p-4 text-center"
-                onClick={() => videoInputRef.current?.click()}
-              >
-                <input
-                  ref={videoInputRef}
-                  type="file"
-                  accept="video/mp4,video/webm"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0] || null;
-                    setVideoFile(f);
-                  }}
-                />
-                <div className="text-[28px] mb-2 opacity-60">🎬</div>
-                <div className="text-[13px] font-medium text-[#e6d6d2] line-clamp-2">
-                  {value.videoFile?.name || "Click or drop video file"}
-                </div>
-              </div>
-            </div>
+            <FileDropZone
+              label="Audio File (MP3)"
+              icon={FileAudio}
+              file={value.audioFile}
+              onFileSelect={(f) => onChange({ ...value, audioFile: f })}
+              accept=".mp3"
+            />
+            <FileDropZone
+              label="Video File (MP4/WEBM)"
+              icon={FileVideo}
+              file={value.videoFile}
+              onFileSelect={(f) => onChange({ ...value, videoFile: f })}
+              accept="video/mp4,video/webm"
+            />
           </div>
 
-          <div className="rounded-[10px] border border-[#c97a54]/20 bg-[#6a352c]/5 p-4 flex items-center justify-between">
+          {/* Subscriber Toggle */}
+          <div className="rounded-xl border border-[#E85D2C]/20 bg-[#E85D2C]/5 p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-[#6a352c]/20 border border-[#c97a54]/30 flex items-center justify-center text-[18px]">🔒</div>
+              <div className="h-10 w-10 rounded-full bg-[#E85D2C]/20 border border-[#E85D2C]/30 flex items-center justify-center">
+                {value.isSubscriberOnly ? (
+                  <Lock className="w-5 h-5 text-[#E85D2C]" />
+                ) : (
+                  <Unlock className="w-5 h-5 text-[#E85D2C]" />
+                )}
+              </div>
               <div>
-                <div className="text-[14px] font-medium text-[#e6d6d2]">Subscriber Only Content</div>
-                <div className="text-[12px] text-[#b8a6a1]">Only your active subscribers will be able to play this track.</div>
+                <div className="text-sm font-medium text-white">
+                  Subscriber Only Content
+                </div>
+                <div className="text-xs text-[#B8A6A1]">
+                  Only active subscribers can play this track
+                </div>
               </div>
             </div>
             <button
               type="button"
-              onClick={() => onChange({ ...value, isSubscriberOnly: !value.isSubscriberOnly })}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                value.isSubscriberOnly ? 'bg-[#c97a54]' : 'bg-[#141010]/80 border border-white/10'
-              }`}
-            >
+              onClick={() =>
+                onChange({
+                  ...value,
+                  isSubscriberOnly: !value.isSubscriberOnly,
+                })
+              }
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                value.isSubscriberOnly
+                  ? "bg-[#E85D2C]"
+                  : "bg-[#0A0A0A]/80 border border-white/10"
+              }`}>
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  value.isSubscriberOnly ? 'translate-x-6' : 'translate-x-1'
+                  value.isSubscriberOnly ? "translate-x-6" : "translate-x-1"
                 }`}
               />
             </button>
           </div>
 
+          {/* Submit Button */}
           <button
-
             type="button"
             disabled={busy || !canPost}
             onClick={onPost}
-            className="w-full mt-4 h-[54px] rounded-[8px] border border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] px-4 text-[16px] font-medium tracking-wide text-white shadow-[0_10px_25px_rgba(0,0,0,0.25)] hover:shadow-[0_15px_30px_rgba(106,53,44,0.4)] disabled:opacity-60 transition-all hover:-translate-y-0.5"
-          >
-            {busy ? "Uploading..." : "Publish Track"}
+            className="w-full h-[56px] rounded-xl bg-gradient-to-r from-[#E85D2C] to-[#C97A54] text-white font-semibold shadow-lg shadow-[#E85D2C]/25 hover:shadow-[#E85D2C]/40 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+            {busy ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Uploading...
+              </>
+            ) : (
+              <>
+                <Upload className="w-5 h-5" />
+                Publish Track
+              </>
+            )}
           </button>
         </div>
 
-        <div className="space-y-4 lg:col-span-2">
-          <div className="rounded-[10px] border border-[#7a3f31]/10 bg-gradient-to-b from-[#141010]/60 to-[#0a0808]/80 p-6 flex flex-col items-center justify-center shadow-inner h-full">
-            <h3 className="text-[14px] uppercase tracking-widest text-[#b8a6a1] mb-6 w-full text-left">Preview</h3>
+        {/* Preview Panel */}
+        <div className="lg:col-span-2">
+          <div className="rounded-xl border border-white/10 bg-[#0A0A0A]/60 p-6">
+            <h3 className="text-xs uppercase tracking-wider text-[#B8A6A1] font-medium mb-6 flex items-center gap-2">
+              <Radio className="w-4 h-4 text-[#E85D2C]" />
+              Preview
+            </h3>
 
-            <div className="h-[200px] w-[200px] sm:h-[240px] sm:w-[240px] rounded-[20px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] bg-[#141010] mb-8 group relative aspect-square">
+            <div className="h-[200px] w-[200px] mx-auto rounded-2xl overflow-hidden shadow-xl bg-[#0A0A0A] mb-6">
               {thumbnailPreviewUrl ? (
-                <img src={thumbnailPreviewUrl} alt="" className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                <img
+                  src={thumbnailPreviewUrl}
+                  alt="Cover"
+                  className="h-full w-full object-cover"
+                />
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-[#8d7b77]">
-                  <span className="text-4xl mb-2">🎧</span>
+                <div className="flex flex-col items-center justify-center h-full text-[#6b5b57]">
+                  <Album className="w-12 h-12 mb-2" />
                   <span className="text-xs">No Cover Art</span>
                 </div>
               )}
             </div>
 
-            <div className="w-full text-center mb-6">
-              <h4 className="text-[20px] font-medium text-white truncate px-4">
+            <div className="text-center mb-6">
+              <h4 className="text-xl font-semibold text-white truncate">
                 {value.title || "Untitled Track"}
               </h4>
-              <p className="text-[14px] text-[#c97a54] mt-1">{value.genre || "Genre"}</p>
+              <p className="text-sm text-[#E85D2C] mt-1">
+                {value.genre || "Genre"}
+              </p>
             </div>
 
-            <div className="w-full max-w-sm bg-[#0e0a0a]/50 p-4 rounded-[12px] border border-white/5 space-y-4 flex-1">
-              <div className="w-full">
-                <span className="text-xs text-[#b8a6a1] mb-2 block uppercase tracking-wide font-medium">Audio</span>
+            <div className="space-y-4">
+              <div>
+                <span className="text-xs text-[#B8A6A1] uppercase tracking-wide font-medium flex items-center gap-2">
+                  <Music className="w-4 h-4" /> Audio
+                </span>
                 {audioPreviewUrl ? (
-                  <audio controls className="w-full h-[40px] outline-none custom-audio-player" src={audioPreviewUrl} />
+                  <audio
+                    controls
+                    className="w-full h-[40px] mt-2 rounded-lg"
+                    src={audioPreviewUrl}
+                  />
                 ) : (
-                  <div className="h-[40px] flex items-center justify-center text-[12px] text-[#8d7b77] bg-[#141010]/50 rounded-[8px]">
+                  <div className="h-[40px] flex items-center justify-center text-xs text-[#6b5b57] bg-[#0A0A0A]/50 rounded-lg mt-2">
                     No audio loaded
                   </div>
                 )}
               </div>
-              <div className="w-full">
-                <span className="text-xs text-[#b8a6a1] mb-2 block uppercase tracking-wide font-medium">Video</span>
+              <div>
+                <span className="text-xs text-[#B8A6A1] uppercase tracking-wide font-medium flex items-center gap-2">
+                  <Video className="w-4 h-4" /> Video
+                </span>
                 {videoPreviewUrl ? (
-                  <video controls className="w-full h-[160px] outline-none rounded-[8px] bg-black" src={videoPreviewUrl} />
+                  <video
+                    controls
+                    className="w-full h-[140px] rounded-lg bg-black mt-2"
+                    src={videoPreviewUrl}
+                  />
                 ) : (
-                  <div className="h-[160px] flex items-center justify-center text-[12px] text-[#8d7b77] bg-[#141010]/50 rounded-[8px]">
+                  <div className="h-[140px] flex items-center justify-center text-xs text-[#6b5b57] bg-[#0A0A0A]/50 rounded-lg mt-2">
                     No video loaded
                   </div>
                 )}
               </div>
             </div>
-            
-            {/* Inline style specifically for the custom audio player */}
-            <style>{`
-              .custom-audio-player::-webkit-media-controls-panel {
-                background-color: transparent;
-              }
-              .custom-audio-player::-webkit-media-controls-current-time-display,
-              .custom-audio-player::-webkit-media-controls-time-remaining-display {
-                color: #e6d6d2;
-              }
-            `}</style>
           </div>
         </div>
       </div>
@@ -540,14 +489,13 @@ export default function ArtistContentUploadPage() {
     thumbnailFile: null,
     audioFile: null,
     videoFile: null,
-    isSubscriberOnly: false
+    isSubscriberOnly: false,
   });
-
 
   const backgroundStyle = useMemo(() => {
     return {
       backgroundImage:
-        "radial-gradient(circle at 30% 10%, rgba(193,117,86,0.10) 0%, rgba(25,18,18,0.55) 45%, rgba(10,8,8,0.92) 100%)"
+        "radial-gradient(circle at 30% 10%, rgba(232,93,44,0.06) 0%, rgba(10,10,10,0.95) 100%)",
     } as const;
   }, []);
 
@@ -574,21 +522,31 @@ export default function ArtistContentUploadPage() {
       fd.append("video", form.videoFile);
       fd.append("isSubscriberOnly", String(form.isSubscriberOnly));
 
-
-      const res = await http.post<UploadResponse>("/api/v1/content/upload", fd, {
-        headers: {
-          "Content-Type": undefined as any
+      const res = await http.post<UploadResponse>(
+        "/api/v1/content/upload",
+        fd,
+        {
+          headers: {
+            "Content-Type": undefined as any,
+          },
         }
-      });
+      );
 
       if (!res.data?.success) {
         throw new Error(res.data?.message || "Upload failed");
       }
 
-      setSuccess("Your release has been uploaded and is currently Under Review!");
-
-      setForm({ title: "", genre: "", thumbnailFile: null, audioFile: null, videoFile: null, isSubscriberOnly: false });
-
+      setSuccess(
+        "Your release has been uploaded and is currently Under Review!"
+      );
+      setForm({
+        title: "",
+        genre: "",
+        thumbnailFile: null,
+        audioFile: null,
+        videoFile: null,
+        isSubscriberOnly: false,
+      });
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || "Upload failed");
     } finally {
@@ -597,40 +555,55 @@ export default function ArtistContentUploadPage() {
   };
 
   return (
-    <div className="w-full" style={backgroundStyle}>
+    <div className="w-full animate-fadeIn" style={backgroundStyle}>
       <div className="px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 max-w-6xl mx-auto">
+        {/* Header */}
         <div className="flex items-start justify-between gap-6 mb-8">
           <div>
-            <h1 className="text-[28px] font-light tracking-wide text-white">New Release</h1>
-            <p className="mt-1 text-[14px] text-[#b8a6a1]">Share your latest master track alongside a visual experience.</p>
+            <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-2">
+              <Sparkles className="w-6 h-6 text-[#E85D2C]" />
+              New Release
+            </h1>
+            <p className="mt-1 text-sm text-[#B8A6A1]">
+              Share your latest master track alongside a visual experience.
+            </p>
           </div>
+          <Link
+            to="/artist/dashboard"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-sm text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all">
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </Link>
         </div>
 
-        {error ? (
-          <div className="mb-6 p-4 rounded-[8px] bg-red-950/40 border border-red-900/50 text-[14px] text-[#fca5a5] flex items-center">
-            <span className="mr-2">⚠️</span> {error}
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 rounded-xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
+            <p className="text-sm text-rose-300">{error}</p>
           </div>
-        ) : null}
-        
-        {success ? (
-          <div className="mb-6 rounded-[8px] bg-[#10b981]/15 border border-[#10b981]/30 p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center text-[15px] text-[#34d399]">
-              <span className="mr-3 text-2xl">🎉</span> 
+        )}
+
+        {/* Success Message */}
+        {success && (
+          <div className="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3 text-sm text-emerald-300">
+              <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0" />
               <span>{success}</span>
             </div>
             <Link
               to="/artist/dashboard"
-              className="px-6 py-2 bg-[#10b981]/20 hover:bg-[#10b981]/30 text-[#10b981] rounded-full text-[14px] font-semibold transition-colors whitespace-nowrap"
-            >
+              className="px-6 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-sm font-semibold transition-colors whitespace-nowrap">
               Back to Dashboard
             </Link>
           </div>
-        ) : null}
+        )}
 
+        {/* Upload Section */}
         <UnifiedUploadSection
           value={form}
           onChange={setForm}
-          onPost={() => post()}
+          onPost={post}
           onError={(m) => {
             setError(m);
             if (m) setSuccess(null);
@@ -638,6 +611,16 @@ export default function ArtistContentUploadPage() {
           busy={busy}
         />
       </div>
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.5s ease-out forwards;
+        }
+      `}</style>
     </div>
   );
 }
