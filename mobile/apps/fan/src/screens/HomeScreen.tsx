@@ -339,7 +339,10 @@ export default function HomeScreen({ navigation }: any) {
   };
 
   const renderFeaturedArtist = ({ item }: { item: FeaturedArtistCard }) => (
-    <View style={styles.featuredCard}>
+    <Pressable style={styles.featuredCard} onPress={() => {
+      console.log('[HomeScreen] Featured artist clicked:', { name: item.name, id: item.id });
+      onPressArtist(item.id);
+    }}>
       <Image source={{ uri: getOptimizedImageUrl(item.avatar) }} style={styles.featuredImg} resizeMode="cover" />
       <LinearGradient
         colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.85)']}
@@ -350,7 +353,7 @@ export default function HomeScreen({ navigation }: any) {
           {item.name}
         </Text>
       </View>
-    </View>
+    </Pressable>
   );
 
   const renderTrendingArtist = ({ item }: { item: ArtistCard }) => (

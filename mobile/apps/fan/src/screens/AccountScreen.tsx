@@ -22,6 +22,7 @@ import { CreditCard, HelpCircle, Library, LogOut, User, Camera, Crown, ShieldChe
 import { SubscriptionStatusCard, DetailedPlatformCard, ArtistSubscriptionItem, EmptySubscriptionState } from '../ui/SubscriptionUI';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 
 import { userService, type AudioQualityPref, type SubscriptionPlanSummary, type Transaction } from '../services/userService';
 import { JWT_STORAGE_KEY, API_BASE_URL } from '../services/api';
@@ -93,6 +94,7 @@ export default function AccountScreen() {
   const [audioQuality, setAudioQuality] = React.useState<AudioQualityPref>('HIGH');
 
   const [showTransactions, setShowTransactions] = React.useState(false);
+  const [showHelpSupport, setShowHelpSupport] = React.useState(false);
 
   const refresh = React.useCallback(async () => {
     setIsLoading(true);
@@ -236,32 +238,45 @@ export default function AccountScreen() {
   };
 
   const handleToggleNotifications = async (next: boolean) => {
-    // Optimistically update the UI immediately
-    setPushNotifications(next);
+    console.log('[AccountScreen] Toggle notifications:', next);
     try {
       if (next) {
         // Enable: request OS permission, fetch token, sync to backend
         const result = await registerForPushNotifications();
-        if (!result.success) {
-          // Revert if permission denied
+        console.log('[AccountScreen] Register result:', result);
+        if (result.success) {
+          setPushNotifications(true);
+        } else {
           setPushNotifications(false);
           if (result.status === 'denied') {
             Alert.alert(
               'Notifications Blocked',
-              'Please enable notifications for this app in your iPhone Settings → Music Streaming Platform → Notifications.',
+              'Please enable notifications for this app in Settings → Music Streaming Platform → Notifications.',
               [
                 { text: 'Cancel', style: 'cancel' },
                 { text: 'Open Settings', onPress: () => Linking.openSettings() },
               ]
+            );
+          } else {
+            Alert.alert(
+              'Notifications Failed',
+              'Unable to enable notifications. Please try again.',
+              [{ text: 'OK', style: 'default' }]
             );
           }
         }
       } else {
         // Disable: tell backend to clear the preference
         await disablePushNotifications();
+        setPushNotifications(false);
       }
     } catch (err) {
       console.error('[AccountScreen] Notification toggle error:', err);
+      Alert.alert(
+        'Error',
+        'Failed to update notification settings. Please try again.',
+        [{ text: 'OK', style: 'default' }]
+      );
       // Revert UI on unexpected error
       setPushNotifications((v) => !v);
     }
@@ -343,13 +358,42 @@ export default function AccountScreen() {
     try {
       Alert.alert('Download', 'Preparing your invoice...');
       
-      const fileUri = `${(FileSystem as any).documentDirectory}invoice_${transactionId}.pdf`;
       const downloadUrl = `${API_BASE_URL}/user/transactions/${transactionId}/invoice`;
       const token = await AsyncStorage.getItem(JWT_STORAGE_KEY) || await AsyncStorage.getItem('userToken');
       
       console.log('[AccountScreen] Download URL:', downloadUrl);
-      console.log('[AccountScreen] File URI:', fileUri);
+      console.log('[AccountScreen] Platform:', Platform.OS);
       console.log('[AccountScreen] Token exists:', !!token);
+      
+      // Web: Fetch with Authorization header, create blob, then download
+      if (Platform.OS === 'web') {
+        const response = await fetch(downloadUrl, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Download failed: ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `invoice_${transactionId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        Alert.alert('Success', 'Invoice downloaded successfully');
+        return;
+      }
+      
+      // Mobile: Download to device storage
+      const fileUri = `${(FileSystem as any).documentDirectory}invoice_${transactionId}.pdf`;
+      console.log('[AccountScreen] File URI:', fileUri);
       
       const downloadRes = await FileSystem.downloadAsync(
         downloadUrl,
@@ -364,7 +408,17 @@ export default function AccountScreen() {
       console.log('[AccountScreen] Download response:', downloadRes);
 
       if (downloadRes.status === 200) {
-        Alert.alert('Downloaded', 'Invoice saved to device: ' + fileUri);
+        // Use Sharing API to make the file accessible to user
+        const isAvailable = await Sharing.isAvailableAsync();
+        if (isAvailable) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'application/pdf',
+            dialogTitle: 'Save Invoice',
+            UTI: 'com.adobe.pdf',
+          });
+        } else {
+          Alert.alert('Downloaded', 'Invoice saved to app storage. You can access it from the app.');
+        }
       } else {
         throw new Error('Download failed with status ' + downloadRes.status);
       }
@@ -552,7 +606,7 @@ export default function AccountScreen() {
           </View>
 
 
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => setShowHelpSupport(true)}>
             <HelpCircle size={20} color="#fff" />
             <Text style={styles.menuText}>Help & Support</Text>
           </TouchableOpacity>
@@ -701,6 +755,77 @@ export default function AccountScreen() {
                 </TouchableOpacity>
               </View>
             )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal visible={showHelpSupport} animationType="slide" onRequestClose={() => setShowHelpSupport(false)}>
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={[styles.modalHeader, { paddingTop: Math.max(insets.top, 20) }]}>
+            <View style={styles.modalHeaderContent}>
+              <Text style={styles.modalTitle}>Help & Support</Text>
+              <Text style={styles.modalSubTitle}>Find answers to common questions</Text>
+            </View>
+            <TouchableOpacity 
+              onPress={() => setShowHelpSupport(false)} 
+              style={styles.modalCloseBtn}
+              hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+            >
+              <X color="#fff" size={22} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView 
+            style={styles.modalScroll} 
+            contentContainerStyle={{ paddingTop: 20, paddingBottom: 40 }}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.faqSection}>
+              <Text style={styles.faqSectionTitle}>Frequently Asked Questions</Text>
+              
+              <View style={styles.faqItem}>
+                <Text style={styles.faqQuestion}>How do I subscribe to an artist?</Text>
+                <Text style={styles.faqAnswer}>Go to the artist's profile and tap the "Subscribe" button. You can choose between monthly or yearly plans. Subscribing unlocks exclusive content and supports your favorite artists directly.</Text>
+              </View>
+
+              <View style={styles.faqItem}>
+                <Text style={styles.faqQuestion}>What is the Platform Plan?</Text>
+                <Text style={styles.faqAnswer}>The Platform Plan gives you HD streaming across all content, ad-free experience, and crystal clear audio quality. It's the best value for users who want premium features across the entire platform.</Text>
+              </View>
+
+              <View style={styles.faqItem}>
+                <Text style={styles.faqQuestion}>How do I cancel my subscription?</Text>
+                <Text style={styles.faqAnswer}>You can cancel your subscription anytime from the Account Settings. Go to "Subscription & Billing" section and select the subscription you want to cancel. Your benefits will continue until the end of the current billing period.</Text>
+              </View>
+
+              <View style={styles.faqItem}>
+                <Text style={styles.faqQuestion}>Can I download songs for offline listening?</Text>
+                <Text style={styles.faqAnswer}>Yes! With a Platform Plan or Artist Subscription, you can download songs for offline listening. Simply tap the download button on any track to save it to your device.</Text>
+              </View>
+
+              <View style={styles.faqItem}>
+                <Text style={styles.faqQuestion}>How do I become an artist on the platform?</Text>
+                <Text style={styles.faqAnswer}>Tap "Become an Artist" in your Account Settings. You'll be guided through the onboarding process where you can set up your artist profile, upload your music, and start earning from your subscribers.</Text>
+              </View>
+
+              <View style={styles.faqItem}>
+                <Text style={styles.faqQuestion}>What payment methods do you accept?</Text>
+                <Text style={styles.faqAnswer}>We accept all major payment methods including credit cards, debit cards, UPI, and net banking through Razorpay. All payments are secure and encrypted.</Text>
+              </View>
+            </View>
+
+            <View style={styles.contactSection}>
+              <Text style={styles.contactTitle}>Still need help?</Text>
+              <Text style={styles.contactSub}>Our support team is here to assist you</Text>
+              
+              <TouchableOpacity style={styles.contactBtn}>
+                <Text style={styles.contactBtnText}>Contact Support</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.contactBtnSecondary}>
+                <Text style={styles.contactBtnTextSecondary}>Email: support@musicplatform.com</Text>
+              </TouchableOpacity>
+            </View>
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -1223,6 +1348,80 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: 'rgba(255,106,0,0.1)',
     borderRadius: 8,
+  },
+  faqSection: {
+    marginBottom: 30,
+  },
+  faqSectionTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 20,
+  },
+  faqItem: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+  },
+  faqQuestion: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  faqAnswer: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  contactSection: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+  },
+  contactTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  contactSub: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: 20,
+  },
+  contactBtn: {
+    backgroundColor: Colors.accent,
+    paddingHorizontal: 30,
+    paddingVertical: 14,
+    borderRadius: 25,
+    marginBottom: 12,
+  },
+  contactBtnText: {
+    color: '#000',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  contactBtnSecondary: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  contactBtnTextSecondary: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
+    fontWeight: '600',
   },
   trustFooter: {
     flexDirection: 'row',

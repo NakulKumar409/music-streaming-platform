@@ -1,3 +1,4 @@
+// src/components/ArtistShell.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { http } from "../services/http";
@@ -16,22 +17,201 @@ type MeResponse = {
   };
 };
 
+// Icons
+const DashboardIcon = () => (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round">
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" />
+  </svg>
+);
+
+const UploadIcon = () => (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="17 8 12 3 7 8" />
+    <line x1="12" y1="3" x2="12" y2="15" />
+  </svg>
+);
+
+const HistoryIcon = () => (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+const AnalyticsIcon = () => (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round">
+    <path d="M21 12v-2a5 5 0 0 0-5-5H8a5 5 0 0 0-5 5v2" />
+    <circle cx="12" cy="16" r="5" />
+    <line x1="12" y1="11" x2="12" y2="16" />
+    <line x1="9" y1="13" x2="12" y2="16" />
+    <line x1="15" y1="13" x2="12" y2="16" />
+  </svg>
+);
+
+const PricingIcon = () => (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <line x1="12" y1="6" x2="12" y2="18" />
+    <line x1="8" y1="10" x2="16" y2="10" />
+    <line x1="8" y1="14" x2="16" y2="14" />
+  </svg>
+);
+
+const ProfileIcon = () => (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
+const LogoutIcon = () => (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <polyline points="16 17 21 12 16 7" />
+    <line x1="21" y1="12" x2="9" y2="12" />
+  </svg>
+);
+
+const MenuIcon = () => (
+  <svg
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round">
+    <line x1="3" y1="6" x2="21" y2="6" />
+    <line x1="3" y1="12" x2="21" y2="12" />
+    <line x1="3" y1="18" x2="21" y2="18" />
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+function NavItem({
+  to,
+  icon,
+  label,
+  isActive,
+}: {
+  to: string;
+  icon: React.ReactNode;
+  label: string;
+  isActive: boolean;
+}) {
+  return (
+    <Link
+      to={to}
+      className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+        isActive
+          ? "bg-[#E85D2C]/10 text-[#E85D2C] border border-[#E85D2C]/20 shadow-[0_0_20px_rgba(232,93,44,0.05)]"
+          : "text-[#B8A6A1] hover:text-white hover:bg-white/5"
+      }`}>
+      <span className={isActive ? "text-[#E85D2C]" : "text-[#B8A6A1]"}>
+        {icon}
+      </span>
+      <span>{label}</span>
+      {isActive && (
+        <span className="ml-auto w-1 h-6 rounded-full bg-[#E85D2C]" />
+      )}
+    </Link>
+  );
+}
+
 function BrandLogo() {
   return (
-    <img 
-      src="/logo.png" 
-      alt="Brand Logo" 
-      className="h-[44px] w-[44px] rounded-full object-cover"
-    />
+    <div className="flex items-center gap-3">
+      <img
+        src="/logo.png"
+        alt="Brand Logo"
+        className="h-[40px] w-[40px] rounded-full object-cover"
+      />
+      <span className="text-lg font-bold tracking-tight text-white hidden sm:block">
+        Artist Studio
+      </span>
+    </div>
   );
 }
 
 export default function ArtistShell() {
   const navigate = useNavigate();
   const location = useLocation();
-
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [me, setMe] = useState<MeResponse["artist"] | null>(null);
 
   const apiBaseUrl = useMemo(() => {
@@ -51,13 +231,6 @@ export default function ArtistShell() {
   const profileSrc = useMemo(() => {
     return resolvePublicUrl(me?.profileImageUrl ?? null);
   }, [apiBaseUrl, me?.profileImageUrl]);
-
-  const backgroundStyle = useMemo(() => {
-    return {
-      backgroundImage:
-        "radial-gradient(circle at 30% 10%, rgba(193,117,86,0.16) 0%, rgba(75,25,39,0.88) 55%, rgba(10,8,8,0.97) 100%)"
-    } as const;
-  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -107,7 +280,9 @@ export default function ArtistShell() {
       } catch (e: any) {
         const status = e?.response?.status;
         if (status === 403) {
-          const msg = (e?.response?.data?.message ?? "").toString().toLowerCase();
+          const msg = (e?.response?.data?.message ?? "")
+            .toString()
+            .toLowerCase();
           if (msg.includes("inactive") || msg.includes("suspended")) {
             localStorage.removeItem("artistToken");
             if (location.pathname !== "/artist/account-inactive") {
@@ -131,192 +306,194 @@ export default function ArtistShell() {
     };
   }, [navigate, location.pathname]);
 
+  const handleLogout = () => {
+    localStorage.removeItem("artistToken");
+    navigate("/artist/login", { replace: true });
+  };
+
   const activePath = location.pathname;
 
-  const navItems = useMemo(
-    () => {
-      const status = (me as any)?.artistStatus ? String((me as any).artistStatus).toUpperCase() : "";
-      const locked = status === "PENDING" || status === "REJECTED";
+  const navItems = useMemo(() => {
+    const status = (me as any)?.artistStatus
+      ? String((me as any).artistStatus).toUpperCase()
+      : "";
+    const locked = status === "PENDING" || status === "REJECTED";
 
-      const base = [
-        { to: "/artist/dashboard", label: "Dashboard" },
-        { to: "/artist/account", label: "Account" },
-        { to: "/artist/analytics-summary", label: "Analytics" },
-        { to: "/artist/content-history", label: "Content History" }
-      ];
+    const items = [
+      {
+        path: "/artist/dashboard",
+        icon: <DashboardIcon />,
+        label: "Dashboard",
+      },
+      { path: "/artist/account", icon: <ProfileIcon />, label: "Profile" },
+    ];
 
-      if (!locked) {
-        base.splice(2, 0, { to: "/artist/pricing", label: "Pricing" });
-        base.splice(5, 0, { to: "/artist/content-upload", label: "Content Upload" });
-      }
+    if (!locked) {
+      items.push(
+        {
+          path: "/artist/content-upload",
+          icon: <UploadIcon />,
+          label: "Upload",
+        },
+        {
+          path: "/artist/content-history",
+          icon: <HistoryIcon />,
+          label: "History",
+        },
+        {
+          path: "/artist/analytics-summary",
+          icon: <AnalyticsIcon />,
+          label: "Analytics",
+        },
+        { path: "/artist/pricing", icon: <PricingIcon />, label: "Pricing" }
+      );
+    } else {
+      items.push(
+        {
+          path: "/artist/content-history",
+          icon: <HistoryIcon />,
+          label: "History",
+        },
+        {
+          path: "/artist/analytics-summary",
+          icon: <AnalyticsIcon />,
+          label: "Analytics",
+        }
+      );
+    }
 
-      return base;
-    },
-    [me]
-  );
+    return items;
+  }, [me]);
+
+  const isActive = (path: string) => activePath === path;
 
   return (
-    <div className="min-h-screen w-full bg-[#0a0808] text-white" style={backgroundStyle}>
-      <div className="mx-auto w-full max-w-[1100px] px-4 sm:px-6 py-6 sm:py-8">
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <button
-                type="button"
-                className="md:hidden h-[36px] w-[36px] rounded-[10px] border border-white/10 bg-[#141010]/60 flex items-center justify-center text-[#e6d6d2]"
-                onClick={() => {
-                  setMobileNavOpen((v) => !v);
-                  setMenuOpen(false);
-                }}
-                aria-label="Open menu"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M4 7H20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  <path d="M4 12H20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  <path d="M4 17H20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </button>
+    <div className="min-h-screen bg-[#0A0A0A] text-white font-sans antialiased">
+      {/* Mobile Overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
-              <BrandLogo />
+      {/* Sidebar */}
+      <aside
+        className={`
+        fixed top-0 left-0 h-full w-[280px] bg-[#0A0A0A] border-r border-white/5 z-50
+        transition-transform duration-300 ease-in-out
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+        lg:translate-x-0
+      `}>
+        {/* Logo */}
+        <div className="flex items-center gap-3 px-6 h-20 border-b border-white/5">
+          <img
+            src="/logo.png"
+            alt="Brand Logo"
+            className="h-10 w-10 rounded-full object-cover"
+          />
+          <span className="text-lg font-bold tracking-tight">
+            Artist Studio
+          </span>
+        </div>
 
-              <div className="hidden md:flex items-center gap-4">
-                {navItems.map((item) => (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    className={`text-[13px] ${activePath.includes(item.to) ? "text-white" : "text-[#b8a6a1] hover:text-white"}`}
-                  >
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
+        {/* Navigation */}
+        <nav className="p-4 space-y-1">
+          {navItems.map((item) => (
+            <NavItem
+              key={item.path}
+              to={item.path}
+              icon={item.icon}
+              label={item.label}
+              isActive={isActive(item.path)}
+            />
+          ))}
+        </nav>
 
-            {/* Right side: Fan App button + profile menu */}
-            <div className="flex items-center gap-3">
-              {/* Fan App Link — always visible */}
-              <a
-                href="exp://localhost:8081"
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Open Fan App (requires Expo Go or your mobile build)"
-                className="hidden sm:inline-flex items-center gap-2 h-[34px] px-4 rounded-full border border-[#c97a54]/30 bg-[#6a352c]/20 text-[12px] font-medium text-[#c97a54] hover:bg-[#6a352c]/40 hover:border-[#c97a54]/50 transition-all"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="5" y="2" width="14" height="20" rx="2" stroke="currentColor" strokeWidth="1.6" />
-                  <circle cx="12" cy="18" r="1" fill="currentColor" />
-                </svg>
-                Fan App
-              </a>
-
-              <div className="relative z-[9999]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen((v) => !v);
-                    setMobileNavOpen(false);
-                  }}
-                  className="flex items-center gap-2 text-[13px] text-[#d8c7c3] hover:text-white"
-                >
-                  <div className="h-[32px] w-[32px] rounded-full overflow-hidden border border-white/10 bg-[#141010]/70 hover:border-[#c97a54]/50 transition-colors">
-                    {profileSrc ? (
-                      <img src={profileSrc} alt="Profile" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="h-full w-full bg-gradient-to-b from-[#4a2a27] to-[#1e100a] flex items-center justify-center">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#c97a54]/70"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                      </div>
-                    )}
-                  </div>
-                </button>
-
-                {menuOpen ? (
-                  <div className="absolute right-0 z-[9999] mt-3 w-[220px] rounded-[8px] border border-white/10 bg-[#141010]/90 backdrop-blur px-2 py-2 shadow-[0_18px_40px_rgba(0,0,0,0.55)]">
-                    {/* Fan App entry — most prominent */}
-                    <a
-                      href="exp://localhost:8081"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => setMenuOpen(false)}
-                      className="flex items-center gap-3 w-full px-3 py-2.5 mb-1 rounded-[6px] bg-[#6a352c]/20 border border-[#c97a54]/20 text-[13px] text-[#c97a54] hover:bg-[#6a352c]/35 transition-colors"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="5" y="2" width="14" height="20" rx="2" stroke="currentColor" strokeWidth="1.6" />
-                        <circle cx="12" cy="18" r="1" fill="currentColor" />
-                      </svg>
-                      <div>
-                        <div className="font-medium">Open Fan App</div>
-                        <div className="text-[10px] text-[#c97a54]/60 mt-0.5">See how your music looks to fans</div>
-                      </div>
-                    </a>
-
-                    <div className="my-1 border-t border-white/10" />
-
-                    <button
-                      type="button"
-                      className="w-full text-left px-3 py-2 text-[13px] text-[#d8c7c3] hover:bg-white/5 rounded-[4px]"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        navigate("/artist/account");
-                      }}
-                    >
-                      Account settings
-                    </button>
-
-                    <button
-                      type="button"
-                      className="w-full text-left px-3 py-2 text-[13px] text-[#d8c7c3] hover:bg-white/5 rounded-[4px]"
-                      onClick={() => {
-                        localStorage.removeItem("artistToken");
-                        navigate("/artist/login", { replace: true });
-                      }}
-                    >
-                      Logout
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
-
-          {mobileNavOpen ? (
-            <div className="md:hidden rounded-[10px] border border-white/10 bg-[#141010]/45 backdrop-blur shadow-[0_18px_40px_rgba(0,0,0,0.35)] overflow-hidden">
-              <div className="px-3 py-2">
-                  {navItems.map((item) => (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    onClick={() => setMobileNavOpen(false)}
-                    className={`block px-3 py-2 rounded-[8px] text-[13px] ${activePath.includes(item.to) ? "bg-white/5 text-white" : "text-[#d8c7c3] hover:bg-white/5"}`}
-                  >
-                    {item.label}
-                  </Link>
-                ))}
-
-                {/* Fan App link in mobile menu */}
-                <div className="mt-2 pt-2 border-t border-white/10">
-                  <a
-                    href="exp://localhost:8081"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => setMobileNavOpen(false)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-[8px] text-[13px] text-[#c97a54] bg-[#6a352c]/20 border border-[#c97a54]/20"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="5" y="2" width="14" height="20" rx="2" stroke="currentColor" strokeWidth="1.6" />
-                      <circle cx="12" cy="18" r="1" fill="currentColor" />
-                    </svg>
-                    Open Fan App
-                  </a>
+        {/* Bottom */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/5">
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5">
+            <div className="h-9 w-9 rounded-full overflow-hidden border border-white/10 bg-[#0A0A0A]">
+              {profileSrc ? (
+                <img
+                  src={profileSrc}
+                  alt="Profile"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="h-full w-full bg-gradient-to-br from-[#E85D2C]/30 to-[#C97A54]/30 flex items-center justify-center text-sm font-bold text-[#E85D2C]">
+                  {me?.name?.charAt(0).toUpperCase() || "A"}
                 </div>
-              </div>
+              )}
             </div>
-          ) : null}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white truncate">
+                {me?.name || "Artist"}
+              </p>
+              <p className="text-xs text-[#8D7B77]">Artist</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="p-2 rounded-lg hover:bg-white/10 transition-colors text-[#B8A6A1] hover:text-white">
+              <LogoutIcon />
+            </button>
+          </div>
         </div>
+      </aside>
 
-        <div className="mt-6 sm:mt-8">
-          <Outlet />
+      {/* Main Content */}
+      <main className="lg:ml-[280px] min-h-screen">
+        {/* Top Bar */}
+        <header className="sticky top-0 z-30 bg-[#0A0A0A]/80 backdrop-blur-xl border-b border-white/5 px-6 h-20 flex items-center justify-between">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="lg:hidden p-2 rounded-lg hover:bg-white/5 transition-colors text-[#B8A6A1]">
+            <MenuIcon />
+          </button>
+
+          <div className="flex-1 lg:flex-none" />
+
+          <div className="flex items-center gap-4">
+            {/* Fan App Button */}
+            <a
+              href="exp://localhost:8081"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border border-[#E85D2C]/30 bg-[#E85D2C]/10 text-[#E85D2C] hover:bg-[#E85D2C]/20 hover:border-[#E85D2C]/50 transition-all">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2">
+                <rect x="5" y="2" width="14" height="20" rx="2" />
+                <circle cx="12" cy="18" r="1" fill="currentColor" />
+              </svg>
+              Fan App
+            </a>
+
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-white/5">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xs text-[#B8A6A1]">Active</span>
+            </div>
+
+            <button
+              onClick={handleLogout}
+              className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all">
+              <LogoutIcon />
+              Logout
+            </button>
+          </div>
+        </header>
+
+        {/* Page Content */}
+        <div className="p-6 lg:p-8">
+          <div className="max-w-7xl mx-auto">
+            <Outlet />
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

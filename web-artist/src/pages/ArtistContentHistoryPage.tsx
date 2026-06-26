@@ -1,7 +1,30 @@
+// src/pages/ArtistContentHistoryPage.tsx
 import { useMemo, useState } from "react";
 import { http } from "../services/http";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Skeleton from "../components/Skeleton";
+import {
+  History,
+  Search,
+  Music,
+  Video,
+  Film,
+  Play,
+  Trash2,
+  Eye,
+  CheckCircle,
+  AlertCircle,
+  Clock,
+  X,
+  Loader2,
+  Filter,
+  ListMusic,
+  FileAudio,
+  FileVideo,
+  Calendar,
+  BarChart3,
+  MoreVertical,
+} from "lucide-react";
 
 type HistoryItem = {
   id: number;
@@ -53,7 +76,7 @@ export default function ArtistContentHistoryPage() {
   const backgroundStyle = useMemo(() => {
     return {
       backgroundImage:
-        "radial-gradient(circle at 30% 10%, rgba(193,117,86,0.10) 0%, rgba(25,18,18,0.55) 45%, rgba(10,8,8,0.92) 100%)"
+        "radial-gradient(circle at 30% 10%, rgba(232,93,44,0.05) 0%, rgba(10,10,10,0.98) 100%)",
     } as const;
   }, []);
 
@@ -68,17 +91,19 @@ export default function ArtistContentHistoryPage() {
       }
       return Array.isArray(res.data?.items) ? res.data.items : [];
     },
-    placeholderData: (prev: HistoryItem[] | undefined) => prev
+    placeholderData: (prev: HistoryItem[] | undefined) => prev,
   });
 
   const items = historyQuery.data ?? [];
   const loading = historyQuery.isLoading;
   const error = historyQuery.isError
-    ? ((historyQuery.error as any)?.message || "Failed to load content history")
+    ? (historyQuery.error as any)?.message || "Failed to load content history"
     : null;
 
   const baseUrl = useMemo(() => {
-    return (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8000";
+    return (
+      (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8000"
+    );
   }, []);
 
   const toAbsoluteUrl = (url: string | null | undefined) => {
@@ -91,8 +116,12 @@ export default function ArtistContentHistoryPage() {
     const q = query.trim().toLowerCase();
     return items.filter((it) => {
       const type = (it.type || "").toString().toUpperCase();
-      const hasAudio = Boolean(it.audioUrl || it.mediaUrl) || type === "AUDIO" || type === "AUDIO_VIDEO";
-      const hasVideo = Boolean(it.videoUrl) || type === "VIDEO" || type === "AUDIO_VIDEO";
+      const hasAudio =
+        Boolean(it.audioUrl || it.mediaUrl) ||
+        type === "AUDIO" ||
+        type === "AUDIO_VIDEO";
+      const hasVideo =
+        Boolean(it.videoUrl) || type === "VIDEO" || type === "AUDIO_VIDEO";
       if (tab === "AUDIO" && !hasAudio) return false;
       if (tab === "VIDEO" && !hasVideo) return false;
       if (!q) return true;
@@ -110,15 +139,39 @@ export default function ArtistContentHistoryPage() {
   };
 
   const getPreviewUrl = (it: HistoryItem, kind: "AUDIO" | "VIDEO") => {
-    if (kind === "VIDEO") return toAbsoluteUrl(it.videoUrl ?? it.mediaUrl) ?? null;
+    if (kind === "VIDEO")
+      return toAbsoluteUrl(it.videoUrl ?? it.mediaUrl) ?? null;
     return toAbsoluteUrl(it.audioUrl ?? it.mediaUrl) ?? null;
   };
 
   const getStatus = (it: HistoryItem) => {
     const lifecycle = (it.lifecycleState || "").toString().toUpperCase();
     const explicit = (it.status || "").toString().toUpperCase();
-    const status = explicit || (lifecycle === "REJECTED" ? "REJECTED" : it.isApproved ? "PUBLISHED" : "PENDING");
+    const status =
+      explicit ||
+      (lifecycle === "REJECTED"
+        ? "REJECTED"
+        : it.isApproved
+        ? "PUBLISHED"
+        : "PENDING");
     return status;
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "PUBLISHED":
+        return <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />;
+      case "REJECTED":
+        return <AlertCircle className="w-3.5 h-3.5 text-rose-400" />;
+      default:
+        return <Clock className="w-3.5 h-3.5 text-amber-400" />;
+    }
+  };
+
+  const getTypeIcon = (type: string) => {
+    if (type === "VIDEO") return <Video className="w-4 h-4" />;
+    if (type === "AUDIO+VIDEO") return <Film className="w-4 h-4" />;
+    return <Music className="w-4 h-4" />;
   };
 
   const deleteMutation = useMutation({
@@ -132,111 +185,117 @@ export default function ArtistContentHistoryPage() {
     onMutate: async (id: number) => {
       setBusyId(id);
       await queryClient.cancelQueries({ queryKey: historyQueryKey });
-      const previous = queryClient.getQueryData<HistoryItem[]>(historyQueryKey) ?? [];
-      queryClient.setQueryData<HistoryItem[]>(historyQueryKey, (old: HistoryItem[] | undefined) =>
-        (old ?? []).filter((x: HistoryItem) => x.id !== id)
+      const previous =
+        queryClient.getQueryData<HistoryItem[]>(historyQueryKey) ?? [];
+      queryClient.setQueryData<HistoryItem[]>(
+        historyQueryKey,
+        (old: HistoryItem[] | undefined) =>
+          (old ?? []).filter((x: HistoryItem) => x.id !== id)
       );
       return { previous };
     },
-    onError: (_err: unknown, _id: number, ctx: { previous: HistoryItem[] } | undefined) => {
-      if (ctx?.previous) queryClient.setQueryData(historyQueryKey, ctx.previous);
+    onError: (
+      _err: unknown,
+      _id: number,
+      ctx: { previous: HistoryItem[] } | undefined
+    ) => {
+      if (ctx?.previous)
+        queryClient.setQueryData(historyQueryKey, ctx.previous);
     },
     onSettled: () => {
       setBusyId(null);
       queryClient.invalidateQueries({ queryKey: historyQueryKey });
-    }
+    },
   });
 
   const onDelete = async (item: HistoryItem) => {
     const id = item.id;
-
     const ok = window.confirm(`Delete "${item.title}"? This cannot be undone.`);
     if (!ok) return;
-
-    const clientTs = new Date().toISOString();
-    console.log(
-      `--------------------------------------------------\n[ARTIST_UI_DELETE] ${clientTs} contentId=${id} action=CLICK title=${item.title}`
-    );
-
-    try {
-      const res = await deleteMutation.mutateAsync(id);
-      const clientTs2 = new Date().toISOString();
-      console.log(
-        `--------------------------------------------------\n[ARTIST_UI_DELETE] ${clientTs2} contentId=${res.id} action=SUCCESS correlationId=-`
-      );
-    } catch (e: any) {
-      const clientTs3 = new Date().toISOString();
-      console.log(
-        `--------------------------------------------------\n[ARTIST_UI_DELETE] ${clientTs3} contentId=${id} action=ERROR message=${e?.message || "Delete failed"}`
-      );
-    }
+    await deleteMutation.mutateAsync(id);
   };
 
   return (
-    <div className="w-full" style={backgroundStyle}>
-      <div className="rounded-[10px] border border-white/10 bg-[#141010]/35 backdrop-blur px-7 py-6 shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
-        <div className="flex items-start justify-between gap-6">
+    <div className="w-full animate-fadeIn" style={backgroundStyle}>
+      <div className="rounded-2xl border border-white/10 bg-[#15100E] p-6 shadow-2xl">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-6 mb-6">
           <div>
-            <div className="text-[18px] font-light tracking-wide">Content History</div>
-            <div className="mt-1 text-[13px] text-[#b8a6a1]">All your uploaded audio and video content.</div>
-          </div>
-        </div>
-
-        {error ? <div className="mt-4 text-[13px] text-[#e3a1a1]">{error}</div> : null}
-
-        <div className="mt-5 flex flex-col gap-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setTab("ALL")}
-                className={`h-[34px] px-4 rounded-[999px] border text-[12px] tracking-wide ${
-                  tab === "ALL" ? "border-white/20 bg-white/10 text-white" : "border-white/10 bg-transparent text-[#b8a6a1] hover:text-white"
-                }`}
-              >
-                All Content
-              </button>
-              <button
-                type="button"
-                onClick={() => setTab("AUDIO")}
-                className={`h-[34px] px-4 rounded-[999px] border text-[12px] tracking-wide ${
-                  tab === "AUDIO" ? "border-white/20 bg-white/10 text-white" : "border-white/10 bg-transparent text-[#b8a6a1] hover:text-white"
-                }`}
-              >
-                Audio Only
-              </button>
-              <button
-                type="button"
-                onClick={() => setTab("VIDEO")}
-                className={`h-[34px] px-4 rounded-[999px] border text-[12px] tracking-wide ${
-                  tab === "VIDEO" ? "border-white/20 bg-white/10 text-white" : "border-white/10 bg-transparent text-[#b8a6a1] hover:text-white"
-                }`}
-              >
-                Video Only
-              </button>
-            </div>
-
             <div className="flex items-center gap-3">
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search by title..."
-                className="h-[38px] w-full md:w-[320px] rounded-[8px] border border-white/10 bg-[#141010]/55 px-3 text-[13px] text-[#f0e5e2] outline-none focus:border-white/20"
-              />
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#E85D2C]/20 to-[#C97A54]/20 border border-[#E85D2C]/30 flex items-center justify-center">
+                <History className="w-5 h-5 text-[#E85D2C]" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-white">
+                  Content History
+                </h1>
+                <p className="text-sm text-[#B8A6A1]">
+                  All your uploaded audio and video content.
+                </p>
+              </div>
             </div>
+          </div>
+          <div className="text-xs text-[#8D7B77] bg-white/5 px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-1">
+            <ListMusic className="w-3.5 h-3.5" />
+            {items.length} {items.length === 1 ? "item" : "items"}
           </div>
         </div>
 
-        <div className="mt-5 overflow-x-auto">
+        {error && (
+          <div className="mb-4 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-sm text-rose-300 flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            {error}
+          </div>
+        )}
+
+        {/* Filters */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
+          <div className="flex items-center gap-2 flex-wrap">
+            {[
+              { key: "ALL", label: "All Content", icon: ListMusic },
+              { key: "AUDIO", label: "Audio Only", icon: FileAudio },
+              { key: "VIDEO", label: "Video Only", icon: FileVideo },
+            ].map((t) => {
+              const Icon = t.icon;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTab(t.key as any)}
+                  className={`h-[36px] px-4 rounded-full border text-xs font-medium transition-all flex items-center gap-1.5 ${
+                    tab === t.key
+                      ? "border-[#E85D2C]/30 bg-[#E85D2C]/10 text-[#E85D2C] shadow-lg shadow-[#E85D2C]/10"
+                      : "border-white/10 bg-transparent text-[#B8A6A1] hover:text-white hover:bg-white/5"
+                  }`}>
+                  <Icon className="w-3.5 h-3.5" />
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6b5b57]" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by title..."
+              className="h-[38px] w-full md:w-[280px] rounded-xl border border-white/10 bg-[#0A0A0A]/60 pl-9 pr-4 text-sm text-white placeholder-[#6b5b57] outline-none focus:border-[#E85D2C]/50 transition-all"
+            />
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
           <table className="w-full border-separate border-spacing-0">
             <thead>
-              <tr className="text-left text-[12px] text-[#b8a6a1]">
-                <th className="py-3 pr-4 font-normal">Title</th>
-                <th className="py-3 pr-4 font-normal">Type</th>
-                <th className="py-3 pr-4 font-normal">Created</th>
-                <th className="py-3 pr-4 font-normal">Total Plays</th>
-                <th className="py-3 pr-4 font-normal">Status</th>
-                <th className="py-3 pr-0 font-normal">Actions</th>
+              <tr className="text-left text-xs text-[#8D7B77] border-b border-white/5">
+                <th className="py-3 pr-4 font-medium">Title</th>
+                <th className="py-3 pr-4 font-medium">Type</th>
+                <th className="py-3 pr-4 font-medium">Created</th>
+                <th className="py-3 pr-4 font-medium">Plays</th>
+                <th className="py-3 pr-4 font-medium">Status</th>
+                <th className="py-3 pr-0 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -244,99 +303,117 @@ export default function ArtistContentHistoryPage() {
                 <tr>
                   <td colSpan={6} className="py-6">
                     <div className="space-y-4">
-                      <div className="grid grid-cols-6 gap-4 items-center">
-                        <Skeleton className="h-[14px] w-[220px]" />
-                        <Skeleton className="h-[14px] w-[80px]" />
-                        <Skeleton className="h-[14px] w-[140px]" />
-                        <Skeleton className="h-[14px] w-[90px]" />
-                        <Skeleton className="h-[22px] w-[110px] rounded-[999px]" />
-                        <div className="flex items-center justify-end gap-2">
-                          <Skeleton className="h-[32px] w-[80px]" />
-                          <Skeleton className="h-[32px] w-[90px]" />
+                      {[1, 2, 3].map((i) => (
+                        <div
+                          key={i}
+                          className="grid grid-cols-6 gap-4 items-center">
+                          <Skeleton className="h-4 w-[200px]" />
+                          <Skeleton className="h-4 w-[80px]" />
+                          <Skeleton className="h-4 w-[140px]" />
+                          <Skeleton className="h-4 w-[60px]" />
+                          <Skeleton className="h-6 w-[100px] rounded-full" />
+                          <div className="flex items-center justify-end gap-2">
+                            <Skeleton className="h-8 w-[90px]" />
+                            <Skeleton className="h-8 w-[90px]" />
+                            <Skeleton className="h-8 w-[70px]" />
+                          </div>
                         </div>
-                      </div>
-                      <div className="grid grid-cols-6 gap-4 items-center">
-                        <Skeleton className="h-[14px] w-[200px]" />
-                        <Skeleton className="h-[14px] w-[80px]" />
-                        <Skeleton className="h-[14px] w-[140px]" />
-                        <Skeleton className="h-[14px] w-[90px]" />
-                        <Skeleton className="h-[22px] w-[110px] rounded-[999px]" />
-                        <div className="flex items-center justify-end gap-2">
-                          <Skeleton className="h-[32px] w-[80px]" />
-                          <Skeleton className="h-[32px] w-[90px]" />
-                        </div>
-                      </div>
+                      ))}
                     </div>
                   </td>
                 </tr>
               ) : filtered.length ? (
                 filtered.map((it, idx) => {
-                  const id = it.id;
-                  const busy = id != null && busyId === id;
+                  const busy = it.id != null && busyId === it.id;
                   const status = getStatus(it);
-                  const isRejected = status === "REJECTED";
                   const isPublished = status === "PUBLISHED";
+                  const isRejected = status === "REJECTED";
                   const badgeClass = isPublished
-                    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
                     : isRejected
-                      ? "border-rose-500/25 bg-rose-500/10 text-rose-200"
-                      : "border-amber-500/25 bg-amber-500/10 text-amber-200";
+                    ? "border-rose-500/30 bg-rose-500/10 text-rose-400"
+                    : "border-amber-500/30 bg-amber-500/10 text-amber-400";
 
-                  const rawType = (it.type || "").toString().toUpperCase();
-                  const canPreviewAudio = Boolean(it.audioUrl || it.mediaUrl) || rawType === "AUDIO" || rawType === "AUDIO_VIDEO";
-                  const canPreviewVideo = Boolean(it.videoUrl) || rawType === "VIDEO" || rawType === "AUDIO_VIDEO";
                   const typeLabel = getDisplayType(it);
+                  const TypeIcon = getTypeIcon(typeLabel);
+
                   return (
-                    <tr key={`${id ?? idx}`} className="border-t border-white/10">
-                      <td className="py-4 pr-4 text-[13px] text-[#f0e5e2]">{it.title}</td>
-                      <td className="py-4 pr-4 text-[12px] text-[#d8c7c3]">{typeLabel}</td>
-                      <td className="py-4 pr-4 text-[12px] text-[#d8c7c3]">{formatDateTime(it.createdAt)}</td>
-                      <td className="py-4 pr-4 text-[12px] text-[#d8c7c3]">{Number(it.totalPlays ?? 0).toLocaleString()}</td>
-                      <td className="py-4 pr-4 text-[12px]">
+                    <tr
+                      key={it.id}
+                      className="border-t border-white/5 hover:bg-white/5 transition-all group">
+                      <td className="py-4 pr-4">
+                        <div className="flex items-center gap-3">
+                          <div className="h-9 w-9 rounded-lg bg-[#0A0A0A]/60 border border-white/10 flex items-center justify-center text-[#E85D2C]">
+                            {TypeIcon}
+                          </div>
+                          <span className="text-sm font-medium text-white">
+                            {it.title}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-4 pr-4">
+                        <span className="text-xs text-[#B8A6A1] bg-white/5 px-2.5 py-1 rounded-full border border-white/5">
+                          {typeLabel}
+                        </span>
+                      </td>
+                      <td className="py-4 pr-4">
+                        <div className="flex items-center gap-1.5 text-xs text-[#B8A6A1]">
+                          <Calendar className="w-3 h-3 text-[#6b5b57]" />
+                          {formatDateTime(it.createdAt)}
+                        </div>
+                      </td>
+                      <td className="py-4 pr-4">
+                        <div className="flex items-center gap-1.5 text-xs text-[#B8A6A1]">
+                          <BarChart3 className="w-3 h-3 text-[#6b5b57]" />
+                          {Number(it.totalPlays ?? 0).toLocaleString()}
+                        </div>
+                      </td>
+                      <td className="py-4 pr-4">
                         <span
-                          title={isRejected ? it.rejectionReason || "Rejected" : undefined}
-                          className={`inline-flex items-center rounded-[999px] border px-2.5 py-1 text-[11px] ${badgeClass}`}
-                        >
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${badgeClass}`}>
+                          {getStatusIcon(status)}
                           {status === "PUBLISHED"
                             ? "Published"
                             : status === "REJECTED"
-                              ? "Rejected"
-                              : "Pending Approval"}
+                            ? "Rejected"
+                            : "Pending"}
                         </span>
                       </td>
                       <td className="py-4 pr-0">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
-                            disabled={!canPreviewAudio}
+                            disabled={!it.audioUrl && !it.mediaUrl}
                             onClick={() => {
                               setPreviewKind("AUDIO");
                               setPreview(it);
                             }}
-                            className="h-[32px] rounded-[6px] border border-white/10 bg-[#141010]/60 px-3 text-[12px] font-light tracking-wide text-[#e6d6d2] hover:bg-white/5 disabled:opacity-40"
-                          >
-                            Preview Audio
+                            className="h-8 px-3 rounded-lg border border-white/10 bg-[#0A0A0A]/60 text-xs text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all disabled:opacity-40 flex items-center gap-1.5">
+                            <Music className="w-3.5 h-3.5" />
+                            Audio
                           </button>
-
                           <button
                             type="button"
-                            disabled={!canPreviewVideo}
+                            disabled={!it.videoUrl}
                             onClick={() => {
                               setPreviewKind("VIDEO");
                               setPreview(it);
                             }}
-                            className="h-[32px] rounded-[6px] border border-white/10 bg-[#141010]/60 px-3 text-[12px] font-light tracking-wide text-[#e6d6d2] hover:bg-white/5 disabled:opacity-40"
-                          >
-                            Preview Video
+                            className="h-8 px-3 rounded-lg border border-white/10 bg-[#0A0A0A]/60 text-xs text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all disabled:opacity-40 flex items-center gap-1.5">
+                            <Video className="w-3.5 h-3.5" />
+                            Video
                           </button>
-
                           <button
                             type="button"
                             disabled={busy}
                             onClick={() => onDelete(it)}
-                            className="h-[32px] rounded-[6px] border border-[#7a3f31]/30 bg-gradient-to-b from-[#6a352c] to-[#3d1e18] px-3 text-[12px] font-light tracking-wide text-[#e6d6d2] shadow-[0_10px_25px_rgba(0,0,0,0.25)] disabled:opacity-60"
-                          >
-                            {busy ? "Deleting..." : "Delete"}
+                            className="h-8 px-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs text-rose-400 hover:bg-rose-500/20 transition-all disabled:opacity-50 flex items-center gap-1.5">
+                            {busy ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                            {busy ? "" : "Delete"}
                           </button>
                         </div>
                       </td>
@@ -345,8 +422,16 @@ export default function ArtistContentHistoryPage() {
                 })
               ) : (
                 <tr>
-                  <td colSpan={6} className="py-6 text-[13px] text-[#d8c7c3]">
-                    No uploads yet.
+                  <td colSpan={6} className="py-12 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="h-16 w-16 rounded-full bg-[#E85D2C]/10 flex items-center justify-center">
+                        <ListMusic className="w-8 h-8 text-[#E85D2C] opacity-50" />
+                      </div>
+                      <p className="text-sm text-[#B8A6A1]">No uploads yet</p>
+                      <p className="text-xs text-[#6b5b57]">
+                        Start sharing your music with the world
+                      </p>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -355,61 +440,84 @@ export default function ArtistContentHistoryPage() {
         </div>
       </div>
 
-      {preview && previewKind === "VIDEO" ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-6" onClick={() => setPreview(null)}>
+      {/* Video Preview Modal */}
+      {preview && previewKind === "VIDEO" && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 px-6"
+          onClick={() => setPreview(null)}>
           <div
-            className="w-full max-w-[980px] overflow-hidden rounded-[12px] border border-white/10 bg-[#0e0a0a] shadow-[0_30px_80px_rgba(0,0,0,0.65)]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+            className="w-full max-w-[900px] overflow-hidden rounded-2xl border border-white/10 bg-[#0A0A0A] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
               <div>
-                <div className="text-[14px] text-[#f0e5e2]">{preview.title}</div>
-                <div className="mt-0.5 text-[12px] text-[#b8a6a1]">Video preview</div>
+                <div className="text-sm font-medium text-white">
+                  {preview.title}
+                </div>
+                <div className="text-xs text-[#B8A6A1]">Video preview</div>
               </div>
               <button
                 type="button"
                 onClick={() => setPreview(null)}
-                className="h-[32px] rounded-[8px] border border-white/10 bg-[#141010]/60 px-3 text-[12px] text-[#e6d6d2] hover:bg-white/5"
-              >
+                className="h-8 px-4 rounded-lg border border-white/10 bg-[#0A0A0A]/60 text-xs text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all flex items-center gap-1.5">
+                <X className="w-4 h-4" />
                 Close
               </button>
             </div>
-            <div className="p-5">
+            <div className="p-6">
               <video
                 key={preview.id}
                 controls
                 autoPlay
                 playsInline
-                className="w-full rounded-[10px] bg-black"
+                className="w-full rounded-xl bg-black"
                 src={getPreviewUrl(preview, "VIDEO") ?? undefined}
               />
             </div>
           </div>
         </div>
-      ) : null}
+      )}
 
-      {preview && previewKind === "AUDIO" ? (
+      {/* Audio Preview Modal */}
+      {preview && previewKind === "AUDIO" && (
         <div className="fixed inset-x-0 bottom-0 z-[60] px-6 pb-6">
-          <div className="mx-auto w-full max-w-[1100px] rounded-[12px] border border-white/10 bg-[#141010]/90 backdrop-blur shadow-[0_24px_70px_rgba(0,0,0,0.6)]">
-            <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-white/10">
+          <div className="mx-auto w-full max-w-[900px] rounded-2xl border border-white/10 bg-[#0A0A0A] shadow-2xl">
+            <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-white/10">
               <div className="min-w-0">
-                <div className="text-[13px] text-[#f0e5e2] truncate">{preview.title}</div>
-                <div className="mt-0.5 text-[12px] text-[#b8a6a1]">Audio preview</div>
+                <div className="text-sm font-medium text-white truncate">
+                  {preview.title}
+                </div>
+                <div className="text-xs text-[#B8A6A1]">Audio preview</div>
               </div>
               <button
                 type="button"
                 onClick={() => setPreview(null)}
-                className="h-[32px] rounded-[8px] border border-white/10 bg-[#0e0a0a]/40 px-3 text-[12px] text-[#e6d6d2] hover:bg-white/5"
-              >
+                className="h-8 px-4 rounded-lg border border-white/10 bg-[#0A0A0A]/60 text-xs text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all flex items-center gap-1.5">
+                <X className="w-4 h-4" />
                 Close
               </button>
             </div>
-            <div className="px-5 py-4">
-              <audio key={preview.id} controls autoPlay className="w-full" src={getPreviewUrl(preview, "AUDIO") ?? undefined} />
+            <div className="px-6 py-4">
+              <audio
+                key={preview.id}
+                controls
+                autoPlay
+                className="w-full"
+                src={getPreviewUrl(preview, "AUDIO") ?? undefined}
+              />
             </div>
           </div>
         </div>
-      ) : null}
+      )}
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.5s ease-out forwards;
+        }
+      `}</style>
     </div>
   );
 }

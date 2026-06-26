@@ -22,6 +22,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { useVideoPlayer, VideoView } from "expo-video";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Slider from "@react-native-community/slider";
@@ -36,7 +37,6 @@ import { setAudioModeAsync } from "expo-audio";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ScreenOrientation from "expo-screen-orientation";
-import { useVideoPlayer, VideoView } from "expo-video";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -442,9 +442,12 @@ export default function VideoScreen() {
   const videoPlayer = useVideoPlayer(activePlaybackUrl, (player) => {
     player.loop = false;
     player.staysActiveInBackground = true;
-    // Only auto-play on init if user hasn't explicitly paused
-    if (!userPausedRef.current) {
+    console.log("[VideoScreen] VideoPlayer initialized with URL:", activePlaybackUrl);
+    if (activePlaybackUrl && !userPausedRef.current) {
+      console.log("[VideoScreen] Auto-playing on init with valid URL");
       safePlay(player as any, "init");
+    } else {
+      console.log("[VideoScreen] Skipping auto-play - no URL or user paused");
     }
   });
   const lastTapRef = useRef(0);
@@ -798,14 +801,28 @@ export default function VideoScreen() {
     async (value: number) => {
       setIsSeeking(false);
       try {
-        // ✅ Better seek for both Android & iOS
         const targetSeconds = value / 1000;
-        videoPlayer.currentTime = targetSeconds;
-      } catch {
-        // ignore
+        const currentSeconds = videoPlayer.currentTime;
+        const deltaSeconds = targetSeconds - currentSeconds;
+
+        // Use seekBy for better Android compatibility
+        videoPlayer.seekBy(deltaSeconds);
+
+        // Resume playback after seek on Android with a small delay
+        if (isVideoPlaying) {
+          if (Platform.OS === "android") {
+            setTimeout(() => {
+              safePlay(videoPlayer as any, "slider-seek");
+            }, 50);
+          } else {
+            safePlay(videoPlayer as any, "slider-seek");
+          }
+        }
+      } catch (e) {
+        console.log("SLIDER SEEK ERROR", e);
       }
     },
-    [videoPlayer]
+    [videoPlayer, isVideoPlaying, safePlay]
   );
 
   const load = useCallback(
@@ -1108,6 +1125,18 @@ export default function VideoScreen() {
             shouldPlayInBackground: true,
             interruptionMode: "doNotMix",
           });
+
+          console.log("[VideoScreen] Playback URL set, attempting to play:", playbackUrl);
+
+          // Explicitly start playback after URL is set
+          setTimeout(() => {
+            if (videoPlayer && sessionId === playbackSessionRef.current) {
+              console.log("[VideoScreen] Calling safePlay after URL set");
+              safePlay(videoPlayer as any, "onPressVideo");
+            } else {
+              console.log("[VideoScreen] safePlay skipped - session mismatch or no player");
+            }
+          }, 100);
         } catch (err: any) {
           const msg = (err?.message || "").toLowerCase();
           if (msg.includes("subscription") || msg.includes("access denied")) {
@@ -1500,16 +1529,34 @@ export default function VideoScreen() {
     try {
       const v = videoPlayer;
       if (!v) return;
+
+      const wasPlaying = v.playing;
       const current = toFiniteDurationMs(v.currentTime * 1000);
       const dur = toFiniteDurationMs(v.duration * 1000);
+
       const next =
         dir === "back" ? current - SEEK_DELTA_MS : current + SEEK_DELTA_MS;
+
       const target = clamp(next, 0, dur > 0 ? dur : Number.MAX_SAFE_INTEGER);
-      v.currentTime = target / 1000;
-    } catch {
-      // ignore
+
+      // Use seekBy for better Android compatibility
+      const deltaSeconds = (target / 1000) - v.currentTime;
+      v.seekBy(deltaSeconds);
+
+      // Resume playback after a small delay on Android to ensure seek completes
+      if (wasPlaying) {
+        if (Platform.OS === "android") {
+          setTimeout(() => {
+            safePlay(v as any, "double-tap-seek");
+          }, 50);
+        } else {
+          safePlay(v as any, "double-tap-seek");
+        }
+      }
+    } catch (e) {
+      console.log("SEEK ERROR", e);
     }
-  }, []);
+  }, [safePlay]);
 
   const onPressPlayerSurface = useCallback(
     async (evt: any) => {
@@ -1549,18 +1596,24 @@ export default function VideoScreen() {
   const toggleInlinePlayPause = useCallback(async () => {
     try {
       const v = videoPlayer;
-      if (!v) return;
+      if (!v) {
+        console.log("[VideoScreen] toggleInlinePlayPause: No video player");
+        return;
+      }
+      console.log("[VideoScreen] toggleInlinePlayPause: Current playing state:", v.playing);
       if (v.playing) {
         userPausedRef.current = true; // Mark as user-initiated pause
         await v.pause();
         setIsVideoPlaying(false);
+        console.log("[VideoScreen] Paused video");
       } else {
         userPausedRef.current = false; // Reset when user plays
         await v.play();
         setIsVideoPlaying(true);
+        console.log("[VideoScreen] Started video playback");
       }
-    } catch {
-      // ignore
+    } catch (e) {
+      console.log("[VideoScreen] toggleInlinePlayPause error:", e);
     }
   }, [videoPlayer]);
 
@@ -2261,16 +2314,21 @@ export default function VideoScreen() {
                         ]}
                         onPress={async () => {
                           try {
-                            if (videoPlayer.playing) {
-                              await videoPlayer.pause();
-                              setIsVideoPlaying(false);
+                            const wasPlaying = videoPlayer.playing;
+                            // Use seekBy for better Android compatibility
+                            videoPlayer.seekBy(-10);
+                            if (wasPlaying) {
+                              if (Platform.OS === "android") {
+                                setTimeout(() => {
+                                  safePlay(videoPlayer as any, "backward-seek");
+                                }, 50);
+                              } else {
+                                safePlay(videoPlayer as any, "backward-seek");
+                              }
                             }
-                            const newTime = Math.max(
-                              0,
-                              videoPlayer.currentTime - 10
-                            );
-                            videoPlayer.seekTo(newTime);
-                          } catch (e) {}
+                          } catch (e) {
+                            console.log("BACKWARD SEEK ERROR", e);
+                          }
                         }}>
                         <Text style={styles.seekBtnText}>⏪ 10</Text>
                       </Pressable>
@@ -2299,17 +2357,26 @@ export default function VideoScreen() {
                         ]}
                         onPress={async () => {
                           try {
-                            if (videoPlayer.playing) {
-                              await videoPlayer.pause();
-                              setIsVideoPlaying(false);
-                            }
+                            const wasPlaying = videoPlayer.playing;
                             const dur = videoPlayer.duration;
-                            const newTime = Math.min(
-                              dur,
-                              videoPlayer.currentTime + 10
-                            );
-                            videoPlayer.seekTo(newTime);
-                          } catch (e) {}
+                            const currentTime = videoPlayer.currentTime;
+                            // Calculate remaining time to avoid seeking beyond duration
+                            const remaining = dur - currentTime;
+                            const seekAmount = Math.min(10, remaining);
+                            // Use seekBy for better Android compatibility
+                            videoPlayer.seekBy(seekAmount);
+                            if (wasPlaying) {
+                              if (Platform.OS === "android") {
+                                setTimeout(() => {
+                                  safePlay(videoPlayer as any, "forward-seek");
+                                }, 50);
+                              } else {
+                                safePlay(videoPlayer as any, "forward-seek");
+                              }
+                            }
+                          } catch (e) {
+                            console.log("FORWARD SEEK ERROR", e);
+                          }
                         }}>
                         <Text style={styles.seekBtnText}>10 ⏩</Text>
                       </Pressable>
@@ -3437,5 +3504,4 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.2)",
   },
-  
 });
