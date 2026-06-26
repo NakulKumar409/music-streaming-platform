@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { http } from "../services/http";
 import ImageUpload from "../components/ImageUpload";
 import PageWrapper from "../components/PageWrapper";
@@ -18,11 +18,11 @@ import {
   Eye,
   EyeOff,
   Sparkles,
-  Music,
-  TrendingUp,
-  Award,
   Crown,
-  Zap
+  Zap,
+  ChevronDown,
+  Search,
+  X,
 } from "lucide-react";
 
 type Artist = {
@@ -41,6 +41,242 @@ type FeaturedArtist = {
   createdAt: string;
 };
 
+// Premium Custom Dropdown Component
+function PremiumSelect({
+  value,
+  onChange,
+  options,
+  placeholder,
+  disabled,
+  label,
+  isLoading = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: Artist[];
+  placeholder: string;
+  disabled?: boolean;
+  label?: string;
+  isLoading?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedOption = options.find((opt) => String(opt.id) === value);
+
+  // Fix: Handle null names in filter
+  const filteredOptions = options.filter(
+    (opt) =>
+      opt.name && opt.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return (
+    <div className="relative w-full" ref={dropdownRef}>
+      {label && (
+        <label className="block text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-1.5">
+          {label}
+        </label>
+      )}
+
+      {/* Dropdown Trigger */}
+      <button
+        type="button"
+        onClick={() => !disabled && !isLoading && setIsOpen(!isOpen)}
+        disabled={disabled || isLoading}
+        className={`w-full h-[48px] rounded-xl bg-[#0A0A0A] border border-white/10 px-4 pr-10 text-sm text-left text-white outline-none transition-all flex items-center justify-between ${
+          isOpen
+            ? "border-[#E85D2C]/50 ring-2 ring-[#E85D2C]/20"
+            : "hover:border-white/20"
+        } ${
+          disabled || isLoading
+            ? "opacity-50 cursor-not-allowed"
+            : "cursor-pointer"
+        }`}>
+        <span
+          className={`truncate flex items-center gap-2 ${
+            selectedOption ? "text-white" : "text-[#8D7B77]"
+          }`}>
+          {selectedOption ? (
+            <>
+              <div className="h-6 w-6 rounded-full bg-black/40 border border-white/10 overflow-hidden shrink-0">
+                {selectedOption.profileImageUrl ? (
+                  <img
+                    src={selectedOption.profileImageUrl}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="h-full w-full flex items-center justify-center text-[#8D7B77]">
+                    <User size={12} />
+                  </div>
+                )}
+              </div>
+              <span>{selectedOption.name || "Unnamed Artist"}</span>
+              {selectedOption.isVerified && (
+                <CheckCircle size={14} className="text-blue-400 shrink-0" />
+              )}
+            </>
+          ) : (
+            placeholder
+          )}
+        </span>
+        {isLoading ? (
+          <div className="w-4 h-4 border-2 border-[#E85D2C]/20 border-t-[#E85D2C] rounded-full animate-spin" />
+        ) : (
+          <ChevronDown
+            size={18}
+            className={`text-[#8D7B77] transition-transform duration-300 ${
+              isOpen ? "rotate-180" : ""
+            }`}
+          />
+        )}
+      </button>
+
+      {/* Dropdown Menu */}
+      {isOpen && !disabled && !isLoading && (
+        <div className="absolute z-50 w-full mt-2 rounded-xl bg-[#15100E] border border-white/10 shadow-2xl overflow-hidden animate-in slide-in-from-top-2 duration-200">
+          {/* Search Input */}
+          <div className="relative p-3 border-b border-white/5 bg-black/20">
+            <Search
+              size={16}
+              className="absolute left-6 top-1/2 -translate-y-1/2 text-[#8D7B77]"
+            />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search artists..."
+              className="w-full h-[36px] rounded-lg bg-[#0A0A0A] border border-white/10 pl-8 pr-8 text-sm text-white placeholder:text-[#8D7B77] outline-none focus:border-[#E85D2C]/50 transition-all"
+              onClick={(e) => e.stopPropagation()}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSearchTerm("");
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D7B77] hover:text-white transition-colors">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* Options List */}
+          <div className="max-h-[260px] overflow-y-auto p-1.5">
+            {filteredOptions.length === 0 ? (
+              <div className="px-4 py-8 text-center">
+                <div className="inline-flex p-3 rounded-full bg-white/5 mb-2">
+                  <Search size={20} className="text-[#8D7B77]" />
+                </div>
+                <p className="text-sm text-[#8D7B77]">No artists found</p>
+                <p className="text-xs text-[#8D7B77]/60 mt-0.5">
+                  Try adjusting your search
+                </p>
+              </div>
+            ) : (
+              filteredOptions.map((artist) => {
+                const isSelected = String(artist.id) === value;
+                return (
+                  <button
+                    key={artist.id}
+                    type="button"
+                    onClick={() => {
+                      onChange(String(artist.id));
+                      setIsOpen(false);
+                      setSearchTerm("");
+                    }}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all ${
+                      isSelected
+                        ? "bg-[#E85D2C]/10 text-white border border-[#E85D2C]/20"
+                        : "text-[#B8A6A1] hover:bg-white/5 hover:text-white"
+                    }`}>
+                    <div className="h-8 w-8 rounded-full bg-[#0A0A0A] border border-white/10 overflow-hidden shrink-0">
+                      {artist.profileImageUrl ? (
+                        <img
+                          src={artist.profileImageUrl}
+                          alt={artist.name || "Artist"}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center text-[#8D7B77]">
+                          <User size={14} />
+                        </div>
+                      )}
+                    </div>
+                    <span className="flex-1 text-left truncate">
+                      {artist.name || "Unnamed Artist"}
+                    </span>
+                    {artist.isVerified && (
+                      <CheckCircle
+                        size={14}
+                        className="text-blue-400 shrink-0"
+                      />
+                    )}
+                    {isSelected && (
+                      <div className="h-5 w-5 rounded-full bg-[#E85D2C] flex items-center justify-center shrink-0">
+                        <CheckCircle size={10} className="text-white" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-4 py-2.5 border-t border-white/5 bg-black/20 flex items-center justify-between">
+            <span className="text-xs text-[#8D7B77]">
+              {filteredOptions.length} artist
+              {filteredOptions.length !== 1 ? "s" : ""} available
+            </span>
+            <span className="text-xs text-[#8D7B77]">
+              <kbd className="px-1.5 py-0.5 rounded bg-white/5 text-[10px]">
+                ESC
+              </kbd>{" "}
+              to close
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Selected Display */}
+      {selectedOption && (
+        <div className="mt-2 flex items-center gap-2 p-2 rounded-lg bg-[#E85D2C]/5 border border-[#E85D2C]/10">
+          <div className="h-5 w-5 rounded-full bg-[#E85D2C]/20 flex items-center justify-center shrink-0">
+            <CheckCircle size={10} className="text-[#E85D2C]" />
+          </div>
+          <p className="text-xs text-[#8D7B77]">
+            Selected:{" "}
+            <span className="text-white font-medium">
+              {selectedOption.name || "Unnamed Artist"}
+            </span>
+            {selectedOption.isVerified && (
+              <span className="ml-1.5 text-blue-400 text-[10px]">
+                ✓ Verified
+              </span>
+            )}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminFeaturedArtistsPage() {
   const [artists, setArtists] = useState<Artist[]>([]);
   const [featured, setFeatured] = useState<FeaturedArtist[]>([]);
@@ -48,7 +284,7 @@ export default function AdminFeaturedArtistsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [addMode, setAddMode] = useState<"existing" | "manual">("existing");
   const [manualName, setManualName] = useState<string>("");
   const [manualAvatar, setManualAvatar] = useState<string>("");
@@ -64,7 +300,7 @@ export default function AdminFeaturedArtistsPage() {
 
       const artistsData = artistsRes.data?.items || [];
       const featuredData = featuredRes.data?.featured || [];
-      
+
       setArtists(artistsData);
       setFeatured(featuredData);
     } catch (err: any) {
@@ -83,7 +319,7 @@ export default function AdminFeaturedArtistsPage() {
     setError(null);
     try {
       let payload;
-      
+
       if (addMode === "existing") {
         if (!selectedArtistId) {
           setError("Please select an artist");
@@ -97,18 +333,18 @@ export default function AdminFeaturedArtistsPage() {
           setIsAdding(false);
           return;
         }
-        payload = { 
-          name: manualName.trim(), 
-          avatar: manualAvatar.trim() 
+        payload = {
+          name: manualName.trim(),
+          avatar: manualAvatar.trim(),
         };
       }
-      
+
       await http.post("/api/v1/admin/featured-artists", payload);
-      
+
       setSelectedArtistId("");
       setManualName("");
       setManualAvatar("");
-      
+
       await loadData();
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to add featured artist");
@@ -146,14 +382,13 @@ export default function AdminFeaturedArtistsPage() {
     (a) => !featured.some((f) => f.artistId === a.id)
   );
 
-  const activeCount = featured.filter(f => f.isActive).length;
-  const inactiveCount = featured.filter(f => !f.isActive).length;
+  const activeCount = featured.filter((f) => f.isActive).length;
+  const inactiveCount = featured.filter((f) => !f.isActive).length;
 
   return (
-    <PageWrapper 
-      title="Featured Artists" 
-      subtitle="Curate and manage artists showcased on the fan app home screen"
-    >
+    <PageWrapper
+      title="Featured Artists"
+      subtitle="Curate and manage artists showcased on the fan app home screen">
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
@@ -161,8 +396,12 @@ export default function AdminFeaturedArtistsPage() {
           <div className="relative">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-[#8D7B77]">Total Featured</p>
-                <p className="mt-1.5 text-3xl font-bold text-white">{featured.length}</p>
+                <p className="text-sm font-medium text-[#8D7B77]">
+                  Total Featured
+                </p>
+                <p className="mt-1.5 text-3xl font-bold text-white">
+                  {featured.length}
+                </p>
               </div>
               <div className="p-3 rounded-xl bg-[#E85D2C]/10">
                 <Star size={20} className="text-[#E85D2C]" />
@@ -177,7 +416,9 @@ export default function AdminFeaturedArtistsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-[#8D7B77]">Active</p>
-                <p className="mt-1.5 text-3xl font-bold text-green-400">{activeCount}</p>
+                <p className="mt-1.5 text-3xl font-bold text-green-400">
+                  {activeCount}
+                </p>
               </div>
               <div className="p-3 rounded-xl bg-green-500/10">
                 <CheckCircle size={20} className="text-green-400" />
@@ -192,7 +433,9 @@ export default function AdminFeaturedArtistsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-[#8D7B77]">Inactive</p>
-                <p className="mt-1.5 text-3xl font-bold text-red-400">{inactiveCount}</p>
+                <p className="mt-1.5 text-3xl font-bold text-red-400">
+                  {inactiveCount}
+                </p>
               </div>
               <div className="p-3 rounded-xl bg-red-500/10">
                 <XCircle size={20} className="text-red-400" />
@@ -207,7 +450,9 @@ export default function AdminFeaturedArtistsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-[#8D7B77]">Available</p>
-                <p className="mt-1.5 text-3xl font-bold text-blue-400">{availableArtists.length}</p>
+                <p className="mt-1.5 text-3xl font-bold text-blue-400">
+                  {availableArtists.length}
+                </p>
               </div>
               <div className="p-3 rounded-xl bg-blue-500/10">
                 <Users size={20} className="text-blue-400" />
@@ -235,8 +480,12 @@ export default function AdminFeaturedArtistsPage() {
             <Zap size={20} className="text-[#E85D2C]" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-white">Add Featured Artist</h2>
-            <p className="text-sm text-[#8D7B77]">Select an existing artist or create a new one</p>
+            <h2 className="text-lg font-semibold text-white">
+              Add Featured Artist
+            </h2>
+            <p className="text-sm text-[#8D7B77]">
+              Select an existing artist or create a new one
+            </p>
           </div>
         </div>
 
@@ -247,8 +496,7 @@ export default function AdminFeaturedArtistsPage() {
               addMode === "existing"
                 ? "bg-[#E85D2C]/10 text-[#E85D2C] border border-[#E85D2C]/20"
                 : "text-[#8D7B77] hover:text-white hover:bg-white/5"
-            }`}
-          >
+            }`}>
             <Users size={14} className="inline mr-2" />
             Existing Artist
           </button>
@@ -258,8 +506,7 @@ export default function AdminFeaturedArtistsPage() {
               addMode === "manual"
                 ? "bg-[#E85D2C]/10 text-[#E85D2C] border border-[#E85D2C]/20"
                 : "text-[#8D7B77] hover:text-white hover:bg-white/5"
-            }`}
-          >
+            }`}>
             <UserPlus size={14} className="inline mr-2" />
             Create New
           </button>
@@ -277,7 +524,9 @@ export default function AdminFeaturedArtistsPage() {
                 <AlertCircle size={16} />
                 <span className="font-medium">No artists found</span>
               </div>
-              <p className="text-sm text-[#8D7B77] mt-1 ml-6">Please add artists first before featuring them.</p>
+              <p className="text-sm text-[#8D7B77] mt-1 ml-6">
+                Please add artists first before featuring them.
+              </p>
             </div>
           ) : availableArtists.length === 0 ? (
             <div className="py-6 px-4 rounded-xl border border-blue-500/20 bg-blue-500/5">
@@ -285,33 +534,27 @@ export default function AdminFeaturedArtistsPage() {
                 <CheckCircle size={16} />
                 <span className="font-medium">All artists are featured</span>
               </div>
-              <p className="text-sm text-[#8D7B77] mt-1 ml-6">Remove some artists below or create a new one.</p>
+              <p className="text-sm text-[#8D7B77] mt-1 ml-6">
+                Remove some artists below or create a new one.
+              </p>
             </div>
           ) : (
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1">
-                <label className="block text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-1.5">
-                  Select Artist
-                </label>
-                <select
+                <PremiumSelect
                   value={selectedArtistId}
-                  onChange={(e) => setSelectedArtistId(e.target.value)}
-                  className="w-full h-[44px] rounded-xl bg-black/30 border border-white/10 px-4 text-white text-sm outline-none focus:border-[#E85D2C]/50 transition-all"
+                  onChange={setSelectedArtistId}
+                  options={availableArtists}
+                  placeholder="Choose an artist..."
                   disabled={isAdding}
-                >
-                  <option value="">Choose an artist...</option>
-                  {availableArtists.map((artist) => (
-                    <option key={artist.id} value={artist.id}>
-                      {artist.name} {artist.isVerified ? "✓" : ""}
-                    </option>
-                  ))}
-                </select>
+                  label="SELECT ARTIST"
+                  isLoading={isLoading}
+                />
               </div>
               <button
                 onClick={handleAddFeatured}
                 disabled={!selectedArtistId || isAdding}
-                className="h-[44px] px-8 rounded-xl bg-gradient-to-r from-[#E85D2C] to-[#C97A54] text-white font-medium hover:shadow-lg hover:shadow-[#E85D2C]/30 transition-all disabled:opacity-50 flex items-center gap-2 self-end"
-              >
+                className="h-[48px] px-8 rounded-xl bg-gradient-to-r from-[#E85D2C] to-[#C97A54] text-white font-medium hover:shadow-lg hover:shadow-[#E85D2C]/30 transition-all disabled:opacity-50 flex items-center gap-2 self-end">
                 {isAdding ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -330,6 +573,7 @@ export default function AdminFeaturedArtistsPage() {
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-1.5">
+                <User size={14} className="inline mr-1.5" />
                 Artist Name
               </label>
               <input
@@ -337,12 +581,13 @@ export default function AdminFeaturedArtistsPage() {
                 value={manualName}
                 onChange={(e) => setManualName(e.target.value)}
                 placeholder="Enter artist name..."
-                className="w-full h-[44px] rounded-xl bg-black/30 border border-white/10 px-4 text-white text-sm outline-none focus:border-[#E85D2C]/50 transition-all"
+                className="w-full h-[48px] rounded-xl bg-[#0A0A0A] border border-white/10 px-4 text-white text-sm outline-none focus:border-[#E85D2C]/50 focus:ring-1 focus:ring-[#E85D2C]/20 transition-all placeholder:text-[#8D7B77]"
                 disabled={isAdding}
               />
             </div>
             <div>
               <label className="block text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-1.5">
+                <Image size={14} className="inline mr-1.5" />
                 Avatar Image
               </label>
               <ImageUpload
@@ -353,8 +598,7 @@ export default function AdminFeaturedArtistsPage() {
             <button
               onClick={handleAddFeatured}
               disabled={!manualName.trim() || !manualAvatar.trim() || isAdding}
-              className="w-full h-[44px] rounded-xl bg-gradient-to-r from-[#E85D2C] to-[#C97A54] text-white font-medium hover:shadow-lg hover:shadow-[#E85D2C]/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-            >
+              className="w-full h-[48px] rounded-xl bg-gradient-to-r from-[#E85D2C] to-[#C97A54] text-white font-medium hover:shadow-lg hover:shadow-[#E85D2C]/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
               {isAdding ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -379,9 +623,12 @@ export default function AdminFeaturedArtistsPage() {
               <Crown size={20} className="text-[#E85D2C]" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white">Featured Artists</h2>
+              <h2 className="text-lg font-semibold text-white">
+                Featured Artists
+              </h2>
               <p className="text-sm text-[#8D7B77]">
-                {featured.length} artist{featured.length !== 1 ? 's' : ''} featured
+                {featured.length} artist{featured.length !== 1 ? "s" : ""}{" "}
+                featured
                 {activeCount > 0 && ` · ${activeCount} active`}
               </p>
             </div>
@@ -389,8 +636,7 @@ export default function AdminFeaturedArtistsPage() {
           <button
             onClick={loadData}
             disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-[#8D7B77] hover:text-white hover:bg-white/10 transition-all disabled:opacity-50"
-          >
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-[#8D7B77] hover:text-white hover:bg-white/10 transition-all disabled:opacity-50">
             <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
             Refresh
           </button>
@@ -399,30 +645,35 @@ export default function AdminFeaturedArtistsPage() {
         {isLoading ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-[#E85D2C]/20 border-t-[#E85D2C]"></div>
-            <p className="text-sm text-[#8D7B77] mt-3">Loading featured artists...</p>
+            <p className="text-sm text-[#8D7B77] mt-3">
+              Loading featured artists...
+            </p>
           </div>
         ) : featured.length === 0 ? (
           <div className="text-center py-16">
             <div className="inline-flex p-5 rounded-full bg-white/5 mb-4">
               <Star size={28} className="text-[#8D7B77]" />
             </div>
-            <p className="text-base font-medium text-white">No featured artists yet</p>
-            <p className="text-sm text-[#8D7B77] mt-1">Add artists using the form above</p>
+            <p className="text-base font-medium text-white">
+              No featured artists yet
+            </p>
+            <p className="text-sm text-[#8D7B77] mt-1">
+              Add artists using the form above
+            </p>
           </div>
         ) : (
           <div className="space-y-3">
-            {featured.map((item, index) => (
+            {featured.map((item) => (
               <div
                 key={item.id}
                 className={`group flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-xl border transition-all duration-300 ${
-                  item.isActive 
-                    ? "border-white/5 hover:border-[#E85D2C]/30 hover:bg-white/5" 
+                  item.isActive
+                    ? "border-white/5 hover:border-[#E85D2C]/30 hover:bg-white/5"
                     : "border-white/5 opacity-60 hover:opacity-80 hover:bg-white/5"
-                }`}
-              >
+                }`}>
                 <div className="flex items-center gap-4 flex-1 min-w-0">
                   <div className="relative">
-                    <div className="h-14 w-14 rounded-full bg-black/30 border border-white/10 overflow-hidden shrink-0">
+                    <div className="h-14 w-14 rounded-full bg-[#0A0A0A] border border-white/10 overflow-hidden shrink-0">
                       {item.avatar ? (
                         <img
                           src={item.avatar}
@@ -444,7 +695,9 @@ export default function AdminFeaturedArtistsPage() {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold text-white truncate">{item.name}</h3>
+                      <h3 className="font-semibold text-white truncate">
+                        {item.name}
+                      </h3>
                       {item.isActive ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-500/10 text-green-400 border border-green-500/20">
                           <Eye size={10} />
@@ -473,15 +726,13 @@ export default function AdminFeaturedArtistsPage() {
                       item.isActive
                         ? "bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20"
                         : "bg-gray-500/10 text-[#8D7B77] border border-gray-500/20 hover:bg-gray-500/20 hover:text-white"
-                    }`}
-                  >
-                    {item.isActive ? 'Active' : 'Inactive'}
+                    }`}>
+                    {item.isActive ? "Active" : "Inactive"}
                   </button>
                   <button
                     onClick={() => handleRemove(item.id)}
                     className="p-2.5 rounded-xl text-red-400 hover:bg-red-500/10 transition-all"
-                    title="Remove"
-                  >
+                    title="Remove">
                     <Trash2 size={18} />
                   </button>
                 </div>
@@ -496,11 +747,14 @@ export default function AdminFeaturedArtistsPage() {
         <div className="flex items-start gap-3">
           <Sparkles size={18} className="text-blue-400 mt-0.5" />
           <div>
-            <h3 className="text-sm font-medium text-blue-400">How Featured Artists Work</h3>
+            <h3 className="text-sm font-medium text-blue-400">
+              How Featured Artists Work
+            </h3>
             <ul className="mt-2 space-y-1 text-sm text-[#8D7B77]">
               <li className="flex items-start gap-2">
                 <span className="text-blue-400">•</span>
-                Artists appear in the "Featured" section on the fan app home screen
+                Artists appear in the "Featured" section on the fan app home
+                screen
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-blue-400">•</span>
@@ -508,7 +762,8 @@ export default function AdminFeaturedArtistsPage() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-blue-400">•</span>
-                Inactive artists remain in the database but won't display to fans
+                Inactive artists remain in the database but won't display to
+                fans
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-blue-400">•</span>

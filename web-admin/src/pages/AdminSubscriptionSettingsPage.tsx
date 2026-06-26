@@ -1,20 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate, NavLink } from "react-router-dom";
-import { http } from "../services/http";
-import { 
-  CreditCard, 
-  Settings2, 
-  Plus, 
-  Trash2, 
-  Save, 
-  ChevronRight, 
-  ShieldCheck, 
-  Zap,
-  CheckCircle2,
+import {
   AlertCircle,
-  Clock,
-  LayoutDashboard
+  Award,
+  CheckCircle2,
+  Crown,
+  DollarSign,
+  Gift,
+  LayoutDashboard,
+  Plus,
+  Save,
+  Sparkles,
+  Trash2,
+  TrendingUp,
+  Wallet,
 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import PageWrapper from "../components/PageWrapper";
+import { http } from "../services/http";
 
 type SubscriptionConfig = {
   price: number;
@@ -45,18 +47,13 @@ export default function AdminSubscriptionSettingsPage() {
   const [features, setFeatures] = useState<string[]>([]);
   const [newFeature, setNewFeature] = useState("");
 
-  const backgroundStyle = useMemo(() => {
-    return {
-      backgroundImage:
-        "radial-gradient(circle at 30% 10%, rgba(108,99,255,0.06) 0%, rgba(75,25,39,0.88) 55%, rgba(10,8,8,0.98) 100%)"
-    } as const;
-  }, []);
-
   const load = async () => {
     setLoading(true);
     setApiError(null);
     try {
-      const res = await http.get<ConfigResponse>("/api/v1/fan/subscriptions/platform-config");
+      const res = await http.get<ConfigResponse>(
+        "/api/v1/fan/subscriptions/platform-config"
+      );
       if (res.data?.success && res.data.config) {
         setPrice(String(res.data.config.price));
         setYearlyPrice(String(res.data.config.yearly_price || ""));
@@ -70,7 +67,11 @@ export default function AdminSubscriptionSettingsPage() {
         navigate("/admin/login", { replace: true });
         return;
       }
-      setApiError(e?.response?.data?.message || e?.message || "Failed to load configuration");
+      setApiError(
+        e?.response?.data?.message ||
+          e?.message ||
+          "Failed to load configuration"
+      );
     } finally {
       setLoading(false);
     }
@@ -85,13 +86,16 @@ export default function AdminSubscriptionSettingsPage() {
     setApiError(null);
     setSuccessMsg(null);
     try {
-      const res = await http.put("/api/v1/admin/subscriptions/platform-config", {
-        price: Number(price),
-        yearlyPrice: Number(yearlyPrice),
-        currency,
-        duration,
-        features
-      });
+      const res = await http.put(
+        "/api/v1/admin/subscriptions/platform-config",
+        {
+          price: Number(price),
+          yearlyPrice: Number(yearlyPrice),
+          currency,
+          duration,
+          features,
+        }
+      );
 
       if (res.data?.success) {
         setSuccessMsg("Platform configuration updated successfully");
@@ -100,7 +104,11 @@ export default function AdminSubscriptionSettingsPage() {
         setApiError(res.data?.message || "Failed to update configuration");
       }
     } catch (e: any) {
-      setApiError(e?.response?.data?.message || e?.message || "Failed to update configuration");
+      setApiError(
+        e?.response?.data?.message ||
+          e?.message ||
+          "Failed to update configuration"
+      );
     } finally {
       setSaving(false);
     }
@@ -118,219 +126,310 @@ export default function AdminSubscriptionSettingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen w-full bg-[#0a0808] flex items-center justify-center" style={backgroundStyle}>
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-2 border-[#b16e5b]/20 border-t-[#b16e5b] rounded-full animate-spin" />
-          <div className="text-[13px] text-[#b8a6a1] tracking-widest uppercase">Loading System Config...</div>
+      <PageWrapper
+        title="Platform Plan"
+        subtitle="Configure subscription settings">
+        <div className="flex flex-col items-center justify-center py-20">
+          <div className="w-12 h-12 border-2 border-[#E85D2C]/20 border-t-[#E85D2C] rounded-full animate-spin" />
+          <div className="text-sm text-[#8D7B77] mt-4">
+            Loading configuration...
+          </div>
         </div>
-      </div>
+      </PageWrapper>
     );
   }
 
+  const monthlyPrice = Number(price) || 0;
+  const yearlyPriceNum = Number(yearlyPrice) || 0;
+  const savings =
+    yearlyPriceNum > 0
+      ? Math.round((1 - yearlyPriceNum / 12 / monthlyPrice) * 100)
+      : 0;
+
   return (
-    <div className="min-h-screen w-full bg-[#0a0808] text-white selection:bg-[#b16e5b]/30" style={backgroundStyle}>
-      {/* ── Page Container ── */}
-      <div className="mx-auto w-full max-w-[1100px] px-6 py-12">
-        
-        {/* ── Breadcrumbs / Minimal Header ── */}
-        <div className="flex items-center gap-2 mb-8 text-[12px] font-medium tracking-widest text-[#8d7b77] uppercase">
-          <NavLink to="/admin/home" className="hover:text-white transition-colors">Admin</NavLink>
-          <ChevronRight size={14} className="opacity-50" />
-          <span className="text-[#b16e5b]">Monetization</span>
-        </div>
-
-        {/* ── Main Header ── */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#b16e5b] to-[#4b1927] flex items-center justify-center shadow-lg shadow-[#b16e5b]/10">
-                <ShieldCheck color="#fff" size={24} />
+    <PageWrapper
+      title="Platform Plan"
+      subtitle="Configure the default subscription plan for your users">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#E85D2C]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-[#8D7B77]">
+                  Monthly Price
+                </p>
+                <p className="mt-1.5 text-3xl font-bold text-white">
+                  {currency} {monthlyPrice}
+                </p>
               </div>
-              <h1 className="text-[34px] font-light tracking-tight text-[#e6d6d2]">Platform Plan</h1>
-            </div>
-            <p className="text-[14px] text-[#b8a6a1] max-w-[500px] leading-relaxed">
-              Configure the default subscription plan for your users. These settings override internal defaults and update across all platforms in real-time.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            disabled={saving}
-            onClick={handleSave}
-            className="group relative flex items-center gap-2 h-[48px] px-8 rounded-xl bg-gradient-to-b from-[#b16e5b] to-[#7d4a41] border border-white/10 text-[14px] font-semibold tracking-wide text-white shadow-2xl hover:brightness-110 disabled:opacity-50 transition-all overflow-hidden"
-          >
-            <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-            {saving ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <Save size={18} />
-            )}
-            <span>{saving ? "Deploying..." : "Save Configuration"}</span>
-          </button>
-        </div>
-
-        {/* ── Feedback Messages ── */}
-        {apiError && (
-          <div className="mb-8 rounded-xl border border-red-500/20 bg-red-500/10 px-6 py-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
-            <AlertCircle className="text-red-400" size={20} />
-            <div className="text-[14px] text-red-100/80">{apiError}</div>
-          </div>
-        )}
-
-        {successMsg && (
-          <div className="mb-8 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-6 py-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
-            <CheckCircle2 className="text-emerald-400" size={20} />
-            <div className="text-[14px] text-emerald-100/80">{successMsg}</div>
-          </div>
-        )}
-
-        {/* ── Setup Cards Grid ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
-          {/* ── Left Column: Pricing & Setup ── */}
-          <div className="lg:col-span-5 space-y-8">
-            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-8 shadow-2xl overflow-hidden relative group">
-              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                <CreditCard size={80} strokeWidth={1} />
-              </div>
-              
-              <div className="flex items-center gap-3 mb-8">
-                <Settings2 className="text-[#b16e5b]" size={18} />
-                <h2 className="text-[16px] font-semibold tracking-wide text-[#e6d6d2]">Core Pricing</h2>
-              </div>
-
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-[11px] font-black tracking-[2px] text-[#b16e5b] uppercase">Monthly Price (₹)</label>
-                  <div className="relative group/input">
-                    <input
-                      type="number"
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value)}
-                      className="w-full h-[52px] rounded-xl bg-black/60 border border-white/20 px-5 text-[16px] font-bold text-white outline-none focus:border-[#b16e5b] focus:ring-4 focus:ring-[#b16e5b]/10 transition-all placeholder:text-white/30"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <p className="text-[12px] text-[#b8a6a1] font-medium">Auto-renewed every 30 days.</p>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[11px] font-black tracking-[2px] text-[#b16e5b] uppercase">Yearly Price (₹)</label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      value={yearlyPrice}
-                      onChange={(e) => setYearlyPrice(e.target.value)}
-                      className="w-full h-[52px] rounded-xl bg-black/60 border border-white/20 px-5 text-[16px] font-bold text-white outline-none focus:border-[#b16e5b] focus:ring-4 focus:ring-[#b16e5b]/10 transition-all placeholder:text-white/30"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <p className="text-[12px] text-white font-black uppercase tracking-[1px] pt-1">Best Value Option</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-black tracking-[2px] text-[#b16e5b] uppercase">Currency</label>
-                    <input
-                      type="text"
-                      value={currency}
-                      onChange={(e) => setCurrency(e.target.value)}
-                      className="w-full h-[52px] rounded-xl bg-black/60 border border-white/20 px-5 text-[15px] font-bold text-white outline-none focus:border-[#b16e5b] transition-all"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-black tracking-[2px] text-[#b16e5b] uppercase">Default Cycle</label>
-                    <select
-                      value={duration}
-                      onChange={(e) => setDuration(e.target.value)}
-                      className="w-full h-[52px] rounded-xl bg-black/60 border border-white/20 px-4 text-[15px] font-bold text-white outline-none focus:border-[#b16e5b] appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%23ffffff%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%222%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:22px_22px] bg-[right_14px_center] bg-no-repeat"
-                    >
-                      <option value="monthly">Monthly</option>
-                      <option value="yearly">Yearly</option>
-                    </select>
-                  </div>
-                </div>
+              <div className="p-3 rounded-xl bg-[#E85D2C]/10">
+                <Wallet size={20} className="text-[#E85D2C]" />
               </div>
             </div>
           </div>
+        </div>
 
-          {/* ── Right Column: Features Management ── */}
-          <div className="lg:col-span-7">
-            <div className="h-full rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-8 shadow-2xl flex flex-col">
-              <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-3">
-                  <Zap className="text-[#b16e5b]" size={18} />
-                  <h2 className="text-[16px] font-semibold tracking-wide text-[#e6d6d2]">Plan Benefits</h2>
-                </div>
-                <div className="px-3 py-1 rounded-full bg-white/10 text-[10px] font-black tracking-[1px] text-[#b8a6a1] uppercase">
-                  {features.length} Activated
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
+          <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-[#8D7B77]">
+                  Yearly Price
+                </p>
+                <p className="mt-1.5 text-3xl font-bold text-green-400">
+                  {currency} {yearlyPriceNum}
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-green-500/10">
+                <Gift size={20} className="text-green-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-[#8D7B77]">Savings</p>
+                <p className="mt-1.5 text-3xl font-bold text-blue-400">
+                  {savings}%
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-blue-500/10">
+                <TrendingUp size={20} className="text-blue-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-[#8D7B77]">Features</p>
+                <p className="mt-1.5 text-3xl font-bold text-purple-400">
+                  {features.length}
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-purple-500/10">
+                <Award size={20} className="text-purple-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Error/Success Messages */}
+      {apiError && (
+        <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-4 flex items-start gap-3">
+          <AlertCircle size={18} className="text-red-400 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-red-400">Error</p>
+            <p className="text-sm text-red-300/80">{apiError}</p>
+          </div>
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="mb-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-5 py-4 flex items-start gap-3">
+          <CheckCircle2 size={18} className="text-emerald-400 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-emerald-400">Success</p>
+            <p className="text-sm text-emerald-300/80">{successMsg}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content - Two Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* Left Column - Pricing */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2.5 rounded-xl bg-[#E85D2C]/10">
+                <DollarSign size={20} className="text-[#E85D2C]" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  Core Pricing
+                </h2>
+                <p className="text-sm text-[#8D7B77]">
+                  Set your subscription prices
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-1.5">
+                  Monthly Price ({currency})
+                </label>
+                <input
+                  type="number"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  className="w-full h-[48px] rounded-xl bg-black/30 border border-white/10 px-4 text-white text-lg font-bold outline-none focus:border-[#E85D2C]/50 transition-all"
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-[#8D7B77] mt-1.5">
+                  Auto-renewed every 30 days
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-1.5">
+                  Yearly Price ({currency})
+                </label>
+                <input
+                  type="number"
+                  value={yearlyPrice}
+                  onChange={(e) => setYearlyPrice(e.target.value)}
+                  className="w-full h-[48px] rounded-xl bg-black/30 border border-white/10 px-4 text-white text-lg font-bold outline-none focus:border-[#E85D2C]/50 transition-all"
+                  placeholder="0.00"
+                />
+                <div className="flex items-center gap-2 mt-1.5">
+                  <Sparkles size={14} className="text-[#E85D2C]" />
+                  <span className="text-xs font-medium text-[#E85D2C]">
+                    Best Value Option
+                  </span>
                 </div>
               </div>
 
-              <div className="flex-1 space-y-3 min-h-[300px]">
-                {features.map((feat, idx) => (
-                  <div 
-                    key={idx} 
-                    className="group flex items-center gap-4 p-4 rounded-xl bg-black/20 border border-white/5 hover:border-[#b16e5b]/30 hover:bg-white/5 transition-all animate-in slide-in-from-right-4 duration-300"
-                    style={{ animationDelay: `${idx * 50}ms` }}
-                  >
-                    <div className="h-8 w-8 rounded-lg bg-black/40 flex items-center justify-center border border-white/10 shrink-0 group-hover:scale-110 transition-transform">
-                      <CheckCircle2 size={16} className="text-[#b16e5b] group-hover:text-white transition-colors" />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-1.5">
+                    Currency
+                  </label>
+                  <input
+                    type="text"
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value)}
+                    className="w-full h-[48px] rounded-xl bg-black/30 border border-white/10 px-4 text-white outline-none focus:border-[#E85D2C]/50 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-1.5">
+                    Billing Cycle
+                  </label>
+                  <select
+                    value={duration}
+                    onChange={(e) => setDuration(e.target.value)}
+                    className="w-full h-[48px] rounded-xl bg-black/30 border border-white/10 px-4 text-white outline-none focus:border-[#E85D2C]/50 transition-all appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%238D7B77%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%222%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:20px_20px] bg-[right_14px_center] bg-no-repeat">
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column - Features */}
+        <div className="lg:col-span-3">
+          <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6 h-full">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-purple-500/10">
+                  <Crown size={20} className="text-purple-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">
+                    Plan Benefits
+                  </h2>
+                  <p className="text-sm text-[#8D7B77]">
+                    Features included in the subscription
+                  </p>
+                </div>
+              </div>
+              <span className="px-3 py-1 rounded-full text-xs font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                {features.length} features
+              </span>
+            </div>
+
+            <div className="space-y-2 min-h-[200px]">
+              {features.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-white/10 rounded-xl">
+                  <LayoutDashboard size={32} className="text-[#8D7B77] mb-3" />
+                  <p className="text-sm text-[#8D7B77]">
+                    No features added yet
+                  </p>
+                  <p className="text-xs text-[#8D7B77]/60 mt-1">
+                    Add features below
+                  </p>
+                </div>
+              ) : (
+                features.map((feat, idx) => (
+                  <div
+                    key={idx}
+                    className="group flex items-center gap-3 p-3 rounded-xl bg-black/20 border border-white/5 hover:border-[#E85D2C]/30 hover:bg-white/5 transition-all">
+                    <div className="h-8 w-8 rounded-lg bg-[#E85D2C]/10 flex items-center justify-center shrink-0">
+                      <CheckCircle2 size={16} className="text-[#E85D2C]" />
                     </div>
-                    <div className="flex-1 text-[13.5px] font-medium text-white tracking-wide">
-                      {feat}
-                    </div>
+                    <span className="flex-1 text-sm text-white">{feat}</span>
                     <button
                       type="button"
                       onClick={() => removeFeature(idx)}
-                      className="h-9 w-9 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition-all shadow-lg"
-                    >
-                      <Trash2 size={16} />
+                      className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition-all">
+                      <Trash2 size={14} />
                     </button>
                   </div>
-                ))}
-                
-                {features.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-white/10 rounded-2xl">
-                    <LayoutDashboard className="text-white/10 mb-4" size={48} />
-                    <div className="text-[13px] text-[#b8a6a1]">No features added yet.</div>
-                  </div>
-                )}
-              </div>
+                ))
+              )}
+            </div>
 
-              <div className="mt-8 pt-8 border-t border-white/10">
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 relative group">
-                    <input
-                      type="text"
-                      value={newFeature}
-                      onChange={(e) => setNewFeature(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && addFeature()}
-                      placeholder="e.g. Ad-free Music Experience"
-                      className="w-full h-[52px] rounded-xl bg-black/60 border border-white/20 pl-5 pr-14 text-[14px] text-white outline-none focus:border-[#b16e5b] transition-all placeholder:text-white/50"
-                    />
-                    <div className="absolute top-1/2 right-4 -translate-y-1/2 pointer-events-none text-[10px] font-bold text-white/40 tracking-widest uppercase">
-                      Enter
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={addFeature}
-                    className="h-[52px] w-[52px] flex items-center justify-center rounded-xl bg-white/10 border border-white/20 text-white hover:bg-[#b16e5b] transition-all group shadow-xl"
-                  >
-                    <Plus size={24} className="group-hover:rotate-90 transition-transform duration-300" />
-                  </button>
+            <div className="mt-6 pt-6 border-t border-white/5">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    value={newFeature}
+                    onChange={(e) => setNewFeature(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addFeature()}
+                    placeholder="Add a feature (e.g. Ad-free experience)"
+                    className="w-full h-[44px] rounded-xl bg-black/30 border border-white/10 px-4 pr-14 text-sm text-white placeholder:text-[#8D7B77] outline-none focus:border-[#E85D2C]/50 transition-all"
+                  />
+                  <span className="absolute top-1/2 right-3 -translate-y-1/2 text-[10px] text-[#8D7B77] font-medium uppercase tracking-wider">
+                    Enter
+                  </span>
                 </div>
+                <button
+                  type="button"
+                  onClick={addFeature}
+                  className="h-[44px] w-[44px] flex items-center justify-center rounded-xl bg-[#E85D2C] text-white hover:bg-[#C97A54] transition-all hover:shadow-lg hover:shadow-[#E85D2C]/30">
+                  <Plus size={20} />
+                </button>
               </div>
             </div>
           </div>
-
         </div>
-
-
       </div>
-    </div>
+
+      {/* Save Button */}
+      <div className="mt-8 flex justify-end">
+        <button
+          type="button"
+          disabled={saving}
+          onClick={handleSave}
+          className="flex items-center gap-2 h-[48px] px-8 rounded-xl bg-gradient-to-r from-[#E85D2C] to-[#C97A54] text-white font-semibold hover:shadow-lg hover:shadow-[#E85D2C]/30 transition-all disabled:opacity-50">
+          {saving ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save size={18} />
+              Save Configuration
+            </>
+          )}
+        </button>
+      </div>
+    </PageWrapper>
   );
 }
-
-

@@ -1,6 +1,31 @@
 import React, { useState, useEffect } from "react";
 import { http } from "../services/http";
-import { Search, Filter, RefreshCw, X, FileJson, Activity, Terminal } from "lucide-react";
+import PageWrapper from "../components/PageWrapper";
+import {
+  Search,
+  RefreshCw,
+  X,
+  FileJson,
+  Activity,
+  Terminal,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Clock,
+  User,
+  Shield,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  Eye,
+  Calendar,
+  Hash,
+  Link2,
+  Database,
+  Code2,
+} from "lucide-react";
 
 interface AuditLog {
   id: string;
@@ -16,6 +41,189 @@ interface AuditLog {
   created_at: string;
 }
 
+function StatusBadge({ status }: { status: string }) {
+  if (status === "success") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
+        <CheckCircle size={12} />
+        Success
+      </span>
+    );
+  }
+  if (status === "failed") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+        <XCircle size={12} />
+        Failed
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+      <Clock size={12} />
+      Pending
+    </span>
+  );
+}
+
+function RoleBadge({ role }: { role: string }) {
+  const colors: Record<string, string> = {
+    admin: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+    system: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    artist: "bg-green-500/10 text-green-400 border-green-500/20",
+    fan: "bg-orange-500/10 text-orange-400 border-orange-500/20",
+  };
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${
+        colors[role] || "bg-white/10 text-[#8D7B77] border-white/10"
+      }`}>
+      <User size={12} />
+      {role}
+    </span>
+  );
+}
+
+// Premium Pagination Component
+function PremiumPagination({
+  currentPage,
+  totalPages,
+  totalItems,
+  itemsPerPage,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  onPageChange: (page: number) => void;
+}) {
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxVisible = 5;
+
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      pages.push(1);
+
+      let start = Math.max(2, currentPage - 1);
+      let end = Math.min(totalPages - 1, currentPage + 1);
+
+      if (currentPage <= 3) {
+        end = 4;
+      }
+      if (currentPage >= totalPages - 2) {
+        start = totalPages - 3;
+      }
+
+      if (start > 2) {
+        pages.push("...");
+      }
+
+      for (let i = start; i <= end; i++) {
+        if (i > 1 && i < totalPages) {
+          pages.push(i);
+        }
+      }
+
+      if (end < totalPages - 1) {
+        pages.push("...");
+      }
+
+      if (totalPages > 1) {
+        pages.push(totalPages);
+      }
+    }
+
+    return pages;
+  };
+
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-white/5 bg-white/5">
+      <div className="text-sm text-[#B8A6A1] bg-black/30 px-4 py-2 rounded-xl border border-white/5">
+        Showing <span className="text-white font-semibold">{startItem}</span> to{" "}
+        <span className="text-white font-semibold">{endItem}</span> of{" "}
+        <span className="text-white font-semibold">{totalItems}</span> logs
+      </div>
+
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onPageChange(1)}
+          disabled={currentPage === 1}
+          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-black/20 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-[#E85D2C]/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          aria-label="First page">
+          <ChevronsLeft size={16} />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-black/20 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-[#E85D2C]/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          aria-label="Previous page">
+          <ChevronLeft size={16} />
+        </button>
+
+        <div className="flex items-center gap-1 px-1">
+          {getPageNumbers().map((page, index) => {
+            if (page === "...") {
+              return (
+                <span
+                  key={`ellipsis-${index}`}
+                  className="h-10 w-10 flex items-center justify-center text-[#8D7B77] text-sm">
+                  …
+                </span>
+              );
+            }
+            const isActive = currentPage === page;
+            return (
+              <button
+                key={index}
+                type="button"
+                onClick={() => typeof page === "number" && onPageChange(page)}
+                className={`h-10 min-w-[40px] px-2 flex items-center justify-center rounded-xl text-sm font-medium transition-all ${
+                  isActive
+                    ? "bg-[#E85D2C] text-white shadow-lg shadow-[#E85D2C]/30 border border-[#E85D2C]"
+                    : "text-[#B8A6A1] hover:text-white hover:bg-white/10 border border-transparent hover:border-white/10"
+                }`}>
+                {page}
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-black/20 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-[#E85D2C]/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          aria-label="Next page">
+          <ChevronRight size={16} />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages}
+          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-black/20 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-[#E85D2C]/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          aria-label="Last page">
+          <ChevronsRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminAuditPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(false);
@@ -24,8 +232,8 @@ export default function AdminAuditPage() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const limit = 15;
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -33,11 +241,11 @@ export default function AdminAuditPage() {
       const { data } = await http.get(`/api/v1/admin/audit`, {
         params: {
           page,
-          limit: 50,
+          limit,
           search: search || undefined,
           role: roleFilter || undefined,
           status: statusFilter || undefined,
-        }
+        },
       });
       if (data.success) {
         setLogs(data.data);
@@ -60,207 +268,367 @@ export default function AdminAuditPage() {
     fetchLogs();
   };
 
+  const totalPages = Math.ceil(total / limit);
+
+  // Stats
+  const successCount = logs.filter((l) => l.status === "success").length;
+  const failedCount = logs.filter((l) => l.status === "failed").length;
+  const pendingCount = logs.filter((l) => l.status === "pending").length;
+
   return (
-    <div className="flex h-full w-full bg-gray-50 text-gray-900 relative">
-      <div className="flex-1 flex flex-col p-8 overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Terminal className="text-blue-500" />
-              System Audit Logs
-            </h1>
-            <p className="text-sm text-gray-500">Monitor all system events, webhook failures, and admin actions.</p>
-          </div>
-          <button
-            onClick={fetchLogs}
-            className="flex items-center gap-2 px-4 py-2 bg-white border rounded-md shadow-sm hover:bg-gray-50 text-sm font-medium transition"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-        </div>
-
-        {/* Filters */}
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex flex-wrap gap-4 items-center">
-          <form onSubmit={handleSearch} className="flex-1 min-w-[300px] relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Search by ID, correlation, or action..."
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </form>
-
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-400" />
-            <select
-              className="border rounded-lg px-3 py-2 text-sm outline-none bg-transparent focus:ring-2 focus:ring-blue-500"
-              value={roleFilter}
-              onChange={(e) => { setPage(1); setRoleFilter(e.target.value); }}
-            >
-              <option value="">All Roles</option>
-              <option value="system">System</option>
-              <option value="admin">Admin</option>
-              <option value="fan">Fan</option>
-              <option value="artist">Artist</option>
-            </select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <select
-              className="border rounded-lg px-3 py-2 text-sm outline-none bg-transparent focus:ring-2 focus:ring-blue-500"
-              value={statusFilter}
-              onChange={(e) => { setPage(1); setStatusFilter(e.target.value); }}
-            >
-              <option value="">All Statuses</option>
-              <option value="success">Success</option>
-              <option value="pending">Pending</option>
-              <option value="failed">Failed</option>
-            </select>
+    <PageWrapper
+      title="Audit Logs"
+      subtitle="Monitor all system events, webhook failures, and admin actions">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-4 hover:border-white/10 transition-all duration-300">
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77]">Total Logs</p>
+                <p className="mt-1 text-2xl font-bold text-white">{total}</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-blue-500/10">
+                <Activity size={18} className="text-blue-400" />
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Table */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex-1">
-          <div className="overflow-x-auto h-full max-h-[600px]">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-gray-50 border-b sticky top-0">
-                <tr>
-                  <th className="px-6 py-4 font-medium text-gray-500">Timestamp</th>
-                  <th className="px-6 py-4 font-medium text-gray-500">Action</th>
-                  <th className="px-6 py-4 font-medium text-gray-500">Actor</th>
-                  <th className="px-6 py-4 font-medium text-gray-500">Entity</th>
-                  <th className="px-6 py-4 font-medium text-gray-500">Status</th>
-                  <th className="px-6 py-4 font-medium text-gray-500">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {logs.length === 0 && !loading && (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                      No logs found matching your criteria.
-                    </td>
-                  </tr>
-                )}
-                {logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-blue-50/50 transition cursor-pointer" onClick={() => setSelectedLog(log)}>
-                    <td className="px-6 py-3 text-gray-600">
-                      {new Date(log.created_at).toLocaleString()}
-                    </td>
-                    <td className="px-6 py-3 font-mono text-xs text-indigo-600 font-medium">
-                      {log.action}
-                    </td>
-                    <td className="px-6 py-3">
-                      <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                        log.actor_role === 'system' ? 'bg-gray-100 text-gray-700' : 
-                        log.actor_role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
-                      }`}>
-                        {log.actor_role} {log.actor_id ? `#${log.actor_id}` : ''}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3 text-gray-600 text-xs">
-                      {log.entity} <span className="opacity-50">#{log.entity_id}</span>
-                    </td>
-                    <td className="px-6 py-3">
-                      <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                        log.status === 'success' ? 'bg-green-100 text-green-700' : 
-                        log.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
-                      }`}>
-                        {log.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3">
-                      <button className="text-blue-500 hover:underline text-xs flex items-center gap-1">
-                        View <Activity className="w-3 h-3"/>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-4 hover:border-white/10 transition-all duration-300">
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77]">Success</p>
+                <p className="mt-1 text-2xl font-bold text-green-400">
+                  {successCount}
+                </p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-green-500/10">
+                <CheckCircle size={18} className="text-green-400" />
+              </div>
+            </div>
           </div>
-          
-          {/* Pagination */}
-          <div className="p-4 border-t flex justify-between items-center text-sm text-gray-500">
-            <span>Showing {logs.length} of {total} logs</span>
-            <div className="flex gap-2">
-              <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="px-3 py-1 border rounded disabled:opacity-50">Prev</button>
-              <button disabled={logs.length < 50} onClick={() => setPage(p => p + 1)} className="px-3 py-1 border rounded disabled:opacity-50">Next</button>
+        </div>
+
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-4 hover:border-white/10 transition-all duration-300">
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77]">Failed</p>
+                <p className="mt-1 text-2xl font-bold text-red-400">
+                  {failedCount}
+                </p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-red-500/10">
+                <XCircle size={18} className="text-red-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-4 hover:border-white/10 transition-all duration-300">
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77]">Pending</p>
+                <p className="mt-1 text-2xl font-bold text-yellow-400">
+                  {pendingCount}
+                </p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-yellow-500/10">
+                <Clock size={18} className="text-yellow-400" />
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Slide-out Drawer Component */}
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-4 mb-6">
+        <form onSubmit={handleSearch} className="flex-1 min-w-[280px]">
+          <div className="relative">
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8D7B77]"
+            />
+            <input
+              type="text"
+              placeholder="Search by ID, action, or correlation..."
+              className="w-full h-[42px] rounded-xl bg-white/5 border border-white/10 pl-9 pr-4 text-sm text-white placeholder:text-[#8D7B77] outline-none focus:border-[#E85D2C]/50 transition-all"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </form>
+
+        <div className="flex items-center gap-2">
+          <Filter size={16} className="text-[#8D7B77]" />
+          <select
+            className="h-[42px] rounded-xl bg-white/5 border border-white/10 px-4 text-sm text-white outline-none focus:border-[#E85D2C]/50 transition-all"
+            value={roleFilter}
+            onChange={(e) => {
+              setPage(1);
+              setRoleFilter(e.target.value);
+            }}>
+            <option value="">All Roles</option>
+            <option value="system">System</option>
+            <option value="admin">Admin</option>
+            <option value="fan">Fan</option>
+            <option value="artist">Artist</option>
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <select
+            className="h-[42px] rounded-xl bg-white/5 border border-white/10 px-4 text-sm text-white outline-none focus:border-[#E85D2C]/50 transition-all"
+            value={statusFilter}
+            onChange={(e) => {
+              setPage(1);
+              setStatusFilter(e.target.value);
+            }}>
+            <option value="">All Statuses</option>
+            <option value="success">Success</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed</option>
+          </select>
+        </div>
+
+        <button
+          onClick={fetchLogs}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-[#8D7B77] hover:text-white hover:bg-white/10 transition-all">
+          <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+          Refresh
+        </button>
+      </div>
+
+      {/* Table */}
+      <div className="rounded-2xl border border-white/5 bg-[#15100E] overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/5 bg-white/5">
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-left">
+                  Timestamp
+                </th>
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-left">
+                  Action
+                </th>
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-left">
+                  Actor
+                </th>
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-left">
+                  Entity
+                </th>
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-left">
+                  Status
+                </th>
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-right">
+                  Details
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center">
+                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-[#E85D2C]/20 border-t-[#E85D2C]"></div>
+                    <p className="text-sm text-[#8D7B77] mt-2">
+                      Loading logs...
+                    </p>
+                  </td>
+                </tr>
+              ) : logs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center">
+                    <div className="inline-flex p-4 rounded-full bg-white/5 mb-3">
+                      <Activity size={24} className="text-[#8D7B77]" />
+                    </div>
+                    <p className="text-sm font-medium text-white">
+                      No logs found
+                    </p>
+                    <p className="text-xs text-[#8D7B77] mt-1">
+                      Try adjusting your filters
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                logs.map((log) => (
+                  <tr
+                    key={log.id}
+                    className="hover:bg-white/5 transition-all cursor-pointer"
+                    onClick={() => setSelectedLog(log)}>
+                    <td className="px-6 py-4 text-[#B8A6A1] whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <Calendar size={12} className="text-[#8D7B77]" />
+                        {new Date(log.created_at).toLocaleString()}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <code className="px-2 py-1 rounded-md bg-[#E85D2C]/10 text-[#E85D2C] text-xs font-mono">
+                        {log.action}
+                      </code>
+                    </td>
+                    <td className="px-6 py-4">
+                      <RoleBadge role={log.actor_role} />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[#B8A6A1]">{log.entity}</span>
+                        <span className="text-[#8D7B77] text-xs">
+                          #{log.entity_id}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <StatusBadge status={log.status} />
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button className="inline-flex items-center gap-1 text-[#E85D2C] hover:text-[#C97A54] transition-all text-xs font-medium">
+                        <Eye size={14} />
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Premium Pagination - Shows every 15 logs */}
+        {total > 0 && (
+          <PremiumPagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={total}
+            itemsPerPage={limit}
+            onPageChange={setPage}
+          />
+        )}
+      </div>
+
+      {/* Detail Drawer */}
       {selectedLog && (
-        <div className="absolute top-0 right-0 h-full w-[500px] bg-white shadow-2xl border-l flex flex-col z-50 animate-in slide-in-from-right">
-          <div className="p-6 border-b flex justify-between items-center bg-gray-50">
+        <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[480px] lg:w-[560px] bg-[#15100E] border-l border-white/10 shadow-2xl animate-in slide-in-from-right">
+          <div className="flex items-center justify-between p-6 border-b border-white/5">
             <div>
-              <h3 className="font-bold text-lg flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                 Log Details
-                <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
-                  selectedLog.status === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                }`}>
-                  {selectedLog.status}
-                </span>
+                <StatusBadge status={selectedLog.status} />
               </h3>
-              <p className="text-xs text-gray-500 font-mono mt-1">{selectedLog.id}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <Hash size={12} className="text-[#8D7B77]" />
+                <p className="text-xs text-[#8D7B77] font-mono">
+                  {selectedLog.id}
+                </p>
+              </div>
             </div>
-            <button onClick={() => setSelectedLog(null)} className="p-2 hover:bg-gray-200 rounded-full transition">
-              <X className="w-5 h-5 text-gray-500" />
+            <button
+              onClick={() => setSelectedLog(null)}
+              className="p-2 rounded-xl hover:bg-white/10 transition-all">
+              <X size={20} className="text-[#8D7B77]" />
             </button>
           </div>
 
-          <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          <div className="p-6 overflow-y-auto max-h-[calc(100vh-100px)] space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-1">Timestamp</p>
-                <p className="font-medium text-sm">{new Date(selectedLog.created_at).toLocaleString()}</p>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider flex items-center gap-1.5">
+                  <Calendar size={12} />
+                  Timestamp
+                </p>
+                <p className="text-sm text-white mt-1">
+                  {new Date(selectedLog.created_at).toLocaleString()}
+                </p>
               </div>
               <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-1">Action</p>
-                <p className="font-mono text-sm text-indigo-600 bg-indigo-50 inline-block px-1 rounded">{selectedLog.action}</p>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider flex items-center gap-1.5">
+                  <Code2 size={12} />
+                  Action
+                </p>
+                <code className="inline-block mt-1 px-2 py-1 rounded-md bg-[#E85D2C]/10 text-[#E85D2C] text-xs font-mono">
+                  {selectedLog.action}
+                </code>
               </div>
               <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-1">Entity</p>
-                <p className="font-medium text-sm">{selectedLog.entity} <span className="text-gray-400">({selectedLog.entity_id})</span></p>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider flex items-center gap-1.5">
+                  <Database size={12} />
+                  Entity
+                </p>
+                <p className="text-sm text-white mt-1">
+                  {selectedLog.entity}{" "}
+                  <span className="text-[#8D7B77]">
+                    #{selectedLog.entity_id}
+                  </span>
+                </p>
               </div>
               <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-1">Actor</p>
-                <p className="font-medium text-sm capitalize">{selectedLog.actor_role} {selectedLog.actor_id && `(#${selectedLog.actor_id})`}</p>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider flex items-center gap-1.5">
+                  <User size={12} />
+                  Actor
+                </p>
+                <RoleBadge role={selectedLog.actor_role} />
               </div>
             </div>
 
             {selectedLog.correlation_id && (
-               <div>
-                 <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-1">Correlation ID / Trace</p>
-                 <p className="font-mono text-xs p-2 bg-gray-50 border rounded text-gray-600">{selectedLog.correlation_id}</p>
-               </div>
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                  <Link2 size={12} />
+                  Correlation ID
+                </p>
+                <code className="block p-3 rounded-xl bg-black/30 border border-white/10 text-xs font-mono text-[#B8A6A1] break-all">
+                  {selectedLog.correlation_id}
+                </code>
+              </div>
+            )}
+
+            {selectedLog.ip_address && (
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                  <Shield size={12} />
+                  IP Address
+                </p>
+                <code className="block p-3 rounded-xl bg-black/30 border border-white/10 text-xs font-mono text-[#B8A6A1]">
+                  {selectedLog.ip_address}
+                </code>
+              </div>
             )}
 
             <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-2 flex items-center gap-2">
-                <FileJson className="w-4 h-4"/> Metadata Payload
+              <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                <FileJson size={14} />
+                Metadata
               </p>
-              <pre className="bg-[#1e1e1e] text-[#d4d4d4] p-4 rounded-xl text-xs overflow-x-auto shadow-inner border border-gray-800">
-                <code>{JSON.stringify(selectedLog.metadata, null, 2)}</code>
+              <pre className="p-4 rounded-xl bg-black/30 border border-white/10 text-xs font-mono text-[#B8A6A1] overflow-x-auto max-h-[300px] overflow-y-auto">
+                {JSON.stringify(selectedLog.metadata, null, 2)}
               </pre>
             </div>
-            
-            {/* Diff Viewer (if before/after exists in metadata) */}
+
             {selectedLog.metadata?.before && selectedLog.metadata?.after && (
-              <div className="mt-4">
-                <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-2">State Diff</p>
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                  <div className="bg-red-50 p-3 rounded border border-red-100">
-                    <p className="text-red-800 mb-2 font-bold">- Before</p>
-                    <pre className="text-red-900 bg-transparent">{JSON.stringify(selectedLog.metadata.before, null, 2)}</pre>
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-2">
+                  State Diff
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-xl bg-red-500/5 border border-red-500/20">
+                    <p className="text-xs font-medium text-red-400 mb-2 flex items-center gap-1.5">
+                      <XCircle size={12} />
+                      Before
+                    </p>
+                    <pre className="text-xs text-red-300/80 font-mono overflow-x-auto">
+                      {JSON.stringify(selectedLog.metadata.before, null, 2)}
+                    </pre>
                   </div>
-                  <div className="bg-green-50 p-3 rounded border border-green-100">
-                    <p className="text-green-800 mb-2 font-bold">+ After</p>
-                    <pre className="text-green-900 bg-transparent">{JSON.stringify(selectedLog.metadata.after, null, 2)}</pre>
+                  <div className="p-3 rounded-xl bg-green-500/5 border border-green-500/20">
+                    <p className="text-xs font-medium text-green-400 mb-2 flex items-center gap-1.5">
+                      <CheckCircle size={12} />
+                      After
+                    </p>
+                    <pre className="text-xs text-green-300/80 font-mono overflow-x-auto">
+                      {JSON.stringify(selectedLog.metadata.after, null, 2)}
+                    </pre>
                   </div>
                 </div>
               </div>
@@ -268,6 +636,6 @@ export default function AdminAuditPage() {
           </div>
         </div>
       )}
-    </div>
+    </PageWrapper>
   );
 }
