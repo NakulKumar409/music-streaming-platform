@@ -1,6 +1,7 @@
 import { Worker } from "bullmq";
 
 import fs from "fs";
+import dotenv from "dotenv";
 
 import { getStorageService } from "../shared/storage/services/storage.service";
 
@@ -14,11 +15,16 @@ import * as Sentry from "@sentry/node";
 
 import { NotificationService } from "../shared/notifications/notification.service";
 
+dotenv.config();
 
+const redisUrl = process.env.REDIS_URL || "redis://127.0.0.1:6379";
+
+// Disable worker if Redis is not configured
+const redisEnabled = process.env.REDIS_URL && process.env.REDIS_URL !== "" && process.env.REDIS_URL !== "disabled";
 
 // Ensure we don't fail immediately inside the worker loop if DB reconnects
 
-export const uploadWorker = new Worker(
+export const uploadWorker = redisEnabled ? new Worker(
 
   "media-upload",
 
@@ -245,54 +251,37 @@ export const uploadWorker = new Worker(
   },
 
   {
-
-    connection: {
-
-      host: "127.0.0.1",
-
-      port: 6379,
-
-    },
-
+    connection: redisUrl.startsWith("redis://")
+      ? { url: redisUrl }
+      : {
+          host: "127.0.0.1",
+          port: 6379,
+        },
   }
 
-);
+) : null as any;
 
 
 
-uploadWorker.on("failed", async (job, err) => {
+if (uploadWorker) {
+  uploadWorker.on("failed", async (job, err) => {
+    if (!job) return;
 
-  if (!job) return;
+    if (job.attemptsMade >= (job.opts.attempts || 1)) {
+      logger.warn({ jobId: job.id, contentId: job.data.contentId }, `[Worker] Job completely exhausted retries. Marking as FAILED.`);
+      const { contentId, thumbnail, audio, video } = job.data;
 
-  if (job.attemptsMade >= (job.opts.attempts || 1)) {
+      // Ultimate Failure: Set status to FAILED so user sees it in their UI
+      await pool.query(`UPDATE content_items SET status = 'FAILED' WHERE id = $1`, [contentId]).catch(e => console.error(e));
 
-    logger.warn({ jobId: job.id, contentId: job.data.contentId }, `[Worker] Job completely exhausted retries. Marking as FAILED.`);
-
-    const { contentId, thumbnail, audio, video } = job.data;
-
-    
-
-    // Ultimate Failure: Set status to FAILED so user sees it in their UI
-
-    await pool.query(`UPDATE content_items SET status = 'FAILED' WHERE id = $1`, [contentId]).catch(e => console.error(e));
-
-
-
-    // Cleanup Local Files to prevent disk leak
-
-    const filesToClean = [thumbnail?.path, audio?.path, video?.path];
-
-    for (const p of filesToClean) {
-
-      if (p && fs.existsSync(p)) {
-
-        fs.promises.unlink(p).catch(e => e);
-
+      // Cleanup Local Files to prevent disk leak
+      const filesToClean = [thumbnail?.path, audio?.path, video?.path];
+      for (const p of filesToClean) {
+        if (p && fs.existsSync(p)) {
+          fs.promises.unlink(p).catch(e => e);
+        }
       }
-
     }
-
-  }
-
-});
+  });
+}
 

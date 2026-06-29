@@ -528,7 +528,7 @@ const PORT = process.env.PORT || 8000;
 
   // Retries up to 10 times with backoff. Never crashes — falls back to DB.
 
-  // await connectRedisWithRetry(10); // Disabled Redis to stop connection errors
+  // await connectRedisWithRetry(10); // Disabled Redis - not running on this system
 
 
 

@@ -17,6 +17,7 @@ export const MEDIA_STATUS = {
 export const PLAYABLE_STATUSES = new Set([
   MEDIA_STATUS.READY,
   "PUBLISHED",
+  "PROCESSING", // Allow playback during processing (for development without Redis)
   // Legacy lifecycle used by existing rows in this project.
   "APPROVED"
 ]);

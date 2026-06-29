@@ -30,6 +30,8 @@ import { invalidateContentCache } from "../common/cache";
 
 import { AuditService } from "../shared/audit/audit.service";
 
+import { uploadQueue } from "../common/queue";
+
 const router = Router();
 
 const requireArtist = (req: any, res: any, next: any) => {
@@ -414,15 +416,90 @@ router.post(
         jobData.video = { path: video.path, mime: videoMime, key: videoKey };
       }
 
-      // await uploadQueue.add("upload", jobData, {
-      //   attempts: 3,
+      // Check if uploadQueue is available (requires Redis)
+      if (!uploadQueue) {
+        // Synchronous upload when Redis is not available
+        console.log(`[UPLOAD] Redis not available, doing synchronous upload`);
+        const storage = getStorageService();
 
-      //   backoff: {
-      //     type: "fixed",
+        try {
+          // Upload Thumbnail
+          const uploadedThumbnail = await storage.upload({
+            storageKey: thumbnailKey,
+            body: fs.createReadStream(thumb.path),
+            contentType: thumbMime,
+          });
 
-      //     delay: 5000,
-      //   },
-      // });
+          // Upload Audio
+          const uploadedAudio = await storage.upload({
+            storageKey: audioKey,
+            body: fs.createReadStream(audio.path),
+            contentType: audioMime,
+          });
+
+          // Upload Video if present
+          let uploadedVideo = null;
+          if (video && videoKey) {
+            uploadedVideo = await storage.upload({
+              storageKey: videoKey,
+              body: fs.createReadStream(video.path),
+              contentType: videoMime,
+            });
+          }
+
+          // Update Database
+          await pool.query(
+            `UPDATE content_items
+             SET 
+                provider_asset_id = $1,
+                audio_provider_asset_id = $2,
+                video_provider_asset_id = $3,
+                thumbnail_provider_asset_id = $4,
+                thumbnail_url = $5,
+                audio_url = $6,
+                video_url = $7,
+                file_key = $8,
+                status = 'PUBLISHED'
+             WHERE id = $9`,
+            [
+              uploadedAudio.providerAssetId || uploadedVideo?.providerAssetId || null,
+              uploadedAudio.providerAssetId || null,
+              uploadedVideo?.providerAssetId || null,
+              uploadedThumbnail.providerAssetId || null,
+              uploadedThumbnail.providerUrl || null,
+              null,
+              null,
+              uploadedAudio.providerUrl || uploadedVideo?.providerUrl || null,
+              row.id,
+            ]
+          );
+
+          // Cleanup Local Files
+          fs.promises.unlink(thumb.path).catch((e) => e);
+          fs.promises.unlink(audio.path).catch((e) => e);
+          if (video) fs.promises.unlink(video.path).catch((e) => e);
+
+          console.log(`[UPLOAD] Synchronous upload completed for contentId=${row.id}`);
+        } catch (syncErr: any) {
+          console.error(`[UPLOAD] Synchronous upload failed:`, syncErr);
+          // Cleanup on failure
+          fs.promises.unlink(thumb.path).catch((e) => e);
+          fs.promises.unlink(audio.path).catch((e) => e);
+          if (video) fs.promises.unlink(video.path).catch((e) => e);
+          throw syncErr;
+        }
+      } else {
+        // Use BullMQ for background upload when Redis is available
+        await uploadQueue.add("upload", jobData, {
+          attempts: 3,
+
+          backoff: {
+            type: "fixed",
+
+            delay: 5000,
+          },
+        });
+      }
 
       const cacheInvalidateStart = Date.now();
       await invalidateContentCache();
