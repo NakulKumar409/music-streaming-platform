@@ -221,6 +221,20 @@ router.get("/thumbnail/:contentId", async (req: any, res: any) => {
     
     try {
       const storage = getStorageProviderByName(storageProvider as any);
+      
+      // For Cloudinary, always use signed URLs - never stream
+      if (storageProvider === "cloudinary" && providerAssetId && storage.getPublicObjectUrl) {
+        const thumbnailUrl = await storage.getPublicObjectUrl({
+          providerAssetId,
+          mediaType: "thumbnail"
+        });
+        if (thumbnailUrl) {
+          console.log(`[stream/thumbnail] Generated Cloudinary signed URL: ${thumbnailUrl.substring(0, 80)}...`);
+          return res.redirect(302, thumbnailUrl);
+        }
+      }
+
+      // For other providers, try public URL
       if (providerAssetId && storage.getPublicObjectUrl) {
         const thumbnailUrl = await storage.getPublicObjectUrl({
           providerAssetId,
@@ -239,6 +253,15 @@ router.get("/thumbnail/:contentId", async (req: any, res: any) => {
       if (isFullUrl) {
         console.log(`[stream/thumbnail] Redirecting to full URL: ${directUrl!.substring(0, 80)}...`);
         return res.redirect(302, directUrl!);
+      }
+
+      // Cloudinary should never reach here - if it does, return error
+      if (storageProvider === "cloudinary") {
+        return res.status(404).json({
+          success: false,
+          message: "Cloudinary thumbnail not available. Missing provider asset ID.",
+          correlationId
+        });
       }
 
       if (!storageKey) {
