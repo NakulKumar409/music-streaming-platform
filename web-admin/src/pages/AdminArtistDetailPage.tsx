@@ -28,13 +28,14 @@ import {
   Star,
   Shield,
   Settings,
+  Download,
+  AlertTriangle,
   Activity,
   FileText,
   Link2,
   ExternalLink,
   Image,
   Video,
-  AlertTriangle,
   MoreHorizontal,
   ChevronDown,
   ChevronUp,
@@ -64,6 +65,14 @@ type ArtistDetail = {
   accountCreatedDate: string | null;
   accountUpdatedDate?: string | null;
   lastLogin: string | null;
+  agreementAccepted?: boolean | null;
+  agreementAcceptedAt?: string | null;
+  agreementVersion?: string | null;
+  artistRevenueShare?: number | null;
+  platformRevenueShare?: number | null;
+  digitalSignature?: string | null;
+  signatureSignedAt?: string | null;
+  agreementId?: string | null;
 };
 
 type ArtistDetailResponse = {
@@ -765,6 +774,11 @@ export default function AdminArtistDetailPage() {
                   placeholder="90"
                   inputMode="decimal"
                 />
+                {artist?.agreementAccepted && (
+                  <p className="text-xs text-[#8D7B77] mt-1.5">
+                    <span className="text-amber-400">Note:</span> Changes only apply to future agreements. Current agreement: {artist.artistRevenueShare}% artist / {artist.platformRevenueShare}% platform
+                  </p>
+                )}
               </div>
 
               <div>
@@ -859,6 +873,100 @@ export default function AdminArtistDetailPage() {
 
         {/* Right Column */}
         <div className="space-y-6">
+          {/* Agreement Information */}
+          <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-xl bg-purple-500/10">
+                <FileText size={18} className="text-purple-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-white">
+                Agreement Information
+              </h3>
+            </div>
+
+            {artist?.agreementAccepted ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-[#8D7B77] uppercase tracking-wider">
+                      Agreement Version
+                    </label>
+                    <div className="mt-1 text-sm text-white font-medium">
+                      {artist.agreementVersion || "v1"}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-[#8D7B77] uppercase tracking-wider">
+                      Agreement ID
+                    </label>
+                    <div className="mt-1 text-sm text-white font-mono">
+                      {artist.agreementId?.slice(0, 8) || "—"}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#8D7B77] uppercase tracking-wider">
+                    Accepted Date
+                  </label>
+                  <div className="mt-1 text-sm text-white">
+                    {artist.agreementAcceptedAt ? formatDateTime(artist.agreementAcceptedAt) : "—"}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle size={16} className="text-emerald-400" />
+                    <span className="text-sm text-emerald-400 font-medium">
+                      Agreement Signed
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = `/api/v1/admin/artists/${artistId}/agreement-pdf`;
+                    window.open(url, '_blank');
+                  }}
+                  className="w-full h-[42px] rounded-xl border border-white/10 bg-white/5 text-sm text-[#8D7B77] hover:text-white hover:bg-white/10 transition-all flex items-center justify-center gap-2">
+                  <Download size={16} />
+                  Download Agreement PDF
+                </button>
+
+                {artist?.digitalSignature && (
+                  <div>
+                    <label className="text-xs text-[#8D7B77] uppercase tracking-wider">
+                      Digital Signature
+                    </label>
+                    <div className="mt-1.5 p-3 rounded-xl bg-white/5 border border-white/10">
+                      <img
+                        src={artist.digitalSignature}
+                        alt="Artist signature"
+                        className="h-[60px] w-full object-contain"
+                      />
+                    </div>
+                    <p className="text-xs text-[#8D7B77] mt-1">
+                      Signed: {artist.signatureSignedAt ? formatDateTime(artist.signatureSignedAt) : "—"}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-yellow-500/5 border border-yellow-500/20">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-yellow-400" />
+                  <span className="text-sm text-yellow-400 font-medium">
+                    Agreement Not Signed
+                  </span>
+                </div>
+                <p className="text-xs text-[#8D7B77] mt-2">
+                  This artist has not completed the onboarding agreement.
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Content History */}
           <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
             <div className="flex items-center justify-between mb-4">

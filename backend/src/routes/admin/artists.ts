@@ -4,6 +4,7 @@ import { requireAuth } from "../../common/auth/requireAuth";
 import { pool } from "../../common/db";
 import { invalidateCachePattern, invalidateArtistCache } from "../../common/cache";
 import { AuditService } from "../../shared/audit/audit.service";
+import { AgreementPdfService } from "../../services/agreement-pdf.service";
 
 const router = Router();
 
@@ -256,7 +257,12 @@ router.get("/", requireAuth, requireAdmin, async (req, res) => {
       COALESCE(status, 'ACTIVE') as status,
       COALESCE(is_deleted, false) as is_deleted,
       deleted_at,
-      deletion_reason
+      deletion_reason,
+      agreement_accepted,
+      agreement_version,
+      artist_revenue_share,
+      platform_revenue_share,
+      agreement_id
      FROM users
      ${whereSql}
      ORDER BY created_at DESC NULLS LAST, id DESC
@@ -274,7 +280,12 @@ router.get("/", requireAuth, requireAdmin, async (req, res) => {
     status: (u.status ?? "ACTIVE").toString(),
     isDeleted: Boolean(u.is_deleted),
     deletedAt: u.deleted_at ?? null,
-    deletionReason: u.deletion_reason ?? null
+    deletionReason: u.deletion_reason ?? null,
+    agreementAccepted: Boolean(u.agreement_accepted),
+    agreementVersion: u.agreement_version ?? null,
+    artistRevenueShare: u.artist_revenue_share ?? null,
+    platformRevenueShare: u.platform_revenue_share ?? null,
+    agreementId: u.agreement_id ?? null
   }));
 
   const totalPages = Math.max(1, Math.ceil(totalCount / limit));
@@ -314,7 +325,15 @@ router.get("/:id", requireAuth, requireAdmin, async (req, res) => {
       COALESCE(bio, '') as bio,
       social_links,
       COALESCE(revenue_share_percentage, 90) as revenue_share_percentage,
-      admin_remarks
+      admin_remarks,
+      agreement_accepted,
+      agreement_accepted_at,
+      agreement_version,
+      artist_revenue_share,
+      platform_revenue_share,
+      digital_signature,
+      signature_signed_at,
+      agreement_id
      FROM users
      WHERE id = $1 AND UPPER(role) = 'ARTIST'
      LIMIT 1`,
@@ -390,7 +409,15 @@ router.get("/:id", requireAuth, requireAdmin, async (req, res) => {
       totalContentCount,
       accountCreatedDate: u.created_at ?? null,
       accountUpdatedDate: u.updated_at ?? null,
-      lastLogin: u.last_login ?? null
+      lastLogin: u.last_login ?? null,
+      agreementAccepted: Boolean(u.agreement_accepted),
+      agreementAcceptedAt: u.agreement_accepted_at ?? null,
+      agreementVersion: u.agreement_version ?? null,
+      artistRevenueShare: u.artist_revenue_share ?? null,
+      platformRevenueShare: u.platform_revenue_share ?? null,
+      digitalSignature: u.digital_signature ?? null,
+      signatureSignedAt: u.signature_signed_at ?? null,
+      agreementId: u.agreement_id ?? null
     }
   });
 });
@@ -753,6 +780,65 @@ router.patch("/:id/verified", requireAuth, requireAdmin, async (req, res) => {
   await invalidateCachePattern("artist_search:*");
 
   return res.json({ success: true, isVerified: next });
+});
+
+router.get("/:id/agreement-pdf", requireAuth, requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    return res.status(400).json({ success: false, message: "Invalid id" });
+  }
+
+  const correlationId = (req as any)?.correlationId || "-";
+
+  try {
+    const artistRows = await safeQuery<any>(
+      `SELECT 
+        name, 
+        email, 
+        phone, 
+        agreement_version, 
+        artist_revenue_share, 
+        platform_revenue_share, 
+        agreement_accepted_at, 
+        signature_signed_at, 
+        agreement_id, 
+        digital_signature 
+       FROM users 
+       WHERE id = $1 AND UPPER(role) = 'ARTIST' 
+       LIMIT 1`,
+      [id]
+    );
+
+    if (!artistRows.length) {
+      return res.status(404).json({ success: false, message: "Artist not found" });
+    }
+
+    const artist = artistRows[0];
+
+    if (!artist.agreement_id || !artist.agreement_accepted_at) {
+      return res.status(404).json({ success: false, message: "No agreement found for this artist" });
+    }
+
+    const pdfBuffer = await AgreementPdfService.generateAgreementPdf({
+      artistName: artist.name || "Unknown Artist",
+      email: artist.email,
+      phone: artist.phone,
+      agreementVersion: artist.agreement_version || "v1",
+      artistRevenueShare: artist.artist_revenue_share || 55,
+      platformRevenueShare: artist.platform_revenue_share || 45,
+      agreementAcceptedAt: new Date(artist.agreement_accepted_at),
+      signatureSignedAt: new Date(artist.signature_signed_at || artist.agreement_accepted_at),
+      agreementId: artist.agreement_id,
+      digitalSignature: artist.digital_signature || ""
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="artist-agreement-${artist.agreement_id}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (error: any) {
+    console.error('[admin/artists/:id/agreement-pdf] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to generate agreement PDF", correlationId });
+  }
 });
 
 export default router;

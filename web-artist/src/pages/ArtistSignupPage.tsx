@@ -15,6 +15,7 @@ import {
   Lock,
   Sparkles,
   Shield,
+  DollarSign,
 } from "lucide-react";
 
 type OnboardResponse = {
@@ -59,7 +60,7 @@ function BrandLogo() {
 export default function ArtistSignupPage() {
   const navigate = useNavigate();
 
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6 | 7>(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,6 +80,18 @@ export default function ArtistSignupPage() {
   const [bio, setBio] = useState("");
   const [profileFile, setProfileFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Step 4: Revenue Sharing
+  const [artistRevenueShare] = useState(55);
+  const [platformRevenueShare] = useState(45);
+
+  // Step 5: Terms & Conditions
+  const [termsAccepted, setTermsAccepted] = useState(false);
+
+  // Step 6: Digital Signature
+  const [signatureData, setSignatureData] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
 
   const backgroundStyle = useMemo(() => {
     return {
@@ -200,6 +213,104 @@ export default function ArtistSignupPage() {
     }
   };
 
+  const handleStep4Next = () => {
+    setStep(5);
+  };
+
+  const handleStep5Next = () => {
+    setError(null);
+    if (!termsAccepted) {
+      setError("Please accept the terms and conditions to continue.");
+      return;
+    }
+    setStep(6);
+  };
+
+  const clearSignature = () => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        setSignatureData(null);
+      }
+    }
+  };
+
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    setIsDrawing(true);
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.beginPath();
+        ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+      }
+    }
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.lineCap = "round";
+        ctx.stroke();
+        setSignatureData(canvas.toDataURL());
+      }
+    }
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+  };
+
+  const handleStep6Next = () => {
+    setError(null);
+    if (!signatureData) {
+      setError("Please provide your signature to continue.");
+      return;
+    }
+    setStep(7);
+  };
+
+  const handleStep7Submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await http.post("/api/v1/artist/onboard", {
+        email: email.trim(),
+        password,
+        artistName: artistName.trim(),
+        phone: phone.trim(),
+        genre,
+        bio: bio.trim(),
+        portfolioLinks: [],
+        agreementAccepted: true,
+        agreementVersion: "v1",
+        artistRevenueShare,
+        platformRevenueShare,
+        digitalSignature: signatureData,
+      });
+
+      setStep(8);
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "Failed to submit agreement";
+      setError(msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="min-h-screen w-full bg-[#080505] text-white overflow-hidden font-sans relative">
       {/* Google Fonts Import */}
@@ -297,17 +408,17 @@ export default function ArtistSignupPage() {
 
       <div className="min-h-screen w-full flex items-center justify-center px-4 sm:px-6 py-12 sm:py-16">
         <div className="w-full max-w-[500px] relative z-10">
-          {step < 4 && (
+          {step < 8 && (
             <div className="mb-6 sm:mb-8">
               <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
                 <BrandLogo />
               </div>
               <div className="flex items-center gap-2 text-sm font-inter text-[#8d7b77]">
-                <span>Step {step} of 3</span>
+                <span>Step {step} of 7</span>
                 <div className="flex-1 h-1 bg-[#1a1514] rounded-full overflow-hidden ml-2">
                   <div
                     className="h-full bg-gradient-to-r from-[#e85d2c] to-[#c97a54] transition-all duration-300 ease-out"
-                    style={{ width: `${(step / 3) * 100}%` }}
+                    style={{ width: `${(step / 7) * 100}%` }}
                   />
                 </div>
               </div>
@@ -644,6 +755,290 @@ export default function ArtistSignupPage() {
               )}
 
               {step === 4 && (
+                <div className="space-y-5 sm:space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                  <div className="text-center mb-4 sm:mb-6">
+                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[#e85d2c]/20 text-[#e85d2c] mb-3">
+                      <DollarSign className="w-7 h-7" />
+                    </div>
+                    <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[#e8c4b8]">
+                      Revenue Sharing
+                    </h2>
+                    <p className="font-inter text-[#8d7b77] text-[13px] sm:text-[14px] mt-1">
+                      Understanding how earnings are split
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 rounded-xl bg-[#1a1210]/60 border border-white/10 text-center">
+                      <div className="text-3xl font-bold text-[#e85d2c] mb-1">{artistRevenueShare}%</div>
+                      <div className="text-xs text-[#8d7b77] font-medium uppercase tracking-wider">Artist Share</div>
+                    </div>
+                    <div className="p-4 rounded-xl bg-[#1a1210]/60 border border-white/10 text-center">
+                      <div className="text-3xl font-bold text-[#c97a54] mb-1">{platformRevenueShare}%</div>
+                      <div className="text-xs text-[#8d7b77] font-medium uppercase tracking-wider">Platform Share</div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-white/5 border border-white/5">
+                    <p className="text-xs text-[#8d7b77] leading-relaxed">
+                      This revenue share is fixed for your signed agreement. Future platform changes will not affect your existing agreement.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleStep4Next}
+                    className="relative w-full h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300">
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                    <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
+                    <span className="relative z-10 flex items-center justify-center gap-2">
+                      Next
+                    </span>
+                  </button>
+                </div>
+              )}
+
+              {step === 5 && (
+                <div className="space-y-5 sm:space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                  <div className="text-center mb-4 sm:mb-6">
+                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-blue-500/20 text-blue-400 mb-3">
+                      <Shield className="w-7 h-7" />
+                    </div>
+                    <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[#e8c4b8]">
+                      Terms & Conditions
+                    </h2>
+                    <p className="font-inter text-[#8d7b77] text-[13px] sm:text-[14px] mt-1">
+                      Please review and accept our terms
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-[#1a1210]/60 border border-white/10 max-h-[300px] overflow-y-auto">
+                    <h3 className="text-sm font-semibold text-white mb-3">Artist Agreement Terms</h3>
+                    <div className="space-y-3 text-xs text-[#8d7b77] leading-relaxed">
+                      <p><strong>1. Content Ownership:</strong> You retain full ownership of all content you upload to the platform.</p>
+                      <p><strong>2. Revenue Sharing:</strong> Earnings will be split according to the agreed percentages (Artist {artistRevenueShare}%, Platform {platformRevenueShare}%).</p>
+                      <p><strong>3. Content Standards:</strong> All content must be original and comply with applicable laws and platform guidelines.</p>
+                      <p><strong>4. Payment Processing:</strong> The platform handles payment processing and will distribute earnings according to the revenue share agreement.</p>
+                      <p><strong>5. Account Security:</strong> You are responsible for maintaining the security of your account credentials.</p>
+                      <p><strong>6. Platform Rights:</strong> The platform has the right to distribute your content to subscribers and manage the technical infrastructure.</p>
+                      <p><strong>7. Agreement Binding:</strong> This agreement is legally binding upon your digital signature.</p>
+                      <p><strong>8. Modifications:</strong> Future changes to terms will only apply to new agreements, not existing signed agreements.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      id="terms-checkbox"
+                      checked={termsAccepted}
+                      onChange={(e) => setTermsAccepted(e.target.checked)}
+                      className="mt-1 w-5 h-5 rounded border-white/20 bg-white/5 text-[#e85d2c] focus:ring-[#e85d2c] focus:ring-offset-0"
+                    />
+                    <label htmlFor="terms-checkbox" className="text-sm text-[#8d7b77] cursor-pointer">
+                      I have read and agree to the Terms & Conditions
+                    </label>
+                  </div>
+
+                  {error && (
+                    <div className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-[12px] sm:text-[13px] font-inter backdrop-blur-sm animate-shake">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setStep(4)}
+                      className="w-full sm:w-1/3 h-[48px] sm:h-[52px] rounded-xl border border-white/10 bg-white/5 text-[14px] sm:text-[15px] font-inter font-medium text-white hover:bg-white/10 transition-all duration-300">
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleStep5Next}
+                      className="relative w-full sm:w-2/3 h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300">
+                      <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                      <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
+                      <span className="relative z-10 flex items-center justify-center gap-2">
+                        Next
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {step === 6 && (
+                <div className="space-y-5 sm:space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                  <div className="text-center mb-4 sm:mb-6">
+                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-purple-500/20 text-purple-400 mb-3">
+                      <Sparkles className="w-7 h-7" />
+                    </div>
+                    <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[#e8c4b8]">
+                      Digital Signature
+                    </h2>
+                    <p className="font-inter text-[#8d7b77] text-[13px] sm:text-[14px] mt-1">
+                      Please sign below to complete the agreement
+                    </p>
+                  </div>
+
+                  <div className="relative">
+                    <canvas
+                      ref={canvasRef}
+                      width={450}
+                      height={150}
+                      onMouseDown={startDrawing}
+                      onMouseMove={draw}
+                      onMouseUp={stopDrawing}
+                      onMouseLeave={stopDrawing}
+                      className="w-full h-[150px] rounded-xl bg-[#1a1210]/60 border border-white/10 cursor-crosshair"
+                    />
+                    <button
+                      type="button"
+                      onClick={clearSignature}
+                      className="absolute top-2 right-2 px-3 py-1 rounded-lg bg-white/10 text-xs text-[#8d7b77] hover:bg-white/20 transition-all">
+                      Clear
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-[#5a4a46] text-center">
+                    Draw your signature using your mouse or touch screen
+                  </p>
+
+                  {error && (
+                    <div className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-[12px] sm:text-[13px] font-inter backdrop-blur-sm animate-shake">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setStep(5)}
+                      className="w-full sm:w-1/3 h-[48px] sm:h-[52px] rounded-xl border border-white/10 bg-white/5 text-[14px] sm:text-[15px] font-inter font-medium text-white hover:bg-white/10 transition-all duration-300">
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleStep6Next}
+                      className="relative w-full sm:w-2/3 h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300">
+                      <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                      <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
+                      <span className="relative z-10 flex items-center justify-center gap-2">
+                        Next
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {step === 7 && (
+                <div className="space-y-5 sm:space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                  <div className="text-center mb-4 sm:mb-6">
+                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-500/20 text-emerald-400 mb-3">
+                      <CheckCircle2 className="w-7 h-7" />
+                    </div>
+                    <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[#e8c4b8]">
+                      Review & Submit
+                    </h2>
+                    <p className="font-inter text-[#8d7b77] text-[13px] sm:text-[14px] mt-1">
+                      Please review your agreement details
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-xl bg-[#1a1210]/60 border border-white/10">
+                      <h3 className="text-xs font-semibold text-[#8d7b77] uppercase tracking-wider mb-3">Artist Information</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-[#8d7b77]">Name:</span>
+                          <span className="text-white">{artistName}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-[#8d7b77]">Email:</span>
+                          <span className="text-white">{email}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-[#8d7b77]">Phone:</span>
+                          <span className="text-white">{phone || "—"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-[#1a1210]/60 border border-white/10">
+                      <h3 className="text-xs font-semibold text-[#8d7b77] uppercase tracking-wider mb-3">Revenue Sharing</h3>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-[#e85d2c]">{artistRevenueShare}%</div>
+                          <div className="text-xs text-[#8d7b77]">Artist</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-[#c97a54]">{platformRevenueShare}%</div>
+                          <div className="text-xs text-[#8d7b77]">Platform</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-[#1a1210]/60 border border-white/10">
+                      <h3 className="text-xs font-semibold text-[#8d7b77] uppercase tracking-wider mb-3">Agreement Details</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-[#8d7b77]">Version:</span>
+                          <span className="text-white">v1</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-[#8d7b77]">Terms Accepted:</span>
+                          <span className="text-emerald-400">Yes</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-[#1a1210]/60 border border-white/10">
+                      <h3 className="text-xs font-semibold text-[#8d7b77] uppercase tracking-wider mb-3">Signature</h3>
+                      {signatureData && (
+                        <img
+                          src={signatureData}
+                          alt="Signature preview"
+                          className="h-[80px] w-full object-contain bg-white/5 rounded-lg"
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {error && (
+                    <div className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-[12px] sm:text-[13px] font-inter backdrop-blur-sm animate-shake">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setStep(6)}
+                      className="w-full sm:w-1/3 h-[48px] sm:h-[52px] rounded-xl border border-white/10 bg-white/5 text-[14px] sm:text-[15px] font-inter font-medium text-white hover:bg-white/10 transition-all duration-300">
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleStep7Submit}
+                      className="relative w-full sm:w-2/3 h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300">
+                      <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                      <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
+                      <span className="relative z-10 flex items-center justify-center gap-2">
+                        <Sparkles className="w-4 h-4" />
+                        Submit Agreement
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {step === 8 && (
                 <div className="text-center py-6 sm:py-8 animate-in zoom-in-95 duration-500">
                   <div className="w-24 h-24 bg-gradient-to-br from-[#e85d2c] to-[#c97a54] rounded-full mx-auto flex items-center justify-center shadow-[0_0_50px_rgba(232,93,44,0.4)] mb-6 sm:mb-8">
                     <Music2 className="w-12 h-12 text-white" />

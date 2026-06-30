@@ -11,6 +11,7 @@ import fs from "fs";
 import { AnalyticsController } from "../controllers/analyticsController";
 import { logger } from "../common/logger";
 import { AuditService } from "../shared/audit/audit.service";
+import { v4 as uuidv4 } from "uuid";
 
 const router = Router();
 router.get("/dashboard/subscription-insights", requireAuth, AnalyticsController.getArtistSubscriptionInsights);
@@ -70,7 +71,12 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
       bio,
       portfolioLinks,
       phone,
-      genre
+      genre,
+      agreementAccepted,
+      agreementVersion,
+      artistRevenueShare,
+      platformRevenueShare,
+      digitalSignature
     } = req.body as {
       email?: string;
       password?: string;
@@ -79,6 +85,11 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
       portfolioLinks?: any;
       phone?: string;
       genre?: string;
+      agreementAccepted?: boolean;
+      agreementVersion?: string;
+      artistRevenueShare?: number;
+      platformRevenueShare?: number;
+      digitalSignature?: string;
     };
 
     const trimmedEmail = (email || "").trim().toLowerCase();
@@ -122,12 +133,33 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
     const hashedPassword = await bcrypt.hash(trimmedPassword, 10);
 
     let userId: number | null = null;
+    
+    const agreementId = agreementAccepted ? uuidv4() : null;
+    const agreementAcceptedAt = agreementAccepted ? new Date() : null;
+    const signatureSignedAt = agreementAccepted && digitalSignature ? new Date() : null;
+
     if (!existing.length) {
       const inserted = await pool.query(
-        `INSERT INTO users (email, password, name, role, status, is_verified, verified, phone, genre, artist_status, artist_bio, portfolio_links, onboarded_at, created_at, updated_at)
-         VALUES ($1, $2, $3, 'ARTIST', 'ACTIVE', false, false, $4, $5, 'PENDING', $6, $7, now(), now(), now())
+        `INSERT INTO users (email, password, name, role, status, is_verified, verified, phone, genre, artist_status, artist_bio, portfolio_links, onboarded_at, created_at, updated_at, agreement_accepted, agreement_accepted_at, agreement_version, artist_revenue_share, platform_revenue_share, digital_signature, signature_signed_at, agreement_id)
+         VALUES ($1, $2, $3, 'ARTIST', 'ACTIVE', false, false, $4, $5, 'PENDING', $6, $7, now(), now(), now(), $8, $9, $10, $11, $12, $13, $14, $15)
          RETURNING id`,
-        [trimmedEmail, hashedPassword, trimmedName, phone ?? null, genre ?? null, trimmedBio, links]
+        [
+          trimmedEmail, 
+          hashedPassword, 
+          trimmedName, 
+          phone ?? null, 
+          genre ?? null, 
+          trimmedBio, 
+          links,
+          agreementAccepted || false,
+          agreementAcceptedAt,
+          agreementVersion || null,
+          artistRevenueShare || null,
+          platformRevenueShare || null,
+          digitalSignature || null,
+          signatureSignedAt,
+          agreementId
+        ]
       );
       userId = Number(inserted.rows?.[0]?.id ?? 0) || null;
     } else {
@@ -150,10 +182,34 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
              artist_bio = $6,
              portfolio_links = $7,
              onboarded_at = now(),
-             updated_at = now()
+             updated_at = now(),
+             agreement_accepted = COALESCE($8, agreement_accepted),
+             agreement_accepted_at = COALESCE($9, agreement_accepted_at),
+             agreement_version = COALESCE($10, agreement_version),
+             artist_revenue_share = COALESCE($11, artist_revenue_share),
+             platform_revenue_share = COALESCE($12, platform_revenue_share),
+             digital_signature = COALESCE($13, digital_signature),
+             signature_signed_at = COALESCE($14, signature_signed_at),
+             agreement_id = COALESCE($15, agreement_id)
          WHERE LOWER(email) = $1
          RETURNING id`,
-        [trimmedEmail, hashedPassword, trimmedName, phone ?? null, genre ?? null, trimmedBio, links]
+        [
+          trimmedEmail, 
+          hashedPassword, 
+          trimmedName, 
+          phone ?? null, 
+          genre ?? null, 
+          trimmedBio, 
+          links,
+          agreementAccepted || false,
+          agreementAcceptedAt,
+          agreementVersion || null,
+          artistRevenueShare || null,
+          platformRevenueShare || null,
+          digitalSignature || null,
+          signatureSignedAt,
+          agreementId
+        ]
       );
       userId = Number(updated.rows?.[0]?.id ?? 0) || null;
     }
@@ -174,7 +230,10 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
         correlationId,
         userId,
         email: trimmedEmail,
-        artistStatus: "PENDING"
+        artistStatus: "PENDING",
+        agreementAccepted,
+        agreementVersion,
+        agreementId
       })}`
     );
 

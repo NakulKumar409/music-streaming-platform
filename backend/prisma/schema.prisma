@@ -38,10 +38,19 @@ model users {
   artist_appeal_message     String?
   subscription_features     Json      @default("[]")
   yearly_subscription_price Decimal   @default(0) @db.Decimal
+  agreementAccepted         Boolean   @default(false) @map("agreement_accepted")
+  agreementAcceptedAt       DateTime? @map("agreement_accepted_at") @db.Timestamptz(6)
+  agreementVersion          String?   @map("agreement_version") @db.VarChar(20)
+  artistRevenueShare        Int?      @map("artist_revenue_share")
+  platformRevenueShare      Int?      @map("platform_revenue_share")
+  digitalSignature          String?   @map("digital_signature") @db.Text
+  signatureSignedAt         DateTime? @map("signature_signed_at") @db.Timestamptz(6)
+  agreementId               String?   @map("agreement_id") @db.VarChar(100)
 
   @@index([artistStatus], map: "idx_users_artist_status")
   @@index([isDeleted], map: "idx_users_is_deleted")
   @@index([role], map: "idx_users_role")
+  @@index([agreementId], map: "idx_users_agreement_id")
 }
 
 model artist_stats {
@@ -51,6 +60,20 @@ model artist_stats {
   total_earnings    Decimal  @default(0) @db.Decimal
   created_at        DateTime @default(now()) @db.Timestamptz(6)
   updated_at        DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model revenue_share_configs {
+  id                Int      @id @default(autoincrement())
+  version           String   @unique @db.VarChar(20)
+  artistShare       Int      @map("artist_share")
+  platformShare     Int      @map("platform_share")
+  effectiveFrom     DateTime @map("effective_from") @db.Timestamptz(6)
+  isActive          Boolean  @default(true) @map("is_active")
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([version], map: "idx_revenue_share_configs_version")
+  @@index([effectiveFrom], map: "idx_revenue_share_configs_effective_from")
 }
 
 model content_items {
