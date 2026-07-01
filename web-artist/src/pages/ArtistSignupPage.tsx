@@ -60,7 +60,7 @@ function BrandLogo() {
 export default function ArtistSignupPage() {
   const navigate = useNavigate();
 
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6 | 7>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8>(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,12 +81,16 @@ export default function ArtistSignupPage() {
   const [profileFile, setProfileFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Step 4: Revenue Sharing
-  const [artistRevenueShare] = useState(55);
-  const [platformRevenueShare] = useState(45);
+  // Step 4: Commission Plan Selection
+  const [selectedCommissionPlans, setSelectedCommissionPlans] = useState<number[]>([]);
+  const [commissionPlans, setCommissionPlans] = useState<any[]>([]);
+  const [loadingPlans, setLoadingPlans] = useState(false);
 
   // Step 5: Terms & Conditions
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsContent, setTermsContent] = useState("");
+  const [termsVersion, setTermsVersion] = useState("");
+  const [loadingTerms, setLoadingTerms] = useState(false);
 
   // Step 6: Digital Signature
   const [signatureData, setSignatureData] = useState<string | null>(null);
@@ -110,6 +114,52 @@ export default function ArtistSignupPage() {
       if (profilePreviewUrl) URL.revokeObjectURL(profilePreviewUrl);
     };
   }, [profilePreviewUrl]);
+
+  // Fetch commission plans when entering Step 4
+  useEffect(() => {
+    if (step === 4) {
+      fetchCommissionPlans();
+    }
+  }, [step]);
+
+  // Fetch terms content when entering Step 5
+  useEffect(() => {
+    if (step === 5) {
+      fetchTermsContent();
+    }
+  }, [step]);
+
+  const fetchCommissionPlans = async () => {
+    setLoadingPlans(true);
+    try {
+      const res = await http.get("/api/v1/artist/commission-plans");
+      if (res.data?.success) {
+        setCommissionPlans(res.data.plans || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch commission plans:', error);
+    } finally {
+      setLoadingPlans(false);
+    }
+  };
+
+  const fetchTermsContent = async () => {
+    setLoadingTerms(true);
+    try {
+      const res = await http.get("/api/v1/artist/terms/current");
+      if (res.data?.success) {
+        setTermsContent(res.data.terms.content);
+        setTermsVersion(res.data.terms.version);
+      }
+    } catch (error) {
+      console.error('Failed to fetch terms content:', error);
+      // Fallback to default terms if API fails
+      setTermsContent("Default terms and conditions will be loaded here.");
+      setTermsVersion("v1");
+    } finally {
+      setLoadingTerms(false);
+    }
+  };
 
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
@@ -214,6 +264,11 @@ export default function ArtistSignupPage() {
   };
 
   const handleStep4Next = () => {
+    setError(null);
+    if (selectedCommissionPlans.length === 0) {
+      setError("Please select at least one commission plan to continue.");
+      return;
+    }
     setStep(5);
   };
 
@@ -294,9 +349,9 @@ export default function ArtistSignupPage() {
         portfolioLinks: [],
         agreementAccepted: true,
         agreementVersion: "v1",
-        artistRevenueShare,
-        platformRevenueShare,
+        commissionPlanIds: selectedCommissionPlans,
         digitalSignature: signatureData,
+        termsVersion: termsVersion,
       });
 
       setStep(8);
@@ -313,7 +368,6 @@ export default function ArtistSignupPage() {
 
   return (
     <div className="min-h-screen w-full bg-[#080505] text-white overflow-hidden font-sans relative">
-      {/* Google Fonts Import */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,700&family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800&display=swap');
         
@@ -374,14 +428,12 @@ export default function ArtistSignupPage() {
         }
       `}</style>
 
-      {/* Ambient Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full opacity-30">
           <div className="absolute top-[10%] left-[5%] w-64 h-64 bg-[#e85d2c]/10 rounded-full blur-3xl animate-pulse" />
           <div className="absolute bottom-[20%] right-[10%] w-80 h-80 bg-[#c97a54]/10 rounded-full blur-3xl animate-pulse delay-1000" />
           <div className="absolute top-[50%] left-[50%] w-96 h-96 bg-[#e85d2c]/5 rounded-full blur-3xl animate-pulse delay-500" />
         </div>
-        {/* Floating music notes */}
         {[...Array(6)].map((_, i) => (
           <div
             key={i}
@@ -398,7 +450,6 @@ export default function ArtistSignupPage() {
         ))}
       </div>
 
-      {/* Back Button */}
       <Link
         to="/artist/landing"
         className="absolute top-4 sm:top-6 left-4 sm:left-6 text-[#8d7b77] hover:text-[#e6d6d2] flex items-center gap-2 text-sm font-inter font-medium transition-all group z-50 hover:gap-3">
@@ -426,18 +477,13 @@ export default function ArtistSignupPage() {
           )}
 
           <div className="relative">
-            {/* Card Glow */}
             <div className="absolute -inset-0.5 bg-gradient-to-r from-[#e85d2c]/20 via-[#c97a54]/10 to-[#e85d2c]/20 blur-2xl rounded-3xl animate-pulse" />
 
             <div className="relative glass-effect rounded-2xl p-6 sm:p-8 md:p-10 shadow-2xl">
-              {/* Decorative Elements */}
               <div className="absolute top-0 right-0 w-32 h-32 bg-[#e85d2c]/5 rounded-full blur-2xl" />
               <div className="absolute bottom-0 left-0 w-24 h-24 bg-[#c97a54]/5 rounded-full blur-2xl" />
-
-              {/* Top Gradient Line */}
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-0.5 bg-gradient-to-r from-transparent via-[#e85d2c] to-transparent rounded-full" />
 
-              {/* Busy Overlay */}
               {busy && (
                 <div className="absolute inset-0 z-10 bg-[#1a1210]/80 backdrop-blur-sm flex items-center justify-center rounded-2xl">
                   <div className="text-center">
@@ -761,39 +807,120 @@ export default function ArtistSignupPage() {
                       <DollarSign className="w-7 h-7" />
                     </div>
                     <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[#e8c4b8]">
-                      Revenue Sharing
+                      Commission Plans
                     </h2>
                     <p className="font-inter text-[#8d7b77] text-[13px] sm:text-[14px] mt-1">
-                      Understanding how earnings are split
+                      Select your revenue sharing plans (you can choose multiple)
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 rounded-xl bg-[#1a1210]/60 border border-white/10 text-center">
-                      <div className="text-3xl font-bold text-[#e85d2c] mb-1">{artistRevenueShare}%</div>
-                      <div className="text-xs text-[#8d7b77] font-medium uppercase tracking-wider">Artist Share</div>
+                  {loadingPlans ? (
+                    <div className="text-center py-8">
+                      <div className="w-10 h-10 border-4 border-[#e85d2c]/30 border-t-[#e85d2c] rounded-full animate-spin mx-auto mb-3" />
+                      <p className="text-sm text-[#8d7b77]">Loading plans...</p>
                     </div>
-                    <div className="p-4 rounded-xl bg-[#1a1210]/60 border border-white/10 text-center">
-                      <div className="text-3xl font-bold text-[#c97a54] mb-1">{platformRevenueShare}%</div>
-                      <div className="text-xs text-[#8d7b77] font-medium uppercase tracking-wider">Platform Share</div>
+                  ) : commissionPlans.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-sm text-[#8d7b77]">No commission plans available. Please contact support.</p>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                      {commissionPlans.map((plan) => {
+                        const isSelected = selectedCommissionPlans.includes(plan.id);
+                        return (
+                          <div
+                            key={plan.id}
+                            onClick={() => {
+                              if (isSelected) {
+                                setSelectedCommissionPlans(selectedCommissionPlans.filter(id => id !== plan.id));
+                              } else {
+                                setSelectedCommissionPlans([...selectedCommissionPlans, plan.id]);
+                              }
+                            }}
+                            className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                              isSelected
+                                ? 'bg-[#e85d2c]/10 border-[#e85d2c]/50 shadow-[0_0_30px_rgba(232,93,44,0.1)]'
+                                : 'bg-[#1a1210]/60 border-white/10 hover:border-white/20'
+                            }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className={`w-5 h-5 rounded border-2 mt-0.5 flex items-center justify-center transition-colors flex-shrink-0 ${
+                                isSelected ? 'border-[#e85d2c] bg-[#e85d2c]' : 'border-white/30'
+                              }`}>
+                                {isSelected && <CheckCircle2 className="w-3 h-3 text-white" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                                  <h3 className="text-sm font-semibold text-white">{plan.name || `Plan ${plan.version}`}</h3>
+                                  <span className="text-xs px-2 py-1 rounded-full bg-white/5 text-[#8d7b77]">
+                                    v{plan.version || 1}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 mb-2">
+                                  <div className="text-center p-2 rounded-lg bg-white/5">
+                                    <div className="text-xl font-bold text-[#e85d2c]">{plan.artistShare}%</div>
+                                    <div className="text-xs text-[#8d7b77]">Artist</div>
+                                  </div>
+                                  <div className="text-center p-2 rounded-lg bg-white/5">
+                                    <div className="text-xl font-bold text-[#c97a54]">{plan.platformShare}%</div>
+                                    <div className="text-xs text-[#8d7b77]">Platform</div>
+                                  </div>
+                                </div>
+                                {plan.description && (
+                                  <p className="text-xs text-[#8d7b77] mb-2">{plan.description}</p>
+                                )}
+                                {plan.benefits && plan.benefits.length > 0 && (
+                                  <div>
+                                    <p className="text-xs text-[#8d7b77] mb-1">Benefits:</p>
+                                    <ul className="text-xs text-[#8d7b77] space-y-1">
+                                      {plan.benefits.map((benefit: string, idx: number) => (
+                                        <li key={idx} className="flex items-start gap-1">
+                                          <span className="text-[#e85d2c]">•</span>
+                                          <span>{benefit}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {selectedCommissionPlans.length > 0 && (
+                    <div className="p-3 rounded-xl bg-[#e85d2c]/5 border border-[#e85d2c]/20">
+                      <p className="text-sm text-[#e8c4b8]">
+                        Selected: <span className="font-semibold">{selectedCommissionPlans.length}</span> plan{selectedCommissionPlans.length > 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  )}
 
                   <div className="p-4 rounded-xl bg-white/5 border border-white/5">
                     <p className="text-xs text-[#8d7b77] leading-relaxed">
-                      This revenue share is fixed for your signed agreement. Future platform changes will not affect your existing agreement.
+                      Your selected commission plans will be fixed for your signed agreement. Future platform changes will not affect your existing agreement.
                     </p>
                   </div>
+
+                  {error && (
+                    <div className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-[12px] sm:text-[13px] font-inter backdrop-blur-sm animate-shake">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                  )}
 
                   <button
                     type="button"
                     onClick={handleStep4Next}
-                    className="relative w-full h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300">
+                    disabled={selectedCommissionPlans.length === 0 || loadingPlans}
+                    className="relative w-full h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
                     <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                     <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
                     <span className="relative z-10 flex items-center justify-center gap-2">
-                      Next
+                      Next ({selectedCommissionPlans.length} selected)
                     </span>
                   </button>
                 </div>
@@ -813,32 +940,37 @@ export default function ArtistSignupPage() {
                     </p>
                   </div>
 
-                  <div className="p-4 rounded-xl bg-[#1a1210]/60 border border-white/10 max-h-[300px] overflow-y-auto">
-                    <h3 className="text-sm font-semibold text-white mb-3">Artist Agreement Terms</h3>
-                    <div className="space-y-3 text-xs text-[#8d7b77] leading-relaxed">
-                      <p><strong>1. Content Ownership:</strong> You retain full ownership of all content you upload to the platform.</p>
-                      <p><strong>2. Revenue Sharing:</strong> Earnings will be split according to the agreed percentages (Artist {artistRevenueShare}%, Platform {platformRevenueShare}%).</p>
-                      <p><strong>3. Content Standards:</strong> All content must be original and comply with applicable laws and platform guidelines.</p>
-                      <p><strong>4. Payment Processing:</strong> The platform handles payment processing and will distribute earnings according to the revenue share agreement.</p>
-                      <p><strong>5. Account Security:</strong> You are responsible for maintaining the security of your account credentials.</p>
-                      <p><strong>6. Platform Rights:</strong> The platform has the right to distribute your content to subscribers and manage the technical infrastructure.</p>
-                      <p><strong>7. Agreement Binding:</strong> This agreement is legally binding upon your digital signature.</p>
-                      <p><strong>8. Modifications:</strong> Future changes to terms will only apply to new agreements, not existing signed agreements.</p>
+                  {loadingTerms ? (
+                    <div className="text-center py-8">
+                      <div className="w-10 h-10 border-4 border-[#e85d2c]/30 border-t-[#e85d2c] rounded-full animate-spin mx-auto mb-3" />
+                      <p className="text-sm text-[#8d7b77]">Loading terms...</p>
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      <div className="p-4 rounded-xl bg-[#1a1210]/60 border border-white/10 max-h-[300px] overflow-y-auto">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-sm font-semibold text-white">Artist Agreement Terms</h3>
+                          <span className="text-xs text-[#8d7b77] bg-white/5 px-2 py-1 rounded">Version {termsVersion}</span>
+                        </div>
+                        <div className="text-xs text-[#8d7b77] leading-relaxed whitespace-pre-wrap">
+                          {termsContent || "Terms content will be loaded here."}
+                        </div>
+                      </div>
 
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      id="terms-checkbox"
-                      checked={termsAccepted}
-                      onChange={(e) => setTermsAccepted(e.target.checked)}
-                      className="mt-1 w-5 h-5 rounded border-white/20 bg-white/5 text-[#e85d2c] focus:ring-[#e85d2c] focus:ring-offset-0"
-                    />
-                    <label htmlFor="terms-checkbox" className="text-sm text-[#8d7b77] cursor-pointer">
-                      I have read and agree to the Terms & Conditions
-                    </label>
-                  </div>
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          id="terms-checkbox"
+                          checked={termsAccepted}
+                          onChange={(e) => setTermsAccepted(e.target.checked)}
+                          className="mt-1 w-5 h-5 rounded border-white/20 bg-white/5 text-[#e85d2c] focus:ring-[#e85d2c] focus:ring-offset-0"
+                        />
+                        <label htmlFor="terms-checkbox" className="text-sm text-[#8d7b77] cursor-pointer">
+                          I have read and agree to the Terms & Conditions
+                        </label>
+                      </div>
+                    </>
+                  )}
 
                   {error && (
                     <div className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-[12px] sm:text-[13px] font-inter backdrop-blur-sm animate-shake">
@@ -857,7 +989,8 @@ export default function ArtistSignupPage() {
                     <button
                       type="button"
                       onClick={handleStep5Next}
-                      className="relative w-full sm:w-2/3 h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300">
+                      disabled={loadingTerms}
+                      className="relative w-full sm:w-2/3 h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
                       <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                       <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
@@ -949,7 +1082,7 @@ export default function ArtistSignupPage() {
                     </p>
                   </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
                     <div className="p-4 rounded-xl bg-[#1a1210]/60 border border-white/10">
                       <h3 className="text-xs font-semibold text-[#8d7b77] uppercase tracking-wider mb-3">Artist Information</h3>
                       <div className="space-y-2 text-sm">
@@ -965,21 +1098,45 @@ export default function ArtistSignupPage() {
                           <span className="text-[#8d7b77]">Phone:</span>
                           <span className="text-white">{phone || "—"}</span>
                         </div>
+                        <div className="flex justify-between">
+                          <span className="text-[#8d7b77]">Genre:</span>
+                          <span className="text-white">{genre}</span>
+                        </div>
                       </div>
                     </div>
 
                     <div className="p-4 rounded-xl bg-[#1a1210]/60 border border-white/10">
-                      <h3 className="text-xs font-semibold text-[#8d7b77] uppercase tracking-wider mb-3">Revenue Sharing</h3>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-[#e85d2c]">{artistRevenueShare}%</div>
-                          <div className="text-xs text-[#8d7b77]">Artist</div>
+                      <h3 className="text-xs font-semibold text-[#8d7b77] uppercase tracking-wider mb-3">
+                        Commission Plans ({selectedCommissionPlans.length})
+                      </h3>
+                      {selectedCommissionPlans.length > 0 && commissionPlans.length > 0 ? (
+                        <div className="space-y-4">
+                          {selectedCommissionPlans.map(id => {
+                            const plan = commissionPlans.find(p => p.id === id);
+                            if (!plan) return null;
+                            return (
+                              <div key={plan.id} className="space-y-2 border-b border-white/5 pb-3 last:border-0 last:pb-0">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-white font-medium">{plan.name || `Plan ${plan.version}`}</span>
+                                  <span className="text-xs text-[#8d7b77]">v{plan.version || 1}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                  <div className="text-center p-2 rounded-lg bg-white/5">
+                                    <div className="text-xl font-bold text-[#e85d2c]">{plan.artistShare}%</div>
+                                    <div className="text-xs text-[#8d7b77]">Artist</div>
+                                  </div>
+                                  <div className="text-center p-2 rounded-lg bg-white/5">
+                                    <div className="text-xl font-bold text-[#c97a54]">{plan.platformShare}%</div>
+                                    <div className="text-xs text-[#8d7b77]">Platform</div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-[#c97a54]">{platformRevenueShare}%</div>
-                          <div className="text-xs text-[#8d7b77]">Platform</div>
-                        </div>
-                      </div>
+                      ) : (
+                        <p className="text-sm text-[#8d7b77]">No plans selected</p>
+                      )}
                     </div>
 
                     <div className="p-4 rounded-xl bg-[#1a1210]/60 border border-white/10">
@@ -987,7 +1144,7 @@ export default function ArtistSignupPage() {
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                           <span className="text-[#8d7b77]">Version:</span>
-                          <span className="text-white">v1</span>
+                          <span className="text-white">{termsVersion || "v1"}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-[#8d7b77]">Terms Accepted:</span>

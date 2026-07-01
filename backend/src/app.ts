@@ -644,7 +644,7 @@ const PORT = process.env.PORT || 8000;
 
           WHERE status IN ('ACTIVE', 'GRACE', 'PAST_DUE')
 
-            AND grace_ends_at < now()
+            AND next_billing_date < now()
 
           RETURNING id, user_id, type, artist_id
 

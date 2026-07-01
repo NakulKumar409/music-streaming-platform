@@ -11,6 +11,7 @@ export const requireAuth = async (
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
+      console.log("[Auth Error] Token missing");
       return res.status(401).json({
         success: false,
         message: "Token missing"
@@ -18,6 +19,7 @@ export const requireAuth = async (
     }
 
     const token = authHeader.split(" ")[1];
+    console.log("[Auth Debug] Token received, attempting to verify");
 
     const decoded: any = jwt.verify(
       token,

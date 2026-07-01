@@ -1,6 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import { requireAuth } from "../common/auth/requireAuth";
 import { pool } from "../common/db";
 import { uploadLimiter } from "../common/security/rateLimit";
@@ -11,6 +12,7 @@ import fs from "fs";
 import { AnalyticsController } from "../controllers/analyticsController";
 import { logger } from "../common/logger";
 import { AuditService } from "../shared/audit/audit.service";
+import { AgreementPdfService } from "../services/agreement-pdf.service";
 import { v4 as uuidv4 } from "uuid";
 
 const router = Router();
@@ -29,6 +31,41 @@ const requireArtist = (req: any, res: any, next: any) => {
 };
 
 const EARLY_ACCESS_DAYS = 7;
+
+// Encryption helpers for digital signature
+const ENCRYPTION_KEY = process.env.SIGNATURE_ENCRYPTION_KEY || crypto.randomBytes(32);
+const ENCRYPTION_ALGORITHM = 'aes-256-cbc';
+
+const encryptSignature = (signature: string): string => {
+  try {
+    const iv = crypto.randomBytes(16);
+    const key = Buffer.isBuffer(ENCRYPTION_KEY) ? ENCRYPTION_KEY : Buffer.from(ENCRYPTION_KEY as string, 'hex').slice(0, 32);
+    const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, key, iv);
+    let encrypted = cipher.update(signature, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    return iv.toString('hex') + ':' + encrypted;
+  } catch (error) {
+    console.error('Error encrypting signature:', error);
+    return signature; // Fallback to unencrypted if encryption fails
+  }
+};
+
+const decryptSignature = (encryptedSignature: string): string => {
+  try {
+    const parts = encryptedSignature.split(':');
+    if (parts.length !== 2) return encryptedSignature; // Not encrypted, return as-is
+    const iv = Buffer.from(parts[0], 'hex');
+    const encrypted = parts[1];
+    const key = Buffer.isBuffer(ENCRYPTION_KEY) ? ENCRYPTION_KEY : Buffer.from(ENCRYPTION_KEY as string, 'hex').slice(0, 32);
+    const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, key, iv);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch (error) {
+    console.error('Error decrypting signature:', error);
+    return encryptedSignature; // Return encrypted if decryption fails
+  }
+};
 
 const ensureUploadsDir = () => {
   const dir = path.join(process.cwd(), "public", "uploads");
@@ -74,9 +111,9 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
       genre,
       agreementAccepted,
       agreementVersion,
-      artistRevenueShare,
-      platformRevenueShare,
-      digitalSignature
+      commissionPlanId,
+      digitalSignature,
+      termsVersion
     } = req.body as {
       email?: string;
       password?: string;
@@ -87,9 +124,9 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
       genre?: string;
       agreementAccepted?: boolean;
       agreementVersion?: string;
-      artistRevenueShare?: number;
-      platformRevenueShare?: number;
+      commissionPlanId?: string;
       digitalSignature?: string;
+      termsVersion?: string;
     };
 
     const trimmedEmail = (email || "").trim().toLowerCase();
@@ -124,6 +161,58 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
       return res.status(400).json({ success: false, message: "artistName is required", correlationId });
     }
 
+    // Validate commission plan if provided
+    let artistRevenueShare: number | null = null;
+    let platformRevenueShare: number | null = null;
+
+    if (commissionPlanId) {
+      const planRows = await safeRows<any>(
+        `SELECT id, artist_share, platform_share, is_active 
+         FROM revenue_share_configs 
+         WHERE id = $1 
+         LIMIT 1`,
+        [Number(commissionPlanId)],
+        []
+      );
+
+      if (!planRows.length) {
+        return res.status(400).json({ success: false, message: "Invalid commission plan", correlationId });
+      }
+
+      const plan = planRows[0];
+      if (!plan.is_active) {
+        return res.status(400).json({ success: false, message: "Commission plan is not active", correlationId });
+      }
+
+      artistRevenueShare = plan.artist_share;
+      platformRevenueShare = plan.platform_share;
+    }
+
+    // Validate terms version if provided
+    let termsContentHash: string | null = null;
+    if (termsVersion) {
+      const termsRows = await safeRows<any>(
+        `SELECT version, content, is_active 
+         FROM terms_versions 
+         WHERE version = $1 
+         LIMIT 1`,
+        [termsVersion],
+        []
+      );
+
+      if (!termsRows.length) {
+        return res.status(400).json({ success: false, message: "Invalid terms version", correlationId });
+      }
+
+      if (!termsRows[0].is_active) {
+        return res.status(400).json({ success: false, message: "Terms version is not active", correlationId });
+      }
+
+      // Generate content hash for verification
+      const termsContent = termsRows[0].content;
+      termsContentHash = crypto.createHash('sha256').update(termsContent).digest('hex');
+    }
+
     const existing = await safeRows<any>(
       "SELECT id, role FROM users WHERE LOWER(email) = $1 LIMIT 1",
       [trimmedEmail],
@@ -133,32 +222,42 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
     const hashedPassword = await bcrypt.hash(trimmedPassword, 10);
 
     let userId: number | null = null;
-    
+
     const agreementId = agreementAccepted ? uuidv4() : null;
     const agreementAcceptedAt = agreementAccepted ? new Date() : null;
     const signatureSignedAt = agreementAccepted && digitalSignature ? new Date() : null;
+    const agreementStartDate = agreementAccepted ? new Date() : null;
+    const agreementStatus = agreementAccepted ? "PENDING_APPROVAL" : null;
+
+    // Encrypt digital signature before storage
+    const encryptedSignature = digitalSignature ? encryptSignature(digitalSignature) : null;
 
     if (!existing.length) {
       const inserted = await pool.query(
-        `INSERT INTO users (email, password, name, role, status, is_verified, verified, phone, genre, artist_status, artist_bio, portfolio_links, onboarded_at, created_at, updated_at, agreement_accepted, agreement_accepted_at, agreement_version, artist_revenue_share, platform_revenue_share, digital_signature, signature_signed_at, agreement_id)
-         VALUES ($1, $2, $3, 'ARTIST', 'ACTIVE', false, false, $4, $5, 'PENDING', $6, $7, now(), now(), now(), $8, $9, $10, $11, $12, $13, $14, $15)
+        `INSERT INTO users (email, password, name, role, status, is_verified, verified, phone, genre, artist_status, artist_bio, portfolio_links, onboarded_at, created_at, updated_at, agreement_accepted, agreement_accepted_at, agreement_version, artist_revenue_share, platform_revenue_share, digital_signature, signature_signed_at, agreement_id, terms_version, agreement_status, agreement_start_date, signature_ip_address, signature_user_agent)
+         VALUES ($1, $2, $3, 'ARTIST', 'ACTIVE', false, false, $4, $5, 'PENDING', $6, $7, now(), now(), now(), $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
          RETURNING id`,
         [
-          trimmedEmail, 
-          hashedPassword, 
-          trimmedName, 
-          phone ?? null, 
-          genre ?? null, 
-          trimmedBio, 
+          trimmedEmail,
+          hashedPassword,
+          trimmedName,
+          phone ?? null,
+          genre ?? null,
+          trimmedBio,
           links,
           agreementAccepted || false,
           agreementAcceptedAt,
           agreementVersion || null,
           artistRevenueShare || null,
           platformRevenueShare || null,
-          digitalSignature || null,
+          encryptedSignature || null,
           signatureSignedAt,
-          agreementId
+          agreementId,
+          termsVersion || null,
+          agreementStatus,
+          agreementStartDate,
+          req.ip || req.connection?.remoteAddress || null,
+          req.get('user-agent') || null
         ]
       );
       userId = Number(inserted.rows?.[0]?.id ?? 0) || null;
@@ -190,25 +289,35 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
              platform_revenue_share = COALESCE($12, platform_revenue_share),
              digital_signature = COALESCE($13, digital_signature),
              signature_signed_at = COALESCE($14, signature_signed_at),
-             agreement_id = COALESCE($15, agreement_id)
+             agreement_id = COALESCE($15, agreement_id),
+             terms_version = COALESCE($16, terms_version),
+             agreement_status = COALESCE($17, agreement_status),
+             agreement_start_date = COALESCE($18, agreement_start_date),
+             signature_ip_address = COALESCE($19, signature_ip_address),
+             signature_user_agent = COALESCE($20, signature_user_agent)
          WHERE LOWER(email) = $1
          RETURNING id`,
         [
-          trimmedEmail, 
-          hashedPassword, 
-          trimmedName, 
-          phone ?? null, 
-          genre ?? null, 
-          trimmedBio, 
+          trimmedEmail,
+          hashedPassword,
+          trimmedName,
+          phone ?? null,
+          genre ?? null,
+          trimmedBio,
           links,
           agreementAccepted || false,
           agreementAcceptedAt,
           agreementVersion || null,
           artistRevenueShare || null,
           platformRevenueShare || null,
-          digitalSignature || null,
+          encryptedSignature || null,
           signatureSignedAt,
-          agreementId
+          agreementId,
+          termsVersion || null,
+          agreementStatus,
+          agreementStartDate,
+          req.ip || req.connection?.remoteAddress || null,
+          req.get('user-agent') || null
         ]
       );
       userId = Number(updated.rows?.[0]?.id ?? 0) || null;
@@ -216,6 +325,56 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
 
     if (!userId) {
       return res.status(500).json({ success: false, message: "Failed to onboard artist", correlationId });
+    }
+
+    // Generate agreement PDF if agreement was accepted
+    let agreementPdfPath: string | null = null;
+    if (agreementAccepted && agreementId && digitalSignature) {
+      try {
+        const termsRows = await safeRows<any>(
+          `SELECT content FROM terms_versions WHERE version = $1 LIMIT 1`,
+          [termsVersion || "v1"],
+          []
+        );
+        const termsContent = termsRows.length > 0 ? termsRows[0].content : "Terms & Conditions not available.";
+
+        const pdfBuffer = await AgreementPdfService.generateAgreementPdf({
+          artistName: trimmedName,
+          email: trimmedEmail,
+          phone: phone || undefined,
+          agreementVersion: agreementVersion || "v1",
+          artistRevenueShare: artistRevenueShare || 55,
+          platformRevenueShare: platformRevenueShare || 45,
+          agreementAcceptedAt: agreementAcceptedAt || new Date(),
+          signatureSignedAt: signatureSignedAt || new Date(),
+          agreementId: agreementId,
+          digitalSignature: digitalSignature,
+          termsVersion: termsVersion || "v1",
+          termsContent: termsContent,
+          agreementStartDate: agreementStartDate || new Date()
+        });
+
+        // Save PDF to disk
+        const pdfDir = path.join(process.cwd(), "public", "agreements");
+        if (!fs.existsSync(pdfDir)) {
+          fs.mkdirSync(pdfDir, { recursive: true });
+        }
+        const pdfFileName = `agreement-${agreementId}.pdf`;
+        const pdfFilePath = path.join(pdfDir, pdfFileName);
+        fs.writeFileSync(pdfFilePath, pdfBuffer);
+        agreementPdfPath = `/agreements/${pdfFileName}`;
+
+        // Update user record with PDF path
+        await pool.query(
+          `UPDATE users SET agreement_pdf_path = $2 WHERE id = $1`,
+          [userId, agreementPdfPath]
+        );
+
+        logger.info({ userId, agreementId, pdfPath: agreementPdfPath }, "[artist/onboard] Agreement PDF generated");
+      } catch (pdfError: any) {
+        logger.error({ error: pdfError?.message }, "[artist/onboard] Failed to generate agreement PDF");
+        // Don't fail the onboarding if PDF generation fails
+      }
     }
 
     const token = jwt.sign(
@@ -233,7 +392,10 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
         artistStatus: "PENDING",
         agreementAccepted,
         agreementVersion,
-        agreementId
+        agreementId,
+        commissionPlanId,
+        termsVersion,
+        agreementPdfPath
       })}`
     );
 
@@ -353,6 +515,105 @@ const safeScalarNumber = async (
     return fallback;
   }
 };
+
+// Public API: Get all commission plans (for artist onboarding dropdown)
+router.get("/commission-plans", async (req: any, res: any) => {
+  const correlationId = req?.correlationId || "-";
+
+  try {
+    const rows = await safeRows<any>(
+      `SELECT id, version, artist_share, platform_share, effective_from, is_active
+       FROM revenue_share_configs
+       ORDER BY effective_from DESC`,
+      [],
+      []
+    );
+
+    const planDescriptions: Record<string, { name: string; description: string; benefits: string[] }> = {
+      basic: {
+        name: "Basic Plan",
+        description: "Standard streaming with essential tools for new artists",
+        benefits: ["Standard Streaming", "Artist Dashboard", "Basic Analytics"]
+      },
+      growth: {
+        name: "Growth Plan",
+        description: "Enhanced support and analytics for growing artists",
+        benefits: ["Standard Streaming", "Promotional Support", "Advanced Analytics"]
+      },
+      pro: {
+        name: "Pro Plan",
+        description: "Professional promotion and featured placement",
+        benefits: ["Promotion", "Featured Placement"]
+      },
+      managed: {
+        name: "Managed Plan",
+        description: "Full management support with priority promotion",
+        benefits: ["Priority Promotion", "Artist Management Support"]
+      }
+    };
+
+    const plans = rows.map((r: any) => {
+      const desc = planDescriptions[r.version] || { name: `Plan ${r.version}`, description: "", benefits: [] };
+      return {
+        id: r.id,
+        version: r.version,
+        name: desc.name,
+        description: desc.description,
+        benefits: desc.benefits,
+        artistShare: r.artist_share,
+        platformShare: r.platform_share,
+        effectiveFrom: r.effective_from,
+        isActive: r.is_active
+      };
+    });
+
+    return res.json({
+      success: true,
+      plans,
+      correlationId
+    });
+  } catch (err: any) {
+    console.error("[artist/commission-plans] error", correlationId, err?.message);
+    return res.status(500).json({ success: false, message: "Failed to fetch commission plans", correlationId });
+  }
+});
+
+// Public API: Get current terms
+router.get("/terms/current", async (req: any, res: any) => {
+  const correlationId = req?.correlationId || "-";
+
+  try {
+    const rows = await safeRows<any>(
+      `SELECT version, content, effective_from, is_active
+       FROM terms_versions
+       WHERE is_active = true
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [],
+      []
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: "No active terms found", correlationId });
+    }
+
+    const terms = {
+      version: rows[0].version,
+      content: rows[0].content,
+      effectiveFrom: rows[0].effective_from,
+      isActive: rows[0].is_active
+    };
+
+    return res.json({
+      success: true,
+      terms,
+      correlationId
+    });
+  } catch (err: any) {
+    console.error("[artist/terms/current] error", correlationId, err?.message);
+    return res.status(500).json({ success: false, message: "Failed to fetch terms", correlationId });
+  }
+});
 
 const safeRows = async <T = any>(query: string, params: any[], fallback: T[] = []): Promise<T[]> => {
   try {

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { requireAuth } from "../../common/auth/requireAuth";
 import { pool } from "../../common/db";
 import { invalidateCachePattern, invalidateArtistCache } from "../../common/cache";
@@ -43,6 +44,27 @@ const coercePositiveInt = (v: any, dflt: number) => {
   const n = Number(v);
   if (!Number.isFinite(n)) return dflt;
   return Math.max(1, Math.floor(n));
+};
+
+// Signature decryption helpers (must match artist.ts encryption)
+const ENCRYPTION_KEY = process.env.SIGNATURE_ENCRYPTION_KEY || crypto.randomBytes(32);
+const ENCRYPTION_ALGORITHM = 'aes-256-cbc';
+
+const decryptSignature = (encryptedSignature: string): string => {
+  try {
+    const parts = encryptedSignature.split(':');
+    if (parts.length !== 2) return encryptedSignature; // Not encrypted, return as-is
+    const iv = Buffer.from(parts[0], 'hex');
+    const encrypted = parts[1];
+    const key = Buffer.isBuffer(ENCRYPTION_KEY) ? ENCRYPTION_KEY : Buffer.from(ENCRYPTION_KEY as string, 'hex').slice(0, 32);
+    const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, key, iv);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch (error) {
+    console.error('Error decrypting signature:', error);
+    return encryptedSignature; // Return encrypted if decryption fails
+  }
 };
 
 router.post("/create", requireAuth, requireAdmin, async (req, res) => {
@@ -210,6 +232,370 @@ router.post("/create", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+// Revenue Share Configuration Management (must be before /:id)
+router.post("/revenue-share-config", requireAuth, requireAdmin, async (req, res) => {
+  const { version, artistShare, platformShare } = req.body as {
+    version?: string;
+    artistShare?: number;
+    platformShare?: number;
+  };
+
+  const allowedPlanTypes = ["basic", "growth", "pro", "managed"];
+
+  if (!version || !allowedPlanTypes.includes(version)) {
+    return res.status(400).json({ success: false, message: "Invalid plan type. Must be one of: basic, growth, pro, managed" });
+  }
+
+  if (typeof artistShare !== "number" || typeof platformShare !== "number") {
+    return res.status(400).json({ success: false, message: "Invalid revenue share values" });
+  }
+
+  if (artistShare + platformShare !== 100) {
+    return res.status(400).json({ success: false, message: "Revenue shares must sum to 100" });
+  }
+
+  const correlationId = (req as any)?.correlationId || "-";
+  const adminUserId = (req as any)?.user?.id ?? null;
+
+  try {
+    // Check if plan type already exists
+    const existingPlan = await safeQuery<any>(
+      `SELECT id FROM revenue_share_configs WHERE version = $1`,
+      [version]
+    );
+
+    if (existingPlan.length > 0) {
+      return res.status(400).json({ success: false, message: `Plan type '${version}' already exists. Use PUT to update instead.` });
+    }
+
+    await pool.query(
+      `INSERT INTO revenue_share_configs (version, artist_share, platform_share, effective_from, is_active)
+       VALUES ($1, $2, $3, NOW(), true)`,
+      [version, artistShare, platformShare]
+    );
+
+    console.log(`[AUDIT] revenue_share_config_created: ${version} by admin ${adminUserId}`);
+
+    return res.json({
+      success: true,
+      version,
+      artistShare,
+      platformShare
+    });
+  } catch (error: any) {
+    console.error('[admin/revenue-share-config POST] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to create revenue share configuration" });
+  }
+});
+
+router.put("/revenue-share-config/:id", requireAuth, requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const { artistShare, platformShare, isActive } = req.body as {
+    artistShare?: number;
+    platformShare?: number;
+    isActive?: boolean;
+  };
+
+  if (!Number.isFinite(id) || id <= 0) {
+    return res.status(400).json({ success: false, message: "Invalid id" });
+  }
+
+  if (artistShare !== undefined && platformShare !== undefined) {
+    if (typeof artistShare !== "number" || typeof platformShare !== "number") {
+      return res.status(400).json({ success: false, message: "Invalid revenue share values" });
+    }
+    if (artistShare + platformShare !== 100) {
+      return res.status(400).json({ success: false, message: "Revenue shares must sum to 100" });
+    }
+  }
+
+  const correlationId = (req as any)?.correlationId || "-";
+  const adminUserId = (req as any)?.user?.id ?? null;
+
+  try {
+    const updates: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (artistShare !== undefined && platformShare !== undefined) {
+      updates.push(`artist_share = $${paramIndex++}`);
+      values.push(artistShare);
+      updates.push(`platform_share = $${paramIndex++}`);
+      values.push(platformShare);
+    }
+
+    if (isActive !== undefined) {
+      updates.push(`is_active = $${paramIndex++}`);
+      values.push(isActive);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ success: false, message: "No fields to update" });
+    }
+
+    updates.push(`updated_at = NOW()`);
+    values.push(id);
+
+    const result = await pool.query(
+      `UPDATE revenue_share_configs SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Commission plan not found" });
+    }
+
+    console.log(`[AUDIT] revenue_share_config_updated: id ${id} by admin ${adminUserId}`);
+
+    return res.json({ success: true, config: result.rows[0] });
+  } catch (error: any) {
+    console.error('[admin/revenue-share-config PUT] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to update revenue share configuration" });
+  }
+});
+
+router.delete("/revenue-share-config/:id", requireAuth, requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+
+  if (!Number.isFinite(id) || id <= 0) {
+    return res.status(400).json({ success: false, message: "Invalid id" });
+  }
+
+  const correlationId = (req as any)?.correlationId || "-";
+  const adminUserId = (req as any)?.user?.id ?? null;
+
+  try {
+    const result = await pool.query(
+      `DELETE FROM revenue_share_configs WHERE id = $1 RETURNING id`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Commission plan not found" });
+    }
+
+    console.log(`[AUDIT] revenue_share_config_deleted: id ${id} by admin ${adminUserId}`);
+
+    return res.json({ success: true, message: "Commission plan deleted" });
+  } catch (error: any) {
+    console.error('[admin/revenue-share-config DELETE] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to delete revenue share configuration" });
+  }
+});
+
+router.patch("/revenue-share-config", requireAuth, requireAdmin, async (req, res) => {
+  const { artistShare, platformShare } = req.body as {
+    artistShare?: number;
+    platformShare?: number;
+  };
+
+  if (typeof artistShare !== "number" || typeof platformShare !== "number") {
+    return res.status(400).json({ success: false, message: "Invalid revenue share values" });
+  }
+
+  if (artistShare + platformShare !== 100) {
+    return res.status(400).json({ success: false, message: "Revenue shares must sum to 100" });
+  }
+
+  const correlationId = (req as any)?.correlationId || "-";
+  const adminUserId = (req as any)?.user?.id ?? null;
+
+  try {
+    const latestVersionRows = await safeQuery<any>(
+      `SELECT version FROM revenue_share_configs ORDER BY created_at DESC LIMIT 1`,
+      []
+    );
+
+    const latestVersion = latestVersionRows.length > 0 ? latestVersionRows[0].version : "v0";
+    const versionNum = parseInt(String(latestVersion).replace("v", "")) || 0;
+    const newVersion = `v${versionNum + 1}`;
+
+    await pool.query(
+      `INSERT INTO revenue_share_configs (version, artist_share, platform_share, effective_from, is_active)
+       VALUES ($1, $2, $3, NOW(), true)`,
+      [newVersion, artistShare, platformShare]
+    );
+
+    await pool.query(
+      `UPDATE revenue_share_configs SET is_active = false WHERE version != $1`,
+      [newVersion]
+    );
+
+    console.log(`[AUDIT] revenue_share_config_created: ${newVersion} by admin ${adminUserId}`);
+
+    return res.json({
+      success: true,
+      version: newVersion,
+      artistShare,
+      platformShare
+    });
+  } catch (error: any) {
+    console.error('[admin/revenue-share-config PATCH] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to update revenue share configuration" });
+  }
+});
+
+router.get("/revenue-share-config", requireAuth, requireAdmin, async (req, res) => {
+  const correlationId = (req as any)?.correlationId || "-";
+  console.log("[admin] GET revenue-share-config called", { correlationId });
+
+  try {
+    const configs = await safeQuery<any>(
+      `SELECT id, version, artist_share, platform_share, effective_from, is_active, created_at
+       FROM revenue_share_configs
+       ORDER BY created_at DESC`,
+      []
+    );
+    console.log("[admin] revenue-share-config query result", { count: configs.length });
+
+    const planDescriptions: Record<string, { name: string; description: string; benefits: string[] }> = {
+      "basic": {
+        name: "Basic Plan",
+        description: "Standard streaming with essential tools for new artists",
+        benefits: ["Standard Streaming", "Artist Dashboard", "Basic Analytics"]
+      },
+      "growth": {
+        name: "Growth Plan",
+        description: "Enhanced support and analytics for growing artists",
+        benefits: ["Standard Streaming", "Promotional Support", "Advanced Analytics"]
+      },
+      "pro": {
+        name: "Pro Plan",
+        description: "Professional promotion and featured placement",
+        benefits: ["Promotion", "Featured Placement"]
+      },
+      "managed": {
+        name: "Managed Plan",
+        description: "Full management support with priority promotion",
+        benefits: ["Priority Promotion", "Artist Management Support"]
+      }
+    };
+
+    return res.json({
+      success: true,
+      configs: configs.map((c) => ({
+        id: c.id,
+        version: c.version,
+        name: planDescriptions[c.version]?.name || `Plan ${c.version}`,
+        description: planDescriptions[c.version]?.description || "",
+        benefits: planDescriptions[c.version]?.benefits || [],
+        artistShare: c.artist_share,
+        platformShare: c.platform_share,
+        effectiveFrom: c.effective_from,
+        isActive: c.is_active,
+        createdAt: c.created_at
+      }))
+    });
+  } catch (error: any) {
+    console.error('[admin/revenue-share-config GET] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to fetch revenue share configurations", correlationId });
+  }
+});
+
+// Terms Management (must be before /:id)
+router.post("/terms-versions", requireAuth, requireAdmin, async (req, res) => {
+  const { content } = req.body as {
+    content?: string;
+  };
+
+  if (!content || typeof content !== "string" || content.trim().length === 0) {
+    return res.status(400).json({ success: false, message: "Terms content is required" });
+  }
+
+  const correlationId = (req as any)?.correlationId || "-";
+  const adminUserId = (req as any)?.user?.id ?? null;
+
+  try {
+    const latestVersionRows = await safeQuery<any>(
+      `SELECT version FROM terms_versions ORDER BY created_at DESC LIMIT 1`,
+      []
+    );
+
+    const latestVersion = latestVersionRows.length > 0 ? latestVersionRows[0].version : "v0";
+    const versionNum = parseInt(String(latestVersion).replace("v", "")) || 0;
+    const newVersion = `v${versionNum + 1}`;
+
+    await pool.query(
+      `INSERT INTO terms_versions (version, content, effective_from, is_active)
+       VALUES ($1, $2, NOW(), true)`,
+      [newVersion, content.trim()]
+    );
+
+    await pool.query(
+      `UPDATE terms_versions SET is_active = false WHERE version != $1`,
+      [newVersion]
+    );
+
+    console.log(`[AUDIT] terms_version_published: ${newVersion} by admin ${adminUserId}`);
+
+    return res.json({
+      success: true,
+      version: newVersion,
+      content: content.trim()
+    });
+  } catch (error: any) {
+    console.error('[admin/terms-versions POST] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to publish terms version", correlationId });
+  }
+});
+
+router.get("/terms-versions", requireAuth, requireAdmin, async (req, res) => {
+  const correlationId = (req as any)?.correlationId || "-";
+  console.log("[admin] GET terms-versions called", { correlationId });
+
+  try {
+    const terms = await safeQuery<any>(
+      `SELECT version, content, effective_from, is_active, created_at, updated_at
+       FROM terms_versions
+       ORDER BY created_at DESC`,
+      []
+    );
+    console.log("[admin] terms-versions query result", { count: terms.length });
+
+    return res.json({
+      success: true,
+      terms: terms.map((t) => ({
+        version: t.version,
+        content: t.content,
+        effectiveFrom: t.effective_from,
+        isActive: t.is_active,
+        createdAt: t.created_at,
+        updatedAt: t.updated_at
+      }))
+    });
+  } catch (error: any) {
+    console.error('[admin/terms-versions GET] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to fetch terms versions", correlationId });
+  }
+});
+
+router.get("/terms-versions/active", requireAuth, requireAdmin, async (req, res) => {
+  const correlationId = (req as any)?.correlationId || "-";
+
+  try {
+    const activeTerms = await safeQuery<any>(
+      `SELECT version, content, effective_from, created_at
+       FROM terms_versions
+       WHERE is_active = true
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      []
+    );
+
+    if (!activeTerms.length) {
+      return res.status(404).json({ success: false, message: "No active terms found" });
+    }
+
+    return res.json({
+      success: true,
+      terms: activeTerms[0]
+    });
+  } catch (error: any) {
+    console.error('[admin/terms-versions/active GET] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to fetch active terms", correlationId });
+  }
+});
+
 router.get("/", requireAuth, requireAdmin, async (req, res) => {
   const page = coercePositiveInt(req.query.page, 1);
   const limit = coercePositiveInt(req.query.limit, 10);
@@ -262,7 +648,11 @@ router.get("/", requireAuth, requireAdmin, async (req, res) => {
       agreement_version,
       artist_revenue_share,
       platform_revenue_share,
-      agreement_id
+      agreement_id,
+      terms_version,
+      agreement_status,
+      agreement_start_date,
+      signature_signed_at
      FROM users
      ${whereSql}
      ORDER BY created_at DESC NULLS LAST, id DESC
@@ -285,7 +675,11 @@ router.get("/", requireAuth, requireAdmin, async (req, res) => {
     agreementVersion: u.agreement_version ?? null,
     artistRevenueShare: u.artist_revenue_share ?? null,
     platformRevenueShare: u.platform_revenue_share ?? null,
-    agreementId: u.agreement_id ?? null
+    agreementId: u.agreement_id ?? null,
+    termsVersion: u.terms_version ?? null,
+    agreementStatus: u.agreement_status ?? null,
+    agreementStartDate: u.agreement_start_date ?? null,
+    signatureSignedAt: u.signature_signed_at ?? null
   }));
 
   const totalPages = Math.max(1, Math.ceil(totalCount / limit));
@@ -333,7 +727,13 @@ router.get("/:id", requireAuth, requireAdmin, async (req, res) => {
       platform_revenue_share,
       digital_signature,
       signature_signed_at,
-      agreement_id
+      agreement_id,
+      terms_version,
+      agreement_status,
+      agreement_start_date,
+      agreement_pdf_path,
+      signature_ip_address,
+      signature_user_agent
      FROM users
      WHERE id = $1 AND UPPER(role) = 'ARTIST'
      LIMIT 1`,
@@ -386,6 +786,9 @@ router.get("/:id", requireAuth, requireAdmin, async (req, res) => {
     0
   );
 
+  // Decrypt digital signature for display
+  const decryptedSignature = u.digital_signature ? decryptSignature(u.digital_signature) : null;
+
   return res.json({
     success: true,
     artist: {
@@ -415,9 +818,15 @@ router.get("/:id", requireAuth, requireAdmin, async (req, res) => {
       agreementVersion: u.agreement_version ?? null,
       artistRevenueShare: u.artist_revenue_share ?? null,
       platformRevenueShare: u.platform_revenue_share ?? null,
-      digitalSignature: u.digital_signature ?? null,
+      digitalSignature: decryptedSignature,
       signatureSignedAt: u.signature_signed_at ?? null,
-      agreementId: u.agreement_id ?? null
+      agreementId: u.agreement_id ?? null,
+      termsVersion: u.terms_version ?? null,
+      agreementStatus: u.agreement_status ?? null,
+      agreementStartDate: u.agreement_start_date ?? null,
+      agreementPdfPath: u.agreement_pdf_path ?? null,
+      signatureIpAddress: u.signature_ip_address ?? null,
+      signatureUserAgent: u.signature_user_agent ?? null
     }
   });
 });
@@ -792,19 +1201,21 @@ router.get("/:id/agreement-pdf", requireAuth, requireAdmin, async (req, res) => 
 
   try {
     const artistRows = await safeQuery<any>(
-      `SELECT 
-        name, 
-        email, 
-        phone, 
-        agreement_version, 
-        artist_revenue_share, 
-        platform_revenue_share, 
-        agreement_accepted_at, 
-        signature_signed_at, 
-        agreement_id, 
-        digital_signature 
-       FROM users 
-       WHERE id = $1 AND UPPER(role) = 'ARTIST' 
+      `SELECT
+        name,
+        email,
+        phone,
+        agreement_version,
+        artist_revenue_share,
+        platform_revenue_share,
+        agreement_accepted_at,
+        signature_signed_at,
+        agreement_id,
+        digital_signature,
+        terms_version,
+        agreement_start_date
+       FROM users
+       WHERE id = $1 AND UPPER(role) = 'ARTIST'
        LIMIT 1`,
       [id]
     );
@@ -819,6 +1230,14 @@ router.get("/:id/agreement-pdf", requireAuth, requireAdmin, async (req, res) => 
       return res.status(404).json({ success: false, message: "No agreement found for this artist" });
     }
 
+    // Fetch terms content
+    const termsRows = await safeQuery<any>(
+      `SELECT content FROM terms_versions WHERE version = $1 LIMIT 1`,
+      [artist.terms_version || "v1"]
+    );
+
+    const termsContent = termsRows.length > 0 ? termsRows[0].content : "Terms & Conditions not available.";
+
     const pdfBuffer = await AgreementPdfService.generateAgreementPdf({
       artistName: artist.name || "Unknown Artist",
       email: artist.email,
@@ -829,7 +1248,10 @@ router.get("/:id/agreement-pdf", requireAuth, requireAdmin, async (req, res) => 
       agreementAcceptedAt: new Date(artist.agreement_accepted_at),
       signatureSignedAt: new Date(artist.signature_signed_at || artist.agreement_accepted_at),
       agreementId: artist.agreement_id,
-      digitalSignature: artist.digital_signature || ""
+      digitalSignature: artist.digital_signature || "",
+      termsVersion: artist.terms_version || "v1",
+      termsContent: termsContent,
+      agreementStartDate: new Date(artist.agreement_start_date || artist.agreement_accepted_at)
     });
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -838,6 +1260,642 @@ router.get("/:id/agreement-pdf", requireAuth, requireAdmin, async (req, res) => 
   } catch (error: any) {
     console.error('[admin/artists/:id/agreement-pdf] error', correlationId, error?.message);
     return res.status(500).json({ success: false, message: "Failed to generate agreement PDF", correlationId });
+  }
+});
+
+// Revenue Share Configuration Management
+router.post("/revenue-share-config", requireAuth, requireAdmin, async (req, res) => {
+  const { version, artistShare, platformShare } = req.body as {
+    version?: string;
+    artistShare?: number;
+    platformShare?: number;
+  };
+
+  const allowedPlanTypes = ["basic", "growth", "pro", "managed"];
+
+  if (!version || !allowedPlanTypes.includes(version)) {
+    return res.status(400).json({ success: false, message: "Invalid plan type. Must be one of: basic, growth, pro, managed" });
+  }
+
+  if (typeof artistShare !== "number" || typeof platformShare !== "number") {
+    return res.status(400).json({ success: false, message: "Invalid revenue share values" });
+  }
+
+  if (artistShare + platformShare !== 100) {
+    return res.status(400).json({ success: false, message: "Revenue shares must sum to 100" });
+  }
+
+  const correlationId = (req as any)?.correlationId || "-";
+  const adminUserId = (req as any)?.user?.id ?? null;
+
+  try {
+    // Check if plan type already exists
+    const existingPlan = await safeQuery<any>(
+      `SELECT id FROM revenue_share_configs WHERE version = $1`,
+      [version]
+    );
+
+    if (existingPlan.length > 0) {
+      return res.status(400).json({ success: false, message: `Plan type '${version}' already exists. Use PUT to update instead.` });
+    }
+
+    await pool.query(
+      `INSERT INTO revenue_share_configs (version, artist_share, platform_share, effective_from, is_active)
+       VALUES ($1, $2, $3, NOW(), true)`,
+      [version, artistShare, platformShare]
+    );
+
+    console.log(`[AUDIT] revenue_share_config_created: ${version} by admin ${adminUserId}`);
+
+    return res.json({
+      success: true,
+      version,
+      artistShare,
+      platformShare
+    });
+  } catch (error: any) {
+    console.error('[admin/revenue-share-config POST] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to create revenue share configuration" });
+  }
+});
+
+router.put("/revenue-share-config/:id", requireAuth, requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const { artistShare, platformShare, isActive } = req.body as {
+    artistShare?: number;
+    platformShare?: number;
+    isActive?: boolean;
+  };
+
+  if (!Number.isFinite(id) || id <= 0) {
+    return res.status(400).json({ success: false, message: "Invalid id" });
+  }
+
+  if (artistShare !== undefined && platformShare !== undefined) {
+    if (typeof artistShare !== "number" || typeof platformShare !== "number") {
+      return res.status(400).json({ success: false, message: "Invalid revenue share values" });
+    }
+    if (artistShare + platformShare !== 100) {
+      return res.status(400).json({ success: false, message: "Revenue shares must sum to 100" });
+    }
+  }
+
+  const correlationId = (req as any)?.correlationId || "-";
+  const adminUserId = (req as any)?.user?.id ?? null;
+
+  try {
+    const updates: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (artistShare !== undefined && platformShare !== undefined) {
+      updates.push(`artist_share = $${paramIndex++}`);
+      values.push(artistShare);
+      updates.push(`platform_share = $${paramIndex++}`);
+      values.push(platformShare);
+    }
+
+    if (isActive !== undefined) {
+      updates.push(`is_active = $${paramIndex++}`);
+      values.push(isActive);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ success: false, message: "No fields to update" });
+    }
+
+    updates.push(`updated_at = NOW()`);
+    values.push(id);
+
+    const result = await pool.query(
+      `UPDATE revenue_share_configs SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Commission plan not found" });
+    }
+
+    console.log(`[AUDIT] revenue_share_config_updated: id ${id} by admin ${adminUserId}`);
+
+    return res.json({ success: true, config: result.rows[0] });
+  } catch (error: any) {
+    console.error('[admin/revenue-share-config PUT] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to update revenue share configuration" });
+  }
+});
+
+router.delete("/revenue-share-config/:id", requireAuth, requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+
+  if (!Number.isFinite(id) || id <= 0) {
+    return res.status(400).json({ success: false, message: "Invalid id" });
+  }
+
+  const correlationId = (req as any)?.correlationId || "-";
+  const adminUserId = (req as any)?.user?.id ?? null;
+
+  try {
+    const result = await pool.query(
+      `DELETE FROM revenue_share_configs WHERE id = $1 RETURNING id`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Commission plan not found" });
+    }
+
+    console.log(`[AUDIT] revenue_share_config_deleted: id ${id} by admin ${adminUserId}`);
+
+    return res.json({ success: true, message: "Commission plan deleted" });
+  } catch (error: any) {
+    console.error('[admin/revenue-share-config DELETE] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to delete revenue share configuration" });
+  }
+});
+
+router.patch("/revenue-share-config", requireAuth, requireAdmin, async (req, res) => {
+  const { artistShare, platformShare } = req.body as {
+    artistShare?: number;
+    platformShare?: number;
+  };
+
+  if (typeof artistShare !== "number" || typeof platformShare !== "number") {
+    return res.status(400).json({ success: false, message: "Invalid revenue share values" });
+  }
+
+  if (artistShare + platformShare !== 100) {
+    return res.status(400).json({ success: false, message: "Revenue shares must sum to 100" });
+  }
+
+  const correlationId = (req as any)?.correlationId || "-";
+  const adminUserId = (req as any)?.user?.id ?? null;
+
+  try {
+    const latestVersionRows = await safeQuery<any>(
+      `SELECT version FROM revenue_share_configs ORDER BY created_at DESC LIMIT 1`,
+      []
+    );
+
+    const latestVersion = latestVersionRows.length > 0 ? latestVersionRows[0].version : "v0";
+    const versionNum = parseInt(String(latestVersion).replace("v", "")) || 0;
+    const newVersion = `v${versionNum + 1}`;
+
+    await pool.query(
+      `INSERT INTO revenue_share_configs (version, artist_share, platform_share, effective_from, is_active)
+       VALUES ($1, $2, $3, NOW(), true)`,
+      [newVersion, artistShare, platformShare]
+    );
+
+    await pool.query(
+      `UPDATE revenue_share_configs SET is_active = false WHERE version != $1`,
+      [newVersion]
+    );
+
+    console.log(`[AUDIT] revenue_share_config_created: ${newVersion} by admin ${adminUserId}`);
+
+    return res.json({
+      success: true,
+      version: newVersion,
+      artistShare,
+      platformShare
+    });
+  } catch (error: any) {
+    console.error('[admin/revenue-share-config PATCH] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to update revenue share configuration" });
+  }
+});
+
+router.get("/revenue-share-config", requireAuth, requireAdmin, async (req, res) => {
+  const correlationId = (req as any)?.correlationId || "-";
+  console.log("[admin] GET revenue-share-config called", { correlationId });
+
+  try {
+    const configs = await safeQuery<any>(
+      `SELECT id, version, artist_share, platform_share, effective_from, is_active, created_at
+       FROM revenue_share_configs
+       ORDER BY created_at DESC`,
+      []
+    );
+    console.log("[admin] revenue-share-config query result", { count: configs.length });
+
+    const planDescriptions: Record<string, { name: string; description: string; benefits: string[] }> = {
+      "basic": {
+        name: "Basic Plan",
+        description: "Standard streaming with essential tools for new artists",
+        benefits: ["Standard Streaming", "Artist Dashboard", "Basic Analytics"]
+      },
+      "growth": {
+        name: "Growth Plan",
+        description: "Enhanced support and analytics for growing artists",
+        benefits: ["Standard Streaming", "Promotional Support", "Advanced Analytics"]
+      },
+      "pro": {
+        name: "Pro Plan",
+        description: "Professional promotion and featured placement",
+        benefits: ["Promotion", "Featured Placement"]
+      },
+      "managed": {
+        name: "Managed Plan",
+        description: "Full management support with priority promotion",
+        benefits: ["Priority Promotion", "Artist Management Support"]
+      }
+    };
+
+    return res.json({
+      success: true,
+      configs: configs.map((c) => ({
+        id: c.id,
+        version: c.version,
+        name: planDescriptions[c.version]?.name || `Plan ${c.version}`,
+        description: planDescriptions[c.version]?.description || "",
+        benefits: planDescriptions[c.version]?.benefits || [],
+        artistShare: c.artist_share,
+        platformShare: c.platform_share,
+        effectiveFrom: c.effective_from,
+        isActive: c.is_active,
+        createdAt: c.created_at
+      }))
+    });
+  } catch (error: any) {
+    console.error('[admin/revenue-share-config GET] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to fetch revenue share configurations", correlationId });
+  }
+});
+
+// Terms Management
+router.post("/terms-versions", requireAuth, requireAdmin, async (req, res) => {
+  const { content } = req.body as {
+    content?: string;
+  };
+
+  if (!content || typeof content !== "string" || content.trim().length === 0) {
+    return res.status(400).json({ success: false, message: "Terms content is required" });
+  }
+
+  const correlationId = (req as any)?.correlationId || "-";
+  const adminUserId = (req as any)?.user?.id ?? null;
+
+  try {
+    // Get the latest version number
+    const latestVersionRows = await safeQuery<any>(
+      `SELECT version FROM terms_versions ORDER BY created_at DESC LIMIT 1`,
+      []
+    );
+
+    const latestVersion = latestVersionRows.length > 0 ? latestVersionRows[0].version : "v0";
+
+    // Extract version number and increment
+    const versionNum = parseInt(String(latestVersion).replace("v", "")) || 0;
+    const newVersion = `v${versionNum + 1}`;
+
+    // Insert new terms version
+    await pool.query(
+      `INSERT INTO terms_versions (version, content, effective_from, is_active)
+       VALUES ($1, $2, NOW(), true)`,
+      [newVersion, content.trim()]
+    );
+
+    // Deactivate old terms
+    await pool.query(
+      `UPDATE terms_versions SET is_active = false WHERE version != $1`,
+      [newVersion]
+    );
+
+    console.log(
+      `[AUDIT] ${JSON.stringify({
+        event: "terms_version_published",
+        correlationId,
+        adminUserId,
+        newVersion
+      })}`
+    );
+
+    return res.json({
+      success: true,
+      version: newVersion,
+      content: content.trim()
+    });
+  } catch (error: any) {
+    console.error('[admin/terms-versions POST] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to publish terms version", correlationId });
+  }
+});
+
+router.get("/terms-versions", requireAuth, requireAdmin, async (req, res) => {
+  const correlationId = (req as any)?.correlationId || "-";
+  console.log("[admin] GET terms-versions called", { correlationId });
+
+  try {
+    const terms = await safeQuery<any>(
+      `SELECT version, content, effective_from, is_active, created_at, updated_at
+       FROM terms_versions
+       ORDER BY created_at DESC`,
+      []
+    );
+    console.log("[admin] terms-versions query result", { count: terms.length });
+
+    return res.json({
+      success: true,
+      terms: terms.map((t) => ({
+        version: t.version,
+        content: t.content,
+        effectiveFrom: t.effective_from,
+        isActive: t.is_active,
+        createdAt: t.created_at,
+        updatedAt: t.updated_at
+      }))
+    });
+  } catch (error: any) {
+    console.error('[admin/terms-versions GET] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to fetch terms versions", correlationId });
+  }
+});
+
+router.get("/terms-versions/active", requireAuth, requireAdmin, async (req, res) => {
+  const correlationId = (req as any)?.correlationId || "-";
+
+  try {
+    const activeTerms = await safeQuery<any>(
+      `SELECT version, content, effective_from, created_at
+       FROM terms_versions
+       WHERE is_active = true
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      []
+    );
+
+    if (!activeTerms.length) {
+      return res.status(404).json({ success: false, message: "No active terms found" });
+    }
+
+    return res.json({
+      success: true,
+      terms: {
+        version: activeTerms[0].version,
+        content: activeTerms[0].content,
+        effectiveFrom: activeTerms[0].effective_from,
+        createdAt: activeTerms[0].created_at
+      }
+    });
+  } catch (error: any) {
+    console.error('[admin/terms-versions/active GET] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to fetch active terms", correlationId });
+  }
+});
+
+// Approve Agreement (transition from PENDING_APPROVAL to ACTIVE)
+router.patch("/:id/approve-agreement", requireAuth, requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    return res.status(400).json({ success: false, message: "Invalid id" });
+  }
+
+  const correlationId = (req as any)?.correlationId || "-";
+  const adminUserId = (req as any)?.user?.id ?? null;
+
+  try {
+    // Check if artist exists and has agreement
+    const artistRows = await safeQuery<any>(
+      `SELECT id, name, email, agreement_accepted, agreement_status, artist_status
+       FROM users
+       WHERE id = $1 AND UPPER(role) = 'ARTIST'
+       LIMIT 1`,
+      [id]
+    );
+
+    if (!artistRows.length) {
+      return res.status(404).json({ success: false, message: "Artist not found" });
+    }
+
+    const artist = artistRows[0];
+
+    if (!artist.agreement_accepted) {
+      return res.status(400).json({ success: false, message: "Artist has not signed agreement yet" });
+    }
+
+    if (artist.agreement_status === "ACTIVE") {
+      return res.status(400).json({ success: false, message: "Agreement is already active" });
+    }
+
+    if (artist.agreement_status === "SUSPENDED" || artist.agreement_status === "TERMINATED") {
+      return res.status(400).json({ success: false, message: "Cannot approve suspended or terminated agreement" });
+    }
+
+    // Update agreement status to ACTIVE and artist status to APPROVED
+    await pool.query(
+      `UPDATE users
+       SET agreement_status = 'ACTIVE',
+           artist_status = 'APPROVED',
+           updated_at = NOW()
+       WHERE id = $1`,
+      [id]
+    );
+
+    // Log audit event
+    AuditService.log({
+      action: 'artist.agreement_approved',
+      entity: 'user',
+      entityId: String(id),
+      performedBy: adminUserId,
+      role: 'admin',
+      status: 'success',
+      correlationId,
+      metadata: {
+        artistName: artist.name,
+        artistEmail: artist.email,
+        previousStatus: artist.agreement_status,
+        newStatus: 'ACTIVE'
+      }
+    });
+
+    console.log(
+      `[AUDIT] ${JSON.stringify({
+        event: "artist_agreement_approved",
+        correlationId,
+        adminUserId,
+        artistUserId: id,
+        artistName: artist.name,
+        artistEmail: artist.email
+      })}`
+    );
+
+    // Invalidate cache
+    await invalidateArtistCache();
+
+    return res.json({
+      success: true,
+      message: "Agreement approved successfully",
+      agreementStatus: "ACTIVE",
+      artistStatus: "APPROVED"
+    });
+  } catch (error: any) {
+    console.error('[admin/artists/:id/approve-agreement] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to approve agreement", correlationId });
+  }
+});
+
+// Reject Agreement
+router.patch("/:id/reject-agreement", requireAuth, requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    return res.status(400).json({ success: false, message: "Invalid id" });
+  }
+
+  const { reason } = req.body as {
+    reason?: string;
+  };
+
+  const correlationId = (req as any)?.correlationId || "-";
+  const adminUserId = (req as any)?.user?.id ?? null;
+
+  try {
+    // Check if artist exists and has agreement
+    const artistRows = await safeQuery<any>(
+      `SELECT id, name, email, agreement_accepted, agreement_status
+       FROM users
+       WHERE id = $1 AND UPPER(role) = 'ARTIST'
+       LIMIT 1`,
+      [id]
+    );
+
+    if (!artistRows.length) {
+      return res.status(404).json({ success: false, message: "Artist not found" });
+    }
+
+    const artist = artistRows[0];
+
+    if (!artist.agreement_accepted) {
+      return res.status(400).json({ success: false, message: "Artist has not signed agreement yet" });
+    }
+
+    if (artist.agreement_status === "ACTIVE") {
+      return res.status(400).json({ success: false, message: "Cannot reject active agreement. Use suspend instead." });
+    }
+
+    // Update agreement status to REJECTED and artist status to REJECTED
+    await pool.query(
+      `UPDATE users
+       SET agreement_status = 'REJECTED',
+           artist_status = 'REJECTED',
+           admin_remarks = COALESCE(admin_remarks || '', '') || 'Rejection reason: ' || $2,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [id, reason || "No reason provided"]
+    );
+
+    // Log audit event
+    AuditService.log({
+      action: 'artist.agreement_rejected',
+      entity: 'user',
+      entityId: String(id),
+      performedBy: adminUserId,
+      role: 'admin',
+      status: 'success',
+      correlationId,
+      metadata: {
+        artistName: artist.name,
+        artistEmail: artist.email,
+        previousStatus: artist.agreement_status,
+        newStatus: 'REJECTED',
+        rejectionReason: reason
+      }
+    });
+
+    console.log(
+      `[AUDIT] ${JSON.stringify({
+        event: "artist_agreement_rejected",
+        correlationId,
+        adminUserId,
+        artistUserId: id,
+        artistName: artist.name,
+        artistEmail: artist.email,
+        rejectionReason: reason
+      })}`
+    );
+
+    // Invalidate cache
+    await invalidateArtistCache();
+
+    return res.json({
+      success: true,
+      message: "Agreement rejected successfully",
+      agreementStatus: "REJECTED",
+      artistStatus: "REJECTED"
+    });
+  } catch (error: any) {
+    console.error('[admin/artists/:id/reject-agreement] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to reject agreement", correlationId });
+  }
+});
+
+// Update Agreement Status
+router.patch("/:id/agreement-status", requireAuth, requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    return res.status(400).json({ success: false, message: "Invalid id" });
+  }
+
+  const { status } = req.body as {
+    status?: string;
+  };
+
+  if (!status || !['ACTIVE', 'SUSPENDED', 'TERMINATED'].includes(status)) {
+    return res.status(400).json({ success: false, message: "Invalid status. Must be ACTIVE, SUSPENDED, or TERMINATED" });
+  }
+
+  const correlationId = (req as any)?.correlationId || "-";
+  const adminUserId = (req as any)?.user?.id ?? null;
+
+  try {
+    // Check if artist exists and has agreement
+    const artistRows = await safeQuery<any>(
+      `SELECT id, name, agreement_accepted, agreement_status
+       FROM users
+       WHERE id = $1 AND UPPER(role) = 'ARTIST'
+       LIMIT 1`,
+      [id]
+    );
+
+    if (!artistRows.length) {
+      return res.status(404).json({ success: false, message: "Artist not found" });
+    }
+
+    const artist = artistRows[0];
+
+    if (!artist.agreement_accepted) {
+      return res.status(400).json({ success: false, message: "Artist has not signed agreement yet" });
+    }
+
+    // Update agreement status
+    await pool.query(
+      `UPDATE users
+       SET agreement_status = $1,
+           updated_at = NOW()
+       WHERE id = $2`,
+      [status, id]
+    );
+
+    console.log(
+      `[AUDIT] ${JSON.stringify({
+        event: "artist_agreement_status_updated",
+        correlationId,
+        adminUserId,
+        artistUserId: id,
+        artistName: artist.name,
+        oldStatus: artist.agreement_status,
+        newStatus: status
+      })}`
+    );
+
+    return res.json({
+      success: true,
+      message: `Agreement status updated to ${status}`,
+      agreementStatus: status
+    });
+  } catch (error: any) {
+    console.error('[admin/artists/:id/agreement-status] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to update agreement status", correlationId });
   }
 });
 

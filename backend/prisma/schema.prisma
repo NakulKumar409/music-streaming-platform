@@ -29,6 +29,7 @@ model users {
   created_at                DateTime  @default(now()) @db.Timestamptz(6)
   updated_at                DateTime  @default(now()) @db.Timestamptz(6)
   phone                     String?   @db.VarChar(50)
+  genre                     String?   @db.VarChar(50)
   bio                       String?
   banner_image_url          String?
   accent_color              String?   @db.VarChar(20)
@@ -46,6 +47,12 @@ model users {
   digitalSignature          String?   @map("digital_signature") @db.Text
   signatureSignedAt         DateTime? @map("signature_signed_at") @db.Timestamptz(6)
   agreementId               String?   @map("agreement_id") @db.VarChar(100)
+  termsVersion              String?   @map("terms_version") @db.VarChar(20)
+  agreementStatus           String?   @map("agreement_status") @db.VarChar(20)
+  agreementStartDate        DateTime? @map("agreement_start_date") @db.Timestamptz(6)
+  agreementPdfPath          String?   @map("agreement_pdf_path") @db.VarChar(500)
+  signatureIpAddress        String?   @map("signature_ip_address") @db.VarChar(50)
+  signatureUserAgent        String?   @map("signature_user_agent") @db.Text
 
   @@index([artistStatus], map: "idx_users_artist_status")
   @@index([isDeleted], map: "idx_users_is_deleted")
@@ -74,6 +81,19 @@ model revenue_share_configs {
 
   @@index([version], map: "idx_revenue_share_configs_version")
   @@index([effectiveFrom], map: "idx_revenue_share_configs_effective_from")
+}
+
+model terms_versions {
+  id                Int      @id @default(autoincrement())
+  version           String   @unique @db.VarChar(20)
+  content           String   @db.Text
+  isActive          Boolean  @default(true) @map("is_active")
+  effectiveFrom     DateTime @map("effective_from") @db.Timestamptz(6)
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([version], map: "idx_terms_versions_version")
+  @@index([effectiveFrom], map: "idx_terms_versions_effective_from")
 }
 
 model content_items {

@@ -50,6 +50,26 @@ async function migrate() {
     `);
     console.log('✓ Added agreement_id column');
 
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version VARCHAR(20)
+    `);
+    console.log('✓ Added terms_version column');
+
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS agreement_status VARCHAR(20)
+    `);
+    console.log('✓ Added agreement_status column');
+
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS agreement_start_date TIMESTAMPTZ
+    `);
+    console.log('✓ Added agreement_start_date column');
+
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS agreement_pdf_path VARCHAR(500)
+    `);
+    console.log('✓ Added agreement_pdf_path column');
+
     // Create index on agreement_id
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_users_agreement_id ON users(agreement_id)
@@ -88,6 +108,61 @@ async function migrate() {
       ON CONFLICT (version) DO NOTHING
     `);
     console.log('✓ Inserted default revenue share configuration');
+
+    // Create terms_versions table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS terms_versions (
+        id SERIAL PRIMARY KEY,
+        version VARCHAR(20) UNIQUE NOT NULL,
+        content TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT true,
+        effective_from TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log('✓ Created terms_versions table');
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_terms_versions_version ON terms_versions(version)
+    `);
+    console.log('✓ Created index on terms_versions.version');
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_terms_versions_effective_from ON terms_versions(effective_from)
+    `);
+    console.log('✓ Created index on terms_versions.effective_from');
+
+    // Insert default terms
+    const defaultTerms = `MUSIC PLATFORM ARTIST AGREEMENT
+
+1. ACCEPTANCE OF TERMS
+By signing this agreement, you agree to be bound by these terms and conditions.
+
+2. REVENUE SHARING
+Revenue from your content will be shared according to the agreed percentages.
+
+3. CONTENT GUIDELINES
+You agree to only upload content you own or have the right to distribute.
+
+4. INTELLECTUAL PROPERTY
+You retain ownership of your intellectual property while granting us the right to distribute it.
+
+5. PAYMENT TERMS
+Payments will be processed according to our standard payment schedule.
+
+6. TERMINATION
+Either party may terminate this agreement with 30 days notice.
+
+7. GOVERNING LAW
+This agreement is governed by the laws of the jurisdiction in which the platform operates.`;
+
+    await pool.query(`
+      INSERT INTO terms_versions (version, content)
+      VALUES ('v1', $1)
+      ON CONFLICT (version) DO NOTHING
+    `, [defaultTerms]);
+    console.log('✓ Inserted default terms configuration');
 
     console.log('\n✅ Migration completed successfully!');
   } catch (error) {

@@ -63,10 +63,12 @@ export default function AdminArtistApplicationsPage() {
     setApiError(null);
     try {
       const res = await http.get<PendingArtistsResponse>("/api/v1/admin/pending-artists");
+      console.log("Pending artists response:", res.data);
       const next = Array.isArray(res.data?.items) ? (res.data.items as PendingItem[]) : [];
       setItems(next);
       setActive(next[0] ?? null);
     } catch (e: any) {
+      console.error("Failed to load pending artists:", e);
       const status = e?.response?.status;
       if (status === 401 || status === 403) {
         localStorage.removeItem("adminToken");

@@ -13,6 +13,10 @@ const AdminArtistApplicationsPage = lazy(() => import("./pages/AdminArtistApplic
 const AdminFeaturedArtistsPage = lazy(() => import("./pages/AdminFeaturedArtistsPage"));
 const AdminSubscriptionSettingsPage = lazy(() => import("./pages/AdminSubscriptionSettingsPage"));
 const AdminAuditPage = lazy(() => import("./pages/AdminAuditPage"));
+const AdminAgreementSettingsPage = lazy(() => import("./pages/AdminAgreementSettingsPage"));
+const AdminCommissionPlansPage = lazy(() => import("./pages/AdminCommissionPlansPage"));
+const AdminTermsManagementPage = lazy(() => import("./pages/AdminTermsManagementPage"));
+const AdminSignedAgreementsPage = lazy(() => import("./pages/AdminSignedAgreementsPage"));
 
 const PageFallback = () => (
   <div className="p-8">
@@ -36,6 +40,11 @@ export default function App() {
           <Route path="/admin/artists/:id" element={<AdminArtistDetailPage />} />
           <Route path="/admin/moderation" element={<AdminContentApprovalQueuePage />} />
           <Route path="/admin/featured-artists" element={<AdminFeaturedArtistsPage />} />
+          <Route path="/admin/agreement-settings" element={<AdminAgreementSettingsPage />}>
+            <Route path="commission-plans" element={<AdminCommissionPlansPage />} />
+            <Route path="terms" element={<AdminTermsManagementPage />} />
+            <Route path="signed-agreements" element={<AdminSignedAgreementsPage />} />
+          </Route>
           <Route path="/admin/subscription-settings" element={<AdminSubscriptionSettingsPage />} />
           <Route path="/admin/audit" element={<AdminAuditPage />} />
         </Route>

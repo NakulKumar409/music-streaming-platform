@@ -108,6 +108,8 @@ router.get("/pending-artists", requireAuth, requireAdmin, async (req: any, res: 
 router.patch("/resolve-artist/:id", requireAuth, requireAdmin, async (req: any, res: any) => {
   const correlationId = req?.correlationId || "-";
   const id = Number(req.params.id);
+  console.log("[admin] resolve-artist called", { correlationId, id, body: req.body });
+  
   if (!Number.isFinite(id) || id <= 0) {
     return res.status(400).json({ success: false, message: "Invalid id", correlationId });
   }
@@ -115,6 +117,8 @@ router.patch("/resolve-artist/:id", requireAuth, requireAdmin, async (req: any, 
   const { action, reason } = req.body as { action?: string; reason?: string };
   const act = (action ?? "").toString().trim().toUpperCase();
   const note = (reason ?? "").toString().trim();
+
+  console.log("[admin] resolve-artist parsed", { act, note });
 
   if (act !== "APPROVE" && act !== "REJECT") {
     return res.status(400).json({
@@ -134,17 +138,20 @@ router.patch("/resolve-artist/:id", requireAuth, requireAdmin, async (req: any, 
   try {
 
     if (act === "APPROVE") {
+      console.log("[admin] Approving artist", id);
       const r = await pool.query(
         `UPDATE users
-         SET artist_status = 'APPROVED'::"ArtistStatus",
+         SET artist_status = 'APPROVED',
              is_verified = true,
              verified = true,
              admin_remarks = NULL,
              updated_at = now()
          WHERE id = $1 AND role = 'ARTIST'
-         RETURNING id`,
+         RETURNING id, artist_status`,
         [id]
       );
+
+      console.log("[admin] Artist update result", r.rows);
 
       if (!r.rows?.length) {
         return res.status(404).json({ success: false, message: "Artist not found", correlationId });
@@ -173,17 +180,20 @@ router.patch("/resolve-artist/:id", requireAuth, requireAdmin, async (req: any, 
       return res.json({ success: true, status: "APPROVED", correlationId });
     }
 
+    console.log("[admin] Rejecting artist", id);
     const r = await pool.query(
       `UPDATE users
-       SET artist_status = 'REJECTED'::"ArtistStatus",
+       SET artist_status = 'REJECTED',
            is_verified = false,
            verified = false,
            admin_remarks = $2,
            updated_at = now()
        WHERE id = $1 AND role = 'ARTIST'
-       RETURNING id`,
+       RETURNING id, artist_status`,
       [id, note]
     );
+
+    console.log("[admin] Artist reject result", r.rows);
 
     if (!r.rows?.length) {
       return res.status(404).json({ success: false, message: "Artist not found", correlationId });
@@ -202,8 +212,8 @@ router.patch("/resolve-artist/:id", requireAuth, requireAdmin, async (req: any, 
 
     return res.json({ success: true, status: "REJECTED", correlationId });
   } catch (err: any) {
-    console.error("[admin] resolve-artist error", correlationId, err?.message);
-    return res.status(500).json({ success: false, message: "Failed to resolve artist", correlationId });
+    console.error("[admin] resolve-artist error", correlationId, err?.message, err?.stack);
+    return res.status(500).json({ success: false, message: "Failed to resolve artist", correlationId, error: err?.message });
   }
 });
 

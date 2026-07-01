@@ -12,6 +12,9 @@ interface AgreementData {
   signatureSignedAt: Date;
   agreementId: string;
   digitalSignature: string;
+  termsVersion: string;
+  termsContent: string;
+  agreementStartDate: Date;
 }
 
 export class AgreementPdfService {
@@ -56,9 +59,12 @@ export class AgreementPdfService {
         // Agreement Version
         doc.fontSize(14).font('Helvetica-Bold').fill('#333').text('Agreement Details');
         doc.moveDown(0.5);
-        
+
         doc.fontSize(11).font('Helvetica').fill('#444');
+        doc.text(`Agreement ID: ${data.agreementId}`);
         doc.text(`Agreement Version: ${data.agreementVersion}`);
+        doc.text(`Terms Version: ${data.termsVersion}`);
+        doc.text(`Agreement Start Date: ${data.agreementStartDate.toLocaleDateString()}`);
         doc.text(`Accepted On: ${data.agreementAcceptedAt.toLocaleDateString()}`);
         doc.moveDown(1);
 
@@ -71,25 +77,12 @@ export class AgreementPdfService {
         doc.text(`Platform Share: ${data.platformRevenueShare}%`);
         doc.moveDown(1);
 
-        // Terms & Conditions Section (Placeholder)
+        // Terms & Conditions Section
         doc.fontSize(14).font('Helvetica-Bold').fill('#333').text('Terms & Conditions');
         doc.moveDown(0.5);
-        
+
         doc.fontSize(10).font('Helvetica').fill('#444');
-        const terms = [
-          '1. The Artist agrees to upload original content and owns all rights to the material.',
-          '2. The Platform will distribute the content and handle payment processing.',
-          '3. Revenue will be shared according to the percentages specified above.',
-          '4. The Artist maintains ownership of their intellectual property.',
-          '5. Both parties agree to comply with applicable laws and regulations.',
-          '6. This agreement is binding and effective upon signature.',
-          '7. The Platform reserves the right to modify terms for future agreements.',
-          '8. Any disputes will be resolved through mutual agreement or legal means.'
-        ];
-        
-        terms.forEach(term => {
-          doc.text(term, { continued: false });
-        });
+        doc.text(data.termsContent, { align: 'justify' });
         doc.moveDown(1);
 
         // Signature Section

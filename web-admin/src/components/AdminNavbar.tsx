@@ -1,19 +1,20 @@
 import { useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { 
-  LayoutDashboard, 
-  Users, 
-  UserPlus, 
-  Star, 
-  Shield, 
-  CreditCard, 
-  BarChart3, 
-  FileText, 
+import {
+  LayoutDashboard,
+  Users,
+  UserPlus,
+  Star,
+  Shield,
+  CreditCard,
+  BarChart3,
+  FileText,
   LogOut,
   ChevronLeft,
   ChevronRight,
   Menu,
-  X
+  X,
+  FileSignature
 } from "lucide-react";
 import { useSidebar } from "./AdminLayout";
 
@@ -47,45 +48,51 @@ export default function AdminNavbar() {
 
   const navItems: NavItem[] = useMemo(
     () => [
-      { 
-        label: "Dashboard", 
-        to: "/admin/home", 
-        icon: <LayoutDashboard size={20} /> 
+      {
+        label: "Dashboard",
+        to: "/admin/home",
+        icon: <LayoutDashboard size={20} />
       },
-      { 
-        label: "Artist Applications", 
+      {
+        label: "Artist Applications",
         to: "/admin/artist-applications",
         matchPrefix: "/admin/artist-applications",
         icon: <UserPlus size={20} />
       },
-      { 
-        label: "Artists", 
-        to: "/admin/artists", 
+      {
+        label: "Artists",
+        to: "/admin/artists",
         matchPrefix: "/admin/artists",
         icon: <Users size={20} />
       },
-      { 
-        label: "Featured Artists", 
+      {
+        label: "Featured Artists",
         to: "/admin/featured-artists",
         icon: <Star size={20} />
       },
-      { 
-        label: "Content Moderation", 
+      {
+        label: "Content Moderation",
         to: "/admin/moderation",
         icon: <Shield size={20} />
       },
-      { 
-        label: "Platform Plan", 
+      {
+        label: "Agreement Settings",
+        to: "/admin/agreement-settings",
+        matchPrefix: "/admin/agreement-settings",
+        icon: <FileSignature size={20} />
+      },
+      {
+        label: "Platform Plan",
         to: "/admin/subscription-settings",
         icon: <CreditCard size={20} />
       },
-      { 
-        label: "Analytics", 
+      {
+        label: "Analytics",
         to: "/admin/analytics",
         icon: <BarChart3 size={20} />
       },
-      { 
-        label: "Audit Logs", 
+      {
+        label: "Audit Logs",
         to: "/admin/audit",
         icon: <FileText size={20} />
       }
