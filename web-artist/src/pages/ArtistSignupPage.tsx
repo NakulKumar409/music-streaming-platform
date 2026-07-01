@@ -81,7 +81,7 @@ export default function ArtistSignupPage() {
   const [profileFile, setProfileFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Step 4: Commission Plan Selection
+  // Step 4: Revenue Share Plan Selection
   const [selectedCommissionPlans, setSelectedCommissionPlans] = useState<number[]>([]);
   const [commissionPlans, setCommissionPlans] = useState<any[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(false);
@@ -137,7 +137,7 @@ export default function ArtistSignupPage() {
         setCommissionPlans(res.data.plans || []);
       }
     } catch (error) {
-      console.error('Failed to fetch commission plans:', error);
+      console.error('Failed to fetch revenue share plans:', error);
     } finally {
       setLoadingPlans(false);
     }
@@ -266,7 +266,7 @@ export default function ArtistSignupPage() {
   const handleStep4Next = () => {
     setError(null);
     if (selectedCommissionPlans.length === 0) {
-      setError("Please select at least one commission plan to continue.");
+      setError("Please select a revenue share plan to continue.");
       return;
     }
     setStep(5);
@@ -313,8 +313,38 @@ export default function ArtistSignupPage() {
       const ctx = canvas.getContext("2d");
       if (ctx) {
         ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#1E3A8A"; // Blue ink color like a ballpoint pen
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = "round";
+        ctx.stroke();
+        setSignatureData(canvas.toDataURL());
+      }
+    }
+  };
+
+  const startDrawingTouch = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    setIsDrawing(true);
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const ctx = canvas.getContext("2d");
+      if (ctx && e.touches[0]) {
+        ctx.beginPath();
+        ctx.moveTo(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
+      }
+    }
+  };
+
+  const drawTouch = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const ctx = canvas.getContext("2d");
+      if (ctx && e.touches[0]) {
+        ctx.lineTo(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
+        ctx.strokeStyle = "#1E3A8A"; // Blue ink color
+        ctx.lineWidth = 2.5;
         ctx.lineCap = "round";
         ctx.stroke();
         setSignatureData(canvas.toDataURL());
@@ -807,75 +837,90 @@ export default function ArtistSignupPage() {
                       <DollarSign className="w-7 h-7" />
                     </div>
                     <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[#e8c4b8]">
-                      Commission Plans
+                      Revenue Share Plan
                     </h2>
                     <p className="font-inter text-[#8d7b77] text-[13px] sm:text-[14px] mt-1">
-                      Select your revenue sharing plans (you can choose multiple)
+                      Choose the plan that best fits your music strategy
                     </p>
                   </div>
 
                   {loadingPlans ? (
                     <div className="text-center py-8">
                       <div className="w-10 h-10 border-4 border-[#e85d2c]/30 border-t-[#e85d2c] rounded-full animate-spin mx-auto mb-3" />
-                      <p className="text-sm text-[#8d7b77]">Loading plans...</p>
+                      <p className="text-sm text-[#8d7b77]">Loading revenue share plans...</p>
                     </div>
                   ) : commissionPlans.length === 0 ? (
                     <div className="text-center py-8">
-                      <p className="text-sm text-[#8d7b77]">No commission plans available. Please contact support.</p>
+                      <p className="text-sm text-[#8d7b77]">No revenue share plans available. Please contact support.</p>
                     </div>
                   ) : (
-                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                    <div className="space-y-4 max-h-[390px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-white/5 [&::-webkit-scrollbar-thumb]:bg-[#e85d2c]/30 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#e85d2c]/50">
                       {commissionPlans.map((plan) => {
                         const isSelected = selectedCommissionPlans.includes(plan.id);
                         return (
                           <div
                             key={plan.id}
-                            onClick={() => {
-                              if (isSelected) {
-                                setSelectedCommissionPlans(selectedCommissionPlans.filter(id => id !== plan.id));
-                              } else {
-                                setSelectedCommissionPlans([...selectedCommissionPlans, plan.id]);
-                              }
-                            }}
-                            className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                            onClick={() => setSelectedCommissionPlans([plan.id])}
+                            className={`p-5 rounded-2xl border cursor-pointer transition-all duration-300 relative overflow-hidden group/card ${
                               isSelected
-                                ? 'bg-[#e85d2c]/10 border-[#e85d2c]/50 shadow-[0_0_30px_rgba(232,93,44,0.1)]'
-                                : 'bg-[#1a1210]/60 border-white/10 hover:border-white/20'
+                                ? 'bg-gradient-to-br from-[#e85d2c]/15 to-[#c97a54]/5 border-[#e85d2c] shadow-[0_0_25px_rgba(232,93,44,0.15)] scale-[1.02]'
+                                : 'bg-[#140e0c]/60 border-white/5 hover:border-white/20 hover:bg-[#1c1411]/80 hover:scale-[1.01]'
                             }`}
                           >
-                            <div className="flex items-start gap-3">
-                              <div className={`w-5 h-5 rounded border-2 mt-0.5 flex items-center justify-center transition-colors flex-shrink-0 ${
-                                isSelected ? 'border-[#e85d2c] bg-[#e85d2c]' : 'border-white/30'
+                            <div className="flex items-start gap-4">
+                              {/* Custom Radio Button Indicator */}
+                              <div className={`w-5 h-5 rounded-full border-2 mt-0.5 flex items-center justify-center transition-all duration-300 flex-shrink-0 ${
+                                isSelected ? 'border-[#e85d2c]' : 'border-white/30 group-hover/card:border-white/50'
                               }`}>
-                                {isSelected && <CheckCircle2 className="w-3 h-3 text-white" />}
+                                <div className={`w-2.5 h-2.5 rounded-full bg-[#e85d2c] transition-all duration-300 ${
+                                  isSelected ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
+                                }`} />
                               </div>
+
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                                  <h3 className="text-sm font-semibold text-white">{plan.name || `Plan ${plan.version}`}</h3>
-                                  <span className="text-xs px-2 py-1 rounded-full bg-white/5 text-[#8d7b77]">
+                                <div className="flex items-center justify-between mb-2.5 flex-wrap gap-2">
+                                  <h3 className="text-[15px] font-bold text-white tracking-wide font-outfit">
+                                    {plan.name || `Plan ${plan.version}`}
+                                  </h3>
+                                  <span className="text-[10px] uppercase tracking-wider font-semibold font-inter px-2 py-0.5 rounded bg-white/5 text-[#8d7b77] border border-white/5">
                                     v{plan.version || 1}
                                   </span>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3 mb-2">
-                                  <div className="text-center p-2 rounded-lg bg-white/5">
-                                    <div className="text-xl font-bold text-[#e85d2c]">{plan.artistShare}%</div>
-                                    <div className="text-xs text-[#8d7b77]">Artist</div>
+
+                                <div className="grid grid-cols-2 gap-3 mb-3.5">
+                                  <div className="text-center p-2.5 rounded-xl bg-white/[0.02] border border-white/5 group-hover/card:bg-white/[0.04] transition-colors">
+                                    <div className="text-2xl font-black text-[#e85d2c] font-outfit tracking-tight">
+                                      {plan.artistShare}%
+                                    </div>
+                                    <div className="text-[10px] uppercase tracking-wider font-bold text-[#8d7b77] font-inter">
+                                      Artist Share
+                                    </div>
                                   </div>
-                                  <div className="text-center p-2 rounded-lg bg-white/5">
-                                    <div className="text-xl font-bold text-[#c97a54]">{plan.platformShare}%</div>
-                                    <div className="text-xs text-[#8d7b77]">Platform</div>
+                                  <div className="text-center p-2.5 rounded-xl bg-white/[0.02] border border-white/5 group-hover/card:bg-white/[0.04] transition-colors">
+                                    <div className="text-2xl font-black text-[#c97a54] font-outfit tracking-tight">
+                                      {plan.platformShare}%
+                                    </div>
+                                    <div className="text-[10px] uppercase tracking-wider font-bold text-[#8d7b77] font-inter">
+                                      Platform Share
+                                    </div>
                                   </div>
                                 </div>
+
                                 {plan.description && (
-                                  <p className="text-xs text-[#8d7b77] mb-2">{plan.description}</p>
+                                  <p className="text-[12px] text-[#8d7b77] font-inter leading-relaxed mb-3">
+                                    {plan.description}
+                                  </p>
                                 )}
+
                                 {plan.benefits && plan.benefits.length > 0 && (
-                                  <div>
-                                    <p className="text-xs text-[#8d7b77] mb-1">Benefits:</p>
-                                    <ul className="text-xs text-[#8d7b77] space-y-1">
+                                  <div className="space-y-1.5">
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#8d7b77] font-inter">
+                                      Benefits & Terms
+                                    </p>
+                                    <ul className="grid grid-cols-1 gap-1.5">
                                       {plan.benefits.map((benefit: string, idx: number) => (
-                                        <li key={idx} className="flex items-start gap-1">
-                                          <span className="text-[#e85d2c]">•</span>
+                                        <li key={idx} className="flex items-start gap-2 text-xs text-[#8d7b77] font-inter">
+                                          <Sparkles className="w-3.5 h-3.5 text-[#e85d2c] shrink-0 mt-0.5" />
                                           <span>{benefit}</span>
                                         </li>
                                       ))}
@@ -890,17 +935,21 @@ export default function ArtistSignupPage() {
                     </div>
                   )}
 
-                  {selectedCommissionPlans.length > 0 && (
-                    <div className="p-3 rounded-xl bg-[#e85d2c]/5 border border-[#e85d2c]/20">
-                      <p className="text-sm text-[#e8c4b8]">
-                        Selected: <span className="font-semibold">{selectedCommissionPlans.length}</span> plan{selectedCommissionPlans.length > 1 ? 's' : ''}
-                      </p>
-                    </div>
-                  )}
+                  {selectedCommissionPlans.length > 0 && (() => {
+                    const selectedPlan = commissionPlans.find(p => p.id === selectedCommissionPlans[0]);
+                    return selectedPlan ? (
+                      <div className="p-3.5 rounded-xl bg-gradient-to-r from-[#e85d2c]/10 to-transparent border border-[#e85d2c]/20 animate-in fade-in duration-300">
+                        <p className="text-sm text-[#e8c4b8] font-inter flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-[#e85d2c]" />
+                          <span>Selected: <span className="font-semibold text-white">{selectedPlan.name || `Plan ${selectedPlan.version}`}</span></span>
+                        </p>
+                      </div>
+                    ) : null;
+                  })()}
 
-                  <div className="p-4 rounded-xl bg-white/5 border border-white/5">
-                    <p className="text-xs text-[#8d7b77] leading-relaxed">
-                      Your selected commission plans will be fixed for your signed agreement. Future platform changes will not affect your existing agreement.
+                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
+                    <p className="text-[11px] text-[#8d7b77] font-inter leading-relaxed">
+                      Your selected revenue share plan will be fixed for your signed agreement. Future platform changes will not affect your existing agreement.
                     </p>
                   </div>
 
@@ -920,7 +969,7 @@ export default function ArtistSignupPage() {
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                     <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
                     <span className="relative z-10 flex items-center justify-center gap-2">
-                      Next ({selectedCommissionPlans.length} selected)
+                      Continue
                     </span>
                   </button>
                 </div>
@@ -1025,7 +1074,10 @@ export default function ArtistSignupPage() {
                       onMouseMove={draw}
                       onMouseUp={stopDrawing}
                       onMouseLeave={stopDrawing}
-                      className="w-full h-[150px] rounded-xl bg-[#1a1210]/60 border border-white/10 cursor-crosshair"
+                      onTouchStart={startDrawingTouch}
+                      onTouchMove={drawTouch}
+                      onTouchEnd={stopDrawing}
+                      className="w-full h-[150px] rounded-xl bg-[#fdfaf2] border border-[#e8c4b8]/30 cursor-crosshair shadow-inner"
                     />
                     <button
                       type="button"
@@ -1107,7 +1159,7 @@ export default function ArtistSignupPage() {
 
                     <div className="p-4 rounded-xl bg-[#1a1210]/60 border border-white/10">
                       <h3 className="text-xs font-semibold text-[#8d7b77] uppercase tracking-wider mb-3">
-                        Commission Plans ({selectedCommissionPlans.length})
+                        Revenue Share Plan
                       </h3>
                       {selectedCommissionPlans.length > 0 && commissionPlans.length > 0 ? (
                         <div className="space-y-4">
@@ -1121,13 +1173,13 @@ export default function ArtistSignupPage() {
                                   <span className="text-xs text-[#8d7b77]">v{plan.version || 1}</span>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 text-sm">
-                                  <div className="text-center p-2 rounded-lg bg-white/5">
+                                  <div className="text-center p-2.5 rounded-lg bg-white/5">
                                     <div className="text-xl font-bold text-[#e85d2c]">{plan.artistShare}%</div>
-                                    <div className="text-xs text-[#8d7b77]">Artist</div>
+                                    <div className="text-xs text-[#8d7b77]">Artist Share</div>
                                   </div>
-                                  <div className="text-center p-2 rounded-lg bg-white/5">
+                                  <div className="text-center p-2.5 rounded-lg bg-white/5">
                                     <div className="text-xl font-bold text-[#c97a54]">{plan.platformShare}%</div>
-                                    <div className="text-xs text-[#8d7b77]">Platform</div>
+                                    <div className="text-xs text-[#8d7b77]">Platform Share</div>
                                   </div>
                                 </div>
                               </div>

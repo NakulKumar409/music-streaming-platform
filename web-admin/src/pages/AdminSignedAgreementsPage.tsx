@@ -23,15 +23,20 @@ export default function AdminSignedAgreementsPage() {
   const [agreements, setAgreements] = useState<SignedAgreement[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
 
   const fetchAgreements = async () => {
     setLoading(true);
     try {
-      const res = await http.get("/api/v1/admin/artists");
+      const res = await http.get("/api/v1/admin/artists", {
+        params: { limit: 200 }
+      });
       if (res.data?.success) {
-        const artists = res.data.artists || [];
-        const signedAgreements = artists.filter((a: any) => a.agreementAccepted && a.agreementId);
+        const artists = res.data.items || [];
+        const signedAgreements = artists.filter((a: any) => 
+          a.agreementAccepted && 
+          a.agreementId && 
+          a.agreementStatus === "ACTIVE"
+        );
         setAgreements(signedAgreements);
       }
     } catch (error) {
@@ -46,12 +51,11 @@ export default function AdminSignedAgreementsPage() {
   }, []);
 
   const filteredAgreements = agreements.filter((agreement) => {
-    const matchesSearch =
+    return (
       agreement.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       agreement.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      agreement.agreementId.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "all" || agreement.agreementStatus === statusFilter;
-    return matchesSearch && matchesStatus;
+      agreement.agreementId.toLowerCase().includes(searchTerm.toLowerCase())
+    );
   });
 
   const handleDownloadPdf = async (artistId: number) => {
@@ -133,17 +137,6 @@ export default function AdminSignedAgreementsPage() {
             className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-[#8D7B77] focus:outline-none focus:border-[#E85D2C]"
           />
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#E85D2C]"
-        >
-          <option value="all">All Status</option>
-          <option value="ACTIVE">Active</option>
-          <option value="PENDING_APPROVAL">Pending</option>
-          <option value="REJECTED">Rejected</option>
-          <option value="SUSPENDED">Suspended</option>
-        </select>
       </div>
 
       {loading ? (
@@ -156,14 +149,14 @@ export default function AdminSignedAgreementsPage() {
           <FileText className="w-16 h-16 text-[#8D7B77] mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-white mb-2">No Signed Agreements</h3>
           <p className="text-sm text-[#8D7B77]">
-            {searchTerm || statusFilter !== "all"
+            {searchTerm
               ? "No agreements match your search criteria"
-              : "No artists have signed agreements yet"}
+              : "No artists have active signed agreements yet"}
           </p>
         </div>
       ) : (
-        <div className="border border-white/10 rounded-xl overflow-hidden">
-          <table className="w-full">
+        <div className="border border-white/10 rounded-xl overflow-hidden overflow-x-auto">
+          <table className="w-full min-w-[900px]">
             <thead>
               <tr className="border-b border-white/10 bg-white/5">
                 <th className="text-left px-4 py-3 text-sm font-medium text-[#8D7B77]">Agreement #</th>

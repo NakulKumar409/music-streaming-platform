@@ -47,7 +47,10 @@ const coercePositiveInt = (v: any, dflt: number) => {
 };
 
 // Signature decryption helpers (must match artist.ts encryption)
-const ENCRYPTION_KEY = process.env.SIGNATURE_ENCRYPTION_KEY || crypto.randomBytes(32);
+const ENCRYPTION_KEY_RAW = process.env.SIGNATURE_ENCRYPTION_KEY || "4a0f8b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a";
+const ENCRYPTION_KEY = ENCRYPTION_KEY_RAW.length === 64 
+  ? Buffer.from(ENCRYPTION_KEY_RAW, 'hex') 
+  : Buffer.from(ENCRYPTION_KEY_RAW, 'utf8').slice(0, 32);
 const ENCRYPTION_ALGORITHM = 'aes-256-cbc';
 
 const decryptSignature = (encryptedSignature: string): string => {
@@ -596,6 +599,38 @@ router.get("/terms-versions/active", requireAuth, requireAdmin, async (req, res)
   }
 });
 
+router.put("/terms-versions/:version", requireAuth, requireAdmin, async (req, res) => {
+  const version = req.params.version;
+  const { isActive } = req.body as {
+    isActive?: boolean;
+  };
+
+  const correlationId = (req as any)?.correlationId || "-";
+  const adminUserId = (req as any)?.user?.id ?? null;
+
+  try {
+    const isAct = Boolean(isActive);
+    if (isAct) {
+      await pool.query(
+        `UPDATE terms_versions SET is_active = false WHERE version != $1`,
+        [version]
+      );
+    }
+    
+    await pool.query(
+      `UPDATE terms_versions SET is_active = $1 WHERE version = $2`,
+      [isAct, version]
+    );
+
+    console.log(`[AUDIT] terms_version_status_toggled: ${version} to ${isAct} by admin ${adminUserId}`);
+
+    return res.json({ success: true, version, isActive: isAct });
+  } catch (error: any) {
+    console.error('[admin/terms-versions PUT] error', correlationId, error?.message);
+    return res.status(500).json({ success: false, message: "Failed to toggle terms status", correlationId });
+  }
+});
+
 router.get("/", requireAuth, requireAdmin, async (req, res) => {
   const page = coercePositiveInt(req.query.page, 1);
   const limit = coercePositiveInt(req.query.limit, 10);
@@ -652,7 +687,8 @@ router.get("/", requireAuth, requireAdmin, async (req, res) => {
       terms_version,
       agreement_status,
       agreement_start_date,
-      signature_signed_at
+      signature_signed_at,
+      digital_signature
      FROM users
      ${whereSql}
      ORDER BY created_at DESC NULLS LAST, id DESC
@@ -679,7 +715,8 @@ router.get("/", requireAuth, requireAdmin, async (req, res) => {
     termsVersion: u.terms_version ?? null,
     agreementStatus: u.agreement_status ?? null,
     agreementStartDate: u.agreement_start_date ?? null,
-    signatureSignedAt: u.signature_signed_at ?? null
+    signatureSignedAt: u.signature_signed_at ?? null,
+    digitalSignature: u.digital_signature ? decryptSignature(u.digital_signature) : null
   }));
 
   const totalPages = Math.max(1, Math.ceil(totalCount / limit));
@@ -1213,7 +1250,9 @@ router.get("/:id/agreement-pdf", requireAuth, requireAdmin, async (req, res) => 
         agreement_id,
         digital_signature,
         terms_version,
-        agreement_start_date
+        agreement_start_date,
+        created_at,
+        profile_image_url
        FROM users
        WHERE id = $1 AND UPPER(role) = 'ARTIST'
        LIMIT 1`,
@@ -1238,6 +1277,8 @@ router.get("/:id/agreement-pdf", requireAuth, requireAdmin, async (req, res) => 
 
     const termsContent = termsRows.length > 0 ? termsRows[0].content : "Terms & Conditions not available.";
 
+    const decryptedSignature = artist.digital_signature ? decryptSignature(artist.digital_signature) : "";
+
     const pdfBuffer = await AgreementPdfService.generateAgreementPdf({
       artistName: artist.name || "Unknown Artist",
       email: artist.email,
@@ -1248,10 +1289,12 @@ router.get("/:id/agreement-pdf", requireAuth, requireAdmin, async (req, res) => 
       agreementAcceptedAt: new Date(artist.agreement_accepted_at),
       signatureSignedAt: new Date(artist.signature_signed_at || artist.agreement_accepted_at),
       agreementId: artist.agreement_id,
-      digitalSignature: artist.digital_signature || "",
+      digitalSignature: decryptedSignature,
       termsVersion: artist.terms_version || "v1",
       termsContent: termsContent,
-      agreementStartDate: new Date(artist.agreement_start_date || artist.agreement_accepted_at)
+      agreementStartDate: new Date(artist.agreement_start_date || artist.agreement_accepted_at),
+      accountCreatedDate: artist.created_at ? new Date(artist.created_at) : null,
+      profileImageUrl: artist.profile_image_url || null
     });
 
     res.setHeader('Content-Type', 'application/pdf');

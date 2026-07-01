@@ -33,7 +33,10 @@ const requireArtist = (req: any, res: any, next: any) => {
 const EARLY_ACCESS_DAYS = 7;
 
 // Encryption helpers for digital signature
-const ENCRYPTION_KEY = process.env.SIGNATURE_ENCRYPTION_KEY || crypto.randomBytes(32);
+const ENCRYPTION_KEY_RAW = process.env.SIGNATURE_ENCRYPTION_KEY || "4a0f8b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a";
+const ENCRYPTION_KEY = ENCRYPTION_KEY_RAW.length === 64 
+  ? Buffer.from(ENCRYPTION_KEY_RAW, 'hex') 
+  : Buffer.from(ENCRYPTION_KEY_RAW, 'utf8').slice(0, 32);
 const ENCRYPTION_ALGORITHM = 'aes-256-cbc';
 
 const encryptSignature = (signature: string): string => {
@@ -214,10 +217,18 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
     }
 
     const existing = await safeRows<any>(
-      "SELECT id, role FROM users WHERE LOWER(email) = $1 LIMIT 1",
+      "SELECT id, role, agreement_accepted FROM users WHERE LOWER(email) = $1 LIMIT 1",
       [trimmedEmail],
       []
     );
+
+    if (existing.length && Boolean(existing[0].agreement_accepted)) {
+      return res.status(400).json({
+        success: false,
+        message: "Onboarding agreement has already been signed for this account and cannot be modified.",
+        correlationId
+      });
+    }
 
     const hashedPassword = await bcrypt.hash(trimmedPassword, 10);
 

@@ -46,6 +46,17 @@ export default function AdminTermsManagementPage() {
     }
   };
 
+  const handleToggleTermsStatus = async (term: TermsVersion) => {
+    try {
+      await http.put(`/api/v1/admin/artists/terms-versions/${term.version}`, {
+        isActive: !term.isActive,
+      });
+      fetchTerms();
+    } catch (error) {
+      console.error("Failed to toggle terms status:", error);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -120,8 +131,16 @@ export default function AdminTermsManagementPage() {
                   <button
                     onClick={() => setPreviewTerms(term)}
                     className="p-2 rounded-lg hover:bg-white/10 text-[#8D7B77] hover:text-white transition-colors"
+                    title="Preview Terms"
                   >
                     <Eye size={18} />
+                  </button>
+                  <button
+                    onClick={() => handleToggleTermsStatus(term)}
+                    className="p-2 rounded-lg hover:bg-white/10 text-[#8D7B77] hover:text-white transition-colors"
+                    title={term.isActive ? "Deactivate" : "Activate"}
+                  >
+                    {term.isActive ? <XCircle size={18} className="text-red-400" /> : <CheckCircle size={18} className="text-emerald-400" />}
                   </button>
                 </div>
               </div>

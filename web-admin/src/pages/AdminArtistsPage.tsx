@@ -29,6 +29,11 @@ import {
   Music,
   UserPlus,
   MoreHorizontal,
+  FileText,
+  Download,
+  ChevronDown,
+  ChevronUp,
+  AlertTriangle,
 } from "lucide-react";
 
 type ArtistListItem = {
@@ -42,6 +47,16 @@ type ArtistListItem = {
   isDeleted?: boolean;
   deletedAt?: string | null;
   deletionReason?: string | null;
+  agreementAccepted?: boolean;
+  agreementVersion?: string | null;
+  artistRevenueShare?: number | null;
+  platformRevenueShare?: number | null;
+  agreementId?: string | null;
+  termsVersion?: string | null;
+  agreementStatus?: string | null;
+  agreementStartDate?: string | null;
+  signatureSignedAt?: string | null;
+  digitalSignature?: string | null;
 };
 
 type ArtistsListResponse = {
@@ -244,7 +259,51 @@ export default function AdminArtistsPage() {
     return `$${v.toFixed(2)}`;
   }, []);
 
+  const formatDateTime = useCallback((v: string | null) => {
+    if (!v) return "—";
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }, []);
+
+  const [expandedArtistId, setExpandedArtistId] = useState<number | null>(null);
+  const [actionBusyId, setActionBusyId] = useState<number | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [brokenSignatures, setBrokenSignatures] = useState<Record<number, boolean>>({});
+
+  const handleDownloadPdf = async (artistId: number) => {
+    try {
+      setActionBusyId(artistId);
+      const res = await http.get(`/api/v1/admin/artists/${artistId}/agreement-pdf`, {
+        responseType: "blob"
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `agreement-${artistId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error("Failed to download PDF:", error);
+      alert("Failed to download PDF. Please try again.");
+    } finally {
+      setActionBusyId(null);
+    }
+  };
+
+  const toAbsoluteUrl = (url: string | null | undefined) => {
+    if (!url) return "";
+    if (url.startsWith("http://") || url.startsWith("https://")) return url;
+    const backendUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+    return `${backendUrl}${url.startsWith("/") ? "" : "/"}${url}`;
+  };
 
   const page = Number(searchParams.get("page") || "1") || 1;
   const limit = 10;
@@ -511,61 +570,296 @@ export default function AdminArtistsPage() {
             {items.map((a: ArtistListItem) => {
               const status = (a.status || "ACTIVE").toUpperCase();
               const isDeleted = Boolean((a as any).isDeleted);
+              const isExpanded = expandedArtistId === a.id;
               return (
-                <div
-                  key={a.id}
-                  className="flex flex-col md:grid md:grid-cols-[1.6fr_0.8fr_0.8fr_0.8fr_0.8fr] gap-4 px-6 py-4 items-start md:items-center hover:bg-white/5 transition-all">
-                  {/* Artist Info */}
-                  <div className="flex items-center gap-3 w-full">
-                    <div className="h-[40px] w-[40px] rounded-full bg-white/5 border border-white/10 overflow-hidden shrink-0">
-                      {a.profileImage ? (
-                        <img
-                          src={getOptimizedImageUrl(a.profileImage)}
-                          alt={a.name ?? a.email}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="h-full w-full flex items-center justify-center text-[#8D7B77]">
-                          <User size={16} />
+                <div key={a.id} className="border-b border-white/5 last:border-b-0">
+                  <div
+                    className={`flex flex-col md:grid md:grid-cols-[1.6fr_0.8fr_0.8fr_0.8fr_1.2fr] gap-4 px-6 py-4 items-start md:items-center transition-all ${
+                      isExpanded ? "bg-white/[0.02]" : "hover:bg-white/5"
+                    }`}
+                  >
+                    {/* Artist Info */}
+                    <div className="flex items-center gap-3 w-full">
+                      <div className="h-[40px] w-[40px] rounded-full bg-white/5 border border-white/10 overflow-hidden shrink-0">
+                        {a.profileImage ? (
+                          <img
+                            src={getOptimizedImageUrl(toAbsoluteUrl(a.profileImage))}
+                            alt={a.name ?? a.email}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center text-[#8D7B77]">
+                            <User size={16} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate">
+                          {a.name ?? "Unnamed Artist"}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <Mail size={12} className="text-[#8D7B77]" />
+                          <span className="text-xs text-[#8D7B77] truncate">
+                            {a.email}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white truncate">
-                        {a.name ?? "Unnamed Artist"}
-                      </p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <Mail size={12} className="text-[#8D7B77]" />
-                        <span className="text-xs text-[#8D7B77] truncate">
-                          {a.email}
-                        </span>
                       </div>
                     </div>
+
+                    {/* Verified */}
+                    <VerifiedBadge verified={Boolean(a.isVerified)} />
+
+                    {/* Price */}
+                    <div className="flex items-center gap-2">
+                      <DollarSign size={14} className="text-[#E85D2C]" />
+                      <span className="text-sm text-white">
+                        {formatPrice(a.subscriptionPrice)}
+                      </span>
+                    </div>
+
+                    {/* Status */}
+                    <StatusBadge status={status} isDeleted={isDeleted} />
+
+                    {/* Action */}
+                    <div className="flex items-center justify-end gap-2 w-full md:w-auto">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedArtistId(isExpanded ? null : a.id)}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all text-sm ${
+                          isExpanded
+                            ? "border-[#E85D2C] bg-[#E85D2C]/10 text-[#E85D2C]"
+                            : "border-white/10 bg-white/5 text-[#8D7B77] hover:text-white hover:bg-white/10"
+                        }`}
+                      >
+                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        <span>Agreement</span>
+                      </button>
+                      <Link
+                        to={`/admin/artists/${a.id}`}
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-[#8D7B77] hover:text-white hover:bg-white/10 transition-all"
+                      >
+                        <Eye size={14} />
+                        <span>Profile</span>
+                      </Link>
+                    </div>
                   </div>
 
-                  {/* Verified */}
-                  <VerifiedBadge verified={Boolean(a.isVerified)} />
+                  {/* Expandable Details Section */}
+                  {isExpanded && (
+                    <div className="px-6 pb-6 pt-2 bg-white/[0.01] border-t border-white/5 animate-in fade-in duration-300">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Column 1: Agreement Info */}
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <FileText className="w-4 h-4 text-[#E85D2C]" />
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider font-outfit">
+                              Agreement & Terms Details
+                            </h4>
+                          </div>
 
-                  {/* Price */}
-                  <div className="flex items-center gap-2">
-                    <DollarSign size={14} className="text-[#E85D2C]" />
-                    <span className="text-sm text-white">
-                      {formatPrice(a.subscriptionPrice)}
-                    </span>
-                  </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            <div className="p-3 rounded-xl bg-black/35 border border-white/5">
+                              <p className="text-[10px] uppercase tracking-wider text-[#8D7B77] font-semibold">Agreement Status</p>
+                              <span className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded text-[10px] font-bold ${
+                                a.agreementStatus === 'ACTIVE' || a.agreementStatus === 'VERIFIED'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                  : a.agreementStatus === 'PENDING_APPROVAL'
+                                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                  : a.agreementStatus === 'REJECTED'
+                                  ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                  : a.agreementStatus === 'SUSPENDED'
+                                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                  : 'bg-gray-500/10 text-[#8D7B77] border border-gray-500/20'
+                              }`}>
+                                {a.agreementStatus || (a.agreementAccepted ? "ACTIVE" : "NOT SIGNED")}
+                              </span>
+                            </div>
 
-                  {/* Status */}
-                  <StatusBadge status={status} isDeleted={isDeleted} />
+                            <div className="p-3 rounded-xl bg-black/35 border border-white/5">
+                              <p className="text-[10px] uppercase tracking-wider text-[#8D7B77] font-semibold">Artist Share</p>
+                              <p className="text-sm font-bold text-[#E85D2C] mt-1">{a.artistRevenueShare ?? (100 - (a.platformRevenueShare ?? 10))}%</p>
+                            </div>
 
-                  {/* Action */}
-                  <div className="flex items-center justify-end w-full md:w-auto">
-                    <Link
-                      to={`/admin/artists/${a.id}`}
-                      className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-[#8D7B77] hover:text-white hover:bg-white/10 transition-all">
-                      <Eye size={14} />
-                      <span className="hidden sm:inline">View</span>
-                    </Link>
-                  </div>
+                            <div className="p-3 rounded-xl bg-black/35 border border-white/5">
+                              <p className="text-[10px] uppercase tracking-wider text-[#8D7B77] font-semibold">Platform Share</p>
+                              <p className="text-sm font-bold text-[#C97A54] mt-1">{a.platformRevenueShare ?? 10}%</p>
+                            </div>
+
+                            <div className="p-3 rounded-xl bg-black/35 border border-white/5">
+                              <p className="text-[10px] uppercase tracking-wider text-[#8D7B77] font-semibold">Agreement Version</p>
+                              <p className="text-xs text-white font-medium mt-1">{a.agreementVersion || "—"}</p>
+                            </div>
+
+                            <div className="p-3 rounded-xl bg-black/35 border border-white/5">
+                              <p className="text-[10px] uppercase tracking-wider text-[#8D7B77] font-semibold">Terms Version</p>
+                              <p className="text-xs text-white font-medium mt-1">{a.termsVersion || "—"}</p>
+                            </div>
+
+                            <div className="p-3 rounded-xl bg-black/35 border border-white/5">
+                              <p className="text-[10px] uppercase tracking-wider text-[#8D7B77] font-semibold">Agreement ID</p>
+                              <p className="text-xs text-white font-mono truncate mt-1" title={a.agreementId || undefined}>{a.agreementId || "—"}</p>
+                            </div>
+                          </div>
+
+                          <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 text-xs text-[#8D7B77] space-y-1.5 font-inter">
+                            <div className="flex justify-between">
+                              <span>Agreement Accepted:</span>
+                              <span className={a.agreementAccepted ? "text-emerald-400 font-medium" : "text-[#8D7B77]"}>
+                                {a.agreementAccepted ? "Yes" : "No"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Agreement Start Date:</span>
+                              <span className="text-white">{a.agreementStartDate ? formatDateTime(a.agreementStartDate) : "—"}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Signature Timestamp:</span>
+                              <span className="text-white">{a.signatureSignedAt ? formatDateTime(a.signatureSignedAt) : "—"}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Column 2: Digital Signature */}
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <CheckCircle className="w-4 h-4 text-purple-400" />
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider font-outfit">
+                              Digital Signature
+                            </h4>
+                          </div>
+
+                          {a.digitalSignature && !brokenSignatures[a.id] ? (
+                            <div className="p-3.5 rounded-xl bg-black/40 border border-white/10 flex flex-col justify-center items-center h-[115px] relative overflow-hidden group">
+                              <img
+                                src={a.digitalSignature}
+                                alt="Digital signature"
+                                className="max-h-[95px] max-w-full object-contain"
+                                onError={() => setBrokenSignatures(prev => ({ ...prev, [a.id]: true }))}
+                              />
+                              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
+                                <button
+                                  type="button"
+                                  onClick={() => window.open(a.digitalSignature ?? undefined, "_blank")}
+                                  className="text-xs text-[#E85D2C] font-semibold hover:underline"
+                                >
+                                  View Full Signature
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-6 rounded-xl bg-yellow-500/5 border border-yellow-500/10 flex flex-col items-center justify-center h-[115px]">
+                              <AlertTriangle className="w-6 h-6 text-yellow-500 mb-1" />
+                              <p className="text-xs text-yellow-500 font-semibold">Signature Not Available</p>
+                              <p className="text-[10px] text-[#8D7B77] mt-0.5">Agreement has not been signed or decryption failed</p>
+                            </div>
+                          )}
+
+                          {/* Action Buttons for Agreement directly in the list! */}
+                          <div className="flex flex-wrap gap-2.5 pt-2">
+                             <button
+                              type="button"
+                              onClick={() => handleDownloadPdf(a.id)}
+                              disabled={!a.agreementAccepted || actionBusyId === a.id}
+                              className="flex-1 h-[38px] rounded-lg border border-[#E85D2C]/30 bg-[#E85D2C]/10 text-xs font-semibold text-[#E85D2C] hover:bg-[#E85D2C]/20 transition-all flex items-center justify-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              <Download size={14} />
+                              {actionBusyId === a.id ? "Downloading..." : "Agreement PDF"}
+                            </button>
+
+                            {a.agreementStatus === "PENDING_APPROVAL" && (
+                              <>
+                                <button
+                                  type="button"
+                                  disabled={actionBusyId === a.id}
+                                  onClick={async () => {
+                                    setActionBusyId(a.id);
+                                    try {
+                                      await http.patch(`/api/v1/admin/artists/${a.id}/approve-agreement`);
+                                      await artistsQuery.refetch();
+                                    } catch (e: any) {
+                                      console.error("Approve failed", e);
+                                      alert(e?.response?.data?.message || "Failed to approve agreement");
+                                    } finally {
+                                      setActionBusyId(null);
+                                    }
+                                  }}
+                                  className="flex-1 h-[38px] rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-1"
+                                >
+                                  {actionBusyId === a.id ? "..." : "Approve"}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={actionBusyId === a.id}
+                                  onClick={async () => {
+                                    const reason = prompt("Please enter rejection reason:");
+                                    if (!reason) return;
+                                    setActionBusyId(a.id);
+                                    try {
+                                      await http.patch(`/api/v1/admin/artists/${a.id}/reject-agreement`, { reason });
+                                      await artistsQuery.refetch();
+                                    } catch (e: any) {
+                                      console.error("Reject failed", e);
+                                      alert(e?.response?.data?.message || "Failed to reject agreement");
+                                    } finally {
+                                      setActionBusyId(null);
+                                    }
+                                  }}
+                                  className="flex-1 h-[38px] rounded-lg bg-red-600 hover:bg-red-700 text-xs font-bold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-1"
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            )}
+
+                            {a.agreementStatus === "ACTIVE" && (
+                              <button
+                                type="button"
+                                disabled={actionBusyId === a.id}
+                                onClick={async () => {
+                                  if (!confirm("Are you sure you want to suspend this agreement?")) return;
+                                  setActionBusyId(a.id);
+                                  try {
+                                    await http.patch(`/api/v1/admin/artists/${a.id}/agreement-status`, { status: "SUSPENDED" });
+                                    await artistsQuery.refetch();
+                                  } catch (e: any) {
+                                    console.error("Suspend failed", e);
+                                    alert(e?.response?.data?.message || "Failed to suspend agreement");
+                                  } finally {
+                                    setActionBusyId(null);
+                                  }
+                                }}
+                                className="flex-1 h-[38px] rounded-lg bg-amber-600 hover:bg-amber-700 text-xs font-bold text-white transition-all disabled:opacity-50"
+                              >
+                                {actionBusyId === a.id ? "..." : "Suspend"}
+                              </button>
+                            )}
+
+                            {a.agreementStatus === "SUSPENDED" && (
+                              <button
+                                type="button"
+                                disabled={actionBusyId === a.id}
+                                onClick={async () => {
+                                  setActionBusyId(a.id);
+                                  try {
+                                    await http.patch(`/api/v1/admin/artists/${a.id}/agreement-status`, { status: "ACTIVE" });
+                                    await artistsQuery.refetch();
+                                  } catch (e: any) {
+                                    console.error("Activate failed", e);
+                                    alert(e?.response?.data?.message || "Failed to activate agreement");
+                                  } finally {
+                                    setActionBusyId(null);
+                                  }
+                                }}
+                                className="flex-1 h-[38px] rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white transition-all disabled:opacity-50"
+                              >
+                                {actionBusyId === a.id ? "..." : "Activate"}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { FileSignature, DollarSign, Shield, FileText } from "lucide-react";
+import PageWrapper from "../components/PageWrapper";
 
 export default function AdminAgreementSettingsPage() {
   const location = useLocation();
@@ -33,40 +34,42 @@ export default function AdminAgreementSettingsPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-[#E85D2C]/20 text-[#E85D2C]">
-          <FileSignature size={20} />
+    <PageWrapper>
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-[#E85D2C]/20 text-[#E85D2C]">
+            <FileSignature size={20} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-white">Agreement Settings</h1>
+            <p className="text-sm text-[#8D7B77]">Manage commission plans, terms, and signed agreements</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-white">Agreement Settings</h1>
-          <p className="text-sm text-[#8D7B77]">Manage commission plans, terms, and signed agreements</p>
+
+        <div className="border-b border-white/10">
+          <nav className="flex gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+            {tabs.map((tab) => (
+              <Link
+                key={tab.id}
+                to={tab.path}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? "border-[#E85D2C] text-[#E85D2C]"
+                    : "border-transparent text-[#8D7B77] hover:text-white"
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+
+        <div className="min-h-[400px]">
+          <Outlet />
         </div>
       </div>
-
-      <div className="border-b border-white/10">
-        <nav className="flex gap-1">
-          {tabs.map((tab) => (
-            <Link
-              key={tab.id}
-              to={tab.path}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === tab.id
-                  ? "border-[#E85D2C] text-[#E85D2C]"
-                  : "border-transparent text-[#8D7B77] hover:text-white"
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-            </Link>
-          ))}
-        </nav>
-      </div>
-
-      <div className="min-h-[400px]">
-        <Outlet />
-      </div>
-    </div>
+    </PageWrapper>
   );
 }

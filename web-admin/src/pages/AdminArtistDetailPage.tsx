@@ -232,6 +232,7 @@ export default function AdminArtistDetailPage() {
   const [busy, setBusy] = useState(false);
   const [artist, setArtist] = useState<ArtistDetail | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [brokenSignature, setBrokenSignature] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftPhone, setDraftPhone] = useState("");
   const [draftGenre, setDraftGenre] = useState("");
@@ -270,6 +271,28 @@ export default function AdminArtistDetailPage() {
     null
   );
 
+  const handleDownloadPdf = async () => {
+    if (!artist?.id) return;
+    try {
+      setBusy(true);
+      const res = await http.get(`/api/v1/admin/artists/${artist.id}/agreement-pdf`, {
+        responseType: "blob"
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `agreement-${artist.id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error("Failed to download PDF:", error);
+      alert("Failed to download PDF. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const headerBannerStyle = useMemo(() => {
     if (artist?.bannerImage) {
       return {
@@ -292,6 +315,7 @@ export default function AdminArtistDetailPage() {
       if (lastLoadedArtistIdRef.current === artistId) return;
     }
 
+    setBrokenSignature(false);
     artistFetchInFlightRef.current = true;
     setLoading(true);
     try {
@@ -1122,16 +1146,17 @@ export default function AdminArtistDetailPage() {
                     ) : null}
                   </div>
 
-                  {artist?.digitalSignature && (
+                  {artist?.digitalSignature && !brokenSignature ? (
                     <div>
                       <label className="text-xs text-[#8D7B77] uppercase tracking-wider">
                         Digital Signature
                       </label>
-                      <div className="mt-1.5 p-3 rounded-xl bg-white/5 border border-white/10">
+                      <div className="mt-1.5 p-3 rounded-xl bg-black/40 border border-white/10 flex justify-center items-center h-[115px]">
                         <img
                           src={artist.digitalSignature}
                           alt="Artist signature"
-                          className="h-[80px] w-full object-contain bg-white"
+                          className="max-h-[95px] max-w-full object-contain"
+                          onError={() => setBrokenSignature(true)}
                         />
                       </div>
                       <div className="flex items-center justify-between mt-2">
@@ -1150,7 +1175,18 @@ export default function AdminArtistDetailPage() {
                         </button>
                       </div>
                     </div>
-                  )}
+                  ) : artist?.digitalSignature ? (
+                    <div>
+                      <label className="text-xs text-[#8D7B77] uppercase tracking-wider">
+                        Digital Signature
+                      </label>
+                      <div className="p-6 rounded-xl bg-yellow-500/5 border border-yellow-500/10 flex flex-col items-center justify-center h-[115px] mt-1.5">
+                        <AlertTriangle className="w-6 h-6 text-yellow-500 mb-1" />
+                        <p className="text-xs text-yellow-500 font-semibold">Signature Not Available</p>
+                        <p className="text-[10px] text-[#8D7B77] mt-0.5">Agreement signature decryption failed</p>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="p-4 rounded-xl bg-yellow-500/5 border border-yellow-500/20">
@@ -1685,10 +1721,11 @@ export default function AdminArtistDetailPage() {
 
               <div className="flex gap-3">
                 <button
-                  onClick={() => window.open(`/api/v1/admin/artists/${artist.id}/agreement-pdf`, "_blank")}
-                  className="flex-1 h-[42px] rounded-xl border border-[#E85D2C]/30 bg-[#E85D2C]/10 text-sm text-[#E85D2C] hover:bg-[#E85D2C]/20 transition-all flex items-center justify-center gap-2">
+                  onClick={handleDownloadPdf}
+                  disabled={busy}
+                  className="flex-1 h-[42px] rounded-xl border border-[#E85D2C]/30 bg-[#E85D2C]/10 text-sm text-[#E85D2C] hover:bg-[#E85D2C]/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
                   <Download size={16} />
-                  Download PDF
+                  {busy ? "Downloading..." : "Download PDF"}
                 </button>
                 {artist.agreementStatus === 'PENDING_APPROVAL' && (
                   <>
@@ -1734,13 +1771,22 @@ export default function AdminArtistDetailPage() {
                 </h3>
               </div>
 
-              <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                <img
-                  src={artist.digitalSignature}
-                  alt="Digital Signature"
-                  className="max-h-32 mx-auto"
-                />
-              </div>
+              {!brokenSignature ? (
+                <div className="p-4 rounded-xl bg-black/40 border border-white/10 flex justify-center items-center h-[140px]">
+                  <img
+                    src={artist.digitalSignature}
+                    alt="Digital Signature"
+                    className="max-h-[120px] max-w-full object-contain"
+                    onError={() => setBrokenSignature(true)}
+                  />
+                </div>
+              ) : (
+                <div className="p-6 rounded-xl bg-yellow-500/5 border border-yellow-500/10 flex flex-col items-center justify-center h-[140px]">
+                  <AlertTriangle className="w-6 h-6 text-yellow-500 mb-1" />
+                  <p className="text-xs text-yellow-500 font-semibold">Signature Not Available</p>
+                  <p className="text-[10px] text-[#8D7B77] mt-0.5">Agreement signature decryption failed</p>
+                </div>
+              )}
 
               <div className="mt-4 grid grid-cols-2 gap-4 text-xs text-[#8D7B77]">
                 <div>
