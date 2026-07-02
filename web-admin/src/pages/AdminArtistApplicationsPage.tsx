@@ -537,8 +537,8 @@ export default function AdminAuditPage() {
                   </div>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
     </PageWrapper>
