@@ -1,452 +1,546 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
 import { http } from "../services/http";
 import PageWrapper from "../components/PageWrapper";
 import {
-  Users,
-  UserPlus,
+  Search,
+  RefreshCw,
+  X,
+  FileJson,
+  Activity,
+  Terminal,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Clock,
-  Mail,
   User,
-  FileText,
-  Link2,
+  Shield,
+  AlertCircle,
   CheckCircle,
   XCircle,
-  RefreshCw,
-  AlertCircle,
-  ExternalLink,
-  ChevronRight,
-  MessageSquare,
-  Calendar,
-  Shield,
-  Award,
-  Zap,
-  ChevronDown,
-  Search,
-  Filter,
-  Star,
-  Crown
 } from "lucide-react";
 
-type PendingItem = {
-  id: number;
-  name: string | null;
-  email: string;
-  submittedAt: string | null;
-  artistStatus?: string;
-  artistBio: string;
-  portfolioLinks: string[];
-  appealMessage?: string | null;
-  appealed?: boolean;
-  adminNote?: string | null;
-};
+interface AuditLog {
+  id: string;
+  action: string;
+  entity: string;
+  entity_id: string;
+  actor_id: number | null;
+  actor_role: string;
+  status: string;
+  correlation_id: string | null;
+  ip_address: string | null;
+  metadata: any;
+  created_at: string;
+}
 
-type PendingArtistsResponse = {
-  success: boolean;
-  items?: PendingItem[];
-  message?: string;
-};
+function StatusBadge({ status }: { status: string }) {
+  if (status === "success") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
+        <CheckCircle size={12} />
+        Success
+      </span>
+    );
+  }
+  if (status === "failed") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+        <XCircle size={12} />
+        Failed
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+      <Clock size={12} />
+      Pending
+    </span>
+  );
+}
 
-export default function AdminArtistApplicationsPage() {
-  const navigate = useNavigate();
+function RoleBadge({ role }: { role: string }) {
+  const colors: Record<string, string> = {
+    admin: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+    system: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    artist: "bg-green-500/10 text-green-400 border-green-500/20",
+    fan: "bg-orange-500/10 text-orange-400 border-orange-500/20",
+  };
 
-  const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<PendingItem[]>([]);
-  const [apiError, setApiError] = useState<string | null>(null);
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${
+        colors[role] || "bg-white/10 text-[#8D7B77] border-white/10"
+      }`}>
+      <User size={12} />
+      {role}
+    </span>
+  );
+}
 
-  const [active, setActive] = useState<PendingItem | null>(null);
-  const [resolveBusy, setResolveBusy] = useState(false);
-  const [rejectReason, setRejectReason] = useState("");
+// Premium Pagination Component
+function PremiumPagination({
+  currentPage,
+  totalPages,
+  totalItems,
+  itemsPerPage,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  onPageChange: (page: number) => void;
+}) {
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
 
-  const load = async () => {
-    setLoading(true);
-    setApiError(null);
-    try {
-      const res = await http.get<PendingArtistsResponse>("/api/v1/admin/pending-artists");
-      const next = Array.isArray(res.data?.items) ? (res.data.items as PendingItem[]) : [];
-      setItems(next);
-      setActive(next[0] ?? null);
-    } catch (e: any) {
-      const status = e?.response?.status;
-      if (status === 401 || status === 403) {
-        localStorage.removeItem("adminToken");
-        navigate("/admin/login", { replace: true });
-        return;
+  // Generate page numbers
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxVisible = 5;
+
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
       }
-      setApiError(e?.response?.data?.message || e?.message || "Failed to load pending applications");
+    } else {
+      pages.push(1);
+
+      let start = Math.max(2, currentPage - 1);
+      let end = Math.min(totalPages - 1, currentPage + 1);
+
+      if (currentPage <= 3) {
+        end = 4;
+      }
+      if (currentPage >= totalPages - 2) {
+        start = totalPages - 3;
+      }
+
+      if (start > 2) {
+        pages.push("...");
+      }
+
+      for (let i = start; i <= end; i++) {
+        if (i > 1 && i < totalPages) {
+          pages.push(i);
+        }
+      }
+
+      if (end < totalPages - 1) {
+        pages.push("...");
+      }
+
+      if (totalPages > 1) {
+        pages.push(totalPages);
+      }
+    }
+
+    return pages;
+  };
+
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-white/5">
+      {/* Left - Items info */}
+      <div className="text-sm text-[#B8A6A1] bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+        Showing <span className="text-white font-semibold">{startItem}</span> to{" "}
+        <span className="text-white font-semibold">{endItem}</span> of{" "}
+        <span className="text-white font-semibold">{totalItems}</span> results
+      </div>
+
+      {/* Right - Pagination controls */}
+      <div className="flex items-center gap-1">
+        {/* First page */}
+        <button
+          type="button"
+          onClick={() => onPageChange(1)}
+          disabled={currentPage === 1}
+          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-[#E85D2C]/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-white/10"
+          aria-label="First page">
+          <ChevronsLeft size={16} />
+        </button>
+
+        {/* Previous page */}
+        <button
+          type="button"
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-[#E85D2C]/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-white/10"
+          aria-label="Previous page">
+          <ChevronLeft size={16} />
+        </button>
+
+        {/* Page numbers */}
+        <div className="flex items-center gap-1 px-1">
+          {getPageNumbers().map((page, index) => {
+            if (page === "...") {
+              return (
+                <span
+                  key={`ellipsis-${index}`}
+                  className="h-10 w-10 flex items-center justify-center text-[#8D7B77] text-sm">
+                  …
+                </span>
+              );
+            }
+
+            const isActive = currentPage === page;
+            return (
+              <button
+                key={index}
+                type="button"
+                onClick={() => typeof page === "number" && onPageChange(page)}
+                className={`h-10 min-w-[40px] px-2 flex items-center justify-center rounded-xl text-sm font-medium transition-all ${
+                  isActive
+                    ? "bg-[#E85D2C] text-white shadow-lg shadow-[#E85D2C]/30 border border-[#E85D2C]"
+                    : "text-[#B8A6A1] hover:text-white hover:bg-white/10 border border-transparent hover:border-white/10"
+                }`}>
+                {page}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Next page */}
+        <button
+          type="button"
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-[#E85D2C]/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-white/10"
+          aria-label="Next page">
+          <ChevronRight size={16} />
+        </button>
+
+        {/* Last page */}
+        <button
+          type="button"
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages}
+          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-[#E85D2C]/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-white/10"
+          aria-label="Last page">
+          <ChevronsRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function AdminAuditPage() {
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const limit = 50;
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const { data } = await http.get(`/api/v1/admin/audit`, {
+        params: {
+          page,
+          limit,
+          search: search || undefined,
+          role: roleFilter || undefined,
+          status: statusFilter || undefined,
+        },
+      });
+      if (data.success) {
+        setLogs(data.data);
+        setTotal(data.meta.total);
+      }
+    } catch (err) {
+      console.error("Failed to fetch audit logs", err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
-  }, []);
+    fetchLogs();
+  }, [page, roleFilter, statusFilter]);
 
-  const resolve = async (action: "APPROVE" | "REJECT") => {
-    if (!active) return;
-
-    if (action === "REJECT" && !rejectReason.trim()) {
-      setApiError("Rejection reason is required.");
-      return;
-    }
-
-    setResolveBusy(true);
-    setApiError(null);
-
-    try {
-      const res = await http.patch(`/api/v1/admin/resolve-artist/${active.id}`, {
-        action,
-        reason: action === "REJECT" ? rejectReason.trim() : undefined
-      });
-
-      if (!res.data?.success) {
-        setApiError(res.data?.message || "Failed to resolve application");
-        return;
-      }
-
-      const next = items.filter((x) => x.id !== active.id);
-      setItems(next);
-      setActive(next[0] ?? null);
-      setRejectReason("");
-    } catch (e: any) {
-      setApiError(e?.response?.data?.message || e?.message || "Failed to resolve application");
-    } finally {
-      setResolveBusy(false);
-    }
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(1);
+    fetchLogs();
   };
 
+  const totalPages = Math.ceil(total / limit);
+
   return (
-    <PageWrapper 
-      title="Artist Applications" 
-      subtitle="Review, approve, or reject pending artist applications"
-    >
-      {/* Stats Cards Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
-          <div className="absolute inset-0 bg-gradient-to-br from-[#E85D2C]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+    <PageWrapper
+      title="Audit Logs"
+      subtitle="Monitor all system events and admin actions">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-4 mb-6">
+        <form onSubmit={handleSearch} className="flex-1 min-w-[280px]">
           <div className="relative">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-[#8D7B77]">Total Applications</p>
-                <p className="mt-1.5 text-3xl font-bold text-white">{items.length}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-[#E85D2C]/10">
-                <Users size={20} className="text-[#E85D2C]" />
-              </div>
-            </div>
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8D7B77]"
+            />
+            <input
+              type="text"
+              placeholder="Search by ID, action, or correlation..."
+              className="w-full h-[42px] rounded-xl bg-white/5 border border-white/10 pl-9 pr-4 text-sm text-white placeholder:text-[#8D7B77] outline-none focus:border-[#E85D2C]/50 transition-all"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
+        </form>
+
+        <div className="flex items-center gap-2">
+          <Filter size={16} className="text-[#8D7B77]" />
+          <select
+            className="h-[42px] rounded-xl bg-white/5 border border-white/10 px-4 text-sm text-white outline-none focus:border-[#E85D2C]/50 transition-all"
+            value={roleFilter}
+            onChange={(e) => {
+              setPage(1);
+              setRoleFilter(e.target.value);
+            }}>
+            <option value="">All Roles</option>
+            <option value="system">System</option>
+            <option value="admin">Admin</option>
+            <option value="fan">Fan</option>
+            <option value="artist">Artist</option>
+          </select>
         </div>
 
-        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
-          <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="relative">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-[#8D7B77]">Pending Review</p>
-                <p className="mt-1.5 text-3xl font-bold text-yellow-400">{items.filter(i => i.artistStatus !== "APPROVED").length}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-yellow-500/10">
-                <Clock size={20} className="text-yellow-400" />
-              </div>
-            </div>
-          </div>
+        <div className="flex items-center gap-2">
+          <select
+            className="h-[42px] rounded-xl bg-white/5 border border-white/10 px-4 text-sm text-white outline-none focus:border-[#E85D2C]/50 transition-all"
+            value={statusFilter}
+            onChange={(e) => {
+              setPage(1);
+              setStatusFilter(e.target.value);
+            }}>
+            <option value="">All Statuses</option>
+            <option value="success">Success</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed</option>
+          </select>
         </div>
 
-        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
-          <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="relative">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-[#8D7B77]">Approved</p>
-                <p className="mt-1.5 text-3xl font-bold text-green-400">{items.filter(i => i.artistStatus === "APPROVED").length}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-green-500/10">
-                <CheckCircle size={20} className="text-green-400" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
-          <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="relative">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-[#8D7B77]">Appealed</p>
-                <p className="mt-1.5 text-3xl font-bold text-purple-400">{items.filter(i => i.appealed).length}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-purple-500/10">
-                <MessageSquare size={20} className="text-purple-400" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Header Actions */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-2 text-sm text-[#8D7B77]">
-          <Filter size={14} />
-          <span>{items.length} applications awaiting review</span>
-        </div>
-        
         <button
-          type="button"
-          onClick={load}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-white/70 hover:text-white hover:bg-white/10 transition-all disabled:opacity-50"
-        >
+          onClick={fetchLogs}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-[#8D7B77] hover:text-white hover:bg-white/10 transition-all">
           <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-          {loading ? "Loading..." : "Refresh"}
+          Refresh
         </button>
       </div>
 
-      {/* Error Message */}
-      {apiError && (
-        <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-4 flex items-start gap-3">
-          <AlertCircle size={18} className="text-red-400 mt-0.5" />
-          <div>
-            <p className="text-sm font-medium text-red-400">Error</p>
-            <p className="text-sm text-red-300/80">{apiError}</p>
+      {/* Table */}
+      <div className="rounded-2xl border border-white/5 bg-[#15100E] overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/5 bg-white/5">
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-left">
+                  Timestamp
+                </th>
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-left">
+                  Action
+                </th>
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-left">
+                  Actor
+                </th>
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-left">
+                  Entity
+                </th>
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-left">
+                  Status
+                </th>
+                <th className="px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider text-right">
+                  Details
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center">
+                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-[#E85D2C]/20 border-t-[#E85D2C]"></div>
+                    <p className="text-sm text-[#8D7B77] mt-2">
+                      Loading logs...
+                    </p>
+                  </td>
+                </tr>
+              ) : logs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center">
+                    <div className="inline-flex p-4 rounded-full bg-white/5 mb-3">
+                      <Activity size={24} className="text-[#8D7B77]" />
+                    </div>
+                    <p className="text-sm font-medium text-white">
+                      No logs found
+                    </p>
+                    <p className="text-xs text-[#8D7B77] mt-1">
+                      Try adjusting your filters
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                logs.map((log) => (
+                  <tr
+                    key={log.id}
+                    className="hover:bg-white/5 transition-all cursor-pointer"
+                    onClick={() => setSelectedLog(log)}>
+                    <td className="px-6 py-4 text-[#B8A6A1] whitespace-nowrap">
+                      {new Date(log.created_at).toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4">
+                      <code className="px-2 py-1 rounded-md bg-[#E85D2C]/10 text-[#E85D2C] text-xs font-mono">
+                        {log.action}
+                      </code>
+                    </td>
+                    <td className="px-6 py-4">
+                      <RoleBadge role={log.actor_role} />
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-[#B8A6A1]">{log.entity}</span>
+                      <span className="text-[#8D7B77] text-xs ml-1">
+                        #{log.entity_id}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <StatusBadge status={log.status} />
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button className="text-[#E85D2C] hover:text-[#C97A54] transition-all text-xs font-medium">
+                        View →
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Premium Pagination */}
+        {total > 0 && (
+          <PremiumPagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={total}
+            itemsPerPage={limit}
+            onPageChange={setPage}
+          />
+        )}
+      </div>
+
+      {/* Detail Drawer */}
+      {selectedLog && (
+        <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[480px] lg:w-[560px] bg-[#15100E] border-l border-white/10 shadow-2xl animate-in slide-in-from-right">
+          <div className="flex items-center justify-between p-6 border-b border-white/5">
+            <div>
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                Log Details
+                <StatusBadge status={selectedLog.status} />
+              </h3>
+              <p className="text-xs text-[#8D7B77] font-mono mt-1">
+                {selectedLog.id}
+              </p>
+            </div>
+            <button
+              onClick={() => setSelectedLog(null)}
+              className="p-2 rounded-xl hover:bg-white/10 transition-all">
+              <X size={20} className="text-[#8D7B77]" />
+            </button>
           </div>
+
+          <div className="p-6 overflow-y-auto max-h-[calc(100vh-100px)] space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider">
+                  Timestamp
+                </p>
+                <p className="text-sm text-white mt-1">
+                  {new Date(selectedLog.created_at).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider">
+                  Action
+                </p>
+                <code className="inline-block mt-1 px-2 py-1 rounded-md bg-[#E85D2C]/10 text-[#E85D2C] text-xs font-mono">
+                  {selectedLog.action}
+                </code>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider">
+                  Entity
+                </p>
+                <p className="text-sm text-white mt-1">
+                  {selectedLog.entity}{" "}
+                  <span className="text-[#8D7B77]">
+                    #{selectedLog.entity_id}
+                  </span>
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider">
+                  Actor
+                </p>
+                <RoleBadge role={selectedLog.actor_role} />
+              </div>
+            </div>
+
+            {selectedLog.correlation_id && (
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-1">
+                  Correlation ID
+                </p>
+                <code className="block p-3 rounded-xl bg-black/30 border border-white/10 text-xs font-mono text-[#B8A6A1] break-all">
+                  {selectedLog.correlation_id}
+                </code>
+              </div>
+            )}
+
+            <div>
+              <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-2 flex items-center gap-2">
+                <FileJson size={14} />
+                Metadata
+              </p>
+              <pre className="p-4 rounded-xl bg-black/30 border border-white/10 text-xs font-mono text-[#B8A6A1] overflow-x-auto max-h-[300px] overflow-y-auto">
+                {JSON.stringify(selectedLog.metadata, null, 2)}
+              </pre>
+            </div>
+
+            {selectedLog.metadata?.before && selectedLog.metadata?.after && (
+              <div>
+                <p className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-2">
+                  State Diff
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-xl bg-red-500/5 border border-red-500/20">
+                    <p className="text-xs font-medium text-red-400 mb-2">
+                      Before
+                    </p>
+                    <pre className="text-xs text-red-300/80 font-mono overflow-x-auto">
+                      {JSON.stringify(selectedLog.metadata.before, null, 2)}
+                    </pre>
+                  </div>
+                  <div className="p-3 rounded-xl bg-green-500/5 border border-green-500/20">
+                    <p className="text-xs font-medium text-green-400 mb-2">
+                      After
+                    </p>
+                    <pre className="text-xs text-green-300/80 font-mono overflow-x-auto">
+                      {JSON.stringify(selectedLog.metadata.after, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
-
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
-        {/* Left Column - Applications List */}
-        <div className="rounded-2xl border border-white/5 bg-[#15100E] overflow-hidden">
-          <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between bg-white/5">
-            <span className="text-sm font-medium text-[#8D7B77]">Applications</span>
-            <span className="text-xs px-2.5 py-1 rounded-full bg-[#E85D2C]/10 text-[#E85D2C] font-medium">
-              {items.length} pending
-            </span>
-          </div>
-
-          {loading ? (
-            <div className="px-5 py-12 text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-[#E85D2C]/20 border-t-[#E85D2C] mb-3"></div>
-              <p className="text-sm text-[#8D7B77]">Loading applications...</p>
-            </div>
-          ) : items.length ? (
-            <div className="max-h-[600px] overflow-y-auto divide-y divide-white/5">
-              {items.map((it) => (
-                <button
-                  key={it.id}
-                  type="button"
-                  onClick={() => {
-                    setActive(it);
-                    setRejectReason("");
-                    setApiError(null);
-                  }}
-                  className={`w-full text-left px-5 py-4 transition-all hover:bg-white/5 ${
-                    active?.id === it.id ? "bg-[#E85D2C]/5 border-l-2 border-[#E85D2C]" : ""
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-white truncate">
-                          {it.name ?? "Unnamed Artist"}
-                        </p>
-                        {it.artistStatus === "APPROVED" && (
-                          <CheckCircle size={12} className="text-green-400 shrink-0" />
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Mail size={12} className="text-[#8D7B77]" />
-                        <span className="text-xs text-[#8D7B77] truncate">{it.email}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-2">
-                        <Calendar size={12} className="text-[#8D7B77]" />
-                        <span className="text-xs text-[#8D7B77]">
-                          {it.submittedAt ? new Date(it.submittedAt).toLocaleDateString() : "N/A"}
-                        </span>
-                      </div>
-                    </div>
-                    {it.appealed && (
-                      <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-500/10 text-orange-400 border border-orange-500/20">
-                        <AlertCircle size={10} />
-                        Appeal
-                      </span>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="px-5 py-16 text-center">
-              <div className="inline-flex p-4 rounded-full bg-white/5 mb-4">
-                <CheckCircle size={32} className="text-green-400" />
-              </div>
-              <p className="text-base font-medium text-white">All caught up! 🎉</p>
-              <p className="text-sm text-[#8D7B77] mt-1">No pending applications to review</p>
-            </div>
-          )}
-        </div>
-
-        {/* Right Column - Application Details */}
-        <div className="rounded-2xl border border-white/5 bg-[#15100E] overflow-hidden">
-          <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/5">
-            <span className="text-sm font-medium text-[#8D7B77]">Application Details</span>
-            {active && (
-              <span className="text-xs px-2.5 py-1 rounded-full bg-white/5 text-[#8D7B77] border border-white/10">
-                ID: #{active.id}
-              </span>
-            )}
-          </div>
-
-          {!active ? (
-            <div className="px-6 py-20 text-center">
-              <div className="inline-flex p-5 rounded-full bg-white/5 mb-4">
-                <UserPlus size={32} className="text-[#8D7B77]" />
-              </div>
-              <p className="text-base font-medium text-white">No application selected</p>
-              <p className="text-sm text-[#8D7B77] mt-1">Click on any application from the list</p>
-            </div>
-          ) : (
-            <div className="px-6 py-6 space-y-6 max-h-[600px] overflow-y-auto">
-              {/* Name with Status Badge */}
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2 text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-1.5">
-                    <User size={14} />
-                    <span>Full Name</span>
-                  </div>
-                  <p className="text-lg font-semibold text-white">{active.name ?? "Not provided"}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
-                    active.artistStatus === "APPROVED" 
-                      ? "bg-green-500/10 text-green-400 border border-green-500/20"
-                      : "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
-                  }`}>
-                    {active.artistStatus === "APPROVED" ? (
-                      <CheckCircle size={12} />
-                    ) : (
-                      <Clock size={12} />
-                    )}
-                    {(active.artistStatus ?? "PENDING").toUpperCase()}
-                  </span>
-                  {active.appealed && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-500/10 text-orange-400 border border-orange-500/20">
-                      <AlertCircle size={10} />
-                      Appeal
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Email */}
-              <div>
-                <div className="flex items-center gap-2 text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-1.5">
-                  <Mail size={14} />
-                  <span>Email Address</span>
-                </div>
-                <div className="p-3 rounded-xl bg-black/20 border border-white/5">
-                  <p className="text-sm text-white">{active.email}</p>
-                </div>
-              </div>
-
-              {/* Bio */}
-              <div>
-                <div className="flex items-center gap-2 text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-1.5">
-                  <FileText size={14} />
-                  <span>Biography</span>
-                </div>
-                <div className="p-4 rounded-xl bg-black/20 border border-white/5 max-h-[120px] overflow-y-auto">
-                  <p className="text-sm text-[#B8A6A1] leading-relaxed whitespace-pre-wrap">
-                    {active.artistBio || "No bio provided"}
-                  </p>
-                </div>
-              </div>
-
-              {/* Appeal Message */}
-              {active.appealMessage && (
-                <div>
-                  <div className="flex items-center gap-2 text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-1.5">
-                    <MessageSquare size={14} />
-                    <span>Appeal Message</span>
-                  </div>
-                  <div className="p-4 rounded-xl border border-orange-500/20 bg-orange-500/5 max-h-[100px] overflow-y-auto">
-                    <p className="text-sm text-[#B8A6A1] leading-relaxed whitespace-pre-wrap">
-                      {active.appealMessage}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Portfolio Links */}
-              <div>
-                <div className="flex items-center gap-2 text-xs font-medium text-[#8D7B77] uppercase tracking-wider mb-1.5">
-                  <Link2 size={14} />
-                  <span>Portfolio Links</span>
-                </div>
-                {active.portfolioLinks?.length ? (
-                  <div className="space-y-2">
-                    {active.portfolioLinks.map((url, index) => (
-                      <a
-                        key={index}
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 p-3 rounded-xl bg-black/20 border border-white/5 hover:border-[#E85D2C]/30 hover:bg-white/5 transition-all group"
-                      >
-                        <ExternalLink size={14} className="text-[#8D7B77] group-hover:text-[#E85D2C] transition-colors" />
-                        <span className="text-sm text-[#B8A6A1] group-hover:text-white truncate flex-1">{url}</span>
-                        <ChevronRight size={14} className="text-[#8D7B77] group-hover:text-[#E85D2C] transition-colors" />
-                      </a>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-[#8D7B77]">No portfolio links provided</p>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="pt-4 border-t border-white/5">
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs font-medium text-[#8D7B77] uppercase tracking-wider flex items-center gap-1.5">
-                      <AlertCircle size={12} />
-                      Rejection Reason (required for rejection)
-                    </label>
-                    <textarea
-                      value={rejectReason}
-                      onChange={(e) => setRejectReason(e.target.value)}
-                      className="mt-1.5 w-full min-h-[80px] rounded-xl bg-black/30 border border-white/10 px-4 py-3 text-sm text-white placeholder:text-[#8D7B77] outline-none focus:border-[#E85D2C]/50 transition-all resize-none"
-                      placeholder="Explain why this application is being rejected..."
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      disabled={resolveBusy}
-                      onClick={() => resolve("REJECT")}
-                      className="flex-1 flex items-center justify-center gap-2 h-[44px] rounded-xl border border-red-500/20 bg-red-500/5 text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-50"
-                    >
-                      <XCircle size={18} />
-                      {resolveBusy ? "Processing..." : "Reject"}
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={resolveBusy}
-                      onClick={() => resolve("APPROVE")}
-                      className="flex-1 flex items-center justify-center gap-2 h-[44px] rounded-xl bg-gradient-to-r from-[#E85D2C] to-[#C97A54] text-sm font-medium text-white shadow-lg shadow-[#E85D2C]/20 hover:shadow-[#E85D2C]/40 transition-all disabled:opacity-50"
-                    >
-                      <CheckCircle size={18} />
-                      {resolveBusy ? "Processing..." : "Approve"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
     </PageWrapper>
   );
 }
