@@ -89,7 +89,7 @@ export const authLimiter = rateLimit({
 
 export const uploadLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  limit: 10,
+  limit: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req: any) => getClientIp(req),
