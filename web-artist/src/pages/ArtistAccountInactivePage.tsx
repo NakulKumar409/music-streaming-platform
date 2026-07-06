@@ -5,15 +5,15 @@ import { Link, useNavigate } from "react-router-dom";
 
 function PremiumPlayLogo() {
   return (
-    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[#E85D2C] to-[#C97A54] p-[3px] shadow-lg shadow-[#E85D2C]/25">
-      <div className="h-full w-full rounded-full bg-[#0A0A0A] border border-white/10 flex items-center justify-center">
+    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary to-secondary p-[3px] shadow-lg shadow-primary/25">
+      <div className="h-full w-full rounded-full bg-background border border-white/10 flex items-center justify-center">
         <svg
           width="20"
           height="20"
           viewBox="0 0 24 24"
           fill="none"
           xmlns="http://www.w3.org/2000/svg">
-          <path d="M9 7.5V16.5L17 12L9 7.5Z" fill="#E85D2C" />
+          <path d="M9 7.5V16.5L17 12L9 7.5Z" fill="var(--color-primary)" />
         </svg>
       </div>
     </div>
@@ -32,11 +32,11 @@ export default function ArtistAccountInactivePage() {
 
   return (
     <div
-      className="min-h-screen w-full bg-[#0A0A0A] text-white font-sans antialiased"
+      className="min-h-screen w-full bg-background text-white font-sans antialiased"
       style={backgroundStyle}>
       <div className="min-h-screen w-full flex items-center justify-center px-4 sm:px-6">
         <div className="w-full max-w-[560px] animate-fadeIn">
-          <div className="rounded-2xl border border-white/10 bg-[#15100E]/80 backdrop-blur-xl shadow-2xl px-8 py-10 sm:px-10 sm:py-12">
+          <div className="rounded-2xl border border-white/10 bg-surface/80 backdrop-blur-xl shadow-2xl px-8 py-10 sm:px-10 sm:py-12">
             {/* Header */}
             <div className="flex items-start gap-4 mb-6">
               <PremiumPlayLogo />
@@ -45,7 +45,7 @@ export default function ArtistAccountInactivePage() {
                   <h1 className="text-2xl font-bold tracking-tight text-white">
                     Account Inactive
                   </h1>
-                  <UserX className="w-5 h-5 text-[#E85D2C]" />
+                  <UserX className="w-5 h-5 text-primary" />
                 </div>
                 <p className="text-sm text-[#B8A6A1] leading-relaxed">
                   Your account is currently inactive. Please contact support for
@@ -90,7 +90,7 @@ export default function ArtistAccountInactivePage() {
                   localStorage.removeItem("artistToken");
                   navigate("/artist/login", { replace: true });
                 }}
-                className="inline-flex items-center gap-2 h-[44px] px-6 rounded-xl bg-gradient-to-r from-[#E85D2C] to-[#C97A54] text-sm font-semibold text-white shadow-lg shadow-[#E85D2C]/25 hover:shadow-[#E85D2C]/40 hover:-translate-y-0.5 transition-all">
+                className="inline-flex items-center gap-2 h-[44px] px-6 rounded-xl bg-gradient-to-r from-primary to-secondary text-sm font-semibold text-white shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all">
                 <ArrowLeft className="w-4 h-4" />
                 Back to Login
               </button>
@@ -108,7 +108,7 @@ export default function ArtistAccountInactivePage() {
             <div className="mt-6 pt-6 border-t border-white/5">
               <p className="text-xs text-[#6b5b57] text-center">
                 Need help? Contact our support team at{" "}
-                <span className="text-[#E85D2C]">support@artiststudio.com</span>
+                <span className="text-primary">support@artiststudio.com</span>
               </p>
             </div>
           </div>

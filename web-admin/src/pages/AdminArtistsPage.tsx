@@ -185,7 +185,7 @@ function PremiumPagination({
           type="button"
           onClick={() => onPageChange(1)}
           disabled={currentPage === 1}
-          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-black/20 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-[#E85D2C]/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-black/20 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-primary/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
           aria-label="First page">
           <ChevronsLeft size={16} />
         </button>
@@ -194,7 +194,7 @@ function PremiumPagination({
           type="button"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-black/20 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-[#E85D2C]/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-black/20 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-primary/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
           aria-label="Previous page">
           <ChevronLeft size={16} />
         </button>
@@ -218,7 +218,7 @@ function PremiumPagination({
                 onClick={() => typeof page === "number" && onPageChange(page)}
                 className={`h-10 min-w-[40px] px-2 flex items-center justify-center rounded-xl text-sm font-medium transition-all ${
                   isActive
-                    ? "bg-[#E85D2C] text-white shadow-lg shadow-[#E85D2C]/30 border border-[#E85D2C]"
+                    ? "bg-primary text-white shadow-lg shadow-primary/30 border border-primary"
                     : "text-[#B8A6A1] hover:text-white hover:bg-white/10 border border-transparent hover:border-white/10"
                 }`}>
                 {page}
@@ -231,7 +231,7 @@ function PremiumPagination({
           type="button"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-black/20 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-[#E85D2C]/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-black/20 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-primary/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
           aria-label="Next page">
           <ChevronRight size={16} />
         </button>
@@ -240,7 +240,7 @@ function PremiumPagination({
           type="button"
           onClick={() => onPageChange(totalPages)}
           disabled={currentPage === totalPages}
-          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-black/20 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-[#E85D2C]/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-black/20 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-primary/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
           aria-label="Last page">
           <ChevronsRight size={16} />
         </button>
@@ -411,13 +411,13 @@ export default function AdminArtistsPage() {
     <PageWrapper title="Artists" subtitle="Manage all artists on your platform">
       {/* Stats Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <div className="rounded-xl border border-white/5 bg-[#15100E] p-4">
+        <div className="rounded-xl border border-white/5 bg-surface p-4">
           <div className="flex items-center gap-2 text-[#8D7B77] text-xs">
             Total Artists
           </div>
           <div className="text-2xl font-bold text-white mt-1">{totalCount}</div>
         </div>
-        <div className="rounded-xl border border-white/5 bg-[#15100E] p-4">
+        <div className="rounded-xl border border-white/5 bg-surface p-4">
           <div className="flex items-center gap-2 text-[#8D7B77] text-xs">
             <UserCheck size={14} className="text-green-400" />
             Active
@@ -429,7 +429,7 @@ export default function AdminArtistsPage() {
             }
           </div>
         </div>
-        <div className="rounded-xl border border-white/5 bg-[#15100E] p-4">
+        <div className="rounded-xl border border-white/5 bg-surface p-4">
           <div className="flex items-center gap-2 text-[#8D7B77] text-xs">
             <UserX size={14} className="text-red-400" />
             Inactive
@@ -441,7 +441,7 @@ export default function AdminArtistsPage() {
             }
           </div>
         </div>
-        <div className="rounded-xl border border-white/5 bg-[#15100E] p-4">
+        <div className="rounded-xl border border-white/5 bg-surface p-4">
           <div className="flex items-center gap-2 text-[#8D7B77] text-xs">
             <CheckCircle size={14} className="text-blue-400" />
             Verified
@@ -460,7 +460,7 @@ export default function AdminArtistsPage() {
             onClick={() => setFilter("")}
             className={`h-[38px] px-4 rounded-xl border text-sm font-medium transition-all ${
               !filter
-                ? "border-[#E85D2C]/20 bg-[#E85D2C]/10 text-[#E85D2C]"
+                ? "border-primary/20 bg-primary/10 text-primary"
                 : "border-white/10 bg-white/5 text-[#8D7B77] hover:text-white hover:bg-white/10"
             }`}>
             <UserCheck size={14} className="inline mr-2" />
@@ -471,7 +471,7 @@ export default function AdminArtistsPage() {
             onClick={() => setFilter("active")}
             className={`h-[38px] px-4 rounded-xl border text-sm font-medium transition-all ${
               filter === "active"
-                ? "border-[#E85D2C]/20 bg-[#E85D2C]/10 text-[#E85D2C]"
+                ? "border-primary/20 bg-primary/10 text-primary"
                 : "border-white/10 bg-white/5 text-[#8D7B77] hover:text-white hover:bg-white/10"
             }`}>
             <UserCheck size={14} className="inline mr-2" />
@@ -482,7 +482,7 @@ export default function AdminArtistsPage() {
             onClick={() => setFilter("inactive")}
             className={`h-[38px] px-4 rounded-xl border text-sm font-medium transition-all ${
               filter === "inactive"
-                ? "border-[#E85D2C]/20 bg-[#E85D2C]/10 text-[#E85D2C]"
+                ? "border-primary/20 bg-primary/10 text-primary"
                 : "border-white/10 bg-white/5 text-[#8D7B77] hover:text-white hover:bg-white/10"
             }`}>
             <UserX size={14} className="inline mr-2" />
@@ -493,7 +493,7 @@ export default function AdminArtistsPage() {
             onClick={() => setFilter("verified")}
             className={`h-[38px] px-4 rounded-xl border text-sm font-medium transition-all ${
               filter === "verified"
-                ? "border-[#E85D2C]/20 bg-[#E85D2C]/10 text-[#E85D2C]"
+                ? "border-primary/20 bg-primary/10 text-primary"
                 : "border-white/10 bg-white/5 text-[#8D7B77] hover:text-white hover:bg-white/10"
             }`}>
             <CheckCircle size={14} className="inline mr-2" />
@@ -510,7 +510,7 @@ export default function AdminArtistsPage() {
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search artists..."
-            className="w-full h-[38px] rounded-xl bg-white/5 border border-white/10 pl-9 pr-4 text-sm text-white placeholder:text-[#8D7B77] outline-none focus:border-[#E85D2C]/50 transition-all"
+            className="w-full h-[38px] rounded-xl bg-white/5 border border-white/10 pl-9 pr-4 text-sm text-white placeholder:text-[#8D7B77] outline-none focus:border-primary/50 transition-all"
           />
         </div>
       </div>
@@ -524,7 +524,7 @@ export default function AdminArtistsPage() {
       )}
 
       {/* Artists Table */}
-      <div className="rounded-2xl border border-white/5 bg-[#15100E] overflow-hidden">
+      <div className="rounded-2xl border border-white/5 bg-surface overflow-hidden">
         {/* Header */}
         <div className="hidden md:grid grid-cols-[1.6fr_0.8fr_0.8fr_0.8fr_0.8fr] gap-4 px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider border-b border-white/5 bg-white/5">
           <div>Artist</div>
@@ -611,7 +611,7 @@ export default function AdminArtistsPage() {
 
                     {/* Price */}
                     <div className="flex items-center gap-2">
-                      <DollarSign size={14} className="text-[#E85D2C]" />
+                      <DollarSign size={14} className="text-primary" />
                       <span className="text-sm text-white">
                         {formatPrice(a.subscriptionPrice)}
                       </span>
@@ -627,7 +627,7 @@ export default function AdminArtistsPage() {
                         onClick={() => setExpandedArtistId(isExpanded ? null : a.id)}
                         className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all text-sm ${
                           isExpanded
-                            ? "border-[#E85D2C] bg-[#E85D2C]/10 text-[#E85D2C]"
+                            ? "border-primary bg-primary/10 text-primary"
                             : "border-white/10 bg-white/5 text-[#8D7B77] hover:text-white hover:bg-white/10"
                         }`}
                       >
@@ -651,7 +651,7 @@ export default function AdminArtistsPage() {
                         {/* Column 1: Agreement Info */}
                         <div className="space-y-4">
                           <div className="flex items-center gap-2 mb-2">
-                            <FileText className="w-4 h-4 text-[#E85D2C]" />
+                            <FileText className="w-4 h-4 text-primary" />
                             <h4 className="text-xs font-bold text-white uppercase tracking-wider font-outfit">
                               Agreement & Terms Details
                             </h4>
@@ -677,12 +677,12 @@ export default function AdminArtistsPage() {
 
                             <div className="p-3 rounded-xl bg-black/35 border border-white/5">
                               <p className="text-[10px] uppercase tracking-wider text-[#8D7B77] font-semibold">Artist Share</p>
-                              <p className="text-sm font-bold text-[#E85D2C] mt-1">{a.artistRevenueShare ?? (100 - (a.platformRevenueShare ?? 10))}%</p>
+                              <p className="text-sm font-bold text-primary mt-1">{a.artistRevenueShare ?? (100 - (a.platformRevenueShare ?? 10))}%</p>
                             </div>
 
                             <div className="p-3 rounded-xl bg-black/35 border border-white/5">
                               <p className="text-[10px] uppercase tracking-wider text-[#8D7B77] font-semibold">Platform Share</p>
-                              <p className="text-sm font-bold text-[#C97A54] mt-1">{a.platformRevenueShare ?? 10}%</p>
+                              <p className="text-sm font-bold text-secondary mt-1">{a.platformRevenueShare ?? 10}%</p>
                             </div>
 
                             <div className="p-3 rounded-xl bg-black/35 border border-white/5">
@@ -740,7 +740,7 @@ export default function AdminArtistsPage() {
                                 <button
                                   type="button"
                                   onClick={() => window.open(a.digitalSignature ?? undefined, "_blank")}
-                                  className="text-xs text-[#E85D2C] font-semibold hover:underline"
+                                  className="text-xs text-primary font-semibold hover:underline"
                                 >
                                   View Full Signature
                                 </button>
@@ -760,7 +760,7 @@ export default function AdminArtistsPage() {
                               type="button"
                               onClick={() => handleDownloadPdf(a.id)}
                               disabled={!a.agreementAccepted || actionBusyId === a.id}
-                              className="flex-1 h-[38px] rounded-lg border border-[#E85D2C]/30 bg-[#E85D2C]/10 text-xs font-semibold text-[#E85D2C] hover:bg-[#E85D2C]/20 transition-all flex items-center justify-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="flex-1 h-[38px] rounded-lg border border-primary/30 bg-primary/10 text-xs font-semibold text-primary hover:bg-primary/20 transition-all flex items-center justify-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                               <Download size={14} />
                               {actionBusyId === a.id ? "Downloading..." : "Agreement PDF"}

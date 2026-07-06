@@ -125,22 +125,22 @@ export default function AdminArtistApplicationsPage() {
     >
       {/* Stats Cards Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
-          <div className="absolute inset-0 bg-gradient-to-br from-[#E85D2C]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-surface p-5 hover:border-white/10 transition-all duration-300">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-[#8D7B77]">Total Applications</p>
                 <p className="mt-1.5 text-3xl font-bold text-white">{items.length}</p>
               </div>
-              <div className="p-3 rounded-xl bg-[#E85D2C]/10">
-                <Users size={20} className="text-[#E85D2C]" />
+              <div className="p-3 rounded-xl bg-primary/10">
+                <Users size={20} className="text-primary" />
               </div>
             </div>
           </div>
         </div>
 
-        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-surface p-5 hover:border-white/10 transition-all duration-300">
           <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative">
             <div className="flex items-center justify-between">
@@ -155,7 +155,7 @@ export default function AdminArtistApplicationsPage() {
           </div>
         </div>
 
-        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-surface p-5 hover:border-white/10 transition-all duration-300">
           <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative">
             <div className="flex items-center justify-between">
@@ -170,7 +170,7 @@ export default function AdminArtistApplicationsPage() {
           </div>
         </div>
 
-        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-surface p-5 hover:border-white/10 transition-all duration-300">
           <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative">
             <div className="flex items-center justify-between">
@@ -218,17 +218,17 @@ export default function AdminArtistApplicationsPage() {
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
         {/* Left Column - Applications List */}
-        <div className="rounded-2xl border border-white/5 bg-[#15100E] overflow-hidden">
+        <div className="rounded-2xl border border-white/5 bg-surface overflow-hidden">
           <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between bg-white/5">
             <span className="text-sm font-medium text-[#8D7B77]">Applications</span>
-            <span className="text-xs px-2.5 py-1 rounded-full bg-[#E85D2C]/10 text-[#E85D2C] font-medium">
+            <span className="text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary font-medium">
               {items.length} pending
             </span>
           </div>
 
           {loading ? (
             <div className="px-5 py-12 text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-[#E85D2C]/20 border-t-[#E85D2C] mb-3"></div>
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary/20 border-t-primary mb-3"></div>
               <p className="text-sm text-[#8D7B77]">Loading applications...</p>
             </div>
           ) : items.length ? (
@@ -243,7 +243,7 @@ export default function AdminArtistApplicationsPage() {
                     setApiError(null);
                   }}
                   className={`w-full text-left px-5 py-4 transition-all hover:bg-white/5 ${
-                    active?.id === it.id ? "bg-[#E85D2C]/5 border-l-2 border-[#E85D2C]" : ""
+                    active?.id === it.id ? "bg-primary/5 border-l-2 border-primary" : ""
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -289,7 +289,7 @@ export default function AdminArtistApplicationsPage() {
         </div>
 
         {/* Right Column - Application Details */}
-        <div className="rounded-2xl border border-white/5 bg-[#15100E] overflow-hidden">
+        <div className="rounded-2xl border border-white/5 bg-surface overflow-hidden">
           <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/5">
             <span className="text-sm font-medium text-[#8D7B77]">Application Details</span>
             {active && (
@@ -393,11 +393,11 @@ export default function AdminArtistApplicationsPage() {
                         href={url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 p-3 rounded-xl bg-black/20 border border-white/5 hover:border-[#E85D2C]/30 hover:bg-white/5 transition-all group"
+                        className="flex items-center gap-2 p-3 rounded-xl bg-black/20 border border-white/5 hover:border-primary/30 hover:bg-white/5 transition-all group"
                       >
-                        <ExternalLink size={14} className="text-[#8D7B77] group-hover:text-[#E85D2C] transition-colors" />
+                        <ExternalLink size={14} className="text-[#8D7B77] group-hover:text-primary transition-colors" />
                         <span className="text-sm text-[#B8A6A1] group-hover:text-white truncate flex-1">{url}</span>
-                        <ChevronRight size={14} className="text-[#8D7B77] group-hover:text-[#E85D2C] transition-colors" />
+                        <ChevronRight size={14} className="text-[#8D7B77] group-hover:text-primary transition-colors" />
                       </a>
                     ))}
                   </div>
@@ -417,7 +417,7 @@ export default function AdminArtistApplicationsPage() {
                     <textarea
                       value={rejectReason}
                       onChange={(e) => setRejectReason(e.target.value)}
-                      className="mt-1.5 w-full min-h-[80px] rounded-xl bg-black/30 border border-white/10 px-4 py-3 text-sm text-white placeholder:text-[#8D7B77] outline-none focus:border-[#E85D2C]/50 transition-all resize-none"
+                      className="mt-1.5 w-full min-h-[80px] rounded-xl bg-black/30 border border-white/10 px-4 py-3 text-sm text-white placeholder:text-[#8D7B77] outline-none focus:border-primary/50 transition-all resize-none"
                       placeholder="Explain why this application is being rejected..."
                     />
                   </div>
@@ -437,7 +437,7 @@ export default function AdminArtistApplicationsPage() {
                       type="button"
                       disabled={resolveBusy}
                       onClick={() => resolve("APPROVE")}
-                      className="flex-1 flex items-center justify-center gap-2 h-[44px] rounded-xl bg-gradient-to-r from-[#E85D2C] to-[#C97A54] text-sm font-medium text-white shadow-lg shadow-[#E85D2C]/20 hover:shadow-[#E85D2C]/40 transition-all disabled:opacity-50"
+                      className="flex-1 flex items-center justify-center gap-2 h-[44px] rounded-xl bg-gradient-to-r from-primary to-secondary text-sm font-medium text-white shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all disabled:opacity-50"
                     >
                       <CheckCircle size={18} />
                       {resolveBusy ? "Processing..." : "Approve"}

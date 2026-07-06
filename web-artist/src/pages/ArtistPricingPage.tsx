@@ -44,7 +44,7 @@ function PricingPageSkeleton() {
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
           <div className="lg:col-span-3 space-y-4">
-            <div className="rounded-2xl border border-white/10 bg-[#15100E] p-6 space-y-4">
+            <div className="rounded-2xl border border-white/10 bg-surface p-6 space-y-4">
               <div className="flex items-center gap-3 pb-4 border-b border-white/10">
                 <Skeleton className="h-9 w-9 rounded-xl" />
                 <div className="space-y-2 flex-1">
@@ -61,8 +61,8 @@ function PricingPageSkeleton() {
               <Skeleton className="h-3 w-56" />
               <Skeleton className="h-12 w-full rounded-xl" />
             </div>
-            <div className="rounded-2xl border border-[#E85D2C]/20 bg-[#15100E] p-6 space-y-4">
-              <div className="flex items-center gap-3 pb-4 border-b border-[#E85D2C]/15">
+            <div className="rounded-2xl border border-primary/20 bg-surface p-6 space-y-4">
+              <div className="flex items-center gap-3 pb-4 border-b border-primary/15">
                 <Skeleton className="h-9 w-9 rounded-xl" />
                 <div className="space-y-2 flex-1">
                   <Skeleton className="h-4 w-32" />
@@ -77,7 +77,7 @@ function PricingPageSkeleton() {
                 <Skeleton className="h-13 flex-1 rounded-xl" />
               </div>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-[#15100E] p-5 space-y-4">
+            <div className="rounded-2xl border border-white/10 bg-surface p-5 space-y-4">
               <div className="flex items-center gap-2">
                 <Skeleton className="h-4 w-4" />
                 <Skeleton className="h-4 w-28" />
@@ -92,7 +92,7 @@ function PricingPageSkeleton() {
             <Skeleton className="h-14 w-48 rounded-xl" />
           </div>
           <div className="lg:col-span-2 space-y-4">
-            <div className="rounded-2xl border border-white/10 bg-[#15100E] p-5 space-y-4">
+            <div className="rounded-2xl border border-white/10 bg-surface p-5 space-y-4">
               <div className="pb-4 border-b border-white/10">
                 <Skeleton className="h-4 w-36" />
                 <Skeleton className="h-3 w-48 mt-1" />
@@ -104,7 +104,7 @@ function PricingPageSkeleton() {
                 <Skeleton className="h-12 w-full" />
               </div>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-[#15100E] p-5 space-y-3">
+            <div className="rounded-2xl border border-white/10 bg-surface p-5 space-y-3">
               <Skeleton className="h-4 w-28" />
               <div className="space-y-2">
                 <Skeleton className="h-8 w-full" />
@@ -152,7 +152,7 @@ function EarningsRow({
   return (
     <div className="flex items-center justify-between py-3 border-b border-white/5 last:border-0 group hover:bg-white/5 px-3 rounded-xl transition-all">
       <div className="flex items-center gap-3">
-        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#E85D2C]/20 to-[#C97A54]/20 border border-[#E85D2C]/30 flex items-center justify-center text-xs font-bold text-[#E85D2C] group-hover:scale-110 transition-transform">
+        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 border border-primary/30 flex items-center justify-center text-xs font-bold text-primary group-hover:scale-110 transition-transform">
           {count}
         </div>
         <div className="text-sm text-[#B8A6A1] group-hover:text-white transition-colors">
@@ -343,7 +343,7 @@ export default function ArtistPricingPage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <div className="flex items-center gap-3 mb-1">
-                <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-[#E85D2C] to-[#C97A54] flex items-center justify-center shadow-lg shadow-[#E85D2C]/25">
+                <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/25">
                   <Wallet className="w-6 h-6 text-white" />
                 </div>
                 <div>
@@ -356,8 +356,8 @@ export default function ArtistPricingPage() {
                 </div>
               </div>
             </div>
-            <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full border border-[#E85D2C]/20 bg-[#E85D2C]/10 backdrop-blur-sm">
-              <Sparkles className="w-4 h-4 text-[#E85D2C] animate-pulse" />
+            <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full border border-primary/20 bg-primary/10 backdrop-blur-sm">
+              <Sparkles className="w-4 h-4 text-primary animate-pulse" />
               <span className="text-xs text-[#B8A6A1] max-w-[200px] leading-snug transition-all duration-500">
                 {PRICING_TIPS[activeTip]}
               </span>
@@ -377,11 +377,11 @@ export default function ArtistPricingPage() {
             {/* Left column — Pricing plans (3/5 width) */}
             <div className="lg:col-span-3 space-y-5">
               {/* Monthly Plan */}
-              <div className="rounded-2xl border border-white/10 bg-[#15100E] overflow-hidden hover:border-[#E85D2C]/20 transition-all hover:shadow-lg hover:shadow-[#E85D2C]/5">
+              <div className="rounded-2xl border border-white/10 bg-surface overflow-hidden hover:border-primary/20 transition-all hover:shadow-lg hover:shadow-primary/5">
                 <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#E85D2C]/20 to-[#C97A54]/20 border border-white/10 flex items-center justify-center">
-                      <Calendar className="w-5 h-5 text-[#E85D2C]" />
+                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 border border-white/10 flex items-center justify-center">
+                      <Calendar className="w-5 h-5 text-primary" />
                     </div>
                     <div>
                       <div className="text-sm font-semibold text-white">
@@ -392,7 +392,7 @@ export default function ArtistPricingPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="px-3 py-1 rounded-full bg-gradient-to-r from-[#E85D2C]/20 to-[#C97A54]/20 border border-[#E85D2C]/30 text-xs text-[#E85D2C] font-medium flex items-center gap-1">
+                  <div className="px-3 py-1 rounded-full bg-gradient-to-r from-primary/20 to-secondary/20 border border-primary/30 text-xs text-primary font-medium flex items-center gap-1">
                     <Star className="w-3 h-3" /> Recommended
                   </div>
                 </div>
@@ -401,7 +401,7 @@ export default function ArtistPricingPage() {
                     <Users className="w-4 h-4" /> Price per month
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="h-[56px] w-[48px] shrink-0 rounded-xl border border-white/10 bg-[#0A0A0A]/60 flex items-center justify-center text-2xl font-bold text-[#E85D2C]">
+                    <div className="h-[56px] w-[48px] shrink-0 rounded-xl border border-white/10 bg-background/60 flex items-center justify-center text-2xl font-bold text-primary">
                       ₹
                     </div>
                     <input
@@ -410,7 +410,7 @@ export default function ArtistPricingPage() {
                         setMonthlyPrice(e.target.value);
                         setValidationError(null);
                       }}
-                      className="w-full h-[56px] rounded-xl border border-white/10 bg-[#0A0A0A]/60 px-4 text-2xl font-bold text-white outline-none focus:border-[#E85D2C]/50 focus:shadow-[0_0_30px_rgba(232,93,44,0.1)] transition-all"
+                      className="w-full h-[56px] rounded-xl border border-white/10 bg-background/60 px-4 text-2xl font-bold text-white outline-none focus:border-primary/50 focus:shadow-[0_0_30px_rgba(232,93,44,0.1)] transition-all"
                       inputMode="decimal"
                       placeholder="9.99"
                     />
@@ -432,10 +432,10 @@ export default function ArtistPricingPage() {
               </div>
 
               {/* Yearly Plan */}
-              <div className="rounded-2xl border border-[#E85D2C]/20 bg-[#15100E] overflow-hidden hover:border-[#E85D2C]/40 transition-all hover:shadow-lg hover:shadow-[#E85D2C]/10">
-                <div className="px-6 py-4 border-b border-[#E85D2C]/15 flex items-center justify-between bg-gradient-to-r from-[#E85D2C]/5 to-transparent">
+              <div className="rounded-2xl border border-primary/20 bg-surface overflow-hidden hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-primary/10">
+                <div className="px-6 py-4 border-b border-primary/15 flex items-center justify-between bg-gradient-to-r from-primary/5 to-transparent">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#E85D2C] to-[#C97A54] border border-[#E85D2C]/30 flex items-center justify-center shadow-lg shadow-[#E85D2C]/25">
+                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-secondary border border-primary/30 flex items-center justify-center shadow-lg shadow-primary/25">
                       <Crown className="w-5 h-5 text-white" />
                     </div>
                     <div>
@@ -450,8 +450,8 @@ export default function ArtistPricingPage() {
                   <div
                     className={`px-3 py-1 rounded-full border text-xs font-medium transition-all flex items-center gap-1 ${
                       discountPercent > 0
-                        ? "bg-gradient-to-r from-[#E85D2C]/20 to-[#C97A54]/20 border-[#E85D2C]/30 text-[#E85D2C]"
-                        : "bg-[#0A0A0A]/40 border-white/10 text-[#8D7B77]"
+                        ? "bg-gradient-to-r from-primary/20 to-secondary/20 border-primary/30 text-primary"
+                        : "bg-background/40 border-white/10 text-[#8D7B77]"
                     }`}>
                     {discountPercent > 0 ? <Gift className="w-3 h-3" /> : null}
                     {discountPercent > 0
@@ -461,10 +461,10 @@ export default function ArtistPricingPage() {
                 </div>
                 <div className="px-6 py-5">
                   {/* Discount Control */}
-                  <div className="mb-5 rounded-xl border border-[#E85D2C]/15 bg-gradient-to-br from-[#E85D2C]/5 to-transparent px-4 py-4">
+                  <div className="mb-5 rounded-xl border border-primary/15 bg-gradient-to-br from-primary/5 to-transparent px-4 py-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="text-xs uppercase tracking-wider text-[#B8A6A1] font-medium flex items-center gap-2">
-                        <Percent className="w-4 h-4 text-[#E85D2C]" />
+                        <Percent className="w-4 h-4 text-primary" />
                         Yearly Discount
                       </div>
                       <div className="flex items-center gap-2">
@@ -481,9 +481,9 @@ export default function ArtistPricingPage() {
                             setDiscountPercent(v);
                             setValidationError(null);
                           }}
-                          className="w-[70px] h-[36px] rounded-lg border border-[#E85D2C]/30 bg-[#0A0A0A]/60 px-2 text-base font-bold text-[#E85D2C] outline-none focus:border-[#E85D2C]/60 text-center"
+                          className="w-[70px] h-[36px] rounded-lg border border-primary/30 bg-background/60 px-2 text-base font-bold text-primary outline-none focus:border-primary/60 text-center"
                         />
-                        <span className="text-base font-bold text-[#E85D2C]">
+                        <span className="text-base font-bold text-primary">
                           %
                         </span>
                       </div>
@@ -498,7 +498,7 @@ export default function ArtistPricingPage() {
                         setDiscountPercent(Number(e.target.value));
                         setValidationError(null);
                       }}
-                      className="w-full h-1.5 rounded-full accent-[#E85D2C] cursor-pointer bg-white/10"
+                      className="w-full h-1.5 rounded-full accent-primary cursor-pointer bg-white/10"
                     />
                     <div className="flex justify-between mt-1 text-[10px] text-[#8D7B77]">
                       <span>0%</span>
@@ -515,10 +515,10 @@ export default function ArtistPricingPage() {
                     <Wallet className="w-4 h-4" /> Computed yearly price
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="h-[56px] w-[48px] shrink-0 rounded-xl border border-[#E85D2C]/30 bg-gradient-to-br from-[#E85D2C]/10 to-[#C97A54]/10 flex items-center justify-center text-2xl font-bold text-[#E85D2C]">
+                    <div className="h-[56px] w-[48px] shrink-0 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center text-2xl font-bold text-primary">
                       ₹
                     </div>
-                    <div className="w-full h-[56px] rounded-xl border border-[#E85D2C]/30 bg-[#0A0A0A]/60 px-4 flex items-center text-2xl font-bold text-white">
+                    <div className="w-full h-[56px] rounded-xl border border-primary/30 bg-background/60 px-4 flex items-center text-2xl font-bold text-white">
                       {yearlyNum.toFixed(2)}
                     </div>
                   </div>
@@ -529,7 +529,7 @@ export default function ArtistPricingPage() {
                       ? `₹${(yearlyNum / 12).toFixed(2)}/month equivalent`
                       : "Set monthly price first"}
                   </div>
-                  <p className="mt-3 text-sm text-[#E85D2C]/80 leading-relaxed">
+                  <p className="mt-3 text-sm text-primary/80 leading-relaxed">
                     {discountPercent > 0
                       ? `Fans save ${discountPercent}% vs monthly — fans who commit yearly stay 3× longer.`
                       : "Fans pay full yearly price with no discount. Add a discount to boost conversions."}
@@ -538,10 +538,10 @@ export default function ArtistPricingPage() {
               </div>
 
               {/* Early Access */}
-              <div className="rounded-2xl border border-white/10 bg-[#15100E] px-6 py-5 hover:border-[#E85D2C]/20 transition-all">
+              <div className="rounded-2xl border border-white/10 bg-surface px-6 py-5 hover:border-primary/20 transition-all">
                 <div className="flex items-center gap-3 mb-1">
-                  <div className="h-8 w-8 rounded-lg bg-[#E85D2C]/10 flex items-center justify-center">
-                    <Clock className="w-4 h-4 text-[#E85D2C]" />
+                  <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Clock className="w-4 h-4 text-primary" />
                   </div>
                   <div className="text-sm font-semibold text-white">
                     Early Access
@@ -558,8 +558,8 @@ export default function ArtistPricingPage() {
                       onClick={() => setEarlyAccessDays(days)}
                       className={`flex-1 h-[42px] rounded-xl border text-sm font-medium transition-all ${
                         earlyAccessDays === days
-                          ? "border-[#E85D2C]/50 bg-gradient-to-r from-[#E85D2C]/20 to-[#C97A54]/20 text-[#E85D2C] shadow-lg shadow-[#E85D2C]/10"
-                          : "border-white/10 bg-[#0A0A0A]/40 text-[#8D7B77] hover:text-white hover:bg-white/5"
+                          ? "border-primary/50 bg-gradient-to-r from-primary/20 to-secondary/20 text-primary shadow-lg shadow-primary/10"
+                          : "border-white/10 bg-background/40 text-[#8D7B77] hover:text-white hover:bg-white/5"
                       }`}>
                       {days}d
                     </button>
@@ -575,11 +575,11 @@ export default function ArtistPricingPage() {
               </div>
 
               {/* Custom Features */}
-              <div className="rounded-2xl border border-white/10 bg-[#15100E] px-6 py-5 hover:border-[#E85D2C]/20 transition-all">
+              <div className="rounded-2xl border border-white/10 bg-surface px-6 py-5 hover:border-primary/20 transition-all">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-lg bg-[#E85D2C]/10 flex items-center justify-center">
-                      <Gift className="w-4 h-4 text-[#E85D2C]" />
+                    <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Gift className="w-4 h-4 text-primary" />
                     </div>
                     <div className="text-sm font-semibold text-white">
                       Custom Features
@@ -593,7 +593,7 @@ export default function ArtistPricingPage() {
                       }
                     }}
                     disabled={subscriptionFeatures.length >= 8}
-                    className="text-xs font-medium text-[#E85D2C] hover:text-white transition-colors disabled:opacity-50 flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#E85D2C]/30 hover:border-[#E85D2C]/50 hover:bg-[#E85D2C]/10 transition-all">
+                    className="text-xs font-medium text-primary hover:text-white transition-colors disabled:opacity-50 flex items-center gap-1 px-3 py-1.5 rounded-lg border border-primary/30 hover:border-primary/50 hover:bg-primary/10 transition-all">
                     <Plus className="w-4 h-4" /> Add Feature
                   </button>
                 </div>
@@ -606,7 +606,7 @@ export default function ArtistPricingPage() {
                   {subscriptionFeatures.map((feature, i) => (
                     <div
                       key={i}
-                      className="flex items-center gap-3 bg-[#0A0A0A]/40 rounded-xl p-2 border border-white/5 hover:border-[#E85D2C]/20 transition-all group">
+                      className="flex items-center gap-3 bg-background/40 rounded-xl p-2 border border-white/5 hover:border-primary/20 transition-all group">
                       <input
                         type="text"
                         value={feature}
@@ -646,7 +646,7 @@ export default function ArtistPricingPage() {
                   type="button"
                   disabled={saving || loading}
                   onClick={save}
-                  className="h-[56px] px-10 rounded-xl bg-gradient-to-r from-[#E85D2C] to-[#C97A54] text-white font-semibold shadow-lg shadow-[#E85D2C]/25 hover:shadow-[#E85D2C]/40 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                  className="h-[56px] px-10 rounded-xl bg-gradient-to-r from-primary to-secondary text-white font-semibold shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
                   {saving ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
@@ -671,10 +671,10 @@ export default function ArtistPricingPage() {
             {/* Right column — Earnings preview + Tips (2/5 width) */}
             <div className="lg:col-span-2 space-y-5">
               {/* Earnings Preview */}
-              <div className="rounded-2xl border border-white/10 bg-[#15100E] overflow-hidden hover:border-[#E85D2C]/20 transition-all">
-                <div className="px-5 py-4 border-b border-white/10 bg-gradient-to-r from-[#E85D2C]/5 to-transparent">
+              <div className="rounded-2xl border border-white/10 bg-surface overflow-hidden hover:border-primary/20 transition-all">
+                <div className="px-5 py-4 border-b border-white/10 bg-gradient-to-r from-primary/5 to-transparent">
                   <div className="text-sm font-semibold text-white flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-[#E85D2C]" />
+                    <BarChart3 className="w-4 h-4 text-primary" />
                     Earnings Preview
                   </div>
                   <div className="text-xs text-[#8D7B77] mt-0.5">
@@ -712,8 +712,8 @@ export default function ArtistPricingPage() {
                   )}
                 </div>
                 {yearlyNum > 0 && monthlyNum > 0 && (
-                  <div className="px-5 py-3 border-t border-white/5 bg-gradient-to-r from-[#E85D2C]/10 to-transparent">
-                    <div className="text-xs text-[#E85D2C] flex items-center gap-2">
+                  <div className="px-5 py-3 border-t border-white/5 bg-gradient-to-r from-primary/10 to-transparent">
+                    <div className="text-xs text-primary flex items-center gap-2">
                       <TrendingUp className="w-4 h-4" />
                       With yearly plan at ₹{yearlyNum}/yr, 100 yearly subs = ₹
                       {(100 * yearlyNum).toLocaleString()}/yr
@@ -723,9 +723,9 @@ export default function ArtistPricingPage() {
               </div>
 
               {/* Pricing Tips */}
-              <div className="rounded-2xl border border-white/10 bg-[#15100E] px-5 py-5 hover:border-[#E85D2C]/20 transition-all">
+              <div className="rounded-2xl border border-white/10 bg-surface px-5 py-5 hover:border-primary/20 transition-all">
                 <div className="text-sm font-semibold text-white flex items-center gap-2 mb-3">
-                  <Zap className="w-4 h-4 text-[#E85D2C]" />
+                  <Zap className="w-4 h-4 text-primary" />
                   Pricing Tips
                 </div>
                 <ul className="space-y-3">
@@ -733,7 +733,7 @@ export default function ArtistPricingPage() {
                     <li
                       key={i}
                       className="flex gap-2 text-xs text-[#8D7B77] leading-relaxed hover:text-[#B8A6A1] transition-colors">
-                      <span className="text-[#E85D2C] mt-0.5 shrink-0">✦</span>
+                      <span className="text-primary mt-0.5 shrink-0">✦</span>
                       <span>{tip}</span>
                     </li>
                   ))}
@@ -741,9 +741,9 @@ export default function ArtistPricingPage() {
               </div>
 
               {/* Current Config Summary */}
-              <div className="rounded-2xl border border-white/10 bg-[#15100E] px-5 py-5 hover:border-[#E85D2C]/20 transition-all">
+              <div className="rounded-2xl border border-white/10 bg-surface px-5 py-5 hover:border-primary/20 transition-all">
                 <div className="text-sm font-semibold text-white flex items-center gap-2 mb-3">
-                  <Settings className="w-4 h-4 text-[#E85D2C]" />
+                  <Settings className="w-4 h-4 text-primary" />
                   Current Config
                 </div>
                 <div className="space-y-2 text-xs">
@@ -762,7 +762,7 @@ export default function ArtistPricingPage() {
                   {discountPercent > 0 && (
                     <div className="flex justify-between items-center py-1.5 border-b border-white/5">
                       <span className="text-[#8D7B77]">Discount</span>
-                      <span className="text-[#E85D2C] font-medium">
+                      <span className="text-primary font-medium">
                         {discountPercent}% off
                       </span>
                     </div>
@@ -781,7 +781,7 @@ export default function ArtistPricingPage() {
                   </div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-2 text-xs text-[#8D7B77]">
-                  <Shield className="w-3 h-3 text-[#E85D2C]" />
+                  <Shield className="w-3 h-3 text-primary" />
                   All changes are saved automatically
                 </div>
               </div>

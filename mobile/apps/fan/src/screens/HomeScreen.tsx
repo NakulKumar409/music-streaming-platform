@@ -15,12 +15,14 @@ import {
   Dimensions,
   Linking,
   Modal,
+  Platform,
 } from 'react-native';
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { BadgeCheck, Lock, Play, Search, X } from 'lucide-react-native';
+import { BadgeCheck, Lock, Play, Search, X, Bell, Settings } from 'lucide-react-native';
+import ThemeSwitcher from '../ui/ThemeSwitcher';
 import { LockedContentOverlay } from '../ui/SubscriptionUI';
 import { apiV1 } from '../services/api';
 import { fetchVerifiedArtists, fetchFeaturedArtists, type ArtistListItem } from '../services/artistService';
@@ -413,7 +415,7 @@ export default function HomeScreen({ navigation }: any) {
   if (loading)
     return (
       <LinearGradient
-        colors={['#000000', '#000000']}
+        colors={Platform.OS === 'web' ? ['var(--color-bg)', 'var(--color-bg)'] : ['#000000', '#000000']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradientBackground}
@@ -427,7 +429,7 @@ export default function HomeScreen({ navigation }: any) {
 
   return (
     <LinearGradient
-      colors={['#000000', '#000000']}
+      colors={Platform.OS === 'web' ? ['var(--color-bg)', 'var(--color-bg)'] : ['#000000', '#000000']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.gradientBackground}
@@ -446,9 +448,25 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={styles.headerTitle}>Discover</Text>
             </View>
 
-            <Pressable onPress={() => navigation.getParent()?.navigate('SearchTab')}>
-              <Search color="#fff" size={22} />
-            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <Pressable onPress={() => navigation.getParent()?.navigate('SearchTab')}>
+                <Search color="#fff" size={22} />
+              </Pressable>
+
+              {Platform.OS === 'web' && (
+                <>
+                  <Pressable onPress={() => { /* Notifications click placeholder */ }} style={{ padding: 4 }}>
+                    <Bell color="#fff" size={22} />
+                  </Pressable>
+
+                  <Pressable onPress={() => navigation.getParent()?.navigate('AccountTab')} style={{ padding: 4 }}>
+                    <Settings color="#fff" size={22} />
+                  </Pressable>
+
+                  <ThemeSwitcher />
+                </>
+              )}
+            </View>
           </View>
 
       <ScrollView

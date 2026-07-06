@@ -47,8 +47,8 @@ function BrandLogo() {
   return (
     <div className="flex items-center gap-3">
       <div className="relative">
-        <div className="absolute inset-0 bg-[#e85d2c]/30 blur-2xl rounded-full animate-pulse" />
-        <div className="absolute inset-0 bg-gradient-to-tr from-[#e85d2c]/20 to-transparent rounded-full" />
+        <div className="absolute inset-0 bg-primary/30 blur-2xl rounded-full animate-pulse" />
+        <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 to-transparent rounded-full" />
         <img
           src="/logo.png"
           alt="Brand Logo"
@@ -208,7 +208,7 @@ export default function ArtistLoginPage() {
   };
 
   return (
-    <div className="min-h-screen w-full flex bg-[#080505] text-white overflow-hidden font-sans relative">
+    <div className="min-h-screen w-full flex bg-background text-white overflow-hidden font-sans relative">
       {/* Google Fonts Import */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,700&family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800&display=swap');
@@ -274,7 +274,7 @@ export default function ArtistLoginPage() {
           border: 1px solid rgba(255, 255, 255, 0.05);
         }
         .text-gradient-gold {
-          background: linear-gradient(135deg, #e85d2c 0%, #f06d3c 25%, #c97a54 50%, #e85d2c 75%, #f06d3c 100%);
+          background: linear-gradient(135deg, var(--color-primary) 0%, #f06d3c 25%, var(--color-secondary) 50%, var(--color-primary) 75%, #f06d3c 100%);
           background-size: 300% 300%;
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
@@ -292,15 +292,15 @@ export default function ArtistLoginPage() {
       {/* Ambient Background Music Visualizer */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full opacity-30">
-          <div className="absolute top-[10%] left-[5%] w-64 h-64 bg-[#e85d2c]/10 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-[20%] right-[10%] w-80 h-80 bg-[#c97a54]/10 rounded-full blur-3xl animate-pulse delay-1000" />
-          <div className="absolute top-[50%] left-[50%] w-96 h-96 bg-[#e85d2c]/5 rounded-full blur-3xl animate-pulse delay-500" />
+          <div className="absolute top-[10%] left-[5%] w-64 h-64 bg-primary/10 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute bottom-[20%] right-[10%] w-80 h-80 bg-secondary/10 rounded-full blur-3xl animate-pulse delay-1000" />
+          <div className="absolute top-[50%] left-[50%] w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse delay-500" />
         </div>
         {/* Floating music notes */}
         {[...Array(8)].map((_, i) => (
           <div
             key={i}
-            className="absolute text-[#e85d2c]/10 animate-float font-playfair"
+            className="absolute text-primary/10 animate-float font-playfair"
             style={{
               left: `${10 + Math.random() * 80}%`,
               top: `${10 + Math.random() * 80}%`,
@@ -316,19 +316,19 @@ export default function ArtistLoginPage() {
       {/* LEFT PANEL - Premium Typography Design */}
       <div className="hidden lg:flex w-[50%] relative items-center justify-center p-8 xl:p-12 border-r border-white/5">
         {/* Premium Gradient Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#1a0a08] via-[#0a0707] to-[#080505]" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#1a0a08] via-[#0a0707] to-background" />
 
         {/* Decorative Elements */}
-        <div className="absolute top-10 left-10 w-32 h-32 border border-[#e85d2c]/10 rounded-full animate-pulse-ring" />
-        <div className="absolute bottom-10 right-10 w-24 h-24 border border-[#e85d2c]/10 rounded-full animate-pulse-ring delay-1000" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] border border-[#e85d2c]/5 rounded-full animate-pulse-ring delay-500" />
+        <div className="absolute top-10 left-10 w-32 h-32 border border-primary/10 rounded-full animate-pulse-ring" />
+        <div className="absolute bottom-10 right-10 w-24 h-24 border border-primary/10 rounded-full animate-pulse-ring delay-1000" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] border border-primary/5 rounded-full animate-pulse-ring delay-500" />
 
         {/* Music Wave Animation */}
         <div className="absolute bottom-20 left-10 flex items-end gap-1 opacity-20">
           {[...Array(20)].map((_, i) => (
             <div
               key={i}
-              className="w-1 bg-[#e85d2c] rounded-full"
+              className="w-1 bg-primary rounded-full"
               style={{
                 height: `${10 + Math.random() * 40}px`,
                 animation: `wave ${
@@ -356,7 +356,7 @@ export default function ArtistLoginPage() {
 
           {/* Main Heading - Premium Font */}
           <div className="relative">
-            <div className="absolute -top-4 -left-4 text-7xl font-playfair font-bold text-[#e85d2c]/5 select-none">
+            <div className="absolute -top-4 -left-4 text-7xl font-playfair font-bold text-primary/5 select-none">
               ✦
             </div>
             <h1 className="font-playfair text-4xl xl:text-5xl font-bold tracking-tight mb-4 xl:mb-6 leading-tight">
@@ -366,7 +366,7 @@ export default function ArtistLoginPage() {
                 <span className="text-gradient-gold font-playfair italic">
                   your stage.
                 </span>
-                <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-gradient-to-r from-[#e85d2c] to-transparent" />
+                <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-gradient-to-r from-primary to-transparent" />
               </span>
             </h1>
           </div>
@@ -382,7 +382,7 @@ export default function ArtistLoginPage() {
               (tag) => (
                 <span
                   key={tag}
-                  className="px-3 py-1.5 text-xs font-inter font-medium bg-[#e85d2c]/10 border border-[#e85d2c]/20 rounded-full text-[#e8a87c] hover:bg-[#e85d2c]/20 transition-all cursor-default">
+                  className="px-3 py-1.5 text-xs font-inter font-medium bg-primary/10 border border-primary/20 rounded-full text-[#e8a87c] hover:bg-primary/20 transition-all cursor-default">
                   {tag}
                 </span>
               )
@@ -391,11 +391,11 @@ export default function ArtistLoginPage() {
 
           {/* Stats with Premium Design */}
           <div className="grid grid-cols-2 gap-4 xl:gap-6 mt-8 xl:mt-10 pt-8 xl:pt-10 border-t border-white/5">
-            <div className="group relative overflow-hidden bg-gradient-to-br from-[#1a0a08] to-transparent p-4 rounded-2xl border border-white/5 hover:border-[#e85d2c]/30 transition-all duration-500 hover:scale-105">
-              <div className="absolute inset-0 bg-[#e85d2c]/0 group-hover:bg-[#e85d2c]/5 transition-all duration-500" />
+            <div className="group relative overflow-hidden bg-gradient-to-br from-[#1a0a08] to-transparent p-4 rounded-2xl border border-white/5 hover:border-primary/30 transition-all duration-500 hover:scale-105">
+              <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/5 transition-all duration-500" />
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-[#e85d2c]/10 rounded-xl group-hover:bg-[#e85d2c]/20 transition-all duration-300">
-                  <Users className="w-5 h-5 text-[#e85d2c]" />
+                <div className="p-2 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-all duration-300">
+                  <Users className="w-5 h-5 text-primary" />
                 </div>
                 <div>
                   <div className="text-2xl xl:text-3xl font-playfair font-bold text-[#e6d6d2]">
@@ -407,14 +407,14 @@ export default function ArtistLoginPage() {
                 </div>
               </div>
             </div>
-            <div className="group relative overflow-hidden bg-gradient-to-br from-[#1a0a08] to-transparent p-4 rounded-2xl border border-white/5 hover:border-[#e85d2c]/30 transition-all duration-500 hover:scale-105">
-              <div className="absolute inset-0 bg-[#e85d2c]/0 group-hover:bg-[#e85d2c]/5 transition-all duration-500" />
+            <div className="group relative overflow-hidden bg-gradient-to-br from-[#1a0a08] to-transparent p-4 rounded-2xl border border-white/5 hover:border-primary/30 transition-all duration-500 hover:scale-105">
+              <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/5 transition-all duration-500" />
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-[#e85d2c]/10 rounded-xl group-hover:bg-[#e85d2c]/20 transition-all duration-300">
-                  <DollarSign className="w-5 h-5 text-[#e85d2c]" />
+                <div className="p-2 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-all duration-300">
+                  <DollarSign className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <div className="text-2xl xl:text-3xl font-playfair font-bold text-[#e85d2c]">
+                  <div className="text-2xl xl:text-3xl font-playfair font-bold text-primary">
                     $15M
                   </div>
                   <div className="text-xs xl:text-sm font-inter text-[#8d7b77] mt-0.5">
@@ -436,11 +436,11 @@ export default function ArtistLoginPage() {
       {/* RIGHT PANEL - Premium Login */}
       <div className="flex-1 flex flex-col justify-center relative p-4 sm:p-8 lg:p-12 xl:p-16 overflow-y-auto">
         {/* Mobile Background */}
-        <div className="absolute inset-0 lg:hidden bg-gradient-to-tr from-[#1a0a08] via-[#0a0707] to-[#080505]" />
+        <div className="absolute inset-0 lg:hidden bg-gradient-to-tr from-[#1a0a08] via-[#0a0707] to-background" />
 
         {/* Decorative Orbs */}
-        <div className="absolute top-0 right-0 w-[300px] sm:w-[400px] h-[300px] sm:h-[400px] bg-[#e85d2c]/10 blur-[120px] rounded-full pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-[200px] sm:w-[300px] h-[200px] sm:h-[300px] bg-[#c97a54]/5 blur-[100px] rounded-full pointer-events-none" />
+        <div className="absolute top-0 right-0 w-[300px] sm:w-[400px] h-[300px] sm:h-[400px] bg-primary/10 blur-[120px] rounded-full pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-[200px] sm:w-[300px] h-[200px] sm:h-[300px] bg-secondary/5 blur-[100px] rounded-full pointer-events-none" />
 
         <div className="w-full max-w-[400px] mx-auto relative z-10">
           {/* Mobile Header */}
@@ -459,22 +459,22 @@ export default function ArtistLoginPage() {
           {/* Login Card - Premium Design */}
           <div className="relative">
             {/* Card Glow */}
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-[#e85d2c]/20 via-[#c97a54]/10 to-[#e85d2c]/20 blur-2xl rounded-3xl animate-pulse" />
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/20 via-secondary/10 to-primary/20 blur-2xl rounded-3xl animate-pulse" />
 
             <div className="relative glass-effect rounded-2xl p-6 sm:p-8 shadow-2xl">
               {/* Decorative Elements */}
-              <div className="absolute top-0 right-0 w-32 h-32 bg-[#e85d2c]/5 rounded-full blur-2xl" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-[#c97a54]/5 rounded-full blur-2xl" />
+              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl" />
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-secondary/5 rounded-full blur-2xl" />
 
               {/* Top Gradient Line */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-0.5 bg-gradient-to-r from-transparent via-[#e85d2c] to-transparent rounded-full" />
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-0.5 bg-gradient-to-r from-transparent via-primary to-transparent rounded-full" />
 
               {/* Logo & Title */}
               <div className="text-center mb-6 sm:mb-8">
                 {/* Logo - Now visible on all screens */}
                 <div className="flex justify-center mb-4">
                   <div className="relative">
-                    <div className="absolute inset-0 bg-[#e85d2c]/20 blur-2xl rounded-full animate-pulse" />
+                    <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full animate-pulse" />
                     <div className="relative p-2 bg-gradient-to-br from-[#1a0a08] to-[#0a0707] rounded-2xl border border-white/10">
                       <img
                         src="/logo.png"
@@ -506,13 +506,13 @@ export default function ArtistLoginPage() {
                     <input
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 px-3 sm:px-4 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:border-[#e85d2c]/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20"
+                      className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 px-3 sm:px-4 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:border-primary/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20"
                       placeholder="artist@example.com"
                       autoComplete="email"
                       autoCapitalize="none"
                       autoCorrect="off"
                     />
-                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-[#e85d2c]/0 via-[#e85d2c]/0 to-[#e85d2c]/0 group-focus-within:from-[#e85d2c]/5 group-focus-within:via-[#e85d2c]/0 group-focus-within:to-[#e85d2c]/5 pointer-events-none transition-all duration-500" />
+                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-primary/0 via-primary/0 to-primary/0 group-focus-within:from-primary/5 group-focus-within:via-primary/0 group-focus-within:to-primary/5 pointer-events-none transition-all duration-500" />
                   </div>
                 </div>
 
@@ -524,7 +524,7 @@ export default function ArtistLoginPage() {
                     <a
                       href="#"
                       onClick={(e) => e.preventDefault()}
-                      className="text-[11px] font-inter text-[#8d7b77] hover:text-[#e85d2c] transition-colors">
+                      className="text-[11px] font-inter text-[#8d7b77] hover:text-primary transition-colors">
                       Forgot?
                     </a>
                   </div>
@@ -533,7 +533,7 @@ export default function ArtistLoginPage() {
                       type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 pl-3 sm:pl-4 pr-10 sm:pr-12 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:border-[#e85d2c]/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20"
+                      className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 pl-3 sm:pl-4 pr-10 sm:pr-12 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:border-primary/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20"
                       placeholder="••••••"
                       autoComplete="current-password"
                       autoCapitalize="none"
@@ -567,7 +567,7 @@ export default function ArtistLoginPage() {
                   disabled={busy}
                   className="relative w-full h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300">
                   {/* Button Background */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-primary via-[#f06d3c] to-secondary bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
 
                   {/* Button Shine */}
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
@@ -597,9 +597,9 @@ export default function ArtistLoginPage() {
                   New here?{" "}
                   <Link
                     to="/artist/signup"
-                    className="text-[#e85d2c] font-medium hover:text-[#f06d3c] transition-colors relative inline-block group">
+                    className="text-primary font-medium hover:text-[#f06d3c] transition-colors relative inline-block group">
                     Create Account
-                    <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-[#e85d2c] to-[#c97a54] group-hover:w-full transition-all duration-300" />
+                    <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-primary to-secondary group-hover:w-full transition-all duration-300" />
                   </Link>
                 </p>
               </div>
@@ -632,14 +632,14 @@ export default function ArtistLoginPage() {
 
           {/* Mobile Stats */}
           <div className="lg:hidden mt-6 grid grid-cols-2 gap-3">
-            <div className="bg-[#1a1210]/50 backdrop-blur-sm rounded-xl p-3 text-center border border-white/5 hover:border-[#e85d2c]/20 transition-all">
-              <Headphones className="w-4 h-4 text-[#e85d2c] mx-auto mb-1" />
+            <div className="bg-[#1a1210]/50 backdrop-blur-sm rounded-xl p-3 text-center border border-white/5 hover:border-primary/20 transition-all">
+              <Headphones className="w-4 h-4 text-primary mx-auto mb-1" />
               <div className="text-xs font-inter text-[#8d7b77]">
                 2M+ Listeners
               </div>
             </div>
-            <div className="bg-[#1a1210]/50 backdrop-blur-sm rounded-xl p-3 text-center border border-white/5 hover:border-[#e85d2c]/20 transition-all">
-              <TrendingUp className="w-4 h-4 text-[#e85d2c] mx-auto mb-1" />
+            <div className="bg-[#1a1210]/50 backdrop-blur-sm rounded-xl p-3 text-center border border-white/5 hover:border-primary/20 transition-all">
+              <TrendingUp className="w-4 h-4 text-primary mx-auto mb-1" />
               <div className="text-xs font-inter text-[#8d7b77]">$15M Paid</div>
             </div>
           </div>

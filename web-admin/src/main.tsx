@@ -6,6 +6,12 @@ import * as Sentry from "@sentry/react";
 import App from "./App";
 import ErrorBoundary from "./components/ErrorBoundary";
 import "./styles.css";
+import { applyTheme, DEFAULT_THEME_ID } from "./services/themeConfig";
+
+// Initialize theme
+const savedTheme = localStorage.getItem("global-theme") || DEFAULT_THEME_ID;
+applyTheme(savedTheme);
+
 
 Sentry.init({
   dsn: import.meta.env.VITE_SENTRY_DSN,

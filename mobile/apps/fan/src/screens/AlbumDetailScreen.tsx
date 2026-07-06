@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, Pressable, Modal } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Image, Pressable, Modal, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Play, X } from 'lucide-react-native';
@@ -104,7 +104,7 @@ export default function AlbumDetailScreen({ route, navigation }: any) {
   );
 
   return (
-    <LinearGradient colors={['#1a1a1a', '#000000']} style={styles.container}>
+    <LinearGradient colors={Platform.OS === 'web' ? ['var(--color-surface)', 'var(--color-bg)'] : ['#1a1a1a', '#000000']} style={styles.container}>
       <View style={{ paddingTop: insets.top, flex: 1 }}>
         <FlatList
           data={tracks}

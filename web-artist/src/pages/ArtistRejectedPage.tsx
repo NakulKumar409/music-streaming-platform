@@ -36,15 +36,15 @@ type MeResponse = {
 
 function PremiumPlayLogo() {
   return (
-    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[#E85D2C] to-[#C97A54] p-[3px] shadow-lg shadow-[#E85D2C]/25">
-      <div className="h-full w-full rounded-full bg-[#0A0A0A] border border-white/10 flex items-center justify-center">
+    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary to-secondary p-[3px] shadow-lg shadow-primary/25">
+      <div className="h-full w-full rounded-full bg-background border border-white/10 flex items-center justify-center">
         <svg
           width="20"
           height="20"
           viewBox="0 0 24 24"
           fill="none"
           xmlns="http://www.w3.org/2000/svg">
-          <path d="M9 7.5V16.5L17 12L9 7.5Z" fill="#E85D2C" />
+          <path d="M9 7.5V16.5L17 12L9 7.5Z" fill="var(--color-primary)" />
         </svg>
       </div>
     </div>
@@ -186,12 +186,12 @@ export default function ArtistRejectedPage() {
 
   return (
     <div
-      className="min-h-screen w-full bg-[#0A0A0A] text-white font-sans antialiased"
+      className="min-h-screen w-full bg-background text-white font-sans antialiased"
       style={backgroundStyle}>
       <div className="min-h-screen w-full flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-[860px] animate-fadeIn">
           {/* Main Card */}
-          <div className="rounded-2xl border border-white/10 bg-[#15100E]/80 backdrop-blur-xl shadow-2xl px-8 py-10 sm:px-10 sm:py-12">
+          <div className="rounded-2xl border border-white/10 bg-surface/80 backdrop-blur-xl shadow-2xl px-8 py-10 sm:px-10 sm:py-12">
             {/* Header */}
             <div className="flex items-start justify-between gap-6 mb-6">
               <div className="flex items-start gap-4">
@@ -220,7 +220,7 @@ export default function ArtistRejectedPage() {
 
             {loading && (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-8 h-8 text-[#E85D2C] animate-spin" />
+                <Loader2 className="w-8 h-8 text-primary animate-spin" />
               </div>
             )}
 
@@ -267,7 +267,7 @@ export default function ArtistRejectedPage() {
                 <input
                   value={email}
                   disabled
-                  className="mt-2 w-full h-[44px] rounded-xl bg-[#0A0A0A]/40 border border-white/10 px-4 text-sm text-white outline-none opacity-60 cursor-not-allowed"
+                  className="mt-2 w-full h-[44px] rounded-xl bg-background/40 border border-white/10 px-4 text-sm text-white outline-none opacity-60 cursor-not-allowed"
                 />
               </div>
 
@@ -279,7 +279,7 @@ export default function ArtistRejectedPage() {
                 <input
                   value={artistName}
                   onChange={(e) => setArtistName(e.target.value)}
-                  className="mt-2 w-full h-[44px] rounded-xl bg-[#0A0A0A]/40 border border-white/10 px-4 text-sm text-white placeholder-[#6b5b57] outline-none focus:border-[#E85D2C]/50 transition-all"
+                  className="mt-2 w-full h-[44px] rounded-xl bg-background/40 border border-white/10 px-4 text-sm text-white placeholder-[#6b5b57] outline-none focus:border-primary/50 transition-all"
                   placeholder="Your artist name"
                   autoComplete="nickname"
                 />
@@ -293,7 +293,7 @@ export default function ArtistRejectedPage() {
                 <textarea
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
-                  className="mt-2 w-full min-h-[120px] rounded-xl bg-[#0A0A0A]/40 border border-white/10 px-4 py-3 text-sm text-white placeholder-[#6b5b57] outline-none focus:border-[#E85D2C]/50 transition-all resize-none"
+                  className="mt-2 w-full min-h-[120px] rounded-xl bg-background/40 border border-white/10 px-4 py-3 text-sm text-white placeholder-[#6b5b57] outline-none focus:border-primary/50 transition-all resize-none"
                   placeholder="Tell us about yourself..."
                 />
               </div>
@@ -307,7 +307,7 @@ export default function ArtistRejectedPage() {
                 <textarea
                   value={portfolio}
                   onChange={(e) => setPortfolio(e.target.value)}
-                  className="mt-2 w-full min-h-[110px] rounded-xl bg-[#0A0A0A]/40 border border-white/10 px-4 py-3 text-sm text-white placeholder-[#6b5b57] outline-none focus:border-[#E85D2C]/50 transition-all resize-none"
+                  className="mt-2 w-full min-h-[110px] rounded-xl bg-background/40 border border-white/10 px-4 py-3 text-sm text-white placeholder-[#6b5b57] outline-none focus:border-primary/50 transition-all resize-none"
                   placeholder="https://..."
                 />
               </div>
@@ -317,7 +317,7 @@ export default function ArtistRejectedPage() {
                   type="button"
                   disabled={busy}
                   onClick={() => setAppealOpen(true)}
-                  className="inline-flex items-center gap-2 h-[44px] px-5 rounded-xl border border-white/10 bg-[#0A0A0A]/40 text-sm font-medium text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all disabled:opacity-50">
+                  className="inline-flex items-center gap-2 h-[44px] px-5 rounded-xl border border-white/10 bg-background/40 text-sm font-medium text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all disabled:opacity-50">
                   <MessageSquare className="w-4 h-4" />
                   Appeal
                 </button>
@@ -326,7 +326,7 @@ export default function ArtistRejectedPage() {
                   type="button"
                   disabled={busy}
                   onClick={resubmit}
-                  className="inline-flex items-center gap-2 h-[46px] px-6 rounded-xl bg-gradient-to-r from-[#E85D2C] to-[#C97A54] text-sm font-semibold text-white shadow-lg shadow-[#E85D2C]/25 hover:shadow-[#E85D2C]/40 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                  className="inline-flex items-center gap-2 h-[46px] px-6 rounded-xl bg-gradient-to-r from-primary to-secondary text-sm font-semibold text-white shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                   {busy ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -351,12 +351,12 @@ export default function ArtistRejectedPage() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 animate-fadeIn"
           onClick={() => setAppealOpen(false)}>
           <div
-            className="w-full max-w-[520px] rounded-2xl border border-white/10 bg-[#15100E] shadow-2xl p-6"
+            className="w-full max-w-[520px] rounded-2xl border border-white/10 bg-surface shadow-2xl p-6"
             onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5 text-[#E85D2C]" />
+                  <MessageSquare className="w-5 h-5 text-primary" />
                   Appeal to Admin
                 </h3>
                 <p className="text-sm text-[#B8A6A1] mt-0.5">
@@ -374,7 +374,7 @@ export default function ArtistRejectedPage() {
             <textarea
               value={appealMessage}
               onChange={(e) => setAppealMessage(e.target.value)}
-              className="w-full min-h-[140px] rounded-xl bg-[#0A0A0A]/40 border border-white/10 px-4 py-3 text-sm text-white placeholder-[#6b5b57] outline-none focus:border-[#E85D2C]/50 transition-all resize-none"
+              className="w-full min-h-[140px] rounded-xl bg-background/40 border border-white/10 px-4 py-3 text-sm text-white placeholder-[#6b5b57] outline-none focus:border-primary/50 transition-all resize-none"
               placeholder="Write your message..."
             />
 
@@ -383,14 +383,14 @@ export default function ArtistRejectedPage() {
                 type="button"
                 disabled={busy}
                 onClick={() => setAppealOpen(false)}
-                className="h-[40px] px-4 rounded-xl border border-white/10 bg-[#0A0A0A]/40 text-sm font-medium text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all disabled:opacity-50">
+                className="h-[40px] px-4 rounded-xl border border-white/10 bg-background/40 text-sm font-medium text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all disabled:opacity-50">
                 Cancel
               </button>
               <button
                 type="button"
                 disabled={busy}
                 onClick={submitAppeal}
-                className="inline-flex items-center gap-2 h-[40px] px-6 rounded-xl bg-gradient-to-r from-[#E85D2C] to-[#C97A54] text-sm font-semibold text-white shadow-lg shadow-[#E85D2C]/25 hover:shadow-[#E85D2C]/40 transition-all disabled:opacity-50">
+                className="inline-flex items-center gap-2 h-[40px] px-6 rounded-xl bg-gradient-to-r from-primary to-secondary text-sm font-semibold text-white shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all disabled:opacity-50">
                 {busy ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />

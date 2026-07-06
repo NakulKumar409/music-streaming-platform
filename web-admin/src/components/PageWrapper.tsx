@@ -12,7 +12,7 @@ export default function PageWrapper({
   subtitle,
 }: PageWrapperProps) {
   return (
-    <div className="min-h-screen w-full bg-[#0A0A0A]">
+    <div className="min-h-screen w-full bg-background">
       <div className="w-full px-4 sm:px-6 py-6 sm:py-8">
         {title && (
           <div className="mb-6">

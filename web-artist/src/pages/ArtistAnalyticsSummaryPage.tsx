@@ -56,7 +56,7 @@ function CustomTooltip({ active, payload, label, metric, growth }: any) {
     const isPositive = change >= 0;
 
     return (
-      <div className="bg-[#0A0A0A]/98 border border-[#E85D2C]/30 rounded-xl p-4 shadow-2xl backdrop-blur-xl">
+      <div className="bg-background/98 border border-primary/30 rounded-xl p-4 shadow-2xl backdrop-blur-xl">
         <p className="text-[#B8A6A1] text-xs font-medium uppercase tracking-wider mb-2">
           {label}
         </p>
@@ -176,13 +176,13 @@ export default function ArtistAnalyticsSummaryPage() {
 
   return (
     <div
-      className="relative min-h-[500px] overflow-hidden rounded-2xl border border-white/10 bg-[#0A0A0A] shadow-2xl"
+      className="relative min-h-[500px] overflow-hidden rounded-2xl border border-white/10 bg-background shadow-2xl"
       style={backgroundStyle}>
       <div className="relative px-4 py-8 sm:px-8 sm:py-10 lg:px-10 lg:py-10">
         {/* Header Section */}
         <div className="mb-10">
           <h2 className="text-3xl font-bold tracking-tight text-white mb-2 flex items-center gap-2">
-            <BarChart3 className="w-8 h-8 text-[#E85D2C]" />
+            <BarChart3 className="w-8 h-8 text-primary" />
             Analytics Overview
           </h2>
           <p className="text-sm text-[#B8A6A1] max-w-xl">
@@ -193,9 +193,9 @@ export default function ArtistAnalyticsSummaryPage() {
 
         {/* Empty State */}
         {isEmpty && (
-          <div className="mb-10 rounded-2xl border border-dashed border-white/10 bg-[#0A0A0A]/60 p-12 flex flex-col items-center text-center">
-            <div className="w-20 h-20 rounded-full bg-[#E85D2C]/10 flex items-center justify-center mb-4">
-              <PieChart className="w-10 h-10 text-[#E85D2C] opacity-50" />
+          <div className="mb-10 rounded-2xl border border-dashed border-white/10 bg-background/60 p-12 flex flex-col items-center text-center">
+            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+              <PieChart className="w-10 h-10 text-primary opacity-50" />
             </div>
             <h3 className="text-2xl font-bold text-white mb-2">
               No analytics yet
@@ -210,11 +210,11 @@ export default function ArtistAnalyticsSummaryPage() {
 
         {/* Top Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          <div className="rounded-xl border border-white/10 bg-[#15100E] p-6 hover:border-[#E85D2C]/30 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-[#E85D2C]/5">
+          <div className="rounded-xl border border-white/10 bg-surface p-6 hover:border-primary/30 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-primary/5">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-[#B8A6A1] font-medium">
-                <div className="h-8 w-8 rounded-lg bg-[#E85D2C]/10 flex items-center justify-center">
-                  <PlayCircle className="w-4 h-4 text-[#E85D2C]" />
+                <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <PlayCircle className="w-4 h-4 text-primary" />
                 </div>
                 Total Plays
               </div>
@@ -233,11 +233,11 @@ export default function ArtistAnalyticsSummaryPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-[#15100E] p-6 hover:border-[#E85D2C]/30 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-[#E85D2C]/5">
+          <div className="rounded-xl border border-white/10 bg-surface p-6 hover:border-primary/30 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-primary/5">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-[#B8A6A1] font-medium">
-                <div className="h-8 w-8 rounded-lg bg-[#E85D2C]/10 flex items-center justify-center">
-                  <DollarSign className="w-4 h-4 text-[#E85D2C]" />
+                <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <DollarSign className="w-4 h-4 text-primary" />
                 </div>
                 Total Earnings
               </div>
@@ -256,11 +256,11 @@ export default function ArtistAnalyticsSummaryPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-[#15100E] p-6 hover:border-[#E85D2C]/30 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-[#E85D2C]/5">
+          <div className="rounded-xl border border-white/10 bg-surface p-6 hover:border-primary/30 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-primary/5">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-[#B8A6A1] font-medium">
-                <div className="h-8 w-8 rounded-lg bg-[#E85D2C]/10 flex items-center justify-center">
-                  <Users className="w-4 h-4 text-[#E85D2C]" />
+                <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Users className="w-4 h-4 text-primary" />
                 </div>
                 Subscribers
               </div>
@@ -282,10 +282,10 @@ export default function ArtistAnalyticsSummaryPage() {
 
         {/* Smart Insights Banner */}
         {!isEmpty && !loading && (
-          <div className="mb-8 rounded-xl border border-[#E85D2C]/20 bg-gradient-to-r from-[#E85D2C]/10 to-[#0A0A0A] p-5 md:p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="mb-8 rounded-xl border border-primary/20 bg-gradient-to-r from-primary/10 to-background p-5 md:p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-full bg-[#E85D2C]/20 flex items-center justify-center border border-[#E85D2C]/30">
-                <Sparkles className="w-6 h-6 text-[#E85D2C]" />
+              <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center border border-primary/30">
+                <Sparkles className="w-6 h-6 text-primary" />
               </div>
               <div>
                 <h4 className="text-white font-semibold mb-0.5 text-sm">
@@ -315,15 +315,15 @@ export default function ArtistAnalyticsSummaryPage() {
         {/* Performance Trend Card */}
         <div className="mb-8">
           <ErrorBoundary label="Artist Analytics: Growth Chart">
-            <div className="rounded-2xl border border-white/10 bg-[#15100E] p-6 sm:p-8 shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-[#E85D2C]/5 rounded-full blur-[100px] pointer-events-none" />
+            <div className="rounded-2xl border border-white/10 bg-surface p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
 
               {/* Header */}
               <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 mb-6 relative z-10">
                 <div>
                   <div className="flex items-center gap-3 mb-1">
-                    <div className="w-10 h-10 rounded-xl bg-[#E85D2C]/10 flex items-center justify-center border border-[#E85D2C]/20">
-                      <LineChart className="w-5 h-5 text-[#E85D2C]" />
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+                      <LineChart className="w-5 h-5 text-primary" />
                     </div>
                     <div>
                       <h3 className="text-xl font-bold text-white">
@@ -339,7 +339,7 @@ export default function ArtistAnalyticsSummaryPage() {
                 </div>
 
                 {/* Time Range Pills */}
-                <div className="flex items-center gap-1 bg-[#0A0A0A]/60 p-1 rounded-xl border border-white/5">
+                <div className="flex items-center gap-1 bg-background/60 p-1 rounded-xl border border-white/5">
                   {[
                     { val: 7, label: "7D" },
                     { val: 30, label: "30D" },
@@ -351,7 +351,7 @@ export default function ArtistAnalyticsSummaryPage() {
                       onClick={() => setTimeFilter(t.val as TimeFilter)}
                       className={`px-4 py-2 text-xs font-medium rounded-lg transition-all duration-200 ${
                         timeFilter === t.val
-                          ? "bg-[#E85D2C] text-white shadow-lg shadow-[#E85D2C]/25"
+                          ? "bg-primary text-white shadow-lg shadow-primary/25"
                           : "text-[#8D7B77] hover:text-white hover:bg-white/5"
                       }`}>
                       {t.label}
@@ -421,14 +421,14 @@ export default function ArtistAnalyticsSummaryPage() {
                 <span className="text-[#8D7B77] text-sm font-medium">
                   Show:
                 </span>
-                <div className="flex p-1 bg-[#0A0A0A]/60 rounded-lg border border-white/5">
+                <div className="flex p-1 bg-background/60 rounded-lg border border-white/5">
                   {(["plays", "earnings"] as MetricType[]).map((m) => (
                     <button
                       key={m}
                       onClick={() => setMetricFilter(m)}
                       className={`flex items-center gap-2 px-4 py-2 text-sm font-medium capitalize rounded-md transition-all ${
                         metricFilter === m
-                          ? "bg-[#E85D2C] text-white shadow-lg shadow-[#E85D2C]/25"
+                          ? "bg-primary text-white shadow-lg shadow-primary/25"
                           : "text-[#8D7B77] hover:text-white"
                       }`}>
                       {m === "plays" ? (
@@ -459,8 +459,8 @@ export default function ArtistAnalyticsSummaryPage() {
                   </div>
                 ) : isEmpty ? (
                   <div className="h-full w-full flex flex-col items-center justify-center">
-                    <div className="w-16 h-16 rounded-full bg-[#E85D2C]/10 flex items-center justify-center mb-4">
-                      <BarChart3 className="w-8 h-8 text-[#E85D2C] opacity-50" />
+                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                      <BarChart3 className="w-8 h-8 text-primary opacity-50" />
                     </div>
                     <p className="text-white font-medium mb-1">No data yet</p>
                     <p className="text-[#8D7B77] text-sm">
@@ -481,17 +481,17 @@ export default function ArtistAnalyticsSummaryPage() {
                           y2="1">
                           <stop
                             offset="5%"
-                            stopColor="#E85D2C"
+                            stopColor="var(--color-primary)"
                             stopOpacity={0.4}
                           />
                           <stop
                             offset="50%"
-                            stopColor="#E85D2C"
+                            stopColor="var(--color-primary)"
                             stopOpacity={0.15}
                           />
                           <stop
                             offset="95%"
-                            stopColor="#E85D2C"
+                            stopColor="var(--color-primary)"
                             stopOpacity={0}
                           />
                         </linearGradient>
@@ -536,35 +536,35 @@ export default function ArtistAnalyticsSummaryPage() {
                       <Tooltip
                         content={<CustomTooltip metric={metricFilter} />}
                         cursor={{
-                          stroke: "#E85D2C",
+                          stroke: "var(--color-primary)",
                           strokeWidth: 1,
                           strokeDasharray: "4 4",
                         }}
                       />
                       <ReferenceLine
                         y={chartStats.avg}
-                        stroke="#E85D2C"
+                        stroke="var(--color-primary)"
                         strokeDasharray="4 4"
                         strokeOpacity={0.5}
                       />
                       <Area
                         type="monotone"
                         dataKey="value"
-                        stroke="#E85D2C"
+                        stroke="var(--color-primary)"
                         strokeWidth={3}
                         fillOpacity={1}
                         fill="url(#colorAnalyticsMetric)"
                         activeDot={{
                           r: 8,
-                          fill: "#E85D2C",
+                          fill: "var(--color-primary)",
                           stroke: "#fff",
                           strokeWidth: 3,
                           fillOpacity: 1,
                         }}
                         dot={{
                           r: 4,
-                          fill: "#E85D2C",
-                          stroke: "#0A0A0A",
+                          fill: "var(--color-primary)",
+                          stroke: "var(--color-bg)",
                           strokeWidth: 2,
                         }}
                         animationDuration={1500}
@@ -579,7 +579,7 @@ export default function ArtistAnalyticsSummaryPage() {
               {!loading && !isEmpty && (
                 <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t border-white/5 relative z-10">
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-[#E85D2C]" />
+                    <div className="w-3 h-3 rounded-full bg-primary" />
                     <span className="text-[#8D7B77] text-xs">
                       {metricFilter === "earnings"
                         ? "Daily Earnings"
@@ -587,7 +587,7 @@ export default function ArtistAnalyticsSummaryPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-0 border-t border-dashed border-[#E85D2C] opacity-50" />
+                    <div className="w-6 h-0 border-t border-dashed border-primary opacity-50" />
                     <span className="text-[#8D7B77] text-xs">Average</span>
                   </div>
                 </div>

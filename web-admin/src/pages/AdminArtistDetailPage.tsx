@@ -164,7 +164,7 @@ function Toggle({
       type="button"
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-[24px] w-[48px] items-center rounded-full transition-all ${
-        checked ? "bg-[#E85D2C]" : "bg-[#2A2A2A]"
+        checked ? "bg-primary" : "bg-[#2A2A2A]"
       }`}>
       <span
         className={`inline-block h-[18px] w-[18px] rounded-full bg-white shadow-lg transition-transform ${
@@ -680,13 +680,13 @@ export default function AdminArtistDetailPage() {
       </Link>
 
       {/* Header Banner */}
-      <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E]">
+      <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-surface">
         <div className="h-[200px] w-full" style={headerBannerStyle} />
         <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/25 to-black/65" />
 
         <div className="relative px-6 pb-6 -mt-12">
           <div className="flex items-end gap-6">
-            <div className="h-[88px] w-[88px] rounded-2xl border-2 border-white/10 bg-[#0A0A0A] overflow-hidden shadow-xl">
+            <div className="h-[88px] w-[88px] rounded-2xl border-2 border-white/10 bg-background overflow-hidden shadow-xl">
               {artist?.profileImage ? (
                 <img
                   src={artist.profileImage}
@@ -745,7 +745,7 @@ export default function AdminArtistDetailPage() {
             onClick={() => setActiveDetailTab("PROFILE")}
             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
               activeDetailTab === "PROFILE"
-                ? "border-[#E85D2C] text-[#E85D2C]"
+                ? "border-primary text-primary"
                 : "border-transparent text-[#8D7B77] hover:text-white"
             }`}>
             <User size={18} />
@@ -755,7 +755,7 @@ export default function AdminArtistDetailPage() {
             onClick={() => setActiveDetailTab("AGREEMENT")}
             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
               activeDetailTab === "AGREEMENT"
-                ? "border-[#E85D2C] text-[#E85D2C]"
+                ? "border-primary text-primary"
                 : "border-transparent text-[#8D7B77] hover:text-white"
             }`}>
             <FileText size={18} />
@@ -770,10 +770,10 @@ export default function AdminArtistDetailPage() {
           {/* Left Column */}
           <div className="space-y-6">
             {/* Subscription Pricing */}
-            <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
+            <div className="rounded-2xl border border-white/5 bg-surface p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 rounded-xl bg-[#E85D2C]/10">
-                  <DollarSign size={18} className="text-[#E85D2C]" />
+                <div className="p-2 rounded-xl bg-primary/10">
+                  <DollarSign size={18} className="text-primary" />
                 </div>
                 <h3 className="text-sm font-semibold text-white">
                   Subscription Pricing
@@ -795,7 +795,7 @@ export default function AdminArtistDetailPage() {
                   value={draftSubscriptionPrice}
                   onChange={(e) => setDraftSubscriptionPrice(e.target.value)}
                   disabled={busy}
-                  className="mt-1.5 w-full h-[42px] rounded-xl bg-black/30 border border-white/10 px-4 text-white outline-none focus:border-[#E85D2C]/50 transition-all disabled:opacity-50"
+                  className="mt-1.5 w-full h-[42px] rounded-xl bg-black/30 border border-white/10 px-4 text-white outline-none focus:border-primary/50 transition-all disabled:opacity-50"
                   placeholder="0"
                   inputMode="decimal"
                 />
@@ -803,7 +803,7 @@ export default function AdminArtistDetailPage() {
             </div>
 
             {/* Professional Info */}
-            <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
+            <div className="rounded-2xl border border-white/5 bg-surface p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 rounded-xl bg-blue-500/10">
                   <Music size={18} className="text-blue-400" />
@@ -822,7 +822,7 @@ export default function AdminArtistDetailPage() {
                     value={draftGenre}
                     onChange={(e) => setDraftGenre(e.target.value)}
                     disabled={busy}
-                    className="mt-1.5 w-full h-[42px] rounded-xl bg-black/30 border border-white/10 px-4 text-white outline-none focus:border-[#E85D2C]/50 transition-all disabled:opacity-50"
+                    className="mt-1.5 w-full h-[42px] rounded-xl bg-black/30 border border-white/10 px-4 text-white outline-none focus:border-primary/50 transition-all disabled:opacity-50"
                     placeholder="Hip-hop, Pop, Classical..."
                   />
                 </div>
@@ -835,7 +835,7 @@ export default function AdminArtistDetailPage() {
                     value={draftRevenueShare}
                     onChange={(e) => setDraftRevenueShare(e.target.value)}
                     disabled={busy}
-                    className="mt-1.5 w-full h-[42px] rounded-xl bg-black/30 border border-white/10 px-4 text-white outline-none focus:border-[#E85D2C]/50 transition-all disabled:opacity-50"
+                    className="mt-1.5 w-full h-[42px] rounded-xl bg-black/30 border border-white/10 px-4 text-white outline-none focus:border-primary/50 transition-all disabled:opacity-50"
                     placeholder="90"
                     inputMode="decimal"
                   />
@@ -849,7 +849,7 @@ export default function AdminArtistDetailPage() {
                 <button
                   type="button"
                   onClick={() => setShowRevenueModal(true)}
-                  className="w-full h-[42px] rounded-xl border border-[#E85D2C]/30 bg-[#E85D2C]/10 text-sm text-[#E85D2C] hover:bg-[#E85D2C]/20 transition-all flex items-center justify-center gap-2">
+                  className="w-full h-[42px] rounded-xl border border-primary/30 bg-primary/10 text-sm text-primary hover:bg-primary/20 transition-all flex items-center justify-center gap-2">
                   <Settings size={16} />
                   Manage Future Revenue
                 </button>
@@ -863,7 +863,7 @@ export default function AdminArtistDetailPage() {
                     onChange={(e) => setDraftSocialLinks(e.target.value)}
                     disabled={busy}
                     rows={4}
-                    className="mt-1.5 w-full rounded-xl bg-black/30 border border-white/10 px-4 py-2 text-sm text-white outline-none focus:border-[#E85D2C]/50 transition-all disabled:opacity-50 resize-none"
+                    className="mt-1.5 w-full rounded-xl bg-black/30 border border-white/10 px-4 py-2 text-sm text-white outline-none focus:border-primary/50 transition-all disabled:opacity-50 resize-none"
                     placeholder='{"instagram":"https://...","spotify":"https://..."}'
                   />
                 </div>
@@ -871,7 +871,7 @@ export default function AdminArtistDetailPage() {
             </div>
 
             {/* Artist Status */}
-            <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
+            <div className="rounded-2xl border border-white/5 bg-surface p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 rounded-xl bg-purple-500/10">
                   <Shield size={18} className="text-purple-400" />
@@ -947,7 +947,7 @@ export default function AdminArtistDetailPage() {
           {/* Right Column */}
           <div className="space-y-6">
             {/* Agreement Information */}
-            <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
+            <div className="rounded-2xl border border-white/5 bg-surface p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 rounded-xl bg-purple-500/10">
                   <FileText size={18} className="text-purple-400" />
@@ -1170,7 +1170,7 @@ export default function AdminArtistDetailPage() {
                               window.open(artist.digitalSignature, '_blank');
                             }
                           }}
-                          className="text-xs text-[#E85D2C] hover:text-[#E85D2C]/80 transition-all">
+                          className="text-xs text-primary hover:text-primary/80 transition-all">
                           View Full Signature
                         </button>
                       </div>
@@ -1205,7 +1205,7 @@ export default function AdminArtistDetailPage() {
 
             {/* Terms & Conditions */}
             {artist?.agreementAccepted && (
-              <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
+              <div className="rounded-2xl border border-white/5 bg-surface p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-xl bg-blue-500/10">
@@ -1262,7 +1262,7 @@ export default function AdminArtistDetailPage() {
 
             {/* Agreement Timeline */}
             {artist?.agreementAccepted && (
-              <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
+              <div className="rounded-2xl border border-white/5 bg-surface p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="p-2 rounded-xl bg-orange-500/10">
                     <Clock size={18} className="text-orange-400" />
@@ -1274,7 +1274,7 @@ export default function AdminArtistDetailPage() {
 
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 rounded-full bg-[#E85D2C] mt-1.5 shrink-0" />
+                    <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
                     <div className="flex-1">
                       <p className="text-xs text-[#8D7B77]">Agreement Created</p>
                       <p className="text-sm text-white">
@@ -1346,7 +1346,7 @@ export default function AdminArtistDetailPage() {
 
             {/* Audit Trail */}
             {artist?.agreementAccepted && (
-              <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
+              <div className="rounded-2xl border border-white/5 bg-surface p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="p-2 rounded-xl bg-indigo-500/10">
                     <Activity size={18} className="text-indigo-400" />
@@ -1403,7 +1403,7 @@ export default function AdminArtistDetailPage() {
             )}
 
             {/* Content History */}
-            <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
+            <div className="rounded-2xl border border-white/5 bg-surface p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-xl bg-green-500/10">
@@ -1438,7 +1438,7 @@ export default function AdminArtistDetailPage() {
                   onClick={() => setHistoryTab("AUDIO")}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     historyTab === "AUDIO"
-                      ? "bg-[#E85D2C]/10 text-[#E85D2C] border border-[#E85D2C]/20"
+                      ? "bg-primary/10 text-primary border border-primary/20"
                       : "text-[#8D7B77] hover:text-white"
                   }`}>
                   <Volume2 size={12} className="inline mr-1" />
@@ -1449,7 +1449,7 @@ export default function AdminArtistDetailPage() {
                   onClick={() => setHistoryTab("VIDEO")}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     historyTab === "VIDEO"
-                      ? "bg-[#E85D2C]/10 text-[#E85D2C] border border-[#E85D2C]/20"
+                      ? "bg-primary/10 text-primary border border-primary/20"
                       : "text-[#8D7B77] hover:text-white"
                   }`}>
                   <Video size={12} className="inline mr-1" />
@@ -1459,7 +1459,7 @@ export default function AdminArtistDetailPage() {
                 <select
                   value={historyFilter}
                   onChange={(e) => setHistoryFilter(e.target.value as any)}
-                  className="ml-auto h-[30px] rounded-lg bg-black/30 border border-white/10 px-2 text-xs text-white outline-none focus:border-[#E85D2C]/50">
+                  className="ml-auto h-[30px] rounded-lg bg-black/30 border border-white/10 px-2 text-xs text-white outline-none focus:border-primary/50">
                   <option value="ALL">All</option>
                   <option value="AUDIO_ONLY">Audio Only</option>
                   <option value="VIDEO_ONLY">Video Only</option>
@@ -1492,7 +1492,7 @@ export default function AdminArtistDetailPage() {
                     return (
                       <div
                         key={item.id}
-                        className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5 hover:border-[#E85D2C]/30 transition-all">
+                        className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5 hover:border-primary/30 transition-all">
                         <div className="h-[46px] w-[46px] rounded-xl bg-black/30 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
                           {thumbSrc ? (
                             <img
@@ -1546,7 +1546,7 @@ export default function AdminArtistDetailPage() {
             </div>
 
             {/* About Artist */}
-            <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
+            <div className="rounded-2xl border border-white/5 bg-surface p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 rounded-xl bg-yellow-500/10">
                   <User size={18} className="text-yellow-400" />
@@ -1577,7 +1577,7 @@ export default function AdminArtistDetailPage() {
             </div>
 
             {/* Profile Details */}
-            <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
+            <div className="rounded-2xl border border-white/5 bg-surface p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 rounded-xl bg-pink-500/10">
                   <Edit size={18} className="text-pink-400" />
@@ -1596,7 +1596,7 @@ export default function AdminArtistDetailPage() {
                     value={draftName}
                     onChange={(e) => setDraftName(e.target.value)}
                     disabled={busy}
-                    className="mt-1.5 w-full h-[42px] rounded-xl bg-black/30 border border-white/10 px-4 text-white outline-none focus:border-[#E85D2C]/50 transition-all disabled:opacity-50"
+                    className="mt-1.5 w-full h-[42px] rounded-xl bg-black/30 border border-white/10 px-4 text-white outline-none focus:border-primary/50 transition-all disabled:opacity-50"
                     placeholder="Artist name"
                   />
                 </div>
@@ -1608,7 +1608,7 @@ export default function AdminArtistDetailPage() {
                     value={draftPhone}
                     onChange={(e) => setDraftPhone(e.target.value)}
                     disabled={busy}
-                    className="mt-1.5 w-full h-[42px] rounded-xl bg-black/30 border border-white/10 px-4 text-white outline-none focus:border-[#E85D2C]/50 transition-all disabled:opacity-50"
+                    className="mt-1.5 w-full h-[42px] rounded-xl bg-black/30 border border-white/10 px-4 text-white outline-none focus:border-primary/50 transition-all disabled:opacity-50"
                     placeholder="+1 555 123 4567"
                   />
                 </div>
@@ -1621,7 +1621,7 @@ export default function AdminArtistDetailPage() {
                     onChange={(e) => setDraftBio(e.target.value)}
                     disabled={busy}
                     rows={3}
-                    className="mt-1.5 w-full rounded-xl bg-black/30 border border-white/10 px-4 py-2 text-sm text-white outline-none focus:border-[#E85D2C]/50 transition-all disabled:opacity-50 resize-none"
+                    className="mt-1.5 w-full rounded-xl bg-black/30 border border-white/10 px-4 py-2 text-sm text-white outline-none focus:border-primary/50 transition-all disabled:opacity-50 resize-none"
                     placeholder="Short bio"
                   />
                 </div>
@@ -1635,14 +1635,14 @@ export default function AdminArtistDetailPage() {
                 type="button"
                 disabled={busy}
                 onClick={saveAll}
-                className="mt-4 w-full h-[42px] rounded-xl bg-gradient-to-r from-[#E85D2C] to-[#C97A54] text-white font-medium hover:shadow-lg hover:shadow-[#E85D2C]/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                className="mt-4 w-full h-[42px] rounded-xl bg-gradient-to-r from-primary to-secondary text-white font-medium hover:shadow-lg hover:shadow-primary/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
                 <Save size={16} />
                 {busy ? "Saving..." : "Save Changes"}
               </button>
             </div>
 
             {/* Admin Remarks */}
-            <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
+            <div className="rounded-2xl border border-white/5 bg-surface p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 rounded-xl bg-orange-500/10">
                   <Settings size={18} className="text-orange-400" />
@@ -1657,7 +1657,7 @@ export default function AdminArtistDetailPage() {
                 onChange={(e) => setDraftAdminRemarks(e.target.value)}
                 disabled={busy}
                 rows={4}
-                className="w-full rounded-xl bg-black/30 border border-white/10 px-4 py-2 text-sm text-white outline-none focus:border-[#E85D2C]/50 transition-all disabled:opacity-50 resize-none"
+                className="w-full rounded-xl bg-black/30 border border-white/10 px-4 py-2 text-sm text-white outline-none focus:border-primary/50 transition-all disabled:opacity-50 resize-none"
                 placeholder="Internal notes visible only to admins..."
               />
             </div>
@@ -1670,10 +1670,10 @@ export default function AdminArtistDetailPage() {
         <div className="mt-6 space-y-6">
           {/* Agreement Information */}
           {artist?.agreementAccepted ? (
-            <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
+            <div className="rounded-2xl border border-white/5 bg-surface p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 rounded-xl bg-[#E85D2C]/10">
-                  <FileText size={18} className="text-[#E85D2C]" />
+                <div className="p-2 rounded-xl bg-primary/10">
+                  <FileText size={18} className="text-primary" />
                 </div>
                 <h3 className="text-sm font-semibold text-white">
                   Agreement Details
@@ -1703,11 +1703,11 @@ export default function AdminArtistDetailPage() {
                 </div>
                 <div className="p-3 rounded-xl bg-white/5">
                   <p className="text-xs text-[#8D7B77] mb-1">Artist Share</p>
-                  <p className="text-lg font-bold text-[#E85D2C]">{artist.artistRevenueShare}%</p>
+                  <p className="text-lg font-bold text-primary">{artist.artistRevenueShare}%</p>
                 </div>
                 <div className="p-3 rounded-xl bg-white/5">
                   <p className="text-xs text-[#8D7B77] mb-1">Platform Share</p>
-                  <p className="text-lg font-bold text-[#C97A54]">{artist.platformRevenueShare}%</p>
+                  <p className="text-lg font-bold text-secondary">{artist.platformRevenueShare}%</p>
                 </div>
                 <div className="p-3 rounded-xl bg-white/5">
                   <p className="text-xs text-[#8D7B77] mb-1">Agreement Version</p>
@@ -1723,7 +1723,7 @@ export default function AdminArtistDetailPage() {
                 <button
                   onClick={handleDownloadPdf}
                   disabled={busy}
-                  className="flex-1 h-[42px] rounded-xl border border-[#E85D2C]/30 bg-[#E85D2C]/10 text-sm text-[#E85D2C] hover:bg-[#E85D2C]/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                  className="flex-1 h-[42px] rounded-xl border border-primary/30 bg-primary/10 text-sm text-primary hover:bg-primary/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
                   <Download size={16} />
                   {busy ? "Downloading..." : "Download PDF"}
                 </button>
@@ -1752,7 +1752,7 @@ export default function AdminArtistDetailPage() {
               </div>
             </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-[#15100E] p-12 text-center">
+            <div className="rounded-2xl border border-dashed border-white/10 bg-surface p-12 text-center">
               <FileText className="w-16 h-16 text-[#8D7B77] mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-white mb-2">No Agreement Signed</h3>
               <p className="text-sm text-[#8D7B77]">This artist has not signed an agreement yet.</p>
@@ -1761,7 +1761,7 @@ export default function AdminArtistDetailPage() {
 
           {/* Digital Signature */}
           {artist?.digitalSignature && (
-            <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
+            <div className="rounded-2xl border border-white/5 bg-surface p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 rounded-xl bg-purple-500/10">
                   <ShieldCheck size={18} className="text-purple-400" />
@@ -1803,7 +1803,7 @@ export default function AdminArtistDetailPage() {
 
           {/* Agreement Timeline */}
           {artist?.agreementAccepted && (
-            <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
+            <div className="rounded-2xl border border-white/5 bg-surface p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 rounded-xl bg-orange-500/10">
                   <Clock size={18} className="text-orange-400" />
@@ -1815,7 +1815,7 @@ export default function AdminArtistDetailPage() {
 
               <div className="space-y-3">
                 <div className="flex items-start gap-3">
-                  <div className="w-2 h-2 rounded-full bg-[#E85D2C] mt-1.5 shrink-0" />
+                  <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
                   <div className="flex-1">
                     <p className="text-xs text-[#8D7B77]">Agreement Created</p>
                     <p className="text-sm text-white">
@@ -1872,7 +1872,7 @@ export default function AdminArtistDetailPage() {
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={() => setConfirmDelete(null)}
           />
-          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#15100E] p-6 shadow-2xl">
+          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-surface p-6 shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 rounded-xl bg-red-500/10">
                 <AlertTriangle size={20} className="text-red-400" />
@@ -1913,7 +1913,7 @@ export default function AdminArtistDetailPage() {
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={() => setPreviewItem(null)}
           />
-          <div className="relative w-full max-w-2xl rounded-2xl border border-white/10 bg-[#15100E] p-6 shadow-2xl">
+          <div className="relative w-full max-w-2xl rounded-2xl border border-white/10 bg-surface p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-lg font-semibold text-white">
@@ -1974,7 +1974,7 @@ export default function AdminArtistDetailPage() {
               if (!softDeleteBusy) setSoftDeleteOpen(false);
             }}
           />
-          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#15100E] p-6 shadow-2xl">
+          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-surface p-6 shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 rounded-xl bg-red-500/10">
                 <AlertTriangle size={20} className="text-red-400" />
@@ -1997,7 +1997,7 @@ export default function AdminArtistDetailPage() {
                 onChange={(e) => setSoftDeleteReason(e.target.value)}
                 disabled={softDeleteBusy}
                 rows={3}
-                className="mt-1.5 w-full rounded-xl bg-black/30 border border-white/10 px-4 py-2 text-sm text-white outline-none focus:border-[#E85D2C]/50 transition-all disabled:opacity-50 resize-none"
+                className="mt-1.5 w-full rounded-xl bg-black/30 border border-white/10 px-4 py-2 text-sm text-white outline-none focus:border-primary/50 transition-all disabled:opacity-50 resize-none"
                 placeholder="e.g. Policy violation, requested deactivation..."
               />
               {softDeleteError && (
@@ -2036,10 +2036,10 @@ export default function AdminArtistDetailPage() {
               if (!revenueModalBusy) setShowRevenueModal(false);
             }}
           />
-          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#15100E] p-6 shadow-2xl">
+          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-surface p-6 shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 rounded-xl bg-[#E85D2C]/10">
-                <Settings size={20} className="text-[#E85D2C]" />
+              <div className="p-2 rounded-xl bg-primary/10">
+                <Settings size={20} className="text-primary" />
               </div>
               <h3 className="text-lg font-semibold text-white">
                 Manage Future Revenue
@@ -2058,7 +2058,7 @@ export default function AdminArtistDetailPage() {
                   value={futureArtistShare}
                   onChange={(e) => setFutureArtistShare(e.target.value)}
                   disabled={revenueModalBusy}
-                  className="mt-1.5 w-full h-[42px] rounded-xl bg-black/30 border border-white/10 px-4 text-white outline-none focus:border-[#E85D2C]/50 transition-all disabled:opacity-50"
+                  className="mt-1.5 w-full h-[42px] rounded-xl bg-black/30 border border-white/10 px-4 text-white outline-none focus:border-primary/50 transition-all disabled:opacity-50"
                   placeholder="55"
                   inputMode="decimal"
                 />
@@ -2071,7 +2071,7 @@ export default function AdminArtistDetailPage() {
                   value={futurePlatformShare}
                   onChange={(e) => setFuturePlatformShare(e.target.value)}
                   disabled={revenueModalBusy}
-                  className="mt-1.5 w-full h-[42px] rounded-xl bg-black/30 border border-white/10 px-4 text-white outline-none focus:border-[#E85D2C]/50 transition-all disabled:opacity-50"
+                  className="mt-1.5 w-full h-[42px] rounded-xl bg-black/30 border border-white/10 px-4 text-white outline-none focus:border-primary/50 transition-all disabled:opacity-50"
                   placeholder="45"
                   inputMode="decimal"
                 />
@@ -2110,7 +2110,7 @@ export default function AdminArtistDetailPage() {
                     setRevenueModalBusy(false);
                   }
                 }}
-                className="flex-1 h-[42px] rounded-xl bg-[#E85D2C] text-white font-medium hover:bg-[#E85D2C]/90 transition-all disabled:opacity-50">
+                className="flex-1 h-[42px] rounded-xl bg-primary text-white font-medium hover:bg-primary/90 transition-all disabled:opacity-50">
                 {revenueModalBusy ? "Updating..." : "Update Configuration"}
               </button>
             </div>
@@ -2127,7 +2127,7 @@ export default function AdminArtistDetailPage() {
               if (!termsModalBusy) setShowTermsModal(false);
             }}
           />
-          <div className="relative w-full max-w-2xl rounded-2xl border border-white/10 bg-[#15100E] p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="relative w-full max-w-2xl rounded-2xl border border-white/10 bg-surface p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 rounded-xl bg-blue-500/10">
                 <FileText size={20} className="text-blue-400" />
@@ -2150,7 +2150,7 @@ export default function AdminArtistDetailPage() {
                   onChange={(e) => setNewTermsContent(e.target.value)}
                   disabled={termsModalBusy}
                   rows={12}
-                  className="mt-1.5 w-full rounded-xl bg-black/30 border border-white/10 px-4 py-3 text-sm text-white outline-none focus:border-[#E85D2C]/50 transition-all disabled:opacity-50 resize-none font-mono"
+                  className="mt-1.5 w-full rounded-xl bg-black/30 border border-white/10 px-4 py-3 text-sm text-white outline-none focus:border-primary/50 transition-all disabled:opacity-50 resize-none font-mono"
                   placeholder="Enter the terms and conditions content..."
                 />
               </div>

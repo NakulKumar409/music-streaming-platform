@@ -97,14 +97,14 @@ function StatCard({
   subtitle?: string;
 }) {
   const colorMap = {
-    orange: "from-[#E85D2C] to-[#C97A54]",
+    orange: "from-primary to-secondary",
     purple: "from-[#8B5CF6] to-[#6D28D9]",
     green: "from-[#10B981] to-[#059669]",
     blue: "from-[#3B82F6] to-[#2563EB]",
   };
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-6 hover:border-white/10 transition-all duration-300">
+    <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-surface p-6 hover:border-white/10 transition-all duration-300">
       <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent" />
 
       <div className="relative flex items-start justify-between">
@@ -286,7 +286,7 @@ export default function AdminAnalyticsPage() {
         <button
           onClick={fetchData}
           disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#E85D2C] text-white text-sm font-medium hover:bg-[#C97A54] transition-all disabled:opacity-50">
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium hover:bg-secondary transition-all disabled:opacity-50">
           <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
           Apply
         </button>
@@ -318,11 +318,11 @@ export default function AdminAnalyticsPage() {
 
       {/* Revenue Chart */}
       <div className="grid grid-cols-1 gap-6 mb-6">
-        <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-6">
+        <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-surface p-6">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-[#E85D2C]/10">
-                <LineChartIcon size={20} className="text-[#E85D2C]" />
+              <div className="p-2.5 rounded-xl bg-primary/10">
+                <LineChartIcon size={20} className="text-primary" />
               </div>
               <div>
                 <h3 className="text-sm font-medium text-[#8D7B77]">
@@ -365,7 +365,7 @@ export default function AdminAnalyticsPage() {
                 />
                 <Tooltip
                   contentStyle={{
-                    background: "#15100E",
+                    background: "var(--color-surface)",
                     border: "1px solid rgba(255,255,255,0.05)",
                     borderRadius: "12px",
                     padding: "12px",
@@ -377,10 +377,10 @@ export default function AdminAnalyticsPage() {
                 <Line
                   type="monotone"
                   dataKey="value"
-                  stroke="#E85D2C"
+                  stroke="var(--color-primary)"
                   strokeWidth={2.5}
-                  dot={{ r: 3, fill: "#E85D2C", strokeWidth: 0 }}
-                  activeDot={{ r: 6, fill: "#E85D2C", strokeWidth: 0 }}
+                  dot={{ r: 3, fill: "var(--color-primary)", strokeWidth: 0 }}
+                  activeDot={{ r: 6, fill: "var(--color-primary)", strokeWidth: 0 }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -406,7 +406,7 @@ export default function AdminAnalyticsPage() {
       {/* Top Artists Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Performing Artists */}
-        <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-6">
+        <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-surface p-6">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-purple-500/10">
@@ -453,7 +453,7 @@ export default function AdminAnalyticsPage() {
                     <div
                       className={`w-1.5 h-8 rounded-full ${
                         i === 0
-                          ? "bg-[#E85D2C]"
+                          ? "bg-primary"
                           : i === 1
                           ? "bg-purple-400"
                           : "bg-blue-400"
@@ -463,7 +463,7 @@ export default function AdminAnalyticsPage() {
                       {a.name}
                     </span>
                   </div>
-                  <span className="text-sm font-medium text-[#E85D2C]">
+                  <span className="text-sm font-medium text-primary">
                     {formatCurrency(a.revenue)}
                   </span>
                 </div>
@@ -479,7 +479,7 @@ export default function AdminAnalyticsPage() {
         </div>
 
         {/* Popular Artists (Activity) */}
-        <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-6">
+        <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-surface p-6">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-blue-500/10">

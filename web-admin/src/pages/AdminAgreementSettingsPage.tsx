@@ -37,7 +37,7 @@ export default function AdminAgreementSettingsPage() {
     <PageWrapper>
       <div className="space-y-6">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-[#E85D2C]/20 text-[#E85D2C]">
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/20 text-primary">
             <FileSignature size={20} />
           </div>
           <div>
@@ -55,7 +55,7 @@ export default function AdminAgreementSettingsPage() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === tab.id
-                    ? "border-[#E85D2C] text-[#E85D2C]"
+                    ? "border-primary text-primary"
                     : "border-transparent text-[#8D7B77] hover:text-white"
                 }`}
               >

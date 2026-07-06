@@ -1258,7 +1258,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   // Polling for progress updates - works on both web and native
   // PlaybackProgress events may not fire consistently on all platforms
   useEffect(() => {
-    console.log("[MediaPlayer] Progress polling effect - TrackPlayerAvailable:", TrackPlayerAvailable, "isPlayerReady:", isPlayerReady);
     if (!TrackPlayerAvailable || !isPlayerReady) return;
 
     let isPolling = false;
@@ -1270,8 +1269,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         const progress = await TrackPlayer.getProgress();
         const pos = Math.max(0, Math.round(progress.position * 1000));
         const dur = Math.max(0, Math.round(progress.duration * 1000));
-
-        console.log("[MediaPlayer] Polling progress:", { pos, dur, isPlaying: stateRef.current.isPlaying });
 
         setState((s) => ({
           ...s,

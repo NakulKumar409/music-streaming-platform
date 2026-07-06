@@ -107,7 +107,7 @@ export default function AdminCommissionPlansPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-[#E85D2C]/20 text-[#E85D2C]">
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/20 text-primary">
             <DollarSign size={20} />
           </div>
           <div>
@@ -117,7 +117,7 @@ export default function AdminCommissionPlansPage() {
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-[#E85D2C] text-white rounded-lg hover:bg-[#E85D2C]/90 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
         >
           <Plus size={18} />
           Create Plan
@@ -126,7 +126,7 @@ export default function AdminCommissionPlansPage() {
 
       {loading ? (
         <div className="text-center py-12">
-          <div className="w-10 h-10 border-4 border-[#E85D2C]/30 border-t-[#E85D2C] rounded-full animate-spin mx-auto mb-3" />
+          <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-3" />
           <p className="text-sm text-[#8D7B77]">Loading plans...</p>
         </div>
       ) : plans.length === 0 ? (
@@ -136,7 +136,7 @@ export default function AdminCommissionPlansPage() {
           <p className="text-sm text-[#8D7B77] mb-4">Create your first commission plan to get started</p>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#E85D2C] text-white rounded-lg hover:bg-[#E85D2C]/90 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
           >
             <Plus size={18} />
             Create Plan
@@ -149,7 +149,7 @@ export default function AdminCommissionPlansPage() {
               key={plan.id}
               className={`p-6 rounded-xl border ${
                 plan.isActive
-                  ? "bg-[#E85D2C]/5 border-[#E85D2C]/20"
+                  ? "bg-primary/5 border-primary/20"
                   : "bg-white/5 border-white/10 opacity-60"
               }`}
             >
@@ -208,11 +208,11 @@ export default function AdminCommissionPlansPage() {
 
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div className="p-4 rounded-lg bg-white/5">
-                  <div className="text-3xl font-bold text-[#E85D2C]">{plan.artistShare}%</div>
+                  <div className="text-3xl font-bold text-primary">{plan.artistShare}%</div>
                   <div className="text-sm text-[#8D7B77]">Artist Share</div>
                 </div>
                 <div className="p-4 rounded-lg bg-white/5">
-                  <div className="text-3xl font-bold text-[#C97A54]">{plan.platformShare}%</div>
+                  <div className="text-3xl font-bold text-secondary">{plan.platformShare}%</div>
                   <div className="text-sm text-[#8D7B77]">Platform Share</div>
                 </div>
               </div>
@@ -223,7 +223,7 @@ export default function AdminCommissionPlansPage() {
                   <ul className="space-y-1">
                     {plan.benefits.map((benefit, index) => (
                       <li key={index} className="text-sm text-[#B8A6A1] flex items-start gap-2">
-                        <span className="text-[#E85D2C] mt-1">•</span>
+                        <span className="text-primary mt-1">•</span>
                         {benefit}
                       </li>
                     ))}
@@ -241,7 +241,7 @@ export default function AdminCommissionPlansPage() {
 
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-[#0A0A0A] border border-white/10 rounded-2xl p-6 w-full max-w-md">
+          <div className="bg-background border border-white/10 rounded-2xl p-6 w-full max-w-md">
             <h2 className="text-xl font-bold text-white mb-4">Create Commission Plan</h2>
             <CreatePlanForm
               onSubmit={handleCreatePlan}
@@ -287,7 +287,7 @@ function CreatePlanForm({ onSubmit, onCancel }: { onSubmit: (data: any) => void;
         <select
           value={planType}
           onChange={(e) => handlePlanTypeChange(e.target.value)}
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#E85D2C]"
+          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary"
         >
           <option value="" className="text-[#5a4a46]">Select plan type</option>
           <option value="basic" className="text-white bg-[#1a1210]">Basic (70% Artist / 30% Platform)</option>
@@ -308,7 +308,7 @@ function CreatePlanForm({ onSubmit, onCancel }: { onSubmit: (data: any) => void;
             setArtistShare(val);
             setPlatformShare(100 - val);
           }}
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#E85D2C]"
+          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary"
         />
       </div>
       <div>
@@ -323,7 +323,7 @@ function CreatePlanForm({ onSubmit, onCancel }: { onSubmit: (data: any) => void;
             setPlatformShare(val);
             setArtistShare(100 - val);
           }}
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#E85D2C]"
+          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary"
         />
       </div>
       <div className="flex gap-3 pt-4">
@@ -336,7 +336,7 @@ function CreatePlanForm({ onSubmit, onCancel }: { onSubmit: (data: any) => void;
         </button>
         <button
           type="submit"
-          className="flex-1 px-4 py-3 bg-[#E85D2C] text-white rounded-lg hover:bg-[#E85D2C]/90 transition-colors"
+          className="flex-1 px-4 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
         >
           Create Plan
         </button>

@@ -114,7 +114,7 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
       genre,
       agreementAccepted,
       agreementVersion,
-      commissionPlanId,
+      commissionPlanIds,
       digitalSignature,
       termsVersion
     } = req.body as {
@@ -127,7 +127,7 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
       genre?: string;
       agreementAccepted?: boolean;
       agreementVersion?: string;
-      commissionPlanId?: string;
+      commissionPlanIds?: number[];
       digitalSignature?: string;
       termsVersion?: string;
     };
@@ -164,31 +164,24 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
       return res.status(400).json({ success: false, message: "artistName is required", correlationId });
     }
 
-    // Validate commission plan if provided
-    let artistRevenueShare: number | null = null;
-    let platformRevenueShare: number | null = null;
+    // Validate commission plans if provided
+    let selectedPlans: any[] = [];
 
-    if (commissionPlanId) {
+    if (commissionPlanIds && Array.isArray(commissionPlanIds) && commissionPlanIds.length > 0) {
       const planRows = await safeRows<any>(
-        `SELECT id, artist_share, platform_share, is_active 
-         FROM revenue_share_configs 
-         WHERE id = $1 
-         LIMIT 1`,
-        [Number(commissionPlanId)],
+        `SELECT id, artist_share, platform_share, is_active, version
+         FROM revenue_share_configs
+         WHERE id = ANY($1)
+         ORDER BY id`,
+        [commissionPlanIds],
         []
       );
 
-      if (!planRows.length) {
-        return res.status(400).json({ success: false, message: "Invalid commission plan", correlationId });
+      if (planRows.length !== commissionPlanIds.length) {
+        return res.status(400).json({ success: false, message: "One or more invalid commission plans", correlationId });
       }
 
-      const plan = planRows[0];
-      if (!plan.is_active) {
-        return res.status(400).json({ success: false, message: "Commission plan is not active", correlationId });
-      }
-
-      artistRevenueShare = plan.artist_share;
-      platformRevenueShare = plan.platform_share;
+      selectedPlans = planRows;
     }
 
     // Validate terms version if provided

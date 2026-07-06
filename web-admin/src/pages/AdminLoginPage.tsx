@@ -64,14 +64,14 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-[#0A0A0A]">
+    <div className="relative min-h-screen w-full overflow-hidden bg-background">
       {/* Background image with subtle overlay */}
       <div
         className="absolute inset-0 grayscale opacity-25"
         style={backgroundStyle}
       />
       {/* Enhanced radial orange glow + deep shadow */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_40%_50%,rgba(232,93,44,0.15)_0%,rgba(10,10,10,0.85)_60%,#0A0A0A_100%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_40%_50%,rgba(232,93,44,0.15)_0%,rgba(10,10,10,0.85)_60%,var(--color-bg)_100%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_80%,rgba(232,93,44,0.08)_0%,transparent_50%)]" />
       {/* Subtle grid overlay */}
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48cGF0aCBkPSJNMzkuNSAwLjVMMC41IDM5LjUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjAxNSkiIHN0cm9rZS13aWR0aD0iMSIvPjwvc3ZnPg==')] opacity-40" />
@@ -82,10 +82,10 @@ export default function AdminLoginPage() {
           {/* LEFT COLUMN – Enhanced Admin Branding */}
           <div className="order-2 lg:order-1 space-y-8 text-center lg:text-left">
             {/* Premium badge */}
-            <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm text-[#E85D2C] text-sm font-medium tracking-wide mx-auto lg:mx-0 hover:bg-white/10 transition-all duration-300">
-              <ShieldCheck size={16} className="text-[#E85D2C]" />
+            <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm text-primary text-sm font-medium tracking-wide mx-auto lg:mx-0 hover:bg-white/10 transition-all duration-300">
+              <ShieldCheck size={16} className="text-primary" />
               <span>Secure Admin Portal</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-[#E85D2C]/50"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-primary/50"></span>
               <span className="text-[#8D7B77] text-xs">v3.2</span>
             </div>
 
@@ -94,9 +94,9 @@ export default function AdminLoginPage() {
               <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.05]">
                 <span className="text-white">Control</span>
                 <br />
-                <span className="bg-gradient-to-r from-[#E85D2C] via-[#E85D2C] to-[#C97A54] bg-clip-text text-transparent relative">
+                <span className="bg-gradient-to-r from-primary via-primary to-secondary bg-clip-text text-transparent relative">
                   Dashboard
-                  <span className="absolute -inset-1 blur-2xl bg-[#E85D2C]/20 rounded-full -z-10"></span>
+                  <span className="absolute -inset-1 blur-2xl bg-primary/20 rounded-full -z-10"></span>
                 </span>
               </h1>
               <p className="text-[#B8A6A1] text-lg lg:text-xl max-w-md mx-auto lg:mx-0 leading-relaxed font-light">
@@ -119,9 +119,9 @@ export default function AdminLoginPage() {
               ].map((item, idx) => (
                 <div
                   key={idx}
-                  className="group flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 border border-white/5 backdrop-blur-sm hover:bg-white/10 hover:border-[#E85D2C]/20 transition-all duration-300 cursor-default">
-                  <div className="p-1.5 rounded-lg bg-[#E85D2C]/10 group-hover:bg-[#E85D2C]/20 transition-colors">
-                    <item.icon size={18} className="text-[#E85D2C]" />
+                  className="group flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 border border-white/5 backdrop-blur-sm hover:bg-white/10 hover:border-primary/20 transition-all duration-300 cursor-default">
+                  <div className="p-1.5 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
+                    <item.icon size={18} className="text-primary" />
                   </div>
                   <div className="text-left">
                     <span className="text-sm font-medium text-white/90 block">
@@ -147,7 +147,7 @@ export default function AdminLoginPage() {
                 256-bit encryption
               </span>
               <span className="flex items-center gap-2">
-                <Sparkles size={14} className="text-[#E85D2C]" />
+                <Sparkles size={14} className="text-primary" />
                 Enterprise grade
               </span>
             </div>
@@ -155,11 +155,11 @@ export default function AdminLoginPage() {
 
           {/* RIGHT COLUMN – Enhanced Login Card */}
           <div className="order-1 lg:order-2 w-full max-w-md mx-auto lg:mx-0 justify-self-center lg:justify-self-end">
-            <div className="bg-[#15100E]/80 backdrop-blur-xl rounded-3xl p-8 shadow-[0_20px_60px_-12px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.05)] border border-white/5 hover:border-white/10 transition-all duration-500">
+            <div className="bg-surface/80 backdrop-blur-xl rounded-3xl p-8 shadow-[0_20px_60px_-12px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.05)] border border-white/5 hover:border-white/10 transition-all duration-500">
               <div className="flex flex-col items-center">
                 {/* Logo with enhanced glow */}
                 <div className="mb-5 relative">
-                  <div className="absolute -inset-4 bg-[#E85D2C]/10 blur-2xl rounded-full"></div>
+                  <div className="absolute -inset-4 bg-primary/10 blur-2xl rounded-full"></div>
                   <img
                     src="/logo.png"
                     alt="Brand Logo"
@@ -173,7 +173,7 @@ export default function AdminLoginPage() {
                     <span className="bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
                       Admin
                     </span>
-                    <span className="text-[#E85D2C] ml-2 font-medium">
+                    <span className="text-primary ml-2 font-medium">
                       Login
                     </span>
                   </div>
@@ -193,7 +193,7 @@ export default function AdminLoginPage() {
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="admin@example.com"
                       type="email"
-                      className="w-full h-[52px] rounded-xl bg-[#0A0A0A]/60 border border-white/10 px-4 text-[15px] text-white placeholder:text-[#8D7B77] outline-none focus:border-[#E85D2C]/50 focus:ring-2 focus:ring-[#E85D2C]/10 focus:bg-[#0A0A0A]/80 transition-all duration-200"
+                      className="w-full h-[52px] rounded-xl bg-background/60 border border-white/10 px-4 text-[15px] text-white placeholder:text-[#8D7B77] outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10 focus:bg-background/80 transition-all duration-200"
                       autoComplete="email"
                     />
                   </div>
@@ -206,7 +206,7 @@ export default function AdminLoginPage() {
                       </label>
                       <button
                         type="button"
-                        className="text-[11px] text-[#8D7B77] hover:text-[#E85D2C] transition-colors">
+                        className="text-[11px] text-[#8D7B77] hover:text-primary transition-colors">
                         Forgot?
                       </button>
                     </div>
@@ -216,7 +216,7 @@ export default function AdminLoginPage() {
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••"
                         type={showPassword ? "text" : "password"}
-                        className="w-full h-[52px] rounded-xl bg-[#0A0A0A]/60 border border-white/10 pl-4 pr-12 text-[15px] text-white placeholder:text-[#8D7B77] outline-none focus:border-[#E85D2C]/50 focus:ring-2 focus:ring-[#E85D2C]/10 focus:bg-[#0A0A0A]/80 transition-all duration-200"
+                        className="w-full h-[52px] rounded-xl bg-background/60 border border-white/10 pl-4 pr-12 text-[15px] text-white placeholder:text-[#8D7B77] outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10 focus:bg-background/80 transition-all duration-200"
                         autoComplete="current-password"
                       />
                       <button
@@ -225,7 +225,7 @@ export default function AdminLoginPage() {
                           showPassword ? "Hide password" : "Show password"
                         }
                         onClick={() => setShowPassword((v) => !v)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8D7B77] hover:text-[#E85D2C] transition-colors">
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8D7B77] hover:text-primary transition-colors">
                         <EyeIcon open={showPassword} />
                       </button>
                     </div>
@@ -235,7 +235,7 @@ export default function AdminLoginPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full h-[54px] rounded-xl text-[16px] font-semibold text-white bg-gradient-to-r from-[#E85D2C] to-[#C97A54] shadow-[0_8px_24px_-6px_rgba(232,93,44,0.4)] hover:shadow-[0_12px_32px_-8px_rgba(232,93,44,0.6)] hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-300 relative overflow-hidden group">
+                    className="w-full h-[54px] rounded-xl text-[16px] font-semibold text-white bg-gradient-to-r from-primary to-secondary shadow-[0_8px_24px_-6px_rgba(232,93,44,0.4)] hover:shadow-[0_12px_32px_-8px_rgba(232,93,44,0.6)] hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-300 relative overflow-hidden group">
                     <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></span>
                     {loading ? (
                       <span className="flex items-center justify-center gap-2">
@@ -266,10 +266,10 @@ export default function AdminLoginPage() {
                   </button>
 
                   {/* Error message with enhanced styling */}
-                  <div className="h-5 text-center text-[13px] font-medium text-[#E85D2C]">
+                  <div className="h-5 text-center text-[13px] font-medium text-primary">
                     {error ? (
                       <span className="flex items-center justify-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#E85D2C]"></span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
                         {error}
                       </span>
                     ) : (

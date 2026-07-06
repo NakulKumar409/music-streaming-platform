@@ -1,233 +1,496 @@
-import { useMemo } from "react";
 import { Link } from "react-router-dom";
+import {
+  Upload,
+  BarChart3,
+  DollarSign,
+  Music,
+  ArrowRight,
+  Users,
+  PlayCircle,
+  TrendingUp,
+  Clock,
+  CheckCircle2,
+  Lock,
+  ChevronRight,
+  Mic2,
+  Activity,
+  Layers,
+} from "lucide-react";
 
-export default function ArtistDashboardPage() {
-  const backgroundStyle = useMemo(() => ({
-    backgroundImage:
-      "radial-gradient(ellipse at 20% 0%, rgba(201,122,84,0.18) 0%, rgba(20,16,16,0.9) 50%, rgba(10,8,8,1) 100%)"
-  } as const), []);
+/* ─────────────────────────────────────────────
+   Types & constants
+───────────────────────────────────────────── */
+type QuickAction = {
+  icon: React.ElementType;
+  title: string;
+  desc: string;
+  to: string;
+  label: string;
+};
 
-  const featureCards = [
-    {
-      icon: "🎵",
-      title: "Upload Your First Song",
-      desc: "Share your music with thousands of listeners. Upload audio or video tracks and go live instantly.",
-      color: "from-[#c97a54]/20 to-transparent",
-      border: "border-[#c97a54]/30",
-      to: "/artist/content-upload"
-    },
-    {
-      icon: "📈",
-      title: "Track Your Growth",
-      desc: "See detailed play counts, subscriber trends, and earnings breakdowns — all in one place.",
-      color: "from-[#5468c9]/20 to-transparent",
-      border: "border-[#5468c9]/30",
-      to: "/artist/analytics-summary"
-    },
-    {
-      icon: "💰",
-      title: "Earn from Your Content",
-      desc: "Set your own subscription price. Get paid directly every time a fan subscribes to your profile.",
-      color: "from-[#54c97a]/20 to-transparent",
-      border: "border-[#54c97a]/30",
-      to: "/artist/analytics-summary"
-    }
-  ];
+const QUICK_ACTIONS: QuickAction[] = [
+  {
+    icon: Upload,
+    title: "Upload Content",
+    desc: "Publish a new audio or video track to your profile.",
+    to: "/artist/content-upload",
+    label: "Upload Now",
+  },
+  {
+    icon: BarChart3,
+    title: "View Analytics",
+    desc: "Track plays, subscribers, and revenue in real time.",
+    to: "/artist/analytics-summary",
+    label: "Open Analytics",
+  },
+  {
+    icon: DollarSign,
+    title: "Manage Pricing",
+    desc: "Set or update your subscription price for fans.",
+    to: "/artist/pricing",
+    label: "Manage Plan",
+  },
+  {
+    icon: Layers,
+    title: "Content History",
+    desc: "Review all your uploaded tracks and their status.",
+    to: "/artist/content-history",
+    label: "View History",
+  },
+];
 
-  const steps = [
-    { num: "01", title: "Upload Your Song",  desc: "Add your audio or video track with cover art and description." },
-    { num: "02", title: "Get Approved",      desc: "Our team reviews and approves your content within 24 hours." },
-    { num: "03", title: "Reach Listeners",   desc: "Go live to thousands of active fans browsing for new music." },
-    { num: "04", title: "Grow & Earn",       desc: "Build your subscriber base and start generating real income." }
-  ];
+const STEPS = [
+  {
+    icon: Upload,
+    step: "01",
+    title: "Upload a Track",
+    desc: "Submit your audio or video with cover art, title, and description.",
+    status: "pending" as const,
+  },
+  {
+    icon: CheckCircle2,
+    step: "02",
+    title: "Content Review",
+    desc: "Our moderation team reviews your submission within 24 hours.",
+    status: "pending" as const,
+  },
+  {
+    icon: Activity,
+    step: "03",
+    title: "Go Live",
+    desc: "Your track becomes discoverable to thousands of active listeners.",
+    status: "pending" as const,
+  },
+  {
+    icon: TrendingUp,
+    step: "04",
+    title: "Grow & Earn",
+    desc: "Build your subscriber base and earn revenue from your content.",
+    status: "pending" as const,
+  },
+];
 
-  const previews = [
-    { icon: "📊", label: "Your analytics will appear here", sub: "Plays, earnings & subscriber data" },
-    { icon: "🎧", label: "Your songs will appear here",     sub: "All your uploaded tracks in one view" }
-  ];
+const LOCKED_METRICS = [
+  {
+    icon: PlayCircle,
+    label: "Total Plays",
+    sub: "Cumulative stream count",
+  },
+  {
+    icon: Users,
+    label: "Subscribers",
+    sub: "Active fan subscriptions",
+  },
+  {
+    icon: DollarSign,
+    label: "Earnings",
+    sub: "Revenue this month",
+  },
+  {
+    icon: Music,
+    label: "Tracks Live",
+    sub: "Approved content count",
+  },
+];
 
+/* ─────────────────────────────────────────────
+   Sub-components
+───────────────────────────────────────────── */
+
+/** Thin top-coloured card for quick actions */
+function ActionCard({ item }: { item: QuickAction }) {
   return (
-    <div
-      className="relative min-h-screen overflow-hidden rounded-[16px] border border-white/5 bg-[#0e0a0a] shadow-2xl"
-      style={backgroundStyle}
+    <Link
+      to={item.to}
+      className="group relative flex flex-col gap-4 rounded-2xl border border-white/[0.07] p-6 overflow-hidden transition-all duration-300 hover:-translate-y-1"
+      style={{ background: "rgb(var(--color-card-rgb) / 0.7)" }}
     >
-      {/* Ambient glow blobs */}
-      <div className="pointer-events-none absolute -top-32 -left-32 h-[400px] w-[400px] rounded-full bg-[#c97a54]/10 blur-[120px]" />
-      <div className="pointer-events-none absolute top-1/2 -right-40 h-[350px] w-[350px] rounded-full bg-[#5468c9]/[0.08] blur-[100px]" />
+      {/* Accent top bar */}
+      <div
+        className="absolute top-0 left-0 right-0 h-[2px] rounded-t-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+        style={{ background: "var(--gradient-primary)" }}
+      />
 
-      <div className="relative px-5 py-10 sm:px-8 sm:py-12 lg:px-12 lg:py-14 flex flex-col gap-16">
-
-        {/* ── 1. HERO ──────────────────────────────── */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
-          <div className="max-w-xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#c97a54]/30 bg-[#c97a54]/10 px-4 py-1.5 text-[13px] font-semibold text-[#c97a54] tracking-wide">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#c97a54] animate-pulse" />
-              Artist Studio
-            </div>
-            <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-white mb-4 leading-tight">
-              Your Creative Space<br />
-              <span className="bg-gradient-to-r from-[#c97a54] via-[#e6a070] to-[#c97a54] bg-clip-text text-transparent bg-[length:200%_auto] animate-[shimmer_3s_linear_infinite]">
-                to Grow Your Music 🎧
-              </span>
-            </h1>
-            <p className="text-[#a99792] text-lg leading-relaxed mb-8 max-w-lg">
-              Upload tracks, build your subscriber base, and start earning — all from one powerful dashboard.
-            </p>
-            <div className="flex flex-wrap gap-4">
-              <Link
-                to="/artist/content-upload"
-                className="group inline-flex h-[52px] items-center justify-center rounded-full bg-gradient-to-r from-[#c97a54] to-[#a65f3d] px-8 text-[15px] font-bold text-white shadow-[0_0_30px_rgba(201,122,84,0.4)] hover:shadow-[0_0_50px_rgba(201,122,84,0.6)] transition-all hover:-translate-y-1 animate-[pulse-glow_2.5s_ease-in-out_infinite]"
-              >
-                <span className="mr-2">🎵</span> Start Uploading Music
-              </Link>
-              <Link
-                to="/artist/analytics-summary"
-                className="inline-flex h-[52px] items-center justify-center rounded-full border border-white/10 bg-white/5 px-8 text-[15px] font-semibold text-[#d8c7c3] hover:bg-white/10 hover:text-white transition-all"
-              >
-                View Analytics →
-              </Link>
-            </div>
-          </div>
-
-          {/* Decorative visual */}
-          <div className="hidden lg:flex items-center justify-center">
-            <div className="relative h-[220px] w-[220px]">
-              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[#c97a54]/30 to-transparent" style={{ animation: "spin 12s linear infinite" }} />
-              <div className="absolute inset-4 rounded-full bg-gradient-to-br from-[#c97a54]/20 to-black/50 border border-[#c97a54]/20 flex items-center justify-center shadow-[0_0_60px_rgba(201,122,84,0.2)]">
-                <span className="text-6xl drop-shadow-xl">🎵</span>
-              </div>
-              <div className="absolute -top-3 -right-3 h-14 w-14 rounded-full bg-[#c97a54]/20 border border-[#c97a54]/30 flex items-center justify-center text-2xl animate-bounce" style={{ animationDelay: "0.3s" }}>📈</div>
-              <div className="absolute -bottom-3 -left-3 h-14 w-14 rounded-full bg-[#54c97a]/20 border border-[#54c97a]/30 flex items-center justify-center text-2xl animate-bounce" style={{ animationDelay: "0.8s" }}>💰</div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── 2. EMPTY STATE CARD ──────────────────── */}
-        <div className="relative overflow-hidden rounded-[20px] border border-[#c97a54]/25 bg-gradient-to-br from-[#c97a54]/10 via-black/30 to-[#141010] p-8 md:p-12 text-center shadow-[0_0_60px_rgba(201,122,84,0.1)]">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(201,122,84,0.15),transparent_70%)]" />
-          <div className="relative">
-            <div className="mb-6 mx-auto h-20 w-20 rounded-2xl bg-gradient-to-br from-[#c97a54] to-[#7d4a41] flex items-center justify-center text-4xl shadow-[0_10px_40px_rgba(201,122,84,0.4)]">
-              🎧
-            </div>
-            <h2 className="text-3xl font-black text-white mb-3">Your dashboard is ready 🎧</h2>
-            <p className="text-[#a99792] text-lg max-w-lg mx-auto mb-8 leading-relaxed">
-              Upload your first track to unlock analytics, earnings, and audience insights. Your journey starts with one song.
-            </p>
-            <Link
-              to="/artist/content-upload"
-              className="inline-flex h-[54px] items-center justify-center rounded-[14px] bg-white px-12 text-[16px] font-black text-[#141010] shadow-[0_10px_40px_rgba(255,255,255,0.15)] hover:scale-105 hover:shadow-[0_15px_50px_rgba(255,255,255,0.3)] transition-all"
-            >
-              Upload First Song →
-            </Link>
-          </div>
-        </div>
-
-        {/* ── 3. GUIDED FEATURE CARDS ──────────────── */}
-        <div>
-          <h2 className="text-2xl font-black text-white mb-2 text-center">Everything You Need to Succeed</h2>
-          <p className="text-[#8d7b77] text-center mb-8">Powerful tools built for independent artists</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {featureCards.map((card, i) => (
-              <Link
-                key={i}
-                to={card.to}
-                className={`group relative overflow-hidden rounded-[18px] border ${card.border} bg-gradient-to-br ${card.color} p-6 shadow-lg hover:-translate-y-2 transition-all duration-300 block`}
-              >
-                <div className="mb-4 h-14 w-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-3xl group-hover:scale-110 transition-transform">
-                  {card.icon}
-                </div>
-                <h3 className="text-white font-bold text-[17px] mb-2 group-hover:text-[#e6d6d2] transition-colors">{card.title}</h3>
-                <p className="text-[#8d7b77] text-sm leading-relaxed group-hover:text-[#a99792] transition-colors">{card.desc}</p>
-                <div className="absolute bottom-4 right-4 text-white/20 group-hover:text-white/60 transition-colors text-xl">→</div>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* ── 4. HOW IT WORKS ──────────────────────── */}
-        <div className="rounded-[20px] border border-white/5 bg-black/30 p-8 md:p-10">
-          <h2 className="text-2xl font-black text-white mb-2 text-center">How It Works</h2>
-          <p className="text-[#8d7b77] text-center mb-10">Get from zero to live in 4 simple steps</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {steps.map((step, i) => (
-              <div key={i} className="relative flex flex-col items-center text-center group">
-                {i < steps.length - 1 && (
-                  <div className="hidden lg:block absolute top-[28px] left-[calc(50%+28px)] w-[calc(100%-56px)] h-px bg-gradient-to-r from-[#c97a54]/40 to-transparent" />
-                )}
-                <div className="mb-4 h-14 w-14 rounded-2xl bg-gradient-to-br from-[#c97a54]/30 to-black/50 border border-[#c97a54]/40 flex items-center justify-center font-black text-[#c97a54] text-lg shadow-[0_0_20px_rgba(201,122,84,0.2)] group-hover:shadow-[0_0_30px_rgba(201,122,84,0.4)] transition-all">
-                  {step.num}
-                </div>
-                <h4 className="text-white font-bold text-[15px] mb-2">{step.title}</h4>
-                <p className="text-[#8d7b77] text-xs leading-relaxed max-w-[160px]">{step.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── 5. MOTIVATION SECTION ─────────────────── */}
-        <div className="relative overflow-hidden rounded-[20px] border border-white/5 bg-gradient-to-r from-[#1a1010] via-[#0e0a0a] to-[#101a1a] p-8 md:p-12 text-center">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(201,122,84,0.08),transparent_70%)]" />
-          <div className="relative">
-            <div className="text-5xl mb-4">🚀</div>
-            <h2 className="text-3xl sm:text-4xl font-black text-white mb-4">
-              Start Your Journey Today
-            </h2>
-            <p className="text-[#a99792] text-[18px] max-w-lg mx-auto mb-8 leading-relaxed">
-              Thousands of listeners are waiting for your music. Your next fan is just one upload away.
-            </p>
-            <Link
-              to="/artist/content-upload"
-              className="inline-flex h-[52px] items-center justify-center rounded-full bg-gradient-to-r from-[#c97a54] to-[#a65f3d] px-10 text-[15px] font-bold text-white shadow-[0_0_30px_rgba(201,122,84,0.35)] hover:shadow-[0_0_50px_rgba(201,122,84,0.6)] hover:-translate-y-1 transition-all"
-            >
-              🎵 Upload My First Song
-            </Link>
-          </div>
-        </div>
-
-        {/* ── 6. PREVIEW / FUTURE STATE ─────────────── */}
-        <div>
-          <h2 className="text-2xl font-black text-white mb-2">Coming Soon to Your Dashboard</h2>
-          <p className="text-[#8d7b77] mb-8">This is what your dashboard will look like once you start uploading</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {previews.map((p, i) => (
-              <div key={i} className="relative overflow-hidden rounded-[18px] border border-dashed border-white/10 bg-black/20 p-8 flex flex-col items-center text-center gap-3">
-                <div className="absolute inset-0 opacity-20 pointer-events-none">
-                  <div className="h-3 w-3/4 mx-auto rounded-full bg-white/20 mt-6 mb-3" />
-                  <div className="h-3 w-1/2 mx-auto rounded-full bg-white/10 mb-3" />
-                  <div className="h-3 w-2/3 mx-auto rounded-full bg-white/10" />
-                </div>
-                <div className="relative z-10">
-                  <div className="h-16 w-16 mx-auto rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-4xl mb-4">
-                    {p.icon}
-                  </div>
-                  <h4 className="text-[#8d7b77] font-bold text-[16px] mb-1">{p.label}</h4>
-                  <p className="text-[#8d7b77]/60 text-xs">{p.sub}</p>
-                  <div className="mt-4 inline-flex items-center gap-1 text-[12px] text-[#c97a54]/60 font-medium border border-[#c97a54]/20 rounded-full px-3 py-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#c97a54]/40" />
-                    Unlocks after first upload
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
+      {/* Icon */}
+      <div
+        className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 border border-white/[0.07] transition-colors duration-300 group-hover:border-primary/30"
+        style={{ background: "rgb(var(--color-surface-rgb) / 0.8)" }}
+      >
+        <item.icon size={20} className="text-primary" />
       </div>
 
-      <style>{`
-        @keyframes shimmer {
-          0% { background-position: 200% center; }
-          100% { background-position: -200% center; }
-        }
-        @keyframes pulse-glow {
-          0%, 100% { box-shadow: 0 0 30px rgba(201,122,84,0.4); }
-          50% { box-shadow: 0 0 60px rgba(201,122,84,0.7); }
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+      {/* Copy */}
+      <div className="flex-1">
+        <h3 className="text-white font-semibold text-[15px] mb-1.5 group-hover:text-primary transition-colors duration-200">
+          {item.title}
+        </h3>
+        <p className="text-white/45 text-sm leading-relaxed">{item.desc}</p>
+      </div>
+
+      {/* Footer link */}
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-white/35 group-hover:text-primary transition-colors duration-200">
+        {item.label}
+        <ChevronRight
+          size={13}
+          className="group-hover:translate-x-1 transition-transform duration-200"
+        />
+      </div>
+    </Link>
+  );
+}
+
+/** Locked metric placeholder */
+function LockedMetric({
+  item,
+}: {
+  item: (typeof LOCKED_METRICS)[number];
+}) {
+  return (
+    <div
+      className="relative flex items-center gap-4 rounded-2xl border border-dashed border-white/10 p-5 overflow-hidden"
+      style={{ background: "rgb(var(--color-surface-rgb) / 0.3)" }}
+    >
+      {/* Blur overlay */}
+      <div className="absolute inset-0 backdrop-blur-[1px]" />
+
+      <div className="relative z-10 flex items-center gap-4 w-full">
+        <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/8 flex items-center justify-center flex-shrink-0">
+          <item.icon size={18} className="text-white/20" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-white/25 font-semibold text-[14px] truncate">{item.label}</p>
+          <p className="text-white/18 text-xs mt-0.5">{item.sub}</p>
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px] font-medium text-white/20 flex-shrink-0">
+          <Lock size={11} />
+          Locked
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Page
+───────────────────────────────────────────── */
+export default function ArtistDashboardPage() {
+  return (
+    <div className="space-y-8 animate-fadeIn pb-10">
+
+      {/* ══════════════════════════════════════
+          HEADER ROW
+      ══════════════════════════════════════ */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Mic2 size={16} className="text-primary" />
+            <span className="text-xs font-semibold text-primary uppercase tracking-widest">
+              Artist Studio
+            </span>
+          </div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">
+            Welcome to Your Dashboard
+          </h1>
+          <p className="text-white/45 text-sm mt-1">
+            Upload your first track to activate analytics, earnings, and audience tools.
+          </p>
+        </div>
+
+        <Link
+          to="/artist/content-upload"
+          className="self-start sm:self-center inline-flex items-center gap-2 h-10 px-5 rounded-xl font-semibold text-sm text-white transition-all duration-200 hover:-translate-y-0.5 whitespace-nowrap"
+          style={{
+            background: "var(--gradient-primary)",
+            boxShadow: "var(--shadow-glow)",
+          }}
+        >
+          <Upload size={15} />
+          Upload Track
+        </Link>
+      </div>
+
+      {/* ══════════════════════════════════════
+          STATUS BANNER
+      ══════════════════════════════════════ */}
+      <div
+        className="relative overflow-hidden rounded-2xl border p-6 md:p-8"
+        style={{
+          borderColor: "rgb(var(--color-primary-rgb) / 0.20)",
+          background:
+            "linear-gradient(135deg, rgb(var(--color-primary-rgb) / 0.10) 0%, rgb(var(--color-surface-rgb) / 0.5) 60%, rgb(var(--color-card-rgb) / 0.4) 100%)",
+        }}
+      >
+        {/* Corner glow */}
+        <div
+          className="pointer-events-none absolute -top-20 -left-20 w-60 h-60 rounded-full blur-3xl opacity-40"
+          style={{ background: "var(--color-primary)" }}
+        />
+
+        <div className="relative flex flex-col md:flex-row md:items-center gap-6">
+          {/* Icon block */}
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0"
+            style={{
+              background: "rgb(var(--color-primary-rgb) / 0.15)",
+              border: "1px solid rgb(var(--color-primary-rgb) / 0.25)",
+            }}
+          >
+            <Music size={28} className="text-primary" />
+          </div>
+
+          {/* Text */}
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <span
+                className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border"
+                style={{
+                  color: "rgb(52 211 153)",
+                  borderColor: "rgb(52 211 153 / 0.25)",
+                  background: "rgb(52 211 153 / 0.08)",
+                }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Studio Active
+              </span>
+            </div>
+            <h2 className="text-xl font-bold text-white mb-1">
+              Your artist profile is ready
+            </h2>
+            <p className="text-white/50 text-sm leading-relaxed max-w-xl">
+              Your account has been approved. Upload your first track to go live
+              and start reaching listeners. Content is reviewed within 24 hours.
+            </p>
+          </div>
+
+          {/* CTA */}
+          <div className="flex flex-col gap-2 flex-shrink-0">
+            <Link
+              to="/artist/content-upload"
+              className="inline-flex items-center justify-center gap-2 h-11 px-7 rounded-xl font-semibold text-sm text-white transition-all duration-200 hover:-translate-y-0.5"
+              style={{
+                background: "var(--gradient-primary)",
+                boxShadow: "var(--shadow-glow)",
+              }}
+            >
+              <Upload size={15} />
+              Upload First Track
+            </Link>
+            <Link
+              to="/artist/account"
+              className="inline-flex items-center justify-center gap-1.5 h-11 px-7 rounded-xl font-medium text-sm text-white/50 border border-white/8 bg-white/5 hover:bg-white/10 hover:text-white/80 transition-all duration-200"
+            >
+              Complete Profile
+              <ArrowRight size={13} />
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════
+          QUICK ACTIONS
+      ══════════════════════════════════════ */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-white">Quick Actions</h2>
+          <span className="text-xs text-white/30">4 tools available</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {QUICK_ACTIONS.map((item) => (
+            <ActionCard key={item.to} item={item} />
+          ))}
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════
+          METRICS + HOW IT WORKS (2-col)
+      ══════════════════════════════════════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* ── Locked Metrics ── */}
+        <div
+          className="rounded-2xl border border-white/[0.07] p-6"
+          style={{ background: "rgb(var(--color-card-rgb) / 0.5)" }}
+        >
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-base font-semibold text-white">Key Metrics</h2>
+              <p className="text-white/35 text-xs mt-0.5">Available after first upload</p>
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] font-medium text-white/30 bg-white/5 border border-white/8 rounded-full px-3 py-1.5">
+              <Lock size={10} />
+              Locked
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {LOCKED_METRICS.map((item) => (
+              <LockedMetric key={item.label} item={item} />
+            ))}
+          </div>
+
+          <div className="mt-5 pt-4 border-t border-white/[0.06]">
+            <Link
+              to="/artist/content-upload"
+              className="w-full inline-flex items-center justify-center gap-2 h-10 rounded-xl font-semibold text-sm text-white transition-all duration-200"
+              style={{
+                background: "var(--gradient-primary)",
+                boxShadow: "var(--shadow-glow)",
+              }}
+            >
+              <Upload size={14} />
+              Upload to Unlock Metrics
+            </Link>
+          </div>
+        </div>
+
+        {/* ── How It Works ── */}
+        <div
+          className="rounded-2xl border border-white/[0.07] p-6"
+          style={{ background: "rgb(var(--color-card-rgb) / 0.5)" }}
+        >
+          <div className="mb-5">
+            <h2 className="text-base font-semibold text-white">Getting Started</h2>
+            <p className="text-white/35 text-xs mt-0.5">Follow these steps to go live</p>
+          </div>
+
+          <div className="space-y-1">
+            {STEPS.map((step, i) => (
+              <div key={i} className="relative">
+                {/* Vertical connector */}
+                {i < STEPS.length - 1 && (
+                  <div
+                    className="absolute left-[22px] top-[46px] w-px h-[calc(100%-10px)]"
+                    style={{
+                      background:
+                        "linear-gradient(180deg, rgb(var(--color-primary-rgb) / 0.20) 0%, transparent 100%)",
+                    }}
+                  />
+                )}
+
+                <div className="group flex items-start gap-4 rounded-xl p-3 hover:bg-white/[0.03] transition-colors duration-200">
+                  {/* Step circle */}
+                  <div
+                    className="relative w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 border transition-colors duration-200"
+                    style={{
+                      background: "rgb(var(--color-surface-rgb) / 0.8)",
+                      borderColor: "rgb(var(--color-primary-rgb) / 0.20)",
+                    }}
+                  >
+                    <step.icon size={18} className="text-primary/70" />
+                    <span
+                      className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black"
+                      style={{
+                        background: "var(--color-primary)",
+                        color: "#fff",
+                      }}
+                    >
+                      {i + 1}
+                    </span>
+                  </div>
+
+                  <div className="pt-1 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-white/85 font-semibold text-[14px]">
+                        {step.title}
+                      </h4>
+                      {i === 0 && (
+                        <span
+                          className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                          style={{
+                            background: "rgb(var(--color-primary-rgb) / 0.15)",
+                            color: "var(--color-primary)",
+                          }}
+                        >
+                          Start here
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-white/35 text-xs leading-relaxed mt-0.5">
+                      {step.desc}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-white/[0.06] flex items-center gap-2 text-xs text-white/30">
+            <Clock size={13} />
+            Content review typically takes less than 24 hours.
+          </div>
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════
+          BOTTOM INFO STRIP
+      ══════════════════════════════════════ */}
+      <div
+        className="rounded-2xl border border-white/[0.07] p-5 flex flex-col sm:flex-row sm:items-center gap-4"
+        style={{ background: "rgb(var(--color-surface-rgb) / 0.4)" }}
+      >
+        <div className="flex items-start gap-3 flex-1">
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 border"
+            style={{
+              background: "rgb(var(--color-primary-rgb) / 0.10)",
+              borderColor: "rgb(var(--color-primary-rgb) / 0.20)",
+            }}
+          >
+            <Activity size={16} className="text-primary/70" />
+          </div>
+          <div>
+            <p className="text-white/70 text-sm font-medium">
+              Your earnings start immediately after approval
+            </p>
+            <p className="text-white/35 text-xs mt-0.5">
+              Every subscription to your profile earns you revenue based on your
+              pricing plan. Set your price before going live.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-2 flex-shrink-0">
+          <Link
+            to="/artist/pricing"
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/80 transition-all"
+          >
+            Set Pricing
+          </Link>
+          <Link
+            to="/artist/content-upload"
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-xs font-semibold text-white transition-all"
+            style={{
+              background: "var(--gradient-primary)",
+              boxShadow: "0 0 20px rgb(var(--color-primary-rgb) / 0.20)",
+            }}
+          >
+            Upload Track
+            <ArrowRight size={12} />
+          </Link>
+        </div>
+      </div>
+
     </div>
   );
 }
