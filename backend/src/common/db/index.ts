@@ -11,7 +11,7 @@ export const pool = new Pool({
     : { rejectUnauthorized: false },
   connectionTimeoutMillis: 10000,
   idleTimeoutMillis: 10000,
-  max: 100,
+  max: 5,
 });
 
 const readDbUrl = process.env.DATABASE_URL_REPLICA || process.env.DATABASE_URL;
@@ -23,7 +23,7 @@ export const poolRead = new Pool({
     : { rejectUnauthorized: false },
   connectionTimeoutMillis: 10000,
   idleTimeoutMillis: 10000,
-  max: 100,
+  max: 5,
 });
 
 pool.on("error", (err) => {

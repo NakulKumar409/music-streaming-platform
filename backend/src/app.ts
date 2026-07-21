@@ -44,7 +44,9 @@ import {
 
   ensurePlatformConfigSchema,
 
-  ensureAuditLogsSchema
+  ensureAuditLogsSchema,
+
+  ensureFeaturedArtistsSchema
 
 } from "./config/ensure-schema";
 
@@ -623,6 +625,8 @@ const PORT = process.env.PORT || 8000;
     await ensurePlatformConfigSchema();
 
     await ensureAuditLogsSchema();
+
+    await ensureFeaturedArtistsSchema();
 
     console.log("[Startup] All database schemas ensured or updated ✅");
 

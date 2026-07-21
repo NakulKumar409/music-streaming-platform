@@ -48,7 +48,7 @@ export class AuthService {
     }
 
     if (userResult.rows.length === 0) {
-      const e: any = new Error("Invalid credentials");
+      const e: any = new Error("Email not found. Please check your email or sign up.");
       e.status = 401;
       throw e;
     }
@@ -57,7 +57,7 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
-      const e: any = new Error("Invalid credentials");
+      const e: any = new Error("Incorrect password. Please try again.");
       e.status = 401;
       throw e;
     }

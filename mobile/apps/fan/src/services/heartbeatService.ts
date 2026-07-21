@@ -7,8 +7,14 @@ let currentContentId: string | null = null;
 /**
  * Start sending heartbeats to track listening time
  * @param contentId - The ID of the content being played
+ * @param getPosition - Optional callback to retrieve the current playback position in milliseconds
+ * @param getDuration - Optional callback to retrieve the content total duration in milliseconds
  */
-export function startHeartbeat(contentId: string) {
+export function startHeartbeat(
+  contentId: string,
+  getPosition?: () => number,
+  getDuration?: () => number
+) {
   stopHeartbeat(); // Clear any existing heartbeat
   
   currentContentId = contentId;
@@ -16,7 +22,14 @@ export function startHeartbeat(contentId: string) {
   // Send an immediate heartbeat right when playback starts
   const sendBeat = async () => {
     try {
-      const response = await apiV1.post('/stream/heartbeat', { contentId });
+      const currentPosition = getPosition ? getPosition() : 0;
+      const duration = getDuration ? getDuration() : 0;
+
+      const response = await apiV1.post('/stream/heartbeat', {
+        contentId: Number(contentId),
+        currentPosition: Math.round(currentPosition),
+        duration: Math.round(duration)
+      });
       if (!response.data.success) {
         logger.warn('[Heartbeat] Failed to send heartbeat:', response.data.message);
       }

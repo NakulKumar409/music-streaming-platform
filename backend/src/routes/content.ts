@@ -226,12 +226,12 @@ router.post(
 
       const video = (files.video?.[0] as any) ?? null;
 
-      if (!thumb || !audio || !video) {
+      if (!thumb || !audio) {
         console.log(`[UPLOAD] 400: missing files - thumb: ${!!thumb}, audio: ${!!audio}, video: ${!!video}`);
         return res.status(400).json({
           success: false,
 
-          message: "thumbnail, audio, and video files are required",
+          message: "thumbnail and audio files are required (video is optional)",
 
           correlationId,
         });

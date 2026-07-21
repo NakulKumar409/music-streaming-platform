@@ -238,8 +238,8 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
 
     if (!existing.length) {
       const inserted = await pool.query(
-        `INSERT INTO users (email, password, name, role, status, is_verified, verified, phone, genre, artist_status, artist_bio, portfolio_links, onboarded_at, created_at, updated_at, agreement_accepted, agreement_accepted_at, agreement_version, artist_revenue_share, platform_revenue_share, digital_signature, signature_signed_at, agreement_id, terms_version, agreement_status, agreement_start_date, signature_ip_address, signature_user_agent)
-         VALUES ($1, $2, $3, 'ARTIST', 'ACTIVE', false, false, $4, $5, 'PENDING', $6, $7, now(), now(), now(), $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        `INSERT INTO users (email, password, name, role, status, is_verified, verified, phone, genre, artist_status, artist_bio, portfolio_links, onboarded_at, created_at, updated_at, agreement_accepted, agreement_accepted_at, agreement_version, digital_signature, signature_signed_at, agreement_id, terms_version, agreement_status, agreement_start_date, signature_ip_address, signature_user_agent)
+         VALUES ($1, $2, $3, 'ARTIST', 'ACTIVE', false, false, $4, $5, 'PENDING', $6, $7, now(), now(), now(), $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
          RETURNING id`,
         [
           trimmedEmail,
@@ -252,8 +252,6 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
           agreementAccepted || false,
           agreementAcceptedAt,
           agreementVersion || null,
-          artistRevenueShare || null,
-          platformRevenueShare || null,
           encryptedSignature || null,
           signatureSignedAt,
           agreementId,
@@ -289,16 +287,14 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
              agreement_accepted = COALESCE($8, agreement_accepted),
              agreement_accepted_at = COALESCE($9, agreement_accepted_at),
              agreement_version = COALESCE($10, agreement_version),
-             artist_revenue_share = COALESCE($11, artist_revenue_share),
-             platform_revenue_share = COALESCE($12, platform_revenue_share),
-             digital_signature = COALESCE($13, digital_signature),
-             signature_signed_at = COALESCE($14, signature_signed_at),
-             agreement_id = COALESCE($15, agreement_id),
-             terms_version = COALESCE($16, terms_version),
-             agreement_status = COALESCE($17, agreement_status),
-             agreement_start_date = COALESCE($18, agreement_start_date),
-             signature_ip_address = COALESCE($19, signature_ip_address),
-             signature_user_agent = COALESCE($20, signature_user_agent)
+             digital_signature = COALESCE($11, digital_signature),
+             signature_signed_at = COALESCE($12, signature_signed_at),
+             agreement_id = COALESCE($13, agreement_id),
+             terms_version = COALESCE($14, terms_version),
+             agreement_status = COALESCE($15, agreement_status),
+             agreement_start_date = COALESCE($16, agreement_start_date),
+             signature_ip_address = COALESCE($17, signature_ip_address),
+             signature_user_agent = COALESCE($18, signature_user_agent)
          WHERE LOWER(email) = $1
          RETURNING id`,
         [
@@ -312,8 +308,6 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
           agreementAccepted || false,
           agreementAcceptedAt,
           agreementVersion || null,
-          artistRevenueShare || null,
-          platformRevenueShare || null,
           encryptedSignature || null,
           signatureSignedAt,
           agreementId,
@@ -341,6 +335,9 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
           []
         );
         const termsContent = termsRows.length > 0 ? termsRows[0].content : "Terms & Conditions not available.";
+
+        const artistRevenueShare = selectedPlans.length > 0 ? selectedPlans[0].artist_share : undefined;
+        const platformRevenueShare = selectedPlans.length > 0 ? selectedPlans[0].platform_share : undefined;
 
         const pdfBuffer = await AgreementPdfService.generateAgreementPdf({
           artistName: trimmedName,
@@ -397,7 +394,7 @@ router.post("/onboard", uploadLimiter, async (req: any, res: any) => {
         agreementAccepted,
         agreementVersion,
         agreementId,
-        commissionPlanId,
+        commissionPlanIds,
         termsVersion,
         agreementPdfPath
       })}`

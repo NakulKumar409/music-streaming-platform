@@ -998,7 +998,11 @@ export default function VideoScreen() {
     }
 
     const contentId = String(activeVideoMeta.id);
-    startHeartbeat(contentId);
+    startHeartbeat(
+      contentId,
+      () => (videoPlayer ? videoPlayer.currentTime * 1000 : 0),
+      () => (videoPlayer ? videoPlayer.duration * 1000 : 0)
+    );
 
     return () => {
       stopHeartbeat();

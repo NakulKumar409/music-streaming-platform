@@ -106,6 +106,8 @@ router.post("/access", async (req: any, res: any) => {
 router.post("/heartbeat", requireAuth, async (req: any, res: any) => {
   const userId = req.user?.id;
   const contentId = Number(req.body?.contentId);
+  const currentPosition = Number(req.body?.currentPosition ?? 0);
+  const duration = Number(req.body?.duration ?? 0);
   const correlationId = req?.correlationId || "-";
 
   if (!userId) {
@@ -120,20 +122,26 @@ router.post("/heartbeat", requireAuth, async (req: any, res: any) => {
     // Try to update existing session first - ONLY if it's not stale (last heartbeat within 5 mins)
     const result = await pool.query(
       `UPDATE playback_sessions 
-       SET heartbeat_at = now() 
+       SET heartbeat_at = now(), current_position = $3, duration = $4
        WHERE user_id = $1 AND content_id = $2 
        AND heartbeat_at > now() - INTERVAL '5 minutes'
-       RETURNING id`,
-      [userId, contentId]
+       RETURNING id, heartbeat_at`,
+      [userId, contentId, currentPosition, duration]
     );
 
+    let lastSeen = new Date();
     // If no active session exists (or it was stale), create one
     if (result.rows.length === 0) {
-      await pool.query(
-        `INSERT INTO playback_sessions (user_id, content_id, started_at, heartbeat_at)
-         VALUES ($1, $2, now(), now())`,
-        [userId, contentId]
+      const insertResult = await pool.query(
+        `INSERT INTO playback_sessions (user_id, content_id, started_at, heartbeat_at, current_position, duration)
+         VALUES ($1, $2, now(), now(), $3, $4)
+         RETURNING heartbeat_at`,
+        [userId, contentId, currentPosition, duration]
       );
+      
+      if (insertResult.rows[0]?.heartbeat_at) {
+        lastSeen = insertResult.rows[0].heartbeat_at;
+      }
 
       // Record a play for analytics (each new session = 1 play)
       await pool.query(
@@ -146,6 +154,10 @@ router.post("/heartbeat", requireAuth, async (req: any, res: any) => {
         logger.error({ userId, contentId, error: err.message }, "[ANALYTICS] Failed to record content play");
         // Don't fail the heartbeat if play recording fails (non-critical)
       });
+    } else {
+      if (result.rows[0]?.heartbeat_at) {
+        lastSeen = result.rows[0].heartbeat_at;
+      }
     }
 
     // Increment monthly listening stats (30 seconds per heartbeat)
@@ -166,7 +178,13 @@ router.post("/heartbeat", requireAuth, async (req: any, res: any) => {
       // Don't fail the entire heartbeat if stats fails (non-critical)
     }
 
-    return res.json({ success: true, correlationId });
+    return res.json({
+      success: true,
+      currentPosition,
+      duration,
+      lastSeen: lastSeen.toISOString(),
+      correlationId
+    });
   } catch (err: any) {
     logger.error({ userId, contentId, error: err.message, correlationId }, "[HEARTBEAT] Failed");
     return res.status(500).json({ success: false, message: "Internal server error" });

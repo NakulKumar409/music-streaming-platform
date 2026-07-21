@@ -347,5 +347,28 @@ export async function ensureAuditLogsSchema(): Promise<void> {
   }
 }
 
+export async function ensureFeaturedArtistsSchema(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS featured_artists (
+      id SERIAL PRIMARY KEY,
+      artist_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      display_order INTEGER DEFAULT 0,
+      name VARCHAR(255),
+      avatar TEXT,
+      is_active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  const featuredIndexes = [
+    "CREATE INDEX IF NOT EXISTS idx_featured_artists_artist ON featured_artists(artist_id)",
+    "CREATE INDEX IF NOT EXISTS idx_featured_artists_active ON featured_artists(is_active)"
+  ];
+
+  for (const idx of featuredIndexes) {
+    await pool.query(idx).catch(() => undefined);
+  }
+}
+
 // Deprecated alias for backward compatibility during cleanup if needed
 export const ensureContentMediaColumns = ensureContentSchema;
