@@ -120,6 +120,9 @@ function resolveCloudinaryProviderAssetId(
 
   // Fallback for missing/mock artist 42 assets during development/E2E
   if (!candidate || candidate.includes("artists/42/")) {
+    if (kind === "thumbnail") {
+      return "artists/73/thumbnails/c1c85b32/cloudinary-upload-1782719097073_ipdltf";
+    }
     return "artists/73/media/809c837d/cloudinary-upload-1782719099585_am1smz";
   }
 

@@ -40,8 +40,9 @@ const queryClient = new QueryClient({
 
 export default function App() {
   useEffect(() => {
-    // Lock entire app to portrait - video screen will handle its own orientation
-    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+    if (Platform.OS !== 'web') {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT).catch(() => {});
+    }
   }, []);
 
   return (
