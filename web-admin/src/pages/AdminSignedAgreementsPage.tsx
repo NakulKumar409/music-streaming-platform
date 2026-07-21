@@ -134,7 +134,7 @@ export default function AdminSignedAgreementsPage() {
             placeholder="Search by name, email, or agreement ID..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-[#8D7B77] focus:outline-none focus:border-[#E85D2C]"
+            className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-[#8D7B77] focus:outline-none focus:border-primary"
           />
         </div>
       </div>
@@ -187,9 +187,9 @@ export default function AdminSignedAgreementsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="text-sm">
-                      <span className="text-[#E85D2C]">{agreement.artistRevenueShare}%</span>
+                      <span className="text-primary">{agreement.artistRevenueShare}%</span>
                       <span className="text-[#8D7B77]"> / </span>
-                      <span className="text-[#C97A54]">{agreement.platformRevenueShare}%</span>
+                      <span className="text-secondary">{agreement.platformRevenueShare}%</span>
                     </div>
                   </td>
                   <td className="px-4 py-3">

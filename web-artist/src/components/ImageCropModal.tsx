@@ -144,7 +144,7 @@ export function ImageCropModal({ isOpen, imageSrc, cropShape, aspect, onClose, o
                 background: '#0e0a0a',
               },
               cropAreaStyle: {
-                border: '2px solid #c97a54',
+                border: '2px solid var(--color-secondary)',
                 boxShadow: '0 0 0 9999px rgba(0,0,0,0.7)',
               },
             }}
@@ -152,7 +152,7 @@ export function ImageCropModal({ isOpen, imageSrc, cropShape, aspect, onClose, o
         </div>
 
         {/* Controls */}
-        <div className="px-6 py-4 border-t border-white/10 bg-[#141010]">
+        <div className="px-6 py-4 border-t border-white/10 bg-surface">
           {/* Free Ratio Toggle for Banner */}
           {cropShape === 'rect' && (
             <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/10">
@@ -160,7 +160,7 @@ export function ImageCropModal({ isOpen, imageSrc, cropShape, aspect, onClose, o
               <button
                 onClick={() => setFreeRatio(!freeRatio)}
                 className={`relative w-12 h-6 rounded-full transition-colors ${
-                  freeRatio ? 'bg-[#c97a54]' : 'bg-white/20'
+                  freeRatio ? 'bg-secondary' : 'bg-white/20'
                 }`}
               >
                 <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
@@ -180,7 +180,7 @@ export function ImageCropModal({ isOpen, imageSrc, cropShape, aspect, onClose, o
               step={0.1}
               value={zoom}
               onChange={(e) => setZoom(Number(e.target.value))}
-              className="flex-1 h-2 bg-white/10 rounded-full appearance-none cursor-pointer accent-[#c97a54]"
+              className="flex-1 h-2 bg-white/10 rounded-full appearance-none cursor-pointer accent-secondary"
             />
           </div>
 
@@ -201,7 +201,7 @@ export function ImageCropModal({ isOpen, imageSrc, cropShape, aspect, onClose, o
             <button
               onClick={handleConfirm}
               disabled={isProcessing}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#c97a54] to-[#a85d3c] text-white font-medium text-[14px] shadow-lg shadow-[#c97a54]/25 hover:shadow-[#c97a54]/40 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-2"
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-secondary to-[#a85d3c] text-white font-medium text-[14px] shadow-lg shadow-secondary/25 hover:shadow-secondary/40 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-2"
             >
               {isProcessing ? (
                 <>

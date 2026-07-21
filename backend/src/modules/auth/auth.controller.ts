@@ -138,14 +138,14 @@ export class AuthController {
             dbUser = userResult.rows?.[0] || null;
           } catch (err3: any) {
             if (err3?.code !== "42703") throw err3;
-              const userQuery = "SELECT id, name, full_name, email, status, role FROM public.users WHERE id = $1";
+              const userQuery = "SELECT id, name, email, status, role FROM public.users WHERE id = $1";
               const userResult = await pool.query(userQuery, [tokenUser?.id]);
             dbUser = userResult.rows?.[0] || null;
           }
         }
       } catch (err: any) {
         if (err?.code === "42703") {
-            const userQuery = "SELECT id, name, full_name, email, role FROM public.users WHERE id = $1";
+            const userQuery = "SELECT id, name, email, role FROM public.users WHERE id = $1";
             const userResult = await pool.query(userQuery, [tokenUser?.id]);
           dbUser = userResult.rows?.[0] || null;
         } else {
@@ -159,7 +159,7 @@ export class AuthController {
           ...(tokenUser || {}),
           ...(dbUser || {}),
           name: dbUser?.name ?? (tokenUser as any)?.name ?? null,
-          fullName: dbUser?.full_name ?? null,
+          fullName: dbUser?.name ?? null,
           role: (dbUser?.role ?? (tokenUser as any)?.role ?? null) || null,
           isVerified: Boolean(dbUser?.is_verified ?? (tokenUser as any)?.isVerified ?? false),
           status: dbUser?.status ?? (tokenUser as any)?.status ?? "ACTIVE"

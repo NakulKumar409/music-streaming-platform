@@ -100,7 +100,7 @@ function PreviewModal({
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}>
-      <div className="w-full max-w-[800px] rounded-2xl border border-white/10 bg-[#15100E] shadow-2xl">
+      <div className="w-full max-w-[800px] rounded-2xl border border-white/10 bg-surface shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
           <div className="min-w-0">
             <div className="text-lg font-semibold text-white truncate">
@@ -349,7 +349,7 @@ export default function AdminContentApprovalQueuePage() {
       subtitle="Review and manage flagged content reported by users">
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-surface p-5 hover:border-white/10 transition-all duration-300">
           <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative">
             <div className="flex items-center justify-between">
@@ -368,7 +368,7 @@ export default function AdminContentApprovalQueuePage() {
           </div>
         </div>
 
-        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-surface p-5 hover:border-white/10 transition-all duration-300">
           <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative">
             <div className="flex items-center justify-between">
@@ -387,7 +387,7 @@ export default function AdminContentApprovalQueuePage() {
           </div>
         </div>
 
-        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-surface p-5 hover:border-white/10 transition-all duration-300">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative">
             <div className="flex items-center justify-between">
@@ -406,7 +406,7 @@ export default function AdminContentApprovalQueuePage() {
           </div>
         </div>
 
-        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-surface p-5 hover:border-white/10 transition-all duration-300">
           <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative">
             <div className="flex items-center justify-between">
@@ -427,7 +427,7 @@ export default function AdminContentApprovalQueuePage() {
       </div>
 
       {/* Content List */}
-      <div className="rounded-2xl border border-white/5 bg-[#15100E] overflow-hidden">
+      <div className="rounded-2xl border border-white/5 bg-surface overflow-hidden">
         {/* Header */}
         <div className="hidden md:grid grid-cols-[1fr_200px_120px_280px] gap-4 px-6 py-4 text-xs font-medium text-[#8D7B77] uppercase tracking-wider border-b border-white/5 bg-white/5">
           <div>Content</div>

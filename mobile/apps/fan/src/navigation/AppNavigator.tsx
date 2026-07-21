@@ -12,6 +12,7 @@ import MediaPlayerOverlay from '../ui/MediaPlayerOverlay';
 import type { RootStackParamList } from './types';
 
 import LoginScreen from '../screens/LoginScreen';
+import GuestHomeScreen from '../screens/GuestHomeScreen';
 import SignupScreen from '../screens/SignupScreen';
 import MainTabsNavigator from './MainTabsNavigator';
 
@@ -75,6 +76,11 @@ export default function AppNavigator() {
           </>
         ) : (
           <>
+            <Stack.Screen
+              name="GuestHome"
+              component={GuestHomeScreen}
+              options={{ headerShown: false }}
+            />
             <Stack.Screen
               name="Login"
               component={LoginScreen}

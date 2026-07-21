@@ -8,51 +8,52 @@ datasource db {
 }
 
 model users {
-  id                        Int       @id @default(autoincrement())
-  email                     String    @unique(map: "idx_users_email_unique") @db.VarChar(255)
+  id                        Int                @id @default(autoincrement())
+  email                     String             @unique(map: "idx_users_email_unique") @db.VarChar(255)
   password                  String
-  role                      String    @default("FAN") @db.VarChar(20)
-  isDeleted                 Boolean   @default(false) @map("is_deleted")
-  deletedAt                 DateTime? @map("deleted_at") @db.Timestamptz(6)
-  deletionReason            String?   @map("deletion_reason")
-  status                    String    @default("ACTIVE") @db.VarChar(20)
-  artistStatus              String    @default("PENDING") @map("artist_status") @db.VarChar(20)
-  is_verified               Boolean   @default(false)
-  verified                  Boolean   @default(false)
-  trust_score               Int       @default(100)
-  strike_count              Int       @default(0)
-  name                      String?   @db.VarChar(255)
+  role                      String             @default("FAN") @db.VarChar(20)
+  isDeleted                 Boolean            @default(false) @map("is_deleted")
+  deletedAt                 DateTime?          @map("deleted_at") @db.Timestamptz(6)
+  deletionReason            String?            @map("deletion_reason")
+  status                    String             @default("ACTIVE") @db.VarChar(20)
+  artistStatus              String             @default("PENDING") @map("artist_status") @db.VarChar(20)
+  is_verified               Boolean            @default(false)
+  verified                  Boolean            @default(false)
+  trust_score               Int                @default(100)
+  strike_count              Int                @default(0)
+  name                      String?            @db.VarChar(255)
   profile_image_url         String?
-  artistBio                 String?   @map("artist_bio")
-  portfolioLinks            String[]  @default([]) @map("portfolio_links")
-  onboardedAt               DateTime? @map("onboarded_at") @db.Timestamptz(6)
-  created_at                DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at                DateTime  @default(now()) @db.Timestamptz(6)
-  phone                     String?   @db.VarChar(50)
-  genre                     String?   @db.VarChar(50)
+  artistBio                 String?            @map("artist_bio")
+  portfolioLinks            String[]           @default([]) @map("portfolio_links")
+  onboardedAt               DateTime?          @map("onboarded_at") @db.Timestamptz(6)
+  created_at                DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime           @default(now()) @db.Timestamptz(6)
+  phone                     String?            @db.VarChar(50)
   bio                       String?
   banner_image_url          String?
-  accent_color              String?   @db.VarChar(20)
+  accent_color              String?            @db.VarChar(20)
   social_links              Json?
-  subscription_price        Decimal   @default(0) @db.Decimal
+  subscription_price        Decimal            @default(0) @db.Decimal
   admin_remarks             String?
   artist_appeal_message     String?
-  subscription_features     Json      @default("[]")
-  yearly_subscription_price Decimal   @default(0) @db.Decimal
-  agreementAccepted         Boolean   @default(false) @map("agreement_accepted")
-  agreementAcceptedAt       DateTime? @map("agreement_accepted_at") @db.Timestamptz(6)
-  agreementVersion          String?   @map("agreement_version") @db.VarChar(20)
-  artistRevenueShare        Int?      @map("artist_revenue_share")
-  platformRevenueShare      Int?      @map("platform_revenue_share")
-  digitalSignature          String?   @map("digital_signature") @db.Text
-  signatureSignedAt         DateTime? @map("signature_signed_at") @db.Timestamptz(6)
-  agreementId               String?   @map("agreement_id") @db.VarChar(100)
-  termsVersion              String?   @map("terms_version") @db.VarChar(20)
-  agreementStatus           String?   @map("agreement_status") @db.VarChar(20)
-  agreementStartDate        DateTime? @map("agreement_start_date") @db.Timestamptz(6)
-  agreementPdfPath          String?   @map("agreement_pdf_path") @db.VarChar(500)
-  signatureIpAddress        String?   @map("signature_ip_address") @db.VarChar(50)
-  signatureUserAgent        String?   @map("signature_user_agent") @db.Text
+  subscription_features     Json               @default("[]")
+  yearly_subscription_price Decimal            @default(0) @db.Decimal
+  agreementAccepted         Boolean            @default(false) @map("agreement_accepted")
+  agreementAcceptedAt       DateTime?          @map("agreement_accepted_at") @db.Timestamptz(6)
+  agreementVersion          String?            @map("agreement_version") @db.VarChar(20)
+  artistRevenueShare        Int?               @map("artist_revenue_share")
+  platformRevenueShare      Int?               @map("platform_revenue_share")
+  digitalSignature          String?            @map("digital_signature")
+  signatureSignedAt         DateTime?          @map("signature_signed_at") @db.Timestamptz(6)
+  agreementId               String?            @map("agreement_id") @db.VarChar(100)
+  termsVersion              String?            @map("terms_version") @db.VarChar(20)
+  agreementStatus           String?            @map("agreement_status") @db.VarChar(20)
+  agreementStartDate        DateTime?          @map("agreement_start_date") @db.Timestamptz(6)
+  agreementPdfPath          String?            @map("agreement_pdf_path") @db.VarChar(500)
+  signatureIpAddress        String?            @map("signature_ip_address") @db.VarChar(50)
+  signatureUserAgent        String?            @map("signature_user_agent")
+  genre                     String?            @db.VarChar(50)
+  featured_artists          featured_artists[]
 
   @@index([artistStatus], map: "idx_users_artist_status")
   @@index([isDeleted], map: "idx_users_is_deleted")
@@ -70,27 +71,27 @@ model artist_stats {
 }
 
 model revenue_share_configs {
-  id                Int      @id @default(autoincrement())
-  version           String   @unique @db.VarChar(20)
-  artistShare       Int      @map("artist_share")
-  platformShare     Int      @map("platform_share")
-  effectiveFrom     DateTime @map("effective_from") @db.Timestamptz(6)
-  isActive          Boolean  @default(true) @map("is_active")
-  created_at        DateTime @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime @default(now()) @db.Timestamptz(6)
+  id            Int      @id @default(autoincrement())
+  version       String   @unique @db.VarChar(20)
+  artistShare   Int      @map("artist_share")
+  platformShare Int      @map("platform_share")
+  effectiveFrom DateTime @map("effective_from") @db.Timestamptz(6)
+  isActive      Boolean  @default(true) @map("is_active")
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([version], map: "idx_revenue_share_configs_version")
   @@index([effectiveFrom], map: "idx_revenue_share_configs_effective_from")
 }
 
 model terms_versions {
-  id                Int      @id @default(autoincrement())
-  version           String   @unique @db.VarChar(20)
-  content           String   @db.Text
-  isActive          Boolean  @default(true) @map("is_active")
-  effectiveFrom     DateTime @map("effective_from") @db.Timestamptz(6)
-  created_at        DateTime @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime @default(now()) @db.Timestamptz(6)
+  id            Int      @id @default(autoincrement())
+  version       String   @unique @db.VarChar(20)
+  content       String
+  isActive      Boolean  @default(true) @map("is_active")
+  effectiveFrom DateTime @map("effective_from") @db.Timestamptz(6)
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([version], map: "idx_terms_versions_version")
   @@index([effectiveFrom], map: "idx_terms_versions_effective_from")
@@ -240,4 +241,61 @@ model user_listening_stats {
 
   @@id([user_id, year, month])
   @@index([user_id, year, month], map: "idx_user_listening_stats_lookup")
+}
+
+model audit_logs {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  action         String    @db.VarChar(100)
+  entity         String    @db.VarChar(100)
+  entity_id      String?   @db.VarChar(255)
+  actor_id       Int?
+  actor_role     String?   @db.VarChar(20)
+  status         String    @db.VarChar(20)
+  correlation_id String?   @db.Uuid
+  ip_address     String?   @db.VarChar(45)
+  metadata       Json?
+  created_at     DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@index([action], map: "idx_audit_logs_action")
+  @@index([actor_id], map: "idx_audit_logs_actor_id")
+  @@index([correlation_id], map: "idx_audit_logs_correlation_id")
+  @@index([created_at(sort: Desc)], map: "idx_audit_logs_created_at")
+  @@index([entity], map: "idx_audit_logs_entity")
+}
+
+model featured_artists {
+  id            Int       @id @default(autoincrement())
+  artist_id     Int?
+  display_order Int?      @default(0)
+  name          String?   @db.VarChar(255)
+  avatar        String?
+  is_active     Boolean?  @default(true)
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  updated_at    DateTime? @default(now()) @db.Timestamp(6)
+  users         users?    @relation(fields: [artist_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([is_active], map: "idx_featured_artists_active")
+  @@index([artist_id], map: "idx_featured_artists_artist")
+}
+
+model playback_history {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  content_id Int
+  played_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([user_id, content_id])
+  @@index([played_at], map: "idx_playback_history_played_at")
+  @@index([user_id], map: "idx_playback_history_user_id")
+}
+
+model playback_sessions {
+  id           Int      @id @default(autoincrement())
+  user_id      Int
+  content_id   Int
+  heartbeat_at DateTime @default(now()) @db.Timestamptz(6)
+  started_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([user_id], map: "idx_playback_sessions_user")
+  @@index([heartbeat_at], map: "idx_playback_sessions_heartbeat")
 }

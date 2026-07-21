@@ -217,13 +217,13 @@ export default function ArtistContentHistoryPage() {
 
   return (
     <div className="w-full animate-fadeIn" style={backgroundStyle}>
-      <div className="rounded-2xl border border-white/10 bg-[#15100E] p-6 shadow-2xl">
+      <div className="rounded-2xl border border-white/10 bg-surface p-6 shadow-2xl">
         {/* Header */}
         <div className="flex items-start justify-between gap-6 mb-6">
           <div>
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#E85D2C]/20 to-[#C97A54]/20 border border-[#E85D2C]/30 flex items-center justify-center">
-                <History className="w-5 h-5 text-[#E85D2C]" />
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 border border-primary/30 flex items-center justify-center">
+                <History className="w-5 h-5 text-primary" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-white">
@@ -264,7 +264,7 @@ export default function ArtistContentHistoryPage() {
                   onClick={() => setTab(t.key as any)}
                   className={`h-[36px] px-4 rounded-full border text-xs font-medium transition-all flex items-center gap-1.5 ${
                     tab === t.key
-                      ? "border-[#E85D2C]/30 bg-[#E85D2C]/10 text-[#E85D2C] shadow-lg shadow-[#E85D2C]/10"
+                      ? "border-primary/30 bg-primary/10 text-primary shadow-lg shadow-primary/10"
                       : "border-white/10 bg-transparent text-[#B8A6A1] hover:text-white hover:bg-white/5"
                   }`}>
                   <Icon className="w-3.5 h-3.5" />
@@ -280,7 +280,7 @@ export default function ArtistContentHistoryPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search by title..."
-              className="h-[38px] w-full md:w-[280px] rounded-xl border border-white/10 bg-[#0A0A0A]/60 pl-9 pr-4 text-sm text-white placeholder-[#6b5b57] outline-none focus:border-[#E85D2C]/50 transition-all"
+              className="h-[38px] w-full md:w-[280px] rounded-xl border border-white/10 bg-background/60 pl-9 pr-4 text-sm text-white placeholder-[#6b5b57] outline-none focus:border-primary/50 transition-all"
             />
           </div>
         </div>
@@ -343,7 +343,7 @@ export default function ArtistContentHistoryPage() {
                       className="border-t border-white/5 hover:bg-white/5 transition-all group">
                       <td className="py-4 pr-4">
                         <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-lg bg-[#0A0A0A]/60 border border-white/10 flex items-center justify-center text-[#E85D2C]">
+                          <div className="h-9 w-9 rounded-lg bg-background/60 border border-white/10 flex items-center justify-center text-primary">
                             {TypeIcon}
                           </div>
                           <span className="text-sm font-medium text-white">
@@ -388,7 +388,7 @@ export default function ArtistContentHistoryPage() {
                               setPreviewKind("AUDIO");
                               setPreview(it);
                             }}
-                            className="h-8 px-3 rounded-lg border border-white/10 bg-[#0A0A0A]/60 text-xs text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all disabled:opacity-40 flex items-center gap-1.5">
+                            className="h-8 px-3 rounded-lg border border-white/10 bg-background/60 text-xs text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all disabled:opacity-40 flex items-center gap-1.5">
                             <Music className="w-3.5 h-3.5" />
                             Audio
                           </button>
@@ -399,7 +399,7 @@ export default function ArtistContentHistoryPage() {
                               setPreviewKind("VIDEO");
                               setPreview(it);
                             }}
-                            className="h-8 px-3 rounded-lg border border-white/10 bg-[#0A0A0A]/60 text-xs text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all disabled:opacity-40 flex items-center gap-1.5">
+                            className="h-8 px-3 rounded-lg border border-white/10 bg-background/60 text-xs text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all disabled:opacity-40 flex items-center gap-1.5">
                             <Video className="w-3.5 h-3.5" />
                             Video
                           </button>
@@ -424,8 +424,8 @@ export default function ArtistContentHistoryPage() {
                 <tr>
                   <td colSpan={6} className="py-12 text-center">
                     <div className="flex flex-col items-center gap-2">
-                      <div className="h-16 w-16 rounded-full bg-[#E85D2C]/10 flex items-center justify-center">
-                        <ListMusic className="w-8 h-8 text-[#E85D2C] opacity-50" />
+                      <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+                        <ListMusic className="w-8 h-8 text-primary opacity-50" />
                       </div>
                       <p className="text-sm text-[#B8A6A1]">No uploads yet</p>
                       <p className="text-xs text-[#6b5b57]">
@@ -446,7 +446,7 @@ export default function ArtistContentHistoryPage() {
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 px-6"
           onClick={() => setPreview(null)}>
           <div
-            className="w-full max-w-[900px] overflow-hidden rounded-2xl border border-white/10 bg-[#0A0A0A] shadow-2xl"
+            className="w-full max-w-[900px] overflow-hidden rounded-2xl border border-white/10 bg-background shadow-2xl"
             onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
               <div>
@@ -458,7 +458,7 @@ export default function ArtistContentHistoryPage() {
               <button
                 type="button"
                 onClick={() => setPreview(null)}
-                className="h-8 px-4 rounded-lg border border-white/10 bg-[#0A0A0A]/60 text-xs text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all flex items-center gap-1.5">
+                className="h-8 px-4 rounded-lg border border-white/10 bg-background/60 text-xs text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all flex items-center gap-1.5">
                 <X className="w-4 h-4" />
                 Close
               </button>
@@ -480,7 +480,7 @@ export default function ArtistContentHistoryPage() {
       {/* Audio Preview Modal */}
       {preview && previewKind === "AUDIO" && (
         <div className="fixed inset-x-0 bottom-0 z-[60] px-6 pb-6">
-          <div className="mx-auto w-full max-w-[900px] rounded-2xl border border-white/10 bg-[#0A0A0A] shadow-2xl">
+          <div className="mx-auto w-full max-w-[900px] rounded-2xl border border-white/10 bg-background shadow-2xl">
             <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-white/10">
               <div className="min-w-0">
                 <div className="text-sm font-medium text-white truncate">
@@ -491,7 +491,7 @@ export default function ArtistContentHistoryPage() {
               <button
                 type="button"
                 onClick={() => setPreview(null)}
-                className="h-8 px-4 rounded-lg border border-white/10 bg-[#0A0A0A]/60 text-xs text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all flex items-center gap-1.5">
+                className="h-8 px-4 rounded-lg border border-white/10 bg-background/60 text-xs text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all flex items-center gap-1.5">
                 <X className="w-4 h-4" />
                 Close
               </button>

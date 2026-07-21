@@ -97,9 +97,9 @@ function PremiumSelect({
         type="button"
         onClick={() => !disabled && !isLoading && setIsOpen(!isOpen)}
         disabled={disabled || isLoading}
-        className={`w-full h-[48px] rounded-xl bg-[#0A0A0A] border border-white/10 px-4 pr-10 text-sm text-left text-white outline-none transition-all flex items-center justify-between ${
+        className={`w-full h-[48px] rounded-xl bg-background border border-white/10 px-4 pr-10 text-sm text-left text-white outline-none transition-all flex items-center justify-between ${
           isOpen
-            ? "border-[#E85D2C]/50 ring-2 ring-[#E85D2C]/20"
+            ? "border-primary/50 ring-2 ring-primary/20"
             : "hover:border-white/20"
         } ${
           disabled || isLoading
@@ -135,7 +135,7 @@ function PremiumSelect({
           )}
         </span>
         {isLoading ? (
-          <div className="w-4 h-4 border-2 border-[#E85D2C]/20 border-t-[#E85D2C] rounded-full animate-spin" />
+          <div className="w-4 h-4 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
         ) : (
           <ChevronDown
             size={18}
@@ -148,7 +148,7 @@ function PremiumSelect({
 
       {/* Dropdown Menu */}
       {isOpen && !disabled && !isLoading && (
-        <div className="absolute z-50 w-full mt-2 rounded-xl bg-[#15100E] border border-white/10 shadow-2xl overflow-hidden animate-in slide-in-from-top-2 duration-200">
+        <div className="absolute z-50 w-full mt-2 rounded-xl bg-surface border border-white/10 shadow-2xl overflow-hidden animate-in slide-in-from-top-2 duration-200">
           {/* Search Input */}
           <div className="relative p-3 border-b border-white/5 bg-black/20">
             <Search
@@ -160,7 +160,7 @@ function PremiumSelect({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search artists..."
-              className="w-full h-[36px] rounded-lg bg-[#0A0A0A] border border-white/10 pl-8 pr-8 text-sm text-white placeholder:text-[#8D7B77] outline-none focus:border-[#E85D2C]/50 transition-all"
+              className="w-full h-[36px] rounded-lg bg-background border border-white/10 pl-8 pr-8 text-sm text-white placeholder:text-[#8D7B77] outline-none focus:border-primary/50 transition-all"
               onClick={(e) => e.stopPropagation()}
             />
             {searchTerm && (
@@ -202,10 +202,10 @@ function PremiumSelect({
                     }}
                     className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all ${
                       isSelected
-                        ? "bg-[#E85D2C]/10 text-white border border-[#E85D2C]/20"
+                        ? "bg-primary/10 text-white border border-primary/20"
                         : "text-[#B8A6A1] hover:bg-white/5 hover:text-white"
                     }`}>
-                    <div className="h-8 w-8 rounded-full bg-[#0A0A0A] border border-white/10 overflow-hidden shrink-0">
+                    <div className="h-8 w-8 rounded-full bg-background border border-white/10 overflow-hidden shrink-0">
                       {artist.profileImageUrl ? (
                         <img
                           src={artist.profileImageUrl}
@@ -228,7 +228,7 @@ function PremiumSelect({
                       />
                     )}
                     {isSelected && (
-                      <div className="h-5 w-5 rounded-full bg-[#E85D2C] flex items-center justify-center shrink-0">
+                      <div className="h-5 w-5 rounded-full bg-primary flex items-center justify-center shrink-0">
                         <CheckCircle size={10} className="text-white" />
                       </div>
                     )}
@@ -256,9 +256,9 @@ function PremiumSelect({
 
       {/* Selected Display */}
       {selectedOption && (
-        <div className="mt-2 flex items-center gap-2 p-2 rounded-lg bg-[#E85D2C]/5 border border-[#E85D2C]/10">
-          <div className="h-5 w-5 rounded-full bg-[#E85D2C]/20 flex items-center justify-center shrink-0">
-            <CheckCircle size={10} className="text-[#E85D2C]" />
+        <div className="mt-2 flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/10">
+          <div className="h-5 w-5 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+            <CheckCircle size={10} className="text-primary" />
           </div>
           <p className="text-xs text-[#8D7B77]">
             Selected:{" "}
@@ -391,8 +391,8 @@ export default function AdminFeaturedArtistsPage() {
       subtitle="Curate and manage artists showcased on the fan app home screen">
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
-          <div className="absolute inset-0 bg-gradient-to-br from-[#E85D2C]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-surface p-5 hover:border-white/10 transition-all duration-300">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative">
             <div className="flex items-center justify-between">
               <div>
@@ -403,14 +403,14 @@ export default function AdminFeaturedArtistsPage() {
                   {featured.length}
                 </p>
               </div>
-              <div className="p-3 rounded-xl bg-[#E85D2C]/10">
-                <Star size={20} className="text-[#E85D2C]" />
+              <div className="p-3 rounded-xl bg-primary/10">
+                <Star size={20} className="text-primary" />
               </div>
             </div>
           </div>
         </div>
 
-        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-surface p-5 hover:border-white/10 transition-all duration-300">
           <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative">
             <div className="flex items-center justify-between">
@@ -427,7 +427,7 @@ export default function AdminFeaturedArtistsPage() {
           </div>
         </div>
 
-        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-surface p-5 hover:border-white/10 transition-all duration-300">
           <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative">
             <div className="flex items-center justify-between">
@@ -444,7 +444,7 @@ export default function AdminFeaturedArtistsPage() {
           </div>
         </div>
 
-        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#15100E] p-5 hover:border-white/10 transition-all duration-300">
+        <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-surface p-5 hover:border-white/10 transition-all duration-300">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative">
             <div className="flex items-center justify-between">
@@ -474,10 +474,10 @@ export default function AdminFeaturedArtistsPage() {
       )}
 
       {/* Add Featured Artist Section */}
-      <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6 mb-8">
+      <div className="rounded-2xl border border-white/5 bg-surface p-6 mb-8">
         <div className="flex items-center gap-3 mb-6">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#E85D2C]/20 to-[#C97A54]/10">
-            <Zap size={20} className="text-[#E85D2C]" />
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary/20 to-secondary/10">
+            <Zap size={20} className="text-primary" />
           </div>
           <div>
             <h2 className="text-lg font-semibold text-white">
@@ -494,7 +494,7 @@ export default function AdminFeaturedArtistsPage() {
             onClick={() => setAddMode("existing")}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
               addMode === "existing"
-                ? "bg-[#E85D2C]/10 text-[#E85D2C] border border-[#E85D2C]/20"
+                ? "bg-primary/10 text-primary border border-primary/20"
                 : "text-[#8D7B77] hover:text-white hover:bg-white/5"
             }`}>
             <Users size={14} className="inline mr-2" />
@@ -504,7 +504,7 @@ export default function AdminFeaturedArtistsPage() {
             onClick={() => setAddMode("manual")}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
               addMode === "manual"
-                ? "bg-[#E85D2C]/10 text-[#E85D2C] border border-[#E85D2C]/20"
+                ? "bg-primary/10 text-primary border border-primary/20"
                 : "text-[#8D7B77] hover:text-white hover:bg-white/5"
             }`}>
             <UserPlus size={14} className="inline mr-2" />
@@ -514,7 +514,7 @@ export default function AdminFeaturedArtistsPage() {
 
         {isLoading ? (
           <div className="flex items-center justify-center gap-3 py-8">
-            <div className="w-5 h-5 border-2 border-[#E85D2C]/20 border-t-[#E85D2C] rounded-full animate-spin"></div>
+            <div className="w-5 h-5 border-2 border-primary/20 border-t-primary rounded-full animate-spin"></div>
             <span className="text-sm text-[#8D7B77]">Loading...</span>
           </div>
         ) : addMode === "existing" ? (
@@ -554,7 +554,7 @@ export default function AdminFeaturedArtistsPage() {
               <button
                 onClick={handleAddFeatured}
                 disabled={!selectedArtistId || isAdding}
-                className="h-[48px] px-8 rounded-xl bg-gradient-to-r from-[#E85D2C] to-[#C97A54] text-white font-medium hover:shadow-lg hover:shadow-[#E85D2C]/30 transition-all disabled:opacity-50 flex items-center gap-2 self-end">
+                className="h-[48px] px-8 rounded-xl bg-gradient-to-r from-primary to-secondary text-white font-medium hover:shadow-lg hover:shadow-primary/30 transition-all disabled:opacity-50 flex items-center gap-2 self-end">
                 {isAdding ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -581,7 +581,7 @@ export default function AdminFeaturedArtistsPage() {
                 value={manualName}
                 onChange={(e) => setManualName(e.target.value)}
                 placeholder="Enter artist name..."
-                className="w-full h-[48px] rounded-xl bg-[#0A0A0A] border border-white/10 px-4 text-white text-sm outline-none focus:border-[#E85D2C]/50 focus:ring-1 focus:ring-[#E85D2C]/20 transition-all placeholder:text-[#8D7B77]"
+                className="w-full h-[48px] rounded-xl bg-background border border-white/10 px-4 text-white text-sm outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all placeholder:text-[#8D7B77]"
                 disabled={isAdding}
               />
             </div>
@@ -598,7 +598,7 @@ export default function AdminFeaturedArtistsPage() {
             <button
               onClick={handleAddFeatured}
               disabled={!manualName.trim() || !manualAvatar.trim() || isAdding}
-              className="w-full h-[48px] rounded-xl bg-gradient-to-r from-[#E85D2C] to-[#C97A54] text-white font-medium hover:shadow-lg hover:shadow-[#E85D2C]/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+              className="w-full h-[48px] rounded-xl bg-gradient-to-r from-primary to-secondary text-white font-medium hover:shadow-lg hover:shadow-primary/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
               {isAdding ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -616,11 +616,11 @@ export default function AdminFeaturedArtistsPage() {
       </div>
 
       {/* Featured Artists List */}
-      <div className="rounded-2xl border border-white/5 bg-[#15100E] p-6">
+      <div className="rounded-2xl border border-white/5 bg-surface p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#E85D2C]/20 to-[#C97A54]/10">
-              <Crown size={20} className="text-[#E85D2C]" />
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary/20 to-secondary/10">
+              <Crown size={20} className="text-primary" />
             </div>
             <div>
               <h2 className="text-lg font-semibold text-white">
@@ -644,7 +644,7 @@ export default function AdminFeaturedArtistsPage() {
 
         {isLoading ? (
           <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-[#E85D2C]/20 border-t-[#E85D2C]"></div>
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary/20 border-t-primary"></div>
             <p className="text-sm text-[#8D7B77] mt-3">
               Loading featured artists...
             </p>
@@ -668,12 +668,12 @@ export default function AdminFeaturedArtistsPage() {
                 key={item.id}
                 className={`group flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-xl border transition-all duration-300 ${
                   item.isActive
-                    ? "border-white/5 hover:border-[#E85D2C]/30 hover:bg-white/5"
+                    ? "border-white/5 hover:border-primary/30 hover:bg-white/5"
                     : "border-white/5 opacity-60 hover:opacity-80 hover:bg-white/5"
                 }`}>
                 <div className="flex items-center gap-4 flex-1 min-w-0">
                   <div className="relative">
-                    <div className="h-14 w-14 rounded-full bg-[#0A0A0A] border border-white/10 overflow-hidden shrink-0">
+                    <div className="h-14 w-14 rounded-full bg-background border border-white/10 overflow-hidden shrink-0">
                       {item.avatar ? (
                         <img
                           src={item.avatar}
@@ -687,7 +687,7 @@ export default function AdminFeaturedArtistsPage() {
                       )}
                     </div>
                     {item.isActive && (
-                      <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-green-500 border-2 border-[#15100E] flex items-center justify-center">
+                      <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-green-500 border-2 border-surface flex items-center justify-center">
                         <CheckCircle size={12} className="text-white" />
                       </div>
                     )}

@@ -329,12 +329,12 @@ export default function ArtistAccountPage() {
       />
 
       <div
-        className="relative min-h-screen overflow-hidden rounded-[16px] border border-white/10 bg-gradient-to-br from-[#1a1412] via-[#141010] to-[#0a0808] backdrop-blur-xl shadow-[0_30px_100px_rgba(0,0,0,0.6)]"
+        className="relative min-h-screen overflow-hidden rounded-[16px] border border-white/10 bg-gradient-to-br from-[#1a1412] via-surface to-[#0a0808] backdrop-blur-xl shadow-[0_30px_100px_rgba(0,0,0,0.6)]"
         style={backgroundStyle}
       >
       {/* Ambient glow effects */}
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-[#c97a54]/5 rounded-full blur-[150px] pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-[#c97a54]/3 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-secondary/5 rounded-full blur-[150px] pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-secondary/3 rounded-full blur-[120px] pointer-events-none" />
       
       <div className="relative px-6 py-8 sm:px-10 sm:py-10 lg:px-12 lg:py-12">
         
@@ -357,7 +357,7 @@ export default function ArtistAccountPage() {
                   strokeWidth="3"
                 />
                 <path
-                  className="text-[#c97a54]"
+                  className="text-secondary"
                   d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                   fill="none"
                   stroke="currentColor"
@@ -430,12 +430,12 @@ export default function ArtistAccountPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-end gap-5 -mt-16 relative z-10">
               {/* Avatar */}
               <div className="relative group">
-                <div className="w-[120px] h-[120px] rounded-full overflow-hidden border-4 border-[#0e0a0a] bg-[#141010] shadow-2xl">
+                <div className="w-[120px] h-[120px] rounded-full overflow-hidden border-4 border-[#0e0a0a] bg-surface shadow-2xl">
                   {profileSrc ? (
                     <img src={profileSrc} alt="Profile" className="h-full w-full object-cover" />
                   ) : (
-                    <div className="h-full w-full bg-gradient-to-br from-[#c97a54]/20 to-[#2a1a17] flex items-center justify-center">
-                      <span className="text-[40px] font-bold text-[#c97a54]">
+                    <div className="h-full w-full bg-gradient-to-br from-secondary/20 to-[#2a1a17] flex items-center justify-center">
+                      <span className="text-[40px] font-bold text-secondary">
                         {name ? name[0].toUpperCase() : "A"}
                       </span>
                     </div>
@@ -490,15 +490,15 @@ export default function ArtistAccountPage() {
               <div className="flex-1 pb-2">
                 <h2 className="text-[24px] font-bold text-white tracking-tight">{name || "Your Name"}</h2>
                 <p className="text-[14px] text-[#a99792] flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#c97a54]"></span>
+                  <span className="w-2 h-2 rounded-full bg-secondary"></span>
                   {registeredEmail || "artist@example.com"}
                 </p>
               </div>
 
               {/* Upload Status */}
               {imageUploading && (
-                <div className="px-4 py-2 rounded-lg bg-[#c97a54]/10 border border-[#c97a54]/30 text-[13px] text-[#c97a54] flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-[#c97a54]/30 border-t-[#c97a54] rounded-full animate-spin" />
+                <div className="px-4 py-2 rounded-lg bg-secondary/10 border border-secondary/30 text-[13px] text-secondary flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-secondary/30 border-t-secondary rounded-full animate-spin" />
                   Uploading {imageUploading} image...
                 </div>
               )}
@@ -541,7 +541,7 @@ export default function ArtistAccountPage() {
             onClick={() => setActiveTab("profile")}
             className={`px-6 py-3 rounded-xl text-[14px] font-medium transition-all ${
               activeTab === "profile"
-                ? "bg-[#c97a54] text-white shadow-lg shadow-[#c97a54]/25"
+                ? "bg-secondary text-white shadow-lg shadow-secondary/25"
                 : "bg-white/5 text-[#a99792] hover:bg-white/10 hover:text-white"
             }`}
           >
@@ -557,7 +557,7 @@ export default function ArtistAccountPage() {
             onClick={() => setActiveTab("socials")}
             className={`px-6 py-3 rounded-xl text-[14px] font-medium transition-all ${
               activeTab === "socials"
-                ? "bg-[#c97a54] text-white shadow-lg shadow-[#c97a54]/25"
+                ? "bg-secondary text-white shadow-lg shadow-secondary/25"
                 : "bg-white/5 text-[#a99792] hover:bg-white/10 hover:text-white"
             }`}
           >
@@ -580,7 +580,7 @@ export default function ArtistAccountPage() {
             {activeTab === "profile" ? (
               <div className="rounded-[20px] border border-white/10 bg-[#0e0a0a]/40 p-6 sm:p-8 backdrop-blur-sm">
                 <h3 className="text-[18px] font-semibold text-white mb-6 flex items-center gap-2">
-                  <span className="w-8 h-8 rounded-lg bg-[#c97a54]/20 flex items-center justify-center text-[#c97a54]">
+                  <span className="w-8 h-8 rounded-lg bg-secondary/20 flex items-center justify-center text-secondary">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -593,12 +593,12 @@ export default function ArtistAccountPage() {
                   {/* Display Name */}
                   <div>
                     <label className="block text-[12px] uppercase tracking-wider text-[#8d7b77] mb-2 font-medium">
-                      Display Name <span className="text-[#c97a54]">*</span>
+                      Display Name <span className="text-secondary">*</span>
                     </label>
                     <input
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full h-[52px] rounded-xl bg-white/5 border border-white/10 px-5 text-[15px] text-white placeholder-[#5a4a45] outline-none focus:border-[#c97a54]/50 focus:bg-white/[0.07] focus:ring-1 focus:ring-[#c97a54]/20 transition-all"
+                      className="w-full h-[52px] rounded-xl bg-white/5 border border-white/10 px-5 text-[15px] text-white placeholder-[#5a4a45] outline-none focus:border-secondary/50 focus:bg-white/[0.07] focus:ring-1 focus:ring-secondary/20 transition-all"
                       placeholder="How fans will know you"
                     />
                   </div>
@@ -606,13 +606,13 @@ export default function ArtistAccountPage() {
                   {/* Bio */}
                   <div>
                     <label className="block text-[12px] uppercase tracking-wider text-[#8d7b77] mb-2 font-medium">
-                      Bio <span className="text-[#c97a54]">*</span>
+                      Bio <span className="text-secondary">*</span>
                     </label>
                     <textarea
                       value={bio}
                       onChange={(e) => setBio(e.target.value)}
                       rows={4}
-                      className="w-full rounded-xl bg-white/5 border border-white/10 px-5 py-4 text-[15px] text-white placeholder-[#5a4a45] outline-none focus:border-[#c97a54]/50 focus:bg-white/[0.07] focus:ring-1 focus:ring-[#c97a54]/20 transition-all resize-none"
+                      className="w-full rounded-xl bg-white/5 border border-white/10 px-5 py-4 text-[15px] text-white placeholder-[#5a4a45] outline-none focus:border-secondary/50 focus:bg-white/[0.07] focus:ring-1 focus:ring-secondary/20 transition-all resize-none"
                       placeholder="Tell fans about your music, style, and story..."
                     />
                     <div className="flex justify-between mt-2">
@@ -631,7 +631,7 @@ export default function ArtistAccountPage() {
                         <input
                           value={profileImageUrl ?? ""}
                           onChange={(e) => setProfileImageUrl(e.target.value || null)}
-                          className="w-full h-[48px] rounded-xl bg-white/5 border border-white/10 pl-11 pr-4 text-[14px] text-white placeholder-[#5a4a45] outline-none focus:border-[#c97a54]/50 focus:bg-white/[0.07] transition-all"
+                          className="w-full h-[48px] rounded-xl bg-white/5 border border-white/10 pl-11 pr-4 text-[14px] text-white placeholder-[#5a4a45] outline-none focus:border-secondary/50 focus:bg-white/[0.07] transition-all"
                           placeholder="https://..."
                         />
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5a4a45]">
@@ -639,12 +639,12 @@ export default function ArtistAccountPage() {
                         </div>
                       </div>
                       <div 
-                        className="mt-3 rounded-xl border border-dashed border-white/20 bg-white/[0.03] p-4 text-center cursor-pointer hover:border-[#c97a54]/40 hover:bg-white/[0.05] transition-all"
+                        className="mt-3 rounded-xl border border-dashed border-white/20 bg-white/[0.03] p-4 text-center cursor-pointer hover:border-secondary/40 hover:bg-white/[0.05] transition-all"
                         tabIndex={0}
                         onPaste={(e) => onPasteImage("profile", e)}
                       >
                         <div className="text-[#8d7b77] text-[13px]">
-                          <span className="text-[#c97a54]">Paste</span> image here or
+                          <span className="text-secondary">Paste</span> image here or
                           <button
                             type="button"
                             onClick={() => profileInputRef.current?.click()}
@@ -664,7 +664,7 @@ export default function ArtistAccountPage() {
                         <input
                           value={bannerImageUrl ?? ""}
                           onChange={(e) => setBannerImageUrl(e.target.value || null)}
-                          className="w-full h-[48px] rounded-xl bg-white/5 border border-white/10 pl-11 pr-4 text-[14px] text-white placeholder-[#5a4a45] outline-none focus:border-[#c97a54]/50 focus:bg-white/[0.07] transition-all"
+                          className="w-full h-[48px] rounded-xl bg-white/5 border border-white/10 pl-11 pr-4 text-[14px] text-white placeholder-[#5a4a45] outline-none focus:border-secondary/50 focus:bg-white/[0.07] transition-all"
                           placeholder="https://..."
                         />
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5a4a45]">
@@ -672,12 +672,12 @@ export default function ArtistAccountPage() {
                         </div>
                       </div>
                       <div 
-                        className="mt-3 rounded-xl border border-dashed border-white/20 bg-white/[0.03] p-4 text-center cursor-pointer hover:border-[#c97a54]/40 hover:bg-white/[0.05] transition-all"
+                        className="mt-3 rounded-xl border border-dashed border-white/20 bg-white/[0.03] p-4 text-center cursor-pointer hover:border-secondary/40 hover:bg-white/[0.05] transition-all"
                         tabIndex={0}
                         onPaste={(e) => onPasteImage("banner", e)}
                       >
                         <div className="text-[#8d7b77] text-[13px]">
-                          <span className="text-[#c97a54]">Paste</span> image here or
+                          <span className="text-secondary">Paste</span> image here or
                           <button
                             type="button"
                             onClick={() => bannerInputRef.current?.click()}
@@ -694,7 +694,7 @@ export default function ArtistAccountPage() {
             ) : (
               <div className="rounded-[20px] border border-white/10 bg-[#0e0a0a]/40 p-6 sm:p-8 backdrop-blur-sm">
                 <h3 className="text-[18px] font-semibold text-white mb-6 flex items-center gap-2">
-                  <span className="w-8 h-8 rounded-lg bg-[#c97a54]/20 flex items-center justify-center text-[#c97a54]">
+                  <span className="w-8 h-8 rounded-lg bg-secondary/20 flex items-center justify-center text-secondary">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
                       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
@@ -708,7 +708,7 @@ export default function ArtistAccountPage() {
                   <div>
                     <label className="flex items-center gap-2 text-[12px] uppercase tracking-wider text-[#8d7b77] mb-2 font-medium">
                       <span className="text-[#1DB954]"><SpotifyIcon /></span>
-                      Spotify Profile <span className="text-[#c97a54]">*</span>
+                      Spotify Profile <span className="text-secondary">*</span>
                     </label>
                     <div className="relative">
                       <input
@@ -727,7 +727,7 @@ export default function ArtistAccountPage() {
                   <div>
                     <label className="flex items-center gap-2 text-[12px] uppercase tracking-wider text-[#8d7b77] mb-2 font-medium">
                       <span className="text-[#FF0000]"><YoutubeIcon /></span>
-                      YouTube Channel <span className="text-[#c97a54]">*</span>
+                      YouTube Channel <span className="text-secondary">*</span>
                     </label>
                     <div className="relative">
                       <input
@@ -746,7 +746,7 @@ export default function ArtistAccountPage() {
                   <div>
                     <label className="flex items-center gap-2 text-[12px] uppercase tracking-wider text-[#8d7b77] mb-2 font-medium">
                       <span className="text-[#E4405F]"><InstagramIcon /></span>
-                      Instagram Profile <span className="text-[#c97a54]">*</span>
+                      Instagram Profile <span className="text-secondary">*</span>
                     </label>
                     <div className="relative">
                       <input
@@ -762,8 +762,8 @@ export default function ArtistAccountPage() {
                   </div>
                 </div>
 
-                <div className="mt-6 p-4 rounded-xl bg-[#c97a54]/10 border border-[#c97a54]/20">
-                  <p className="text-[13px] text-[#c97a54] flex items-start gap-2">
+                <div className="mt-6 p-4 rounded-xl bg-secondary/10 border border-secondary/20">
+                  <p className="text-[13px] text-secondary flex items-start gap-2">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 flex-shrink-0">
                       <circle cx="12" cy="12" r="10"/>
                       <line x1="12" y1="16" x2="12" y2="12"/>
@@ -781,20 +781,20 @@ export default function ArtistAccountPage() {
             {/* Quick Preview Card */}
             <div className="rounded-[20px] border border-white/10 bg-[#0e0a0a]/40 p-6 backdrop-blur-sm">
               <h4 className="text-[14px] uppercase tracking-wider text-[#8d7b77] mb-4 font-semibold">Profile Preview</h4>
-              <div className="rounded-xl overflow-hidden border border-white/10 bg-[#141010]">
+              <div className="rounded-xl overflow-hidden border border-white/10 bg-surface">
                 {/* Banner with gradient fallback - object-contain to show full image */}
-                <div className="h-[100px] bg-gradient-to-br from-[#c97a54]/30 to-[#2a1a17] relative flex items-center justify-center overflow-hidden">
+                <div className="h-[100px] bg-gradient-to-br from-secondary/30 to-[#2a1a17] relative flex items-center justify-center overflow-hidden">
                   {bannerSrc && <img src={bannerSrc} alt="" className="h-full w-full object-contain" />}
                 </div>
                 {/* Avatar section with proper spacing - no overlap */}
                 <div className="px-4 pb-4 relative">
                   {/* Avatar positioned to overlap banner edge with background padding */}
                   <div className="relative -mt-8 mb-2">
-                    <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-[#141010] bg-[#0e0a0a] shadow-xl">
+                    <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-surface bg-[#0e0a0a] shadow-xl">
                       {profileSrc ? (
                         <img src={profileSrc} alt="" className="h-full w-full object-cover" />
                       ) : (
-                        <div className="h-full w-full bg-gradient-to-br from-[#c97a54]/20 to-[#2a1a17] flex items-center justify-center text-[#c97a54] font-bold text-xl">
+                        <div className="h-full w-full bg-gradient-to-br from-secondary/20 to-[#2a1a17] flex items-center justify-center text-secondary font-bold text-xl">
                           {name ? name[0].toUpperCase() : "A"}
                         </div>
                       )}
@@ -841,7 +841,7 @@ export default function ArtistAccountPage() {
                 type="button"
                 disabled={saving}
                 onClick={save}
-                className="w-full h-[52px] rounded-xl bg-gradient-to-r from-[#c97a54] to-[#a85d3c] text-white font-semibold text-[15px] shadow-lg shadow-[#c97a54]/25 hover:shadow-[#c97a54]/40 hover:from-[#d48a64] hover:to-[#b86d4c] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full h-[52px] rounded-xl bg-gradient-to-r from-secondary to-[#a85d3c] text-white font-semibold text-[15px] shadow-lg shadow-secondary/25 hover:shadow-secondary/40 hover:from-[#d48a64] hover:to-[#b86d4c] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {saving ? (
                   <>

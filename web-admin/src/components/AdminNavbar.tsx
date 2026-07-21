@@ -108,7 +108,7 @@ export default function AdminNavbar() {
   return (
     <>
       {/* Mobile Header */}
-      <div className="md:hidden sticky top-0 z-50 w-full border-b border-white/10 bg-[#0A0A0A] backdrop-blur-xl">
+      <div className="md:hidden sticky top-0 z-50 w-full border-b border-white/10 bg-background backdrop-blur-xl">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <BrandLogo />
@@ -131,7 +131,7 @@ export default function AdminNavbar() {
           onClick={() => setMobileOpen(false)}
         >
           <div 
-            className="fixed top-0 left-0 h-full w-72 bg-[#0A0A0A] border-r border-white/10 shadow-2xl"
+            className="fixed top-0 left-0 h-full w-72 bg-background border-r border-white/10 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-4 border-b border-white/10">
@@ -158,7 +158,7 @@ export default function AdminNavbar() {
                     onClick={() => setMobileOpen(false)}
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                       active
-                        ? "bg-[#E85D2C]/10 text-[#E85D2C] border border-[#E85D2C]/20"
+                        ? "bg-primary/10 text-primary border border-primary/20"
                         : "text-white/60 hover:text-white hover:bg-white/5"
                     }`}
                   >
@@ -169,7 +169,7 @@ export default function AdminNavbar() {
               })}
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10 bg-[#0A0A0A]">
+            <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10 bg-background">
               <button
                 type="button"
                 onClick={onLogout}
@@ -185,7 +185,7 @@ export default function AdminNavbar() {
 
       {/* Desktop Sidebar */}
       <div 
-        className={`hidden md:flex fixed left-0 top-0 h-full bg-[#0A0A0A] border-r border-white/10 shadow-2xl transition-all duration-300 z-50 ${
+        className={`hidden md:flex fixed left-0 top-0 h-full bg-background border-r border-white/10 shadow-2xl transition-all duration-300 z-50 ${
           isCollapsed ? "w-20" : "w-64"
         }`}
       >
@@ -210,7 +210,7 @@ export default function AdminNavbar() {
                   to={item.to}
                   className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all ${
                     active
-                      ? "bg-[#E85D2C]/10 text-[#E85D2C] border border-[#E85D2C]/20"
+                      ? "bg-primary/10 text-primary border border-primary/20"
                       : "text-white/60 hover:text-white hover:bg-white/5"
                   } ${isCollapsed ? "justify-center" : ""}`}
                   title={isCollapsed ? item.label : ""}

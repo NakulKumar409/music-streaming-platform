@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client";
 let dbUrl = process.env.DATABASE_URL || "";
 if (dbUrl && !dbUrl.includes("connection_limit")) {
   const separator = dbUrl.includes("?") ? "&" : "?";
-  dbUrl += `${separator}connection_limit=50&pool_timeout=10`;
+  dbUrl += `${separator}connection_limit=5&pool_timeout=10`;
 }
 
 export const prisma = new PrismaClient({
@@ -17,7 +17,7 @@ export const prisma = new PrismaClient({
 let readDbUrl = process.env.DATABASE_URL_REPLICA || process.env.DATABASE_URL || "";
 if (readDbUrl && !readDbUrl.includes("connection_limit")) {
   const separator = readDbUrl.includes("?") ? "&" : "?";
-  readDbUrl += `${separator}connection_limit=50&pool_timeout=10`;
+  readDbUrl += `${separator}connection_limit=5&pool_timeout=10`;
 }
 
 export const prismaRead = new PrismaClient({

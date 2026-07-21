@@ -401,7 +401,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     }, 500);
 
     // Start heartbeat for listening time tracking
-    startHeartbeat(key);
+    startHeartbeat(
+      key,
+      () => stateRef.current.positionMs,
+      () => stateRef.current.durationMs
+    );
 
     return () => {
       if (playbackRecordTimerRef.current) {
@@ -693,11 +697,24 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       // Check if TrackPlayer is available (Expo Go compatibility)
       if (!TrackPlayerAvailable) {
-        Alert.alert(
-          "Audio Not Available",
-          "Audio playback requires a development build. Please build the app with EAS Build to enable audio features."
-        );
-        setState((s) => ({ ...s, isPlaying: false }));
+        try {
+          logger.log("[MediaPlayer] TrackPlayer not available, falling back to videoPlayer for audio");
+          setVideoSource(playbackUrl);
+          scheduleTokenRefresh(playbackUrl, "audio");
+          
+          if (videoPlayer) {
+            videoPlayer.replace(playbackUrl);
+            videoPlayer.play();
+            setState((s) => ({
+              ...s,
+              isPlaying: true,
+              positionMs: 0,
+              durationMs: item.duration || 0,
+            }));
+          }
+        } catch (err) {
+          logger.warn("[MediaPlayer] videoPlayer fallback for audio failed", err);
+        }
         return;
       }
 
@@ -852,10 +869,15 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
     if (item.mediaType === "audio") {
       if (!TrackPlayerAvailable) {
-        Alert.alert(
-          "Audio Not Available",
-          "Audio playback requires a development build. Please build the app with EAS Build to enable audio features."
-        );
+        if (videoPlayer) {
+          if (stateRef.current.isPlaying) {
+            videoPlayer.pause();
+            setState((s) => ({ ...s, isPlaying: false }));
+          } else {
+            videoPlayer.play();
+            setState((s) => ({ ...s, isPlaying: true }));
+          }
+        }
         return;
       }
       try {
@@ -903,9 +925,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       if (item.mediaType === "audio") {
         if (!TrackPlayerAvailable) {
-          logger.warn(
-            "[MediaPlayer] Cannot seek - TrackPlayer not available in Expo Go"
-          );
+          if (videoPlayer) {
+            videoPlayer.currentTime = safe / 1000;
+          }
           return;
         }
         try {
@@ -1258,7 +1280,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   // Polling for progress updates - works on both web and native
   // PlaybackProgress events may not fire consistently on all platforms
   useEffect(() => {
-    console.log("[MediaPlayer] Progress polling effect - TrackPlayerAvailable:", TrackPlayerAvailable, "isPlayerReady:", isPlayerReady);
     if (!TrackPlayerAvailable || !isPlayerReady) return;
 
     let isPolling = false;
@@ -1270,8 +1291,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         const progress = await TrackPlayer.getProgress();
         const pos = Math.max(0, Math.round(progress.position * 1000));
         const dur = Math.max(0, Math.round(progress.duration * 1000));
-
-        console.log("[MediaPlayer] Polling progress:", { pos, dur, isPlaying: stateRef.current.isPlaying });
 
         setState((s) => ({
           ...s,
@@ -1289,6 +1308,37 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       isPolling = false;
     };
   }, [isPlayerReady]);
+ 
+  // Polling for videoPlayer progress fallback (e.g. Web / Expo Go)
+  useEffect(() => {
+    if (TrackPlayerAvailable || !videoPlayer) return;
+
+    let active = true;
+    const interval = setInterval(() => {
+      if (!active || !videoPlayer) return;
+      try {
+        const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
+        const dur = Math.max(0, Math.round(videoPlayer.duration * 1000));
+        setState((s) => {
+          if (s.isPlaying) {
+            return {
+              ...s,
+              positionMs: pos,
+              durationMs: dur > 0 ? dur : s.durationMs,
+            };
+          }
+          return s;
+        });
+      } catch (e) {
+        // ignore
+      }
+    }, 100); // 100ms interval for fallback smoothness
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [videoPlayer]);
 
   const value = useMemo<MediaPlayerContextValue>(
     () => ({

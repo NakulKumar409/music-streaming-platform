@@ -98,7 +98,7 @@ router.get("/", optionalAuth, (req, res) => {
              WHERE user_id = $1 
                AND (type = 'PLATFORM' OR (type = 'ARTIST' AND artist_id = ANY($2::int[])))
                AND UPPER(COALESCE(status, '')) IN ('ACTIVE', 'GRACE_PERIOD', 'PAST_DUE', 'GRACE')
-               AND (COALESCE(grace_ends_at, next_billing_date) IS NULL OR COALESCE(grace_ends_at, next_billing_date) > now())`,
+               AND (next_billing_date IS NULL OR next_billing_date > now())`,
             [userId, artistIds]
           )
         ]);

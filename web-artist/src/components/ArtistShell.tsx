@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { http } from "../services/http";
+import { Bell, Settings as SettingsIcon } from "lucide-react";
+import ThemeSwitcher from "./ThemeSwitcher";
 
 type MeResponse = {
   success: boolean;
@@ -179,15 +181,15 @@ function NavItem({
       to={to}
       className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
         isActive
-          ? "bg-[#E85D2C]/10 text-[#E85D2C] border border-[#E85D2C]/20 shadow-[0_0_20px_rgba(232,93,44,0.05)]"
+          ? "bg-primary/10 text-primary border border-primary/20 shadow-[0_0_20px_rgba(232,93,44,0.05)]"
           : "text-[#B8A6A1] hover:text-white hover:bg-white/5"
       }`}>
-      <span className={isActive ? "text-[#E85D2C]" : "text-[#B8A6A1]"}>
+      <span className={isActive ? "text-primary" : "text-[#B8A6A1]"}>
         {icon}
       </span>
       <span>{label}</span>
       {isActive && (
-        <span className="ml-auto w-1 h-6 rounded-full bg-[#E85D2C]" />
+        <span className="ml-auto w-1 h-6 rounded-full bg-primary" />
       )}
     </Link>
   );
@@ -368,7 +370,7 @@ export default function ArtistShell() {
   const isActive = (path: string) => activePath === path;
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white font-sans antialiased">
+    <div className="min-h-screen bg-background text-white font-sans antialiased">
       {/* Mobile Overlay */}
       {sidebarOpen && (
         <div
@@ -380,7 +382,7 @@ export default function ArtistShell() {
       {/* Sidebar */}
       <aside
         className={`
-        fixed top-0 left-0 h-full w-[280px] bg-[#0A0A0A] border-r border-white/5 z-50
+        fixed top-0 left-0 h-full w-[280px] bg-background border-r border-white/5 z-50
         transition-transform duration-300 ease-in-out
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
         lg:translate-x-0
@@ -413,7 +415,7 @@ export default function ArtistShell() {
         {/* Bottom */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/5">
           <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5">
-            <div className="h-9 w-9 rounded-full overflow-hidden border border-white/10 bg-[#0A0A0A]">
+            <div className="h-9 w-9 rounded-full overflow-hidden border border-white/10 bg-background">
               {profileSrc ? (
                 <img
                   src={profileSrc}
@@ -421,7 +423,7 @@ export default function ArtistShell() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="h-full w-full bg-gradient-to-br from-[#E85D2C]/30 to-[#C97A54]/30 flex items-center justify-center text-sm font-bold text-[#E85D2C]">
+                <div className="h-full w-full bg-gradient-to-br from-primary/30 to-secondary/30 flex items-center justify-center text-sm font-bold text-primary">
                   {me?.name?.charAt(0).toUpperCase() || "A"}
                 </div>
               )}
@@ -444,7 +446,7 @@ export default function ArtistShell() {
       {/* Main Content */}
       <main className="lg:ml-[280px] min-h-screen">
         {/* Top Bar */}
-        <header className="sticky top-0 z-30 bg-[#0A0A0A]/80 backdrop-blur-xl border-b border-white/5 px-6 h-20 flex items-center justify-between">
+        <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-white/5 px-6 h-20 flex items-center justify-between">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-2 rounded-lg hover:bg-white/5 transition-colors text-[#B8A6A1]">
@@ -459,7 +461,7 @@ export default function ArtistShell() {
               href="exp://localhost:8081"
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border border-[#E85D2C]/30 bg-[#E85D2C]/10 text-[#E85D2C] hover:bg-[#E85D2C]/20 hover:border-[#E85D2C]/50 transition-all">
+              className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary/50 transition-all">
               <svg
                 width="14"
                 height="14"
@@ -477,6 +479,28 @@ export default function ArtistShell() {
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-xs text-[#B8A6A1]">Active</span>
             </div>
+
+            {/* Notifications */}
+            <button 
+              type="button" 
+              className="p-2.5 rounded-xl border border-white/5 bg-white/5 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-white/10 transition-all duration-300 flex items-center justify-center"
+              title="Notifications"
+            >
+              <Bell size={20} />
+            </button>
+
+            {/* Settings */}
+            <button 
+              type="button"
+              onClick={() => navigate("/artist/account")}
+              className="p-2.5 rounded-xl border border-white/5 bg-white/5 text-[#B8A6A1] hover:text-white hover:bg-white/10 hover:border-white/10 transition-all duration-300 flex items-center justify-center" 
+              title="Settings"
+            >
+              <SettingsIcon size={20} />
+            </button>
+
+            {/* Theme selector */}
+            <ThemeSwitcher />
 
             <button
               onClick={handleLogout}

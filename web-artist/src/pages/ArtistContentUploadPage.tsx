@@ -115,7 +115,7 @@ function GenreCombobox({
 
   return (
     <div ref={containerRef} className="relative">
-      <div className="flex h-[52px] w-full rounded-xl border border-white/10 bg-[#0A0A0A]/60 overflow-hidden focus-within:border-[#E85D2C]/50 transition-all">
+      <div className="flex h-[52px] w-full rounded-xl border border-white/10 bg-background/60 overflow-hidden focus-within:border-primary/50 transition-all">
         <input
           ref={inputRef}
           type="text"
@@ -131,7 +131,7 @@ function GenreCombobox({
             setOpen((prev) => !prev);
             if (!open) inputRef.current?.focus();
           }}
-          className="flex items-center justify-center px-3 text-[#8D7B77] hover:text-[#E85D2C] transition-colors">
+          className="flex items-center justify-center px-3 text-[#8D7B77] hover:text-primary transition-colors">
           <ChevronDown
             className={`w-4 h-4 transition-transform duration-200 ${
               open ? "rotate-180" : ""
@@ -141,7 +141,7 @@ function GenreCombobox({
       </div>
 
       {open && (
-        <div className="absolute z-50 left-0 right-0 mt-1 rounded-xl border border-white/10 bg-[#0A0A0A] shadow-2xl overflow-hidden">
+        <div className="absolute z-50 left-0 right-0 mt-1 rounded-xl border border-white/10 bg-background shadow-2xl overflow-hidden">
           {inputValue.trim() &&
             !GENRES.map((g) => g.toLowerCase()).includes(
               inputValue.trim().toLowerCase()
@@ -152,7 +152,7 @@ function GenreCombobox({
                   e.preventDefault();
                   handleSelect(inputValue.trim());
                 }}
-                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-[#E85D2C] hover:bg-white/5 transition-colors border-b border-white/5">
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-primary hover:bg-white/5 transition-colors border-b border-white/5">
                 <span className="text-sm">✏️</span>
                 Use "<strong>{inputValue.trim()}</strong>" as custom genre
               </button>
@@ -169,7 +169,7 @@ function GenreCombobox({
                     }}
                     className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-white/5 ${
                       inputValue === g
-                        ? "text-[#E85D2C] bg-[#E85D2C]/10"
+                        ? "text-primary bg-primary/10"
                         : "text-white"
                     }`}>
                     {g}
@@ -211,7 +211,7 @@ function FileDropZone({
         {label}
       </label>
       <div
-        className={`h-[120px] rounded-xl border-2 border-dashed border-white/20 bg-[#0A0A0A]/40 flex flex-col items-center justify-center cursor-pointer hover:border-[#E85D2C]/40 hover:bg-[#E85D2C]/5 transition-all ${className}`}
+        className={`h-[120px] rounded-xl border-2 border-dashed border-white/20 bg-background/40 flex flex-col items-center justify-center cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all ${className}`}
         onClick={() => inputRef.current?.click()}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
@@ -277,11 +277,11 @@ function UnifiedUploadSection({
   );
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#15100E] overflow-hidden">
+    <div className="rounded-2xl border border-white/10 bg-surface overflow-hidden">
       <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between">
         <div>
           <div className="text-lg font-semibold text-white flex items-center gap-2">
-            <Upload className="w-5 h-5 text-[#E85D2C]" />
+            <Upload className="w-5 h-5 text-primary" />
             Upload Track
           </div>
           <div className="mt-0.5 text-sm text-[#B8A6A1]">
@@ -296,12 +296,12 @@ function UnifiedUploadSection({
           {/* Track Title */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-[#B8A6A1] mb-2 font-medium">
-              Track Title <span className="text-[#E85D2C]">*</span>
+              Track Title <span className="text-primary">*</span>
             </label>
             <input
               value={value.title}
               onChange={(e) => onChange({ ...value, title: e.target.value })}
-              className="w-full h-[52px] rounded-xl bg-[#0A0A0A]/60 border border-white/10 px-5 text-sm text-white placeholder-[#6b5b57] outline-none focus:border-[#E85D2C]/50 transition-all"
+              className="w-full h-[52px] rounded-xl bg-background/60 border border-white/10 px-5 text-sm text-white placeholder-[#6b5b57] outline-none focus:border-primary/50 transition-all"
               placeholder="e.g. Midnight City"
               autoFocus
             />
@@ -310,7 +310,7 @@ function UnifiedUploadSection({
           {/* Genre */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-[#B8A6A1] mb-2 font-medium">
-              Genre <span className="text-[#E85D2C]">*</span>
+              Genre <span className="text-primary">*</span>
             </label>
             <GenreCombobox
               value={value.genre}
@@ -346,13 +346,13 @@ function UnifiedUploadSection({
           </div>
 
           {/* Subscriber Toggle */}
-          <div className="rounded-xl border border-[#E85D2C]/20 bg-[#E85D2C]/5 p-4 flex items-center justify-between">
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-[#E85D2C]/20 border border-[#E85D2C]/30 flex items-center justify-center">
+              <div className="h-10 w-10 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center">
                 {value.isSubscriberOnly ? (
-                  <Lock className="w-5 h-5 text-[#E85D2C]" />
+                  <Lock className="w-5 h-5 text-primary" />
                 ) : (
-                  <Unlock className="w-5 h-5 text-[#E85D2C]" />
+                  <Unlock className="w-5 h-5 text-primary" />
                 )}
               </div>
               <div>
@@ -374,8 +374,8 @@ function UnifiedUploadSection({
               }
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                 value.isSubscriberOnly
-                  ? "bg-[#E85D2C]"
-                  : "bg-[#0A0A0A]/80 border border-white/10"
+                  ? "bg-primary"
+                  : "bg-background/80 border border-white/10"
               }`}>
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -390,7 +390,7 @@ function UnifiedUploadSection({
             type="button"
             disabled={busy || !canPost}
             onClick={onPost}
-            className="w-full h-[56px] rounded-xl bg-gradient-to-r from-[#E85D2C] to-[#C97A54] text-white font-semibold shadow-lg shadow-[#E85D2C]/25 hover:shadow-[#E85D2C]/40 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+            className="w-full h-[56px] rounded-xl bg-gradient-to-r from-primary to-secondary text-white font-semibold shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
             {busy ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -407,13 +407,13 @@ function UnifiedUploadSection({
 
         {/* Preview Panel */}
         <div className="lg:col-span-2">
-          <div className="rounded-xl border border-white/10 bg-[#0A0A0A]/60 p-6">
+          <div className="rounded-xl border border-white/10 bg-background/60 p-6">
             <h3 className="text-xs uppercase tracking-wider text-[#B8A6A1] font-medium mb-6 flex items-center gap-2">
-              <Radio className="w-4 h-4 text-[#E85D2C]" />
+              <Radio className="w-4 h-4 text-primary" />
               Preview
             </h3>
 
-            <div className="h-[200px] w-[200px] mx-auto rounded-2xl overflow-hidden shadow-xl bg-[#0A0A0A] mb-6">
+            <div className="h-[200px] w-[200px] mx-auto rounded-2xl overflow-hidden shadow-xl bg-background mb-6">
               {thumbnailPreviewUrl ? (
                 <img
                   src={thumbnailPreviewUrl}
@@ -432,7 +432,7 @@ function UnifiedUploadSection({
               <h4 className="text-xl font-semibold text-white truncate">
                 {value.title || "Untitled Track"}
               </h4>
-              <p className="text-sm text-[#E85D2C] mt-1">
+              <p className="text-sm text-primary mt-1">
                 {value.genre || "Genre"}
               </p>
             </div>
@@ -449,7 +449,7 @@ function UnifiedUploadSection({
                     src={audioPreviewUrl}
                   />
                 ) : (
-                  <div className="h-[40px] flex items-center justify-center text-xs text-[#6b5b57] bg-[#0A0A0A]/50 rounded-lg mt-2">
+                  <div className="h-[40px] flex items-center justify-center text-xs text-[#6b5b57] bg-background/50 rounded-lg mt-2">
                     No audio loaded
                   </div>
                 )}
@@ -465,7 +465,7 @@ function UnifiedUploadSection({
                     src={videoPreviewUrl}
                   />
                 ) : (
-                  <div className="h-[140px] flex items-center justify-center text-xs text-[#6b5b57] bg-[#0A0A0A]/50 rounded-lg mt-2">
+                  <div className="h-[140px] flex items-center justify-center text-xs text-[#6b5b57] bg-background/50 rounded-lg mt-2">
                     No video loaded
                   </div>
                 )}
@@ -561,7 +561,7 @@ export default function ArtistContentUploadPage() {
         <div className="flex items-start justify-between gap-6 mb-8">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-2">
-              <Sparkles className="w-6 h-6 text-[#E85D2C]" />
+              <Sparkles className="w-6 h-6 text-primary" />
               New Release
             </h1>
             <p className="mt-1 text-sm text-[#B8A6A1]">

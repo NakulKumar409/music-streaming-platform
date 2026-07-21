@@ -42,8 +42,8 @@ function BrandLogo() {
   return (
     <div className="flex items-center gap-3">
       <div className="relative">
-        <div className="absolute inset-0 bg-[#e85d2c]/30 blur-2xl rounded-full animate-pulse" />
-        <div className="absolute inset-0 bg-gradient-to-tr from-[#e85d2c]/20 to-transparent rounded-full" />
+        <div className="absolute inset-0 bg-primary/30 blur-2xl rounded-full animate-pulse" />
+        <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 to-transparent rounded-full" />
         <img
           src="/logo.png"
           alt="Brand Logo"
@@ -397,7 +397,7 @@ export default function ArtistSignupPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#080505] text-white overflow-hidden font-sans relative">
+    <div className="min-h-screen w-full bg-background text-white overflow-hidden font-sans relative">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,700&family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800&display=swap');
         
@@ -450,7 +450,7 @@ export default function ArtistSignupPage() {
           border: 1px solid rgba(255, 255, 255, 0.05);
         }
         .text-gradient-gold {
-          background: linear-gradient(135deg, #e85d2c 0%, #f06d3c 25%, #c97a54 50%, #e85d2c 75%, #f06d3c 100%);
+          background: linear-gradient(135deg, var(--color-primary) 0%, #f06d3c 25%, var(--color-secondary) 50%, var(--color-primary) 75%, #f06d3c 100%);
           background-size: 300% 300%;
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
@@ -460,14 +460,14 @@ export default function ArtistSignupPage() {
 
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full opacity-30">
-          <div className="absolute top-[10%] left-[5%] w-64 h-64 bg-[#e85d2c]/10 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-[20%] right-[10%] w-80 h-80 bg-[#c97a54]/10 rounded-full blur-3xl animate-pulse delay-1000" />
-          <div className="absolute top-[50%] left-[50%] w-96 h-96 bg-[#e85d2c]/5 rounded-full blur-3xl animate-pulse delay-500" />
+          <div className="absolute top-[10%] left-[5%] w-64 h-64 bg-primary/10 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute bottom-[20%] right-[10%] w-80 h-80 bg-secondary/10 rounded-full blur-3xl animate-pulse delay-1000" />
+          <div className="absolute top-[50%] left-[50%] w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse delay-500" />
         </div>
         {[...Array(6)].map((_, i) => (
           <div
             key={i}
-            className="absolute text-[#e85d2c]/10 animate-float font-playfair"
+            className="absolute text-primary/10 animate-float font-playfair"
             style={{
               left: `${10 + Math.random() * 80}%`,
               top: `${10 + Math.random() * 80}%`,
@@ -496,9 +496,9 @@ export default function ArtistSignupPage() {
               </div>
               <div className="flex items-center gap-2 text-sm font-inter text-[#8d7b77]">
                 <span>Step {step} of 7</span>
-                <div className="flex-1 h-1 bg-[#1a1514] rounded-full overflow-hidden ml-2">
+                <div className="flex-1 h-1 bg-surface rounded-full overflow-hidden ml-2">
                   <div
-                    className="h-full bg-gradient-to-r from-[#e85d2c] to-[#c97a54] transition-all duration-300 ease-out"
+                    className="h-full bg-gradient-to-r from-primary to-secondary transition-all duration-300 ease-out"
                     style={{ width: `${(step / 7) * 100}%` }}
                   />
                 </div>
@@ -507,18 +507,18 @@ export default function ArtistSignupPage() {
           )}
 
           <div className="relative">
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-[#e85d2c]/20 via-[#c97a54]/10 to-[#e85d2c]/20 blur-2xl rounded-3xl animate-pulse" />
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/20 via-secondary/10 to-primary/20 blur-2xl rounded-3xl animate-pulse" />
 
             <div className="relative glass-effect rounded-2xl p-6 sm:p-8 md:p-10 shadow-2xl">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-[#e85d2c]/5 rounded-full blur-2xl" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-[#c97a54]/5 rounded-full blur-2xl" />
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-0.5 bg-gradient-to-r from-transparent via-[#e85d2c] to-transparent rounded-full" />
+              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl" />
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-secondary/5 rounded-full blur-2xl" />
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-0.5 bg-gradient-to-r from-transparent via-primary to-transparent rounded-full" />
 
               {busy && (
                 <div className="absolute inset-0 z-10 bg-[#1a1210]/80 backdrop-blur-sm flex items-center justify-center rounded-2xl">
                   <div className="text-center">
-                    <div className="w-10 h-10 border-4 border-[#e85d2c]/30 border-t-[#e85d2c] rounded-full animate-spin mx-auto mb-3" />
-                    <p className="text-sm font-inter font-medium text-[#e85d2c]">
+                    <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-3" />
+                    <p className="text-sm font-inter font-medium text-primary">
                       Processing...
                     </p>
                   </div>
@@ -541,12 +541,12 @@ export default function ArtistSignupPage() {
                       Email Address
                     </label>
                     <div className="relative group">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5a4a46] group-focus-within:text-[#e85d2c] transition-colors" />
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5a4a46] group-focus-within:text-primary transition-colors" />
                       <input
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 pl-10 pr-4 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:border-[#e85d2c]/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20"
+                        className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 pl-10 pr-4 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:border-primary/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20"
                         placeholder="artist@example.com"
                         autoCapitalize="none"
                         autoCorrect="off"
@@ -559,12 +559,12 @@ export default function ArtistSignupPage() {
                       Mobile Number
                     </label>
                     <div className="relative group">
-                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5a4a46] group-focus-within:text-[#e85d2c] transition-colors" />
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5a4a46] group-focus-within:text-primary transition-colors" />
                       <input
                         type="tel"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
-                        className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 pl-10 pr-4 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:border-[#e85d2c]/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20"
+                        className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 pl-10 pr-4 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:border-primary/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20"
                         placeholder="+1 (555) 000-0000"
                       />
                     </div>
@@ -576,12 +576,12 @@ export default function ArtistSignupPage() {
                         Password
                       </label>
                       <div className="relative group">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5a4a46] group-focus-within:text-[#e85d2c] transition-colors" />
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5a4a46] group-focus-within:text-primary transition-colors" />
                         <input
                           type={showPassword ? "text" : "password"}
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 pl-10 pr-10 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:border-[#e85d2c]/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20"
+                          className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 pl-10 pr-10 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:border-primary/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20"
                           placeholder="••••••••"
                           autoCapitalize="none"
                           autoCorrect="off"
@@ -603,7 +603,7 @@ export default function ArtistSignupPage() {
                         Confirm Password
                       </label>
                       <div className="relative group">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5a4a46] group-focus-within:text-[#e85d2c] transition-colors" />
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5a4a46] group-focus-within:text-primary transition-colors" />
                         <input
                           type={showConfirmPassword ? "text" : "password"}
                           value={confirmPassword}
@@ -611,7 +611,7 @@ export default function ArtistSignupPage() {
                           className={`w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border pl-10 pr-10 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20 ${
                             confirmPassword && password !== confirmPassword
                               ? "border-red-500/50 focus:border-red-500/50"
-                              : "border-white/10 focus:border-[#e85d2c]/50 focus:bg-[#1a1210]/80"
+                              : "border-white/10 focus:border-primary/50 focus:bg-[#1a1210]/80"
                           }`}
                           placeholder="••••••••"
                           autoCapitalize="none"
@@ -642,7 +642,7 @@ export default function ArtistSignupPage() {
                     type="button"
                     onClick={handleStep1Next}
                     className="relative w-full h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300 mt-2">
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-primary via-[#f06d3c] to-secondary bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                     <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
                     <span className="relative z-10 flex items-center justify-center gap-2">
@@ -669,12 +669,12 @@ export default function ArtistSignupPage() {
                       Artist / Stage Name
                     </label>
                     <div className="relative group">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5a4a46] group-focus-within:text-[#e85d2c] transition-colors" />
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5a4a46] group-focus-within:text-primary transition-colors" />
                       <input
                         type="text"
                         value={artistName}
                         onChange={(e) => setArtistName(e.target.value)}
-                        className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 pl-10 pr-4 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:border-[#e85d2c]/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20"
+                        className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 pl-10 pr-4 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 placeholder:text-[#5a4a46] focus:border-primary/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20"
                         placeholder="e.g. The Midnight"
                         autoFocus
                       />
@@ -691,7 +691,7 @@ export default function ArtistSignupPage() {
                     <select
                       value={genre}
                       onChange={(e) => setGenre(e.target.value)}
-                      className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 px-4 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 focus:border-[#e85d2c]/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20 appearance-none">
+                      className="w-full h-[46px] sm:h-[50px] rounded-xl bg-[#1a1210]/60 border border-white/10 px-4 text-[14px] sm:text-[15px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 focus:border-primary/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20 appearance-none">
                       <option value="" disabled className="text-[#5a4a46]">
                         Select your main genre
                       </option>
@@ -724,7 +724,7 @@ export default function ArtistSignupPage() {
                       type="button"
                       onClick={handleStep2Submit}
                       className="relative w-full sm:w-2/3 h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300">
-                      <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary via-[#f06d3c] to-secondary bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                       <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
                       <span className="relative z-10 flex items-center justify-center gap-2">
@@ -752,7 +752,7 @@ export default function ArtistSignupPage() {
 
                   <div className="flex flex-col items-center">
                     <div
-                      className="relative w-28 h-28 rounded-full border-2 border-dashed border-white/20 bg-[#1a1210]/60 flex items-center justify-center cursor-pointer overflow-hidden group hover:border-[#e85d2c]/50 transition-all duration-300"
+                      className="relative w-28 h-28 rounded-full border-2 border-dashed border-white/20 bg-[#1a1210]/60 flex items-center justify-center cursor-pointer overflow-hidden group hover:border-primary/50 transition-all duration-300"
                       onClick={() => fileInputRef.current?.click()}>
                       {profilePreviewUrl ? (
                         <img
@@ -795,7 +795,7 @@ export default function ArtistSignupPage() {
                     <textarea
                       value={bio}
                       onChange={(e) => setBio(e.target.value)}
-                      className="w-full h-24 p-4 rounded-xl bg-[#1a1210]/60 border border-white/10 text-[14px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 focus:border-[#e85d2c]/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20 resize-none"
+                      className="w-full h-24 p-4 rounded-xl bg-[#1a1210]/60 border border-white/10 text-[14px] font-inter text-[#f0e0dc] outline-none transition-all duration-300 focus:border-primary/50 focus:bg-[#1a1210]/80 focus:shadow-[0_0_30px_rgba(232,93,44,0.05)] hover:border-white/20 resize-none"
                       placeholder="Tell your fans a bit about yourself..."
                     />
                   </div>
@@ -818,7 +818,7 @@ export default function ArtistSignupPage() {
                       type="button"
                       onClick={() => handleStep3Complete()}
                       className="relative w-full sm:w-2/3 h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300">
-                      <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary via-[#f06d3c] to-secondary bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                       <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
                       <span className="relative z-10 flex items-center justify-center gap-2">
@@ -833,7 +833,7 @@ export default function ArtistSignupPage() {
               {step === 4 && (
                 <div className="space-y-5 sm:space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                   <div className="text-center mb-4 sm:mb-6">
-                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[#e85d2c]/20 text-[#e85d2c] mb-3">
+                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/20 text-primary mb-3">
                       <DollarSign className="w-7 h-7" />
                     </div>
                     <h2 className="font-playfair text-2xl sm:text-3xl font-bold text-[#e8c4b8]">
@@ -846,7 +846,7 @@ export default function ArtistSignupPage() {
 
                   {loadingPlans ? (
                     <div className="text-center py-8">
-                      <div className="w-10 h-10 border-4 border-[#e85d2c]/30 border-t-[#e85d2c] rounded-full animate-spin mx-auto mb-3" />
+                      <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-3" />
                       <p className="text-sm text-[#8d7b77]">Loading revenue share plans...</p>
                     </div>
                   ) : commissionPlans.length === 0 ? (
@@ -854,7 +854,7 @@ export default function ArtistSignupPage() {
                       <p className="text-sm text-[#8d7b77]">No revenue share plans available. Please contact support.</p>
                     </div>
                   ) : (
-                    <div className="space-y-4 max-h-[390px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-white/5 [&::-webkit-scrollbar-thumb]:bg-[#e85d2c]/30 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#e85d2c]/50">
+                    <div className="space-y-4 max-h-[390px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-white/5 [&::-webkit-scrollbar-thumb]:bg-primary/30 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-primary/50">
                       {commissionPlans.map((plan) => {
                         const isSelected = selectedCommissionPlans.includes(plan.id);
                         return (
@@ -863,16 +863,16 @@ export default function ArtistSignupPage() {
                             onClick={() => setSelectedCommissionPlans([plan.id])}
                             className={`p-5 rounded-2xl border cursor-pointer transition-all duration-300 relative overflow-hidden group/card ${
                               isSelected
-                                ? 'bg-gradient-to-br from-[#e85d2c]/15 to-[#c97a54]/5 border-[#e85d2c] shadow-[0_0_25px_rgba(232,93,44,0.15)] scale-[1.02]'
+                                ? 'bg-gradient-to-br from-primary/15 to-secondary/5 border-primary shadow-[0_0_25px_rgba(232,93,44,0.15)] scale-[1.02]'
                                 : 'bg-[#140e0c]/60 border-white/5 hover:border-white/20 hover:bg-[#1c1411]/80 hover:scale-[1.01]'
                             }`}
                           >
                             <div className="flex items-start gap-4">
                               {/* Custom Radio Button Indicator */}
                               <div className={`w-5 h-5 rounded-full border-2 mt-0.5 flex items-center justify-center transition-all duration-300 flex-shrink-0 ${
-                                isSelected ? 'border-[#e85d2c]' : 'border-white/30 group-hover/card:border-white/50'
+                                isSelected ? 'border-primary' : 'border-white/30 group-hover/card:border-white/50'
                               }`}>
-                                <div className={`w-2.5 h-2.5 rounded-full bg-[#e85d2c] transition-all duration-300 ${
+                                <div className={`w-2.5 h-2.5 rounded-full bg-primary transition-all duration-300 ${
                                   isSelected ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
                                 }`} />
                               </div>
@@ -889,7 +889,7 @@ export default function ArtistSignupPage() {
 
                                 <div className="grid grid-cols-2 gap-3 mb-3.5">
                                   <div className="text-center p-2.5 rounded-xl bg-white/[0.02] border border-white/5 group-hover/card:bg-white/[0.04] transition-colors">
-                                    <div className="text-2xl font-black text-[#e85d2c] font-outfit tracking-tight">
+                                    <div className="text-2xl font-black text-primary font-outfit tracking-tight">
                                       {plan.artistShare}%
                                     </div>
                                     <div className="text-[10px] uppercase tracking-wider font-bold text-[#8d7b77] font-inter">
@@ -897,7 +897,7 @@ export default function ArtistSignupPage() {
                                     </div>
                                   </div>
                                   <div className="text-center p-2.5 rounded-xl bg-white/[0.02] border border-white/5 group-hover/card:bg-white/[0.04] transition-colors">
-                                    <div className="text-2xl font-black text-[#c97a54] font-outfit tracking-tight">
+                                    <div className="text-2xl font-black text-secondary font-outfit tracking-tight">
                                       {plan.platformShare}%
                                     </div>
                                     <div className="text-[10px] uppercase tracking-wider font-bold text-[#8d7b77] font-inter">
@@ -920,7 +920,7 @@ export default function ArtistSignupPage() {
                                     <ul className="grid grid-cols-1 gap-1.5">
                                       {plan.benefits.map((benefit: string, idx: number) => (
                                         <li key={idx} className="flex items-start gap-2 text-xs text-[#8d7b77] font-inter">
-                                          <Sparkles className="w-3.5 h-3.5 text-[#e85d2c] shrink-0 mt-0.5" />
+                                          <Sparkles className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
                                           <span>{benefit}</span>
                                         </li>
                                       ))}
@@ -938,9 +938,9 @@ export default function ArtistSignupPage() {
                   {selectedCommissionPlans.length > 0 && (() => {
                     const selectedPlan = commissionPlans.find(p => p.id === selectedCommissionPlans[0]);
                     return selectedPlan ? (
-                      <div className="p-3.5 rounded-xl bg-gradient-to-r from-[#e85d2c]/10 to-transparent border border-[#e85d2c]/20 animate-in fade-in duration-300">
+                      <div className="p-3.5 rounded-xl bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 animate-in fade-in duration-300">
                         <p className="text-sm text-[#e8c4b8] font-inter flex items-center gap-2">
-                          <Sparkles className="w-4 h-4 text-[#e85d2c]" />
+                          <Sparkles className="w-4 h-4 text-primary" />
                           <span>Selected: <span className="font-semibold text-white">{selectedPlan.name || `Plan ${selectedPlan.version}`}</span></span>
                         </p>
                       </div>
@@ -965,7 +965,7 @@ export default function ArtistSignupPage() {
                     onClick={handleStep4Next}
                     disabled={selectedCommissionPlans.length === 0 || loadingPlans}
                     className="relative w-full h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-primary via-[#f06d3c] to-secondary bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                     <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
                     <span className="relative z-10 flex items-center justify-center gap-2">
@@ -991,7 +991,7 @@ export default function ArtistSignupPage() {
 
                   {loadingTerms ? (
                     <div className="text-center py-8">
-                      <div className="w-10 h-10 border-4 border-[#e85d2c]/30 border-t-[#e85d2c] rounded-full animate-spin mx-auto mb-3" />
+                      <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-3" />
                       <p className="text-sm text-[#8d7b77]">Loading terms...</p>
                     </div>
                   ) : (
@@ -1012,7 +1012,7 @@ export default function ArtistSignupPage() {
                           id="terms-checkbox"
                           checked={termsAccepted}
                           onChange={(e) => setTermsAccepted(e.target.checked)}
-                          className="mt-1 w-5 h-5 rounded border-white/20 bg-white/5 text-[#e85d2c] focus:ring-[#e85d2c] focus:ring-offset-0"
+                          className="mt-1 w-5 h-5 rounded border-white/20 bg-white/5 text-primary focus:ring-primary focus:ring-offset-0"
                         />
                         <label htmlFor="terms-checkbox" className="text-sm text-[#8d7b77] cursor-pointer">
                           I have read and agree to the Terms & Conditions
@@ -1040,7 +1040,7 @@ export default function ArtistSignupPage() {
                       onClick={handleStep5Next}
                       disabled={loadingTerms}
                       className="relative w-full sm:w-2/3 h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
-                      <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary via-[#f06d3c] to-secondary bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                       <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
                       <span className="relative z-10 flex items-center justify-center gap-2">
@@ -1109,7 +1109,7 @@ export default function ArtistSignupPage() {
                       type="button"
                       onClick={handleStep6Next}
                       className="relative w-full sm:w-2/3 h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300">
-                      <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary via-[#f06d3c] to-secondary bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                       <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
                       <span className="relative z-10 flex items-center justify-center gap-2">
@@ -1174,11 +1174,11 @@ export default function ArtistSignupPage() {
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 text-sm">
                                   <div className="text-center p-2.5 rounded-lg bg-white/5">
-                                    <div className="text-xl font-bold text-[#e85d2c]">{plan.artistShare}%</div>
+                                    <div className="text-xl font-bold text-primary">{plan.artistShare}%</div>
                                     <div className="text-xs text-[#8d7b77]">Artist Share</div>
                                   </div>
                                   <div className="text-center p-2.5 rounded-lg bg-white/5">
-                                    <div className="text-xl font-bold text-[#c97a54]">{plan.platformShare}%</div>
+                                    <div className="text-xl font-bold text-secondary">{plan.platformShare}%</div>
                                     <div className="text-xs text-[#8d7b77]">Platform Share</div>
                                   </div>
                                 </div>
@@ -1235,7 +1235,7 @@ export default function ArtistSignupPage() {
                       type="button"
                       onClick={handleStep7Submit}
                       className="relative w-full sm:w-2/3 h-[48px] sm:h-[52px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300">
-                      <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary via-[#f06d3c] to-secondary bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                       <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
                       <span className="relative z-10 flex items-center justify-center gap-2">
@@ -1249,7 +1249,7 @@ export default function ArtistSignupPage() {
 
               {step === 8 && (
                 <div className="text-center py-6 sm:py-8 animate-in zoom-in-95 duration-500">
-                  <div className="w-24 h-24 bg-gradient-to-br from-[#e85d2c] to-[#c97a54] rounded-full mx-auto flex items-center justify-center shadow-[0_0_50px_rgba(232,93,44,0.4)] mb-6 sm:mb-8">
+                  <div className="w-24 h-24 bg-gradient-to-br from-primary to-secondary rounded-full mx-auto flex items-center justify-center shadow-[0_0_50px_rgba(232,93,44,0.4)] mb-6 sm:mb-8">
                     <Music2 className="w-12 h-12 text-white" />
                   </div>
 
@@ -1268,7 +1268,7 @@ export default function ArtistSignupPage() {
                         navigate("/artist/content-upload", { replace: true })
                       }
                       className="relative w-full h-[52px] sm:h-[56px] rounded-xl text-[15px] sm:text-[16px] font-inter font-semibold text-white overflow-hidden group transition-all duration-300">
-                      <div className="absolute inset-0 bg-gradient-to-r from-[#e85d2c] via-[#f06d3c] to-[#c97a54] bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary via-[#f06d3c] to-secondary bg-[length:200%_100%] group-hover:bg-[length:100%_100%] transition-all duration-500" />
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                       <div className="absolute inset-0 rounded-xl shadow-[0_4px_20px_rgba(232,93,44,0.3)] group-hover:shadow-[0_8px_30px_rgba(232,93,44,0.5)] transition-all duration-300" />
                       <span className="relative z-10 flex items-center justify-center gap-2">

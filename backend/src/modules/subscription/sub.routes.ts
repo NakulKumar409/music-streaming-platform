@@ -42,7 +42,7 @@ router.get("/me", requireAuth, (req, res) => {
     try {
       const row = await pool.query(
         `SELECT user_id, artist_id, type, status, plan_type, start_date,
-                next_billing_date, grace_ends_at, auto_renew, end_date
+                next_billing_date, auto_renew, end_date
          FROM subscriptions
          WHERE user_id = $1 AND artist_id = $2 AND type = 'ARTIST'
          ORDER BY created_at DESC LIMIT 1`,
@@ -62,7 +62,6 @@ router.get("/me", requireAuth, (req, res) => {
           plan_type: s.plan_type,
           start_date: s.start_date,
           next_billing_date: s.next_billing_date,
-          grace_ends_at: s.grace_ends_at,
           end_date: s.end_date ?? s.next_billing_date,
           auto_renew: s.auto_renew,
           isExpiringSoon: s.next_billing_date ? (new Date(s.next_billing_date).getTime() - Date.now()) < (48 * 3600 * 1000) : false,
@@ -86,7 +85,7 @@ router.get("/platform", requireAuth, (req, res) => {
     try {
       const row = await pool.query(
         `SELECT id, user_id, type, status, plan_type, start_date,
-                next_billing_date, grace_ends_at, auto_renew, end_date
+                next_billing_date, auto_renew, end_date
          FROM subscriptions
          WHERE user_id = $1 AND type = 'PLATFORM'
          ORDER BY created_at DESC LIMIT 1`,
@@ -103,7 +102,6 @@ router.get("/platform", requireAuth, (req, res) => {
               plan_type: s.plan_type,
               start_date: s.start_date,
               next_billing_date: s.next_billing_date,
-              grace_ends_at: s.grace_ends_at,
               end_date: s.end_date ?? s.next_billing_date,
               auto_renew: s.auto_renew,
               isExpiringSoon: s.next_billing_date ? (new Date(s.next_billing_date).getTime() - Date.now()) < (48 * 3600 * 1000) : false,
@@ -157,7 +155,7 @@ router.get("/access-check", requireAuth, (req, res) => {
 
       // check artist subscription
       const subRow = await pool.query(
-        `SELECT status, grace_ends_at FROM subscriptions
+        `SELECT status, next_billing_date FROM subscriptions
          WHERE user_id = $1 AND artist_id = $2 AND type = 'ARTIST'
          ORDER BY created_at DESC LIMIT 1`,
         [userId, artistIdNum]
@@ -177,7 +175,7 @@ router.get("/access-check", requireAuth, (req, res) => {
 
       // Grace period
       if (status === "GRACE" || status === "PAST_DUE") {
-        const graceEnd = sub.grace_ends_at ? new Date(sub.grace_ends_at) : null;
+        const graceEnd = sub.next_billing_date ? new Date(sub.next_billing_date) : null;
         if (graceEnd && graceEnd > now) {
           return res.json({ success: true, allowed: true, reason: "GRACE_PERIOD", graceEndsAt: graceEnd });
         }
@@ -201,7 +199,7 @@ router.get("/quality", requireAuth, (req, res) => {
 
     try {
       const row = await pool.query(
-        `SELECT status, grace_ends_at FROM subscriptions
+        `SELECT status, next_billing_date FROM subscriptions
          WHERE user_id = $1 AND type = 'PLATFORM'
          ORDER BY created_at DESC LIMIT 1`,
         [userId]
@@ -217,7 +215,7 @@ router.get("/quality", requireAuth, (req, res) => {
         return res.json({ success: true, quality: "HD", maxResolution: "1080p" });
       }
       if (status === "GRACE" || status === "PAST_DUE") {
-        const graceEnd = sub.grace_ends_at ? new Date(sub.grace_ends_at) : null;
+        const graceEnd = sub.next_billing_date ? new Date(sub.next_billing_date) : null;
         if (graceEnd && graceEnd > now) {
           return res.json({ success: true, quality: "HD", maxResolution: "720p", isGrace: true });
         }
@@ -241,7 +239,7 @@ router.get("/summary", requireAuth, (req: any, res: any) => {
       // Latest artist subscription
       const artistRow = await pool.query(
         `SELECT s.user_id, s.artist_id, s.type, s.status, s.plan_type,
-                s.start_date, s.next_billing_date, s.grace_ends_at, s.end_date,
+                s.start_date, s.next_billing_date, s.end_date,
                 u.full_name as artist_name, u.name as artist_display_name
          FROM subscriptions s
          LEFT JOIN users u ON s.artist_id = u.id
@@ -254,7 +252,7 @@ router.get("/summary", requireAuth, (req: any, res: any) => {
 
       // Platform subscription
       const platformRow = await pool.query(
-        `SELECT id, type, status, plan_type, start_date, next_billing_date, grace_ends_at, end_date
+        `SELECT id, type, status, plan_type, start_date, next_billing_date, end_date
          FROM subscriptions
          WHERE user_id = $1 AND type = 'PLATFORM'
            AND UPPER(COALESCE(status,'')) IN ('ACTIVE','GRACE','PAST_DUE')
@@ -277,7 +275,7 @@ router.get("/summary", requireAuth, (req: any, res: any) => {
       const mapSub = (s: any, isArtist: boolean) => {
         if (!s) return null;
         const endDate = s.end_date ?? s.next_billing_date;
-        const graceEndsAt = s.grace_ends_at ?? null;
+        const graceEndsAt = s.next_billing_date ?? null;
 
         // Compute days until expiry
         const now = new Date();
@@ -330,7 +328,7 @@ router.get("/details", requireAuth, (req: any, res: any) => {
       // 1. Platform Subscription
       const platformRow = await pool.query(
         `SELECT s.id, s.type, s.status, s.plan_type, s.start_date, s.next_billing_date,
-                s.grace_ends_at, s.end_date, s.auto_renew,
+                s.end_date, s.auto_renew,
                 (SELECT cfg.price FROM platform_subscription_configs cfg WHERE cfg.is_active = true ORDER BY cfg.updated_at DESC LIMIT 1) as price,
                 (SELECT cfg.yearly_price FROM platform_subscription_configs cfg WHERE cfg.is_active = true ORDER BY cfg.updated_at DESC LIMIT 1) as yearly_price,
                 (SELECT cfg.currency FROM platform_subscription_configs cfg WHERE cfg.is_active = true ORDER BY cfg.updated_at DESC LIMIT 1) as currency,
@@ -345,7 +343,7 @@ router.get("/details", requireAuth, (req: any, res: any) => {
       // 2. Artist Subscriptions
       const artistRows = await pool.query(
         `SELECT s.id, s.type, s.artist_id, s.status, s.plan_type,
-                s.start_date, s.next_billing_date, s.grace_ends_at, s.end_date, s.auto_renew,
+                s.start_date, s.next_billing_date, s.end_date, s.auto_renew,
                 u.full_name as artist_name, u.name as artist_display_name, u.profile_image_url as artist_avatar,
                 u.subscription_price, u.subscription_features as features
          FROM subscriptions s
@@ -423,7 +421,7 @@ router.get("/status", requireAuth, (req: any, res: any) => {
     try {
       const rows = await pool.query(
         `SELECT s.id, s.type, s.artist_id, s.status, s.plan_type,
-                s.start_date, s.next_billing_date, s.grace_ends_at, s.end_date, s.auto_renew,
+                s.start_date, s.next_billing_date, s.end_date, s.auto_renew,
                 u.full_name as artist_name, u.name as artist_display_name
          FROM subscriptions s
          LEFT JOIN users u ON s.artist_id = u.id AND s.type = 'ARTIST'
@@ -437,7 +435,7 @@ router.get("/status", requireAuth, (req: any, res: any) => {
          const endDate = s.end_date ?? s.next_billing_date;
          const now = new Date();
          const isGrace = (s.status === 'GRACE' || s.status === 'PAST_DUE') && 
-                         s.grace_ends_at && new Date(s.grace_ends_at) > now;
+                         s.next_billing_date && new Date(s.next_billing_date) > now;
 
          return {
             id: s.id,
@@ -447,7 +445,7 @@ router.get("/status", requireAuth, (req: any, res: any) => {
             status: s.status,
             plan_type: s.plan_type,
             expires_at: endDate,
-            grace_ends_at: s.grace_ends_at,
+            grace_ends_at: s.next_billing_date,
             is_grace: !!isGrace,
             isExpiringSoon: s.next_billing_date ? (new Date(s.next_billing_date).getTime() - Date.now()) < (48 * 3600 * 1000) : false,
             daysLeft: s.next_billing_date ? Math.ceil((new Date(s.next_billing_date).getTime() - Date.now()) / (1000 * 86400)) : null,

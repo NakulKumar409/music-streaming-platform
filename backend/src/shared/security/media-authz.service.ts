@@ -24,10 +24,10 @@ export async function checkPlatformAccess(userId: number | null): Promise<boolea
   try {
     const result = await pool.query(
       `SELECT id FROM subscriptions 
-       WHERE user_id = $1 
-         AND type = 'PLATFORM' 
+       WHERE user_id = $1
+         AND type = 'PLATFORM'
          AND UPPER(COALESCE(status, '')) IN ('ACTIVE', 'GRACE_PERIOD', 'PAST_DUE', 'GRACE')
-         AND (COALESCE(grace_ends_at, next_billing_date) IS NULL OR COALESCE(grace_ends_at, next_billing_date) > now())
+         AND (next_billing_date IS NULL OR next_billing_date > now())
        LIMIT 1`,
       [userId]
     );
