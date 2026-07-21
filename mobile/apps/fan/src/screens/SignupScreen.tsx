@@ -74,6 +74,7 @@ export default function SignupScreen({ navigation }: Props) {
   // Step 4 Actions
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const onNextStep = () => {
     setStepError("");
@@ -238,7 +239,7 @@ export default function SignupScreen({ navigation }: Props) {
             <Text style={styles.stepTitle}>Basic Information</Text>
 
             <Text style={styles.label}>Full Name</Text>
-            <View style={styles.inputGlass}>
+            <View style={[styles.inputGlass, focusedField === "fullName" && styles.inputGlassFocused]}>
               <TextInput
                 placeholder="Your full name"
                 placeholderTextColor={Colors.textMuted}
@@ -248,13 +249,15 @@ export default function SignupScreen({ navigation }: Props) {
                   setFullName(t);
                   if (stepError) setStepError("");
                 }}
+                onFocus={() => setFocusedField("fullName")}
+                onBlur={() => setFocusedField(null)}
                 autoCapitalize="words"
                 autoCorrect={false}
               />
             </View>
 
             <Text style={styles.label}>Email</Text>
-            <View style={styles.inputGlass}>
+            <View style={[styles.inputGlass, focusedField === "email" && styles.inputGlassFocused]}>
               <TextInput
                 placeholder="Email address"
                 placeholderTextColor={Colors.textMuted}
@@ -264,6 +267,8 @@ export default function SignupScreen({ navigation }: Props) {
                   setEmail(t);
                   if (stepError) setStepError("");
                 }}
+                onFocus={() => setFocusedField("email")}
+                onBlur={() => setFocusedField(null)}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -271,7 +276,7 @@ export default function SignupScreen({ navigation }: Props) {
             </View>
 
             <Text style={styles.label}>Phone Number</Text>
-            <View style={styles.inputGlass}>
+            <View style={[styles.inputGlass, focusedField === "phoneNumber" && styles.inputGlassFocused]}>
               <TextInput
                 placeholder="Phone number"
                 placeholderTextColor={Colors.textMuted}
@@ -281,6 +286,8 @@ export default function SignupScreen({ navigation }: Props) {
                   setPhoneNumber(t);
                   if (stepError) setStepError("");
                 }}
+                onFocus={() => setFocusedField("phoneNumber")}
+                onBlur={() => setFocusedField(null)}
                 keyboardType={Platform.select({
                   ios: "number-pad",
                   default: "phone-pad",
@@ -295,7 +302,7 @@ export default function SignupScreen({ navigation }: Props) {
             <Text style={styles.stepTitle}>Account Security</Text>
 
             <Text style={styles.label}>Username</Text>
-            <View style={styles.inputGlass}>
+            <View style={[styles.inputGlass, focusedField === "username" && styles.inputGlassFocused]}>
               <TextInput
                 placeholder="Choose a username "
                 placeholderTextColor={Colors.textMuted}
@@ -305,13 +312,15 @@ export default function SignupScreen({ navigation }: Props) {
                   setUsername(t);
                   if (stepError) setStepError("");
                 }}
+                onFocus={() => setFocusedField("username")}
+                onBlur={() => setFocusedField(null)}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
             </View>
 
             <Text style={styles.label}>Password</Text>
-            <View style={styles.passwordContainer}>
+            <View style={[styles.passwordContainer, focusedField === "password" && styles.inputGlassFocused]}>
               <TextInput
                 placeholder="Enter password "
                 placeholderTextColor={Colors.textMuted}
@@ -322,6 +331,8 @@ export default function SignupScreen({ navigation }: Props) {
                   setPassword(t);
                   if (stepError) setStepError("");
                 }}
+                onFocus={() => setFocusedField("password")}
+                onBlur={() => setFocusedField(null)}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
@@ -338,7 +349,7 @@ export default function SignupScreen({ navigation }: Props) {
             </View>
 
             <Text style={styles.label}>Confirm Password</Text>
-            <View style={styles.passwordContainer}>
+            <View style={[styles.passwordContainer, focusedField === "confirmPassword" && styles.inputGlassFocused]}>
               <TextInput
                 placeholder="Repeat password"
                 placeholderTextColor={Colors.textMuted}
@@ -349,6 +360,8 @@ export default function SignupScreen({ navigation }: Props) {
                   setConfirmPassword(t);
                   if (stepError) setStepError("");
                 }}
+                onFocus={() => setFocusedField("confirmPassword")}
+                onBlur={() => setFocusedField(null)}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
@@ -372,66 +385,134 @@ export default function SignupScreen({ navigation }: Props) {
 
             {/* ✅ FIX BUG 6: Date Picker for DOB */}
             <Text style={styles.label}>Date of Birth</Text>
-            <Pressable
-              onPress={() => setShowDatePicker(true)}
-              style={styles.selectInput}>
-              <Text style={styles.selectText}>
-                {dateOfBirth || "Select your date of birth"}
-              </Text>
-
-              <Text style={styles.selectCaret}>▾</Text>
-            </Pressable>
-            {showDatePicker && (
-              <DateTimePicker
-                value={selectedDate}
-                mode="date"
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                onChange={(event, selected) => {
-                  setShowDatePicker(false);
-                  if (selected) {
-                    setSelectedDate(selected);
-                    const formattedDate = selected.toISOString().split("T")[0];
-                    setDateOfBirth(formattedDate);
+            {Platform.OS === "web" ? (
+              <View style={[styles.selectInput, focusedField === "dob" && styles.inputGlassFocused]}>
+                <input
+                  type="date"
+                  value={dateOfBirth}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setDateOfBirth(val);
                     if (stepError) setStepError("");
-                  }
-                }}
-              />
+                  }}
+                  onFocus={() => setFocusedField("dob")}
+                  onBlur={() => setFocusedField(null)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "#FFFFFF",
+                    fontSize: "14px",
+                    fontFamily: "inherit",
+                    width: "100%",
+                    height: "100%",
+                    outline: "none",
+                    cursor: "pointer",
+                    colorScheme: "dark",
+                  }}
+                />
+              </View>
+            ) : (
+              <>
+                <Pressable
+                  onPress={() => setShowDatePicker(true)}
+                  style={styles.selectInput}>
+                  <Text style={styles.selectText}>
+                    {dateOfBirth || "Select your date of birth"}
+                  </Text>
+
+                  <Text style={styles.selectCaret}>▾</Text>
+                </Pressable>
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={selectedDate}
+                    mode="date"
+                    display={Platform.OS === "ios" ? "spinner" : "default"}
+                    onChange={(event, selected) => {
+                      setShowDatePicker(false);
+                      if (selected) {
+                        setSelectedDate(selected);
+                        const formattedDate = selected.toISOString().split("T")[0];
+                        setDateOfBirth(formattedDate);
+                        if (stepError) setStepError("");
+                      }
+                    }}
+                  />
+                )}
+              </>
             )}
 
             <Text style={styles.label}>Favorite Genre</Text>
-            <Pressable
-              onPress={() => setIsGenreOpen((v) => !v)}
-              style={styles.selectInput}>
-              <Text style={styles.selectText} numberOfLines={1}>
-                {favoriteGenre ? favoriteGenre : "Select a genre"}
-              </Text>
-              <Text style={styles.selectCaret}>▾</Text>
-            </Pressable>
-
-            {isGenreOpen && (
-              <View style={styles.selectDropdown}>
-                {GENRES.map((g) => (
-                  <Pressable
-                    key={g}
-                    onPress={() => {
-                      setFavoriteGenre(g);
-                      setIsGenreOpen(false);
-                      if (stepError) setStepError("");
-                    }}
-                    style={styles.selectOption}>
-                    <Text style={styles.selectOptionText}>{g}</Text>
-                    {favoriteGenre === g ? (
-                      <Check color={Colors.textPrimary} size={18} />
-                    ) : (
-                      <View style={{ width: 18, height: 18 }} />
-                    )}
-                  </Pressable>
-                ))}
+            {Platform.OS === "web" ? (
+              <View style={[styles.selectInput, focusedField === "genre" && styles.inputGlassFocused]}>
+                <select
+                  value={favoriteGenre}
+                  onChange={(e) => {
+                    const val = e.target.value as FavoriteGenre;
+                    setFavoriteGenre(val);
+                    if (stepError) setStepError("");
+                  }}
+                  onFocus={() => setFocusedField("genre")}
+                  onBlur={() => setFocusedField(null)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: favoriteGenre ? "#FFFFFF" : "rgba(255, 255, 255, 0.5)",
+                    fontSize: "14px",
+                    fontFamily: "inherit",
+                    width: "100%",
+                    height: "100%",
+                    outline: "none",
+                    cursor: "pointer",
+                    colorScheme: "dark",
+                  }}
+                >
+                  <option value="" disabled style={{ background: "#121212", color: "rgba(255,255,255,0.5)" }}>
+                    Select a genre
+                  </option>
+                  {GENRES.map((g) => (
+                    <option key={g} value={g} style={{ background: "#121212", color: "#FFFFFF" }}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
               </View>
+            ) : (
+              <>
+                <Pressable
+                  onPress={() => setIsGenreOpen((v) => !v)}
+                  style={styles.selectInput}>
+                  <Text style={styles.selectText} numberOfLines={1}>
+                    {favoriteGenre ? favoriteGenre : "Select a genre"}
+                  </Text>
+                  <Text style={styles.selectCaret}>▾</Text>
+                </Pressable>
+
+                {isGenreOpen && (
+                  <View style={styles.selectDropdown}>
+                    {GENRES.map((g) => (
+                      <Pressable
+                        key={g}
+                        onPress={() => {
+                          setFavoriteGenre(g);
+                          setIsGenreOpen(false);
+                          if (stepError) setStepError("");
+                        }}
+                        style={styles.selectOption}>
+                        <Text style={styles.selectOptionText}>{g}</Text>
+                        {favoriteGenre === g ? (
+                          <Check color={Colors.textPrimary} size={18} />
+                        ) : (
+                          <View style={{ width: 18, height: 18 }} />
+                        )}
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </>
             )}
 
             <Text style={styles.label}>Location (City)</Text>
-            <View style={styles.inputGlass}>
+            <View style={[styles.inputGlass, focusedField === "locationCity" && styles.inputGlassFocused]}>
               <TextInput
                 placeholder="Your city"
                 placeholderTextColor={Colors.textMuted}
@@ -441,6 +522,8 @@ export default function SignupScreen({ navigation }: Props) {
                   setLocationCity(t);
                   if (stepError) setStepError("");
                 }}
+                onFocus={() => setFocusedField("locationCity")}
+                onBlur={() => setFocusedField(null)}
                 autoCapitalize="words"
                 autoCorrect={false}
               />
@@ -703,13 +786,33 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 4,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
+    ...Platform.select({
+      web: {
+        paddingVertical: 0,
+      },
+      default: {
+        paddingVertical: 4,
+      }
+    })
+  },
+  inputGlassFocused: {
+    borderColor: Colors.accent,
+    backgroundColor: "rgba(255,255,255,0.12)",
   },
   input: {
     color: "#FFFFFF",
     fontSize: 14,
+    ...Platform.select({
+      web: {
+        outlineStyle: "none",
+        height: 40,
+      } as any,
+      default: {
+        height: 40,
+      }
+    }),
   },
   placeholderText: {
     color: "rgba(255,255,255,0.5)",
@@ -718,16 +821,32 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 4,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     flexDirection: "row",
     alignItems: "center",
+    ...Platform.select({
+      web: {
+        paddingVertical: 0,
+      },
+      default: {
+        paddingVertical: 4,
+      }
+    })
   },
   passwordInput: {
     flex: 1,
     color: "#FFFFFF",
     fontSize: 14,
+    ...Platform.select({
+      web: {
+        outlineStyle: "none",
+        height: 40,
+      } as any,
+      default: {
+        height: 40,
+      }
+    }),
   },
   eyeButton: {
     paddingLeft: 10,
@@ -766,12 +885,20 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    ...Platform.select({
+      web: {
+        height: 40,
+        paddingVertical: 0,
+      },
+      default: {
+        paddingVertical: 12,
+      }
+    })
   },
   selectText: {
     color: "#FFFFFF",

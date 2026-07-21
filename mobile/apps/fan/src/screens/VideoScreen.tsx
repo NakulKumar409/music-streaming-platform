@@ -754,17 +754,25 @@ export default function VideoScreen() {
   const enterFullscreen = useCallback(async () => {
     setIsFullscreen(true);
     // Lock to landscape when entering fullscreen
-    await ScreenOrientation.lockAsync(
-      ScreenOrientation.OrientationLock.LANDSCAPE
-    );
+    if (Platform.OS !== "web") {
+      try {
+        await ScreenOrientation.lockAsync(
+          ScreenOrientation.OrientationLock.LANDSCAPE
+        );
+      } catch (err) {}
+    }
   }, []);
 
   const exitFullscreen = useCallback(async () => {
     setIsFullscreen(false);
     // Lock back to portrait when exiting fullscreen
-    await ScreenOrientation.lockAsync(
-      ScreenOrientation.OrientationLock.PORTRAIT
-    );
+    if (Platform.OS !== "web") {
+      try {
+        await ScreenOrientation.lockAsync(
+          ScreenOrientation.OrientationLock.PORTRAIT
+        );
+      } catch (err) {}
+    }
   }, []);
 
   const stopAndReset = useCallback(async () => {
