@@ -121,20 +121,45 @@ export default function AdminContentApprovalQueuePage() {
     },
   });
 
-  const requestReason = (
-    label: string,
+  const [reasonModal, setReasonModal] = useState<{
+    title: string;
+    itemTitle: string;
+    actionLabel: string;
+    reason: string;
+    error: string | null;
+    onConfirm: (reason: string) => void;
+  } | null>(null);
+
+  const openReasonModal = (
+    title: string,
+    actionLabel: string,
     item: ModerationItem,
-    onValid: (reason: string) => void,
+    onConfirm: (reason: string) => void,
     initial = ""
   ) => {
-    const reason = window.prompt(`${label} “${item.title}” (3–500 characters):`, initial);
-    if (reason === null) return;
-    const trimmed = reason.trim();
+    setReasonModal({
+      title,
+      itemTitle: item.title,
+      actionLabel,
+      reason: initial,
+      error: null,
+      onConfirm,
+    });
+  };
+
+  const handleModalSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reasonModal) return;
+    const trimmed = reasonModal.reason.trim();
     if (trimmed.length < 3 || trimmed.length > 500) {
-      setError("Reason must be 3–500 characters.");
+      setReasonModal((prev) =>
+        prev ? { ...prev, error: "Reason must be 3–500 characters." } : null
+      );
       return;
     }
-    onValid(trimmed);
+    const confirmFn = reasonModal.onConfirm;
+    setReasonModal(null);
+    confirmFn(trimmed);
   };
 
   const draftItems = pending.data ?? [];
@@ -262,7 +287,15 @@ export default function AdminContentApprovalQueuePage() {
                           <button
                             type="button"
                             disabled={busy}
-                            onClick={() => requestReason("Reason for rejecting", item, (reason) => reject.mutate({ id: item.id, reason }), item.rejectionReason || "")}
+                            onClick={() =>
+                              openReasonModal(
+                                "Reject Content",
+                                "Reject",
+                                item,
+                                (reason) => reject.mutate({ id: item.id, reason }),
+                                item.rejectionReason || ""
+                              )
+                            }
                             className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-red-200 disabled:opacity-40"
                           >
                             <XCircle size={15} /> Reject
@@ -328,7 +361,14 @@ export default function AdminContentApprovalQueuePage() {
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => requestReason("Reason for taking down", item, (reason) => takedown.mutate({ id: item.id, reason }))}
+                      onClick={() =>
+                        openReasonModal(
+                          "Take Down Content",
+                          "Take down",
+                          item,
+                          (reason) => takedown.mutate({ id: item.id, reason })
+                        )
+                      }
                       className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-200 disabled:opacity-40"
                     >
                       <ShieldAlert size={15} /> Take down
@@ -340,6 +380,63 @@ export default function AdminContentApprovalQueuePage() {
           </div>
         )}
       </div>
+
+      {reasonModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-card p-6 shadow-premium">
+            <h2 className="text-lg font-semibold text-white">{reasonModal.title}</h2>
+            <p className="mt-1 text-xs text-muted">
+              Release: <span className="font-medium text-primary">“{reasonModal.itemTitle}”</span>
+            </p>
+
+            {reasonModal.error && (
+              <div className="mt-4 flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                <span>{reasonModal.error}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleModalSubmit} className="mt-4">
+              <label className="block text-xs font-medium text-muted">
+                Mandatory governance reason (3–500 characters)
+              </label>
+              <textarea
+                value={reasonModal.reason}
+                onChange={(e) =>
+                  setReasonModal((prev) =>
+                    prev ? { ...prev, reason: e.target.value, error: null } : null
+                  )
+                }
+                rows={3}
+                maxLength={500}
+                placeholder="Enter mandatory reason..."
+                autoFocus
+                className="mt-2 w-full rounded-xl border border-white/10 bg-inputbg p-3 text-sm text-white placeholder-white/30 outline-none focus:border-primary focus:ring-1 focus:ring-primary/40 transition-colors"
+              />
+              <div className="mt-1 flex justify-between text-[11px] text-muted">
+                <span>Must be between 3 and 500 characters</span>
+                <span className="font-mono">{reasonModal.reason.length}/500</span>
+              </div>
+
+              <div className="mt-5 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setReasonModal(null)}
+                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl border border-red-500/30 bg-red-500/20 px-4 py-2 text-sm font-medium text-red-200 hover:bg-red-500/30 transition-colors"
+                >
+                  Confirm {reasonModal.actionLabel}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </PageWrapper>
   );
 }

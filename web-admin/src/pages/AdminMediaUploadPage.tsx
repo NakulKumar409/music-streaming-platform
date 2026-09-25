@@ -69,8 +69,19 @@ export default function AdminMediaUploadPage() {
     setError(null);
     setResult(null);
 
-    if (!artistId || !title.trim() || !genre.trim() || !thumbnail || !media) {
-      setError("Artist, title, genre, thumbnail and media file are required.");
+    const missing: string[] = [];
+    if (!artistId) missing.push("Artist");
+    if (!title.trim()) missing.push("Title");
+    if (!genre.trim()) missing.push("Genre");
+    if (!thumbnail) missing.push("Thumbnail");
+    if (!media) missing.push(contentType === "VIDEO" ? "Video file" : "Audio file");
+
+    if (missing.length > 0 || !thumbnail || !media) {
+      if (missing.length === 1) {
+        setError(`${missing[0]} is required.`);
+      } else {
+        setError(`Please provide the required fields: ${missing.join(", ")}.`);
+      }
       return;
     }
 

@@ -86,9 +86,21 @@ export async function uploadAdminMedia(req: any, res: Response) {
 
   try {
     if (!thumbnail || !media) {
+      if (!thumbnail && !media) {
+        throw new UploadValidationError(
+          "UPLOAD_FILES_REQUIRED",
+          "Thumbnail and media files are required"
+        );
+      }
+      if (!thumbnail) {
+        throw new UploadValidationError(
+          "UPLOAD_FILES_REQUIRED",
+          "Thumbnail file is required"
+        );
+      }
       throw new UploadValidationError(
         "UPLOAD_FILES_REQUIRED",
-        "thumbnail and media files are required"
+        "Media file is required"
       );
     }
 

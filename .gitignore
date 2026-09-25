@@ -17,6 +17,6 @@ coverage/
 .DS_Store
 backend/storage/users/
 storage/users/
-backend/storage/artists/31/
+backend/storage/artists/
 backend/public/agreements/*.pdf
 public/agreements/*.pdf

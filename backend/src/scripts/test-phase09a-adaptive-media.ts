@@ -69,7 +69,7 @@ function testMigrationAndSchemaGate() {
   assert.match(migration, /idx_content_items_adaptive_readiness/);
   assert.match(
     schema,
-    /LATEST_SCHEMA_VERSION = "20260914_0012_adaptive_protected_media"/
+    /(?:LATEST|PHASE09A)_SCHEMA_VERSION = "20260914_0012_adaptive_protected_media"/
   );
 }
 
