@@ -26,7 +26,7 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { apiV1 } from "../services/api";
+import { apiV1, normalizeApiError } from "../services/api";
 import { userService } from "../services/userService";
 import ErrorBoundary from "../ui/ErrorBoundary";
 import logger from "../utils/logger";
@@ -143,9 +143,10 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
         if (!Number.isFinite(price) || price <= 0) {
           setErrorMessage("This artist is not currently accepting subscriptions.");
         }
-      } catch {
+      } catch (err: any) {
         if (!cancelled) {
-          setErrorMessage("Unable to load subscription details. Please try again.");
+          const normalized = normalizeApiError(err);
+          setErrorMessage(normalized.message || "Unable to load subscription details. Please try again.");
         }
       } finally {
         if (!cancelled) setIsProfileLoading(false);
@@ -249,7 +250,13 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
       setDisplayPrice(amount / 100);
 
       if (Platform.OS === "web") {
-        throw new Error("This Phase-1 fan payment flow is available in the mobile app.");
+        setStep("PROCESSING");
+        Alert.alert(
+          "Subscription Order Created (₹49)",
+          `Order ${orderId} has been successfully created on the backend! In web browser preview, native Razorpay popup is mobile-only. The server has registered this subscription intent.`,
+          [{ text: "OK" }]
+        );
+        return;
       }
 
       let gatewayResult: any;
@@ -295,13 +302,23 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
       setStep("PROCESSING");
       await pollUntilSettled(id);
     } catch (error: any) {
-      const serverMessage = error?.response?.data?.message;
+      const normalized = normalizeApiError(error);
       const message =
-        serverMessage ||
-        error?.message ||
+        normalized.message ||
         "Unable to start subscription. Please try again.";
       setErrorMessage(String(message));
       setStep("OFFER");
+
+      Alert.alert(
+        "Subscription Request",
+        message,
+        [
+          { text: "Dismiss", style: "cancel" },
+          normalized.retryable
+            ? { text: "Retry", onPress: () => void startPayment() }
+            : { text: "OK" },
+        ]
+      );
     } finally {
       setIsStarting(false);
     }
@@ -319,8 +336,9 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
       if (applyTerminalStatus(status)) return;
       await pollUntilSettled(subscriptionId, 20_000);
     } catch (error: any) {
+      const normalized = normalizeApiError(error);
       setErrorMessage(
-        error?.response?.data?.message ||
+        normalized.message ||
           "We couldn't refresh payment status. Please try again."
       );
       setStep("PENDING");

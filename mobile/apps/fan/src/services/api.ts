@@ -39,13 +39,17 @@ export function setUnauthorizedHandler(handler: (() => void | Promise<void>) | n
 }
 
 export function normalizeApiError(error: unknown): NormalizedApiError {
+  const isAxios = axios.isAxiosError(error);
   const axiosError = error as AxiosError<any>;
   const status = typeof axiosError?.response?.status === 'number' ? axiosError.response.status : null;
-  const isTimeout = axiosError?.code === 'ECONNABORTED' || /timeout/i.test(String(axiosError?.message ?? ''));
-  const isNetwork = !axiosError?.response;
+  const isTimeout = isAxios && (axiosError?.code === 'ECONNABORTED' || /timeout/i.test(String(axiosError?.message ?? '')));
+  const isNetwork = isAxios && !axiosError?.response;
   const retryable = isTimeout || isNetwork;
 
-  const rawMessage = String(axiosError?.response?.data?.message || '');
+  const rawMessage = String(
+    axiosError?.response?.data?.message ||
+    (error instanceof Error ? error.message : '')
+  );
   const isTechnicalLeak =
     !rawMessage ||
     /prisma|syntaxerror|sql|database|econnrefused|failed with status code|\[object Object\]|column.*does not exist|relation.*does not exist|jwt malformed/i.test(
@@ -59,7 +63,9 @@ export function normalizeApiError(error: unknown): NormalizedApiError {
     message = "You don't have permission to access this content.";
   } else if (status && status >= 500) {
     message = 'Something went wrong. Please try again.';
-  } else if (isNetwork || isTimeout) {
+  } else if (isTimeout) {
+    message = 'Request timed out. Please try again.';
+  } else if (isNetwork) {
     message = 'Network connection error. Please try again.';
   } else if (isTechnicalLeak) {
     message = 'Something went wrong. Please try again.';

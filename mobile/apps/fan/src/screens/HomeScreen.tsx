@@ -220,7 +220,7 @@ export default function HomeScreen({ navigation }: any) {
             const thumbFallbackFromStorageKey = it.thumbnail_storage_key
               ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(String(it.id))}`
               : '';
-            const artistId = (it.artistId ?? it.artist?.id ?? '') as any;
+            const artistId = (it.artistId ?? it.artist?.id ?? (it as any).artist_id ?? '') as any;
             return {
               id: String(it.id),
               contentId: String(it.id),

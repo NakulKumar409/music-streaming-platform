@@ -23,6 +23,7 @@
     "test:stream-access-errors": "ts-node --transpile-only src/scripts/test-stream-access-error-mapping.ts",
     "test:playback-session-lease-contract": "ts-node --transpile-only src/scripts/test-playback-session-lease-contract.ts",
     "test:payment-integrity": "ts-node --transpile-only src/scripts/test-payment-integrity.ts",
+    "test:module06-subscriptions": "ts-node --transpile-only src/scripts/test-module06-subscriptions-complete.ts",
     "test:refund-integrity-contract": "ts-node --transpile-only src/scripts/test-refund-integrity-contract.ts",
     "test:refund-integrity-db": "ts-node --transpile-only src/scripts/test-refund-integrity-db.ts",
     "test:auth-hardening": "ts-node --transpile-only src/scripts/test-auth-hardening.ts",

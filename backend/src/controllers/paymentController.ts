@@ -47,7 +47,7 @@ function sendDomainError(res: Response, error: unknown, fallback: string) {
   return res.status(500).json({
     success: false,
     code: "PAYMENT_OPERATION_FAILED",
-    message: fallback,
+    message: "Unable to process payment request right now. Please try again.",
   });
 }
 
@@ -70,29 +70,51 @@ export const createSubscriptionPurchase = async (req: any, res: Response) => {
     }
 
     const runtime = paymentRuntime();
-    const razorpay = getRazorpayClient();
+    const isMockKey =
+      runtime.nodeEnv !== "production" &&
+      (runtime.razorpayKeyId.includes("mock") || runtime.razorpayKeySecret.includes("mock"));
+
+    const razorpay = isMockKey ? null : getRazorpayClient();
     const purchase = await startArtistSubscriptionPurchase(
       userId,
       req.body?.artistId,
       async (intent) => {
-        const order = await razorpay.orders.create({
-          amount: intent.amountPaise,
-          currency: intent.currency,
-          receipt: `artist_sub_${userId}_${intent.artistId}_${Date.now()}`,
-          notes: {
-            user_id: String(userId),
-            artist_id: String(intent.artistId),
-            subscription_type: "ARTIST",
-            billing_cycle: "monthly",
-            authoritative_amount_paise: String(intent.amountPaise),
-          },
-        });
+        if (isMockKey) {
+          const mockOrderId = `order_mock_${userId}_${intent.artistId}_${Date.now()}`;
+          return {
+            id: mockOrderId,
+            amount: intent.amountPaise,
+            currency: intent.currency,
+          };
+        }
 
-        return {
-          id: String(order.id),
-          amount: order.amount,
-          currency: String(order.currency || intent.currency),
-        };
+        try {
+          const order = await razorpay!.orders.create({
+            amount: intent.amountPaise,
+            currency: intent.currency,
+            receipt: `artist_sub_${userId}_${intent.artistId}_${Date.now()}`,
+            notes: {
+              user_id: String(userId),
+              artist_id: String(intent.artistId),
+              subscription_type: "ARTIST",
+              billing_cycle: "monthly",
+              authoritative_amount_paise: String(intent.amountPaise),
+            },
+          });
+
+          return {
+            id: String(order.id),
+            amount: order.amount,
+            currency: String(order.currency || intent.currency),
+          };
+        } catch (gatewayError: any) {
+          logger.error({ error: gatewayError }, "Payment gateway order creation failed");
+          throw new PaymentDomainError(
+            502,
+            "PAYMENT_GATEWAY_ERROR",
+            "Payment gateway is currently unavailable. Please try again later."
+          );
+        }
       }
     );
 
