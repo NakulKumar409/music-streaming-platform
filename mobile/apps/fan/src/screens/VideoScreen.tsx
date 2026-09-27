@@ -442,7 +442,7 @@ export default function VideoScreen() {
   const videoPlayer = useVideoPlayer(activePlaybackUrl, (player) => {
     player.loop = false;
     player.staysActiveInBackground = true;
-    console.log("[VideoScreen] VideoPlayer initialized with URL:", activePlaybackUrl);
+    console.log("[VideoScreen] VideoPlayer initialized with URL:", activePlaybackUrl ? `${new URL(activePlaybackUrl).origin}${new URL(activePlaybackUrl).pathname}?[token-redacted]` : "null");
     if (activePlaybackUrl && !userPausedRef.current) {
       console.log("[VideoScreen] Auto-playing on init with valid URL");
       safePlay(player as any, "init");
@@ -1138,7 +1138,7 @@ export default function VideoScreen() {
             interruptionMode: "doNotMix",
           });
 
-          console.log("[VideoScreen] Playback URL set, attempting to play:", playbackUrl);
+          console.log("[VideoScreen] Playback URL set, attempting to play (token redacted):", playbackUrl ? `${new URL(playbackUrl).origin}${new URL(playbackUrl).pathname}?kind=...&quality=...` : "null");
 
           // Explicitly start playback after URL is set
           setTimeout(() => {

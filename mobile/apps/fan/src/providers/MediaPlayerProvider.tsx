@@ -134,6 +134,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   const audioPlayer = null;
   const [audioSource, setAudioSource] = useState<string | null>(null);
 
+  // Web fallback: dedicated HTMLAudioElement when TrackPlayer is unavailable (Expo Web / browser)
+  const webAudioRef = useRef<any | null>(null);
+
   const [videoSource, setVideoSource] = useState<string | null>(null);
   const [videoPlayer, setVideoPlayer] = useState<VideoPlayer | null>(null);
 
@@ -504,6 +507,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         if (item.mediaType === "audio" && TrackPlayerAvailable) {
           TrackPlayer.seekTo(0);
           TrackPlayer.play();
+        } else if (item.mediaType === "audio" && webAudioRef.current) {
+          // Web HTMLAudioElement repeat
+          webAudioRef.current.currentTime = 0;
+          webAudioRef.current.play().catch(() => undefined);
         } else if (videoPlayer) {
           videoPlayer.seekBy(-videoPlayer.currentTime);
           videoPlayer.play();
@@ -537,6 +544,18 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   const unloadAudio = useCallback(async () => {
     setAudioSource(null);
+    // Tear down web audio element
+    if (!TrackPlayerAvailable && webAudioRef.current) {
+      try {
+        const wa = webAudioRef.current;
+        wa.pause();
+        wa.src = '';
+        wa.load();
+      } catch {
+        // ignore
+      }
+      webAudioRef.current = null;
+    }
     if (TrackPlayerAvailable) {
       try {
         await TrackPlayer.reset();
@@ -716,25 +735,77 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       // track-player automatically handles background audio settings when configured with capabilities
 
-      // Check if TrackPlayer is available (Expo Go compatibility)
+      // Check if TrackPlayer is available (Expo Go / Web compatibility)
       if (!TrackPlayerAvailable) {
         try {
-          logger.log("[MediaPlayer] TrackPlayer not available, falling back to videoPlayer for audio");
-          setVideoSource(playbackUrl);
+          logger.log("[MediaPlayer] TrackPlayer not available, using HTMLAudioElement for audio on web");
           scheduleTokenRefresh(playbackUrl, "audio");
 
-          if (videoPlayer) {
-            videoPlayer.replace(playbackUrl);
-            videoPlayer.play();
-            setState((s) => ({
-              ...s,
-              isPlaying: true,
-              positionMs: 0,
-              durationMs: item.duration || 0,
-            }));
+          // Tear down any previous web audio element
+          if (webAudioRef.current) {
+            try {
+              webAudioRef.current.pause();
+              webAudioRef.current.src = '';
+              webAudioRef.current.load();
+            } catch { /* ignore */ }
+          }
+
+          // Create a fresh HTMLAudioElement (available on web)
+          const wa = typeof Audio !== 'undefined' ? new (Audio as any)(playbackUrl) : null;
+          if (!wa) {
+            logger.warn("[MediaPlayer] HTMLAudioElement not available, cannot play audio on this platform");
+            return;
+          }
+
+          webAudioRef.current = wa;
+          wa.crossOrigin = 'anonymous';
+
+          // Wire DOM events → context state (real source of truth, no fake timers)
+          const syncDuration = () => {
+            const dur = isFinite(wa.duration) && wa.duration > 0 ? Math.round(wa.duration * 1000) : 0;
+            if (dur > 0) {
+              setState((s) => ({ ...s, durationMs: dur }));
+            }
+          };
+
+          wa.addEventListener('loadedmetadata', syncDuration);
+          wa.addEventListener('durationchange', syncDuration);
+          wa.addEventListener('canplay', syncDuration);
+
+          wa.addEventListener('timeupdate', () => {
+            const pos = Math.round((wa.currentTime || 0) * 1000);
+            setState((s) => ({ ...s, positionMs: pos }));
+          });
+          wa.addEventListener('play', () => {
+            setState((s) => ({ ...s, isPlaying: true }));
+          });
+          wa.addEventListener('pause', () => {
+            setState((s) => ({ ...s, isPlaying: false }));
+          });
+          wa.addEventListener('ended', () => {
+            setState((s) => ({ ...s, isPlaying: false, positionMs: s.durationMs }));
+            handleDidJustFinish();
+          });
+          wa.addEventListener('error', (e: any) => {
+            logger.warn('[MediaPlayer] HTMLAudioElement error', e);
+            setState((s) => ({ ...s, isPlaying: false }));
+          });
+
+          // Reset position state before starting
+          setState((s) => ({ ...s, positionMs: 0, durationMs: item.duration || 0 }));
+
+          // Start playback
+          const playPromise = wa.play();
+          if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch((err: any) => {
+              if (err?.name !== 'AbortError') {
+                logger.warn('[MediaPlayer] HTMLAudioElement play() failed', err);
+                setState((s) => ({ ...s, isPlaying: false }));
+              }
+            });
           }
         } catch (err) {
-          logger.warn("[MediaPlayer] videoPlayer fallback for audio failed", err);
+          logger.warn("[MediaPlayer] HTMLAudioElement fallback for audio failed", err);
         }
         return;
       }
@@ -888,13 +959,20 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
     if (item.mediaType === "audio") {
       if (!TrackPlayerAvailable) {
-        if (videoPlayer) {
+        // Web fallback: use HTMLAudioElement
+        const wa = webAudioRef.current;
+        if (wa) {
           if (stateRef.current.isPlaying) {
-            videoPlayer.pause();
-            setState((s) => ({ ...s, isPlaying: false }));
+            wa.pause();
+            // state updated by 'pause' DOM event
           } else {
-            videoPlayer.play();
-            setState((s) => ({ ...s, isPlaying: true }));
+            const p = wa.play();
+            if (p && typeof p.catch === 'function') {
+              p.catch((err: any) => {
+                if (err?.name !== 'AbortError') logger.warn('[MediaPlayer] togglePlayPause play() failed', err);
+              });
+            }
+            // state updated by 'play' DOM event
           }
         }
         return;
@@ -944,8 +1022,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       if (item.mediaType === "audio") {
         if (!TrackPlayerAvailable) {
-          if (videoPlayer) {
-            videoPlayer.currentTime = safe / 1000;
+          // Web fallback: seek HTMLAudioElement directly
+          const wa = webAudioRef.current;
+          if (wa && isFinite(safe / 1000)) {
+            wa.currentTime = safe / 1000;
+            // Optimistic UI already set above via setState
           }
           return;
         }
@@ -1327,37 +1408,31 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       isPolling = false;
     };
   }, [isPlayerReady]);
- 
-  // Polling for videoPlayer progress fallback (e.g. Web / Expo Go)
+
+  // Smooth 100ms ticker for Web Audio fallback (since browser timeupdate is ~250ms)
   useEffect(() => {
-    if (TrackPlayerAvailable || !videoPlayer) return;
+    if (TrackPlayerAvailable || !state.isPlaying) return;
 
-    let active = true;
     const interval = setInterval(() => {
-      if (!active || !videoPlayer) return;
-      try {
-        const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
-        const dur = Math.max(0, Math.round(videoPlayer.duration * 1000));
-        setState((s) => {
-          if (s.isPlaying) {
-            return {
-              ...s,
-              positionMs: pos,
-              durationMs: dur > 0 ? dur : s.durationMs,
-            };
-          }
-          return s;
-        });
-      } catch (e) {
-        // ignore
-      }
-    }, 100); // 100ms interval for fallback smoothness
+      const wa = webAudioRef.current;
+      if (!wa || wa.paused) return;
+      const pos = Math.max(0, Math.round((wa.currentTime || 0) * 1000));
+      const dur = isFinite(wa.duration) && wa.duration > 0 ? Math.round(wa.duration * 1000) : 0;
 
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, [videoPlayer]);
+      setState((s) => {
+        if (Math.abs(s.positionMs - pos) < 40 && (dur <= 0 || s.durationMs === dur)) {
+          return s;
+        }
+        return {
+          ...s,
+          positionMs: pos,
+          durationMs: dur > 0 ? dur : s.durationMs,
+        };
+      });
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [state.isPlaying]);
 
   const value = useMemo<MediaPlayerContextValue>(
     () => ({

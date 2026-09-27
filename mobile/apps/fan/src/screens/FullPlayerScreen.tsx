@@ -115,8 +115,8 @@ export default function FullPlayerScreen({ navigation, route }: any) {
   } = useMediaPlayer();
 
   // ── Local UI state ─────────────────────────────────────────────────────────
-  const [isSeeking, setIsSeeking] = useState(false);
-  const seekValueRef = useRef(0);
+  const [scrubPosition, setScrubPosition] = useState<number | null>(null);
+  const isSeeking = scrubPosition !== null;
   const [isHearted, setIsHearted] = useState(false);
   const [hasAutoPlayed, setHasAutoPlayed] = useState(false);
 
@@ -221,22 +221,27 @@ export default function FullPlayerScreen({ navigation, route }: any) {
   const displayArtist = currentItem?.artistName ?? params.artist ?? 'Unknown';
   const displayImage = currentItem?.artworkUrl ?? params.imageUrl ?? FALLBACK_ARTWORK;
 
-  const positionForUi = isSeeking ? seekValueRef.current : playerState.positionMs;
+  const positionForUi = scrubPosition !== null ? scrubPosition : playerState.positionMs;
 
   // ── Seek ───────────────────────────────────────────────────────────────────
   const onSeekStart = useCallback(() => {
-    setIsSeeking(true);
-    seekValueRef.current = playerState.positionMs;
+    setScrubPosition(playerState.positionMs);
   }, [playerState.positionMs]);
 
   const onSeekChange = useCallback((v: number) => {
-    seekValueRef.current = v;
+    setScrubPosition(v);
   }, []);
 
   const onSeekComplete = useCallback(
     (v: number) => {
-      setIsSeeking(false);
-      seekTo(v).catch(() => undefined);
+      setScrubPosition(v);
+      seekTo(v)
+        .catch(() => undefined)
+        .finally(() => {
+          setTimeout(() => {
+            setScrubPosition(null);
+          }, 80);
+        });
     },
     [seekTo]
   );
