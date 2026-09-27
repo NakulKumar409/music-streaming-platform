@@ -250,11 +250,17 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
       setDisplayPrice(amount / 100);
 
       if (Platform.OS === "web") {
-        setStep("PROCESSING");
         Alert.alert(
           "Subscription Order Created (₹49)",
           `Order ${orderId} has been successfully created on the backend! In web browser preview, native Razorpay popup is mobile-only. The server has registered this subscription intent.`,
-          [{ text: "OK" }]
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                if (navigation.canGoBack()) navigation.goBack();
+              },
+            },
+          ]
         );
         return;
       }
@@ -464,6 +470,16 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
               <Text style={styles.stateBody}>
                 Payment was returned by the gateway. We're waiting for verified server confirmation before unlocking content.
               </Text>
+              <Pressable
+                style={[styles.secondaryButton, { marginTop: 24 }]}
+                onPress={() => {
+                  pollingGeneration.current += 1;
+                  setStep("OFFER");
+                  if (navigation.canGoBack()) navigation.goBack();
+                }}
+              >
+                <Text style={styles.secondaryButtonText}>Return</Text>
+              </Pressable>
             </View>
           )}
 

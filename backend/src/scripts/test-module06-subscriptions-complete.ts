@@ -65,11 +65,11 @@ async function main() {
     );
     assert.ok(content9Res.rows[0], "Content 9 must exist in DB");
 
-    // Clear any previous test subscription for Fan A (28) on Artist (31) to start clean
-    await pool.query("DELETE FROM payments WHERE user_id = $1", [28]);
-    await pool.query("DELETE FROM subscription_audit_logs WHERE user_id = $1", [28]);
-    await pool.query("DELETE FROM subscriptions WHERE user_id = $1 AND artist_id = $2", [28, 31]);
-    await pool.query("DELETE FROM transactions WHERE user_id = $1 AND artist_id = $2", [28, 31]);
+    // Clear any previous test subscription for Fan A (28) and Fan B (25) on Artist (31) to start clean
+    await pool.query("DELETE FROM payments WHERE user_id IN ($1, $2)", [28, 25]);
+    await pool.query("DELETE FROM subscription_audit_logs WHERE user_id IN ($1, $2)", [28, 25]);
+    await pool.query("DELETE FROM subscriptions WHERE user_id IN ($1, $2) AND artist_id = $3", [28, 25, 31]);
+    await pool.query("DELETE FROM transactions WHERE user_id IN ($1, $2) AND artist_id = $3", [28, 25, 31]);
 
     // Create valid sessions
     const sessionA = await SessionService.createSession({
