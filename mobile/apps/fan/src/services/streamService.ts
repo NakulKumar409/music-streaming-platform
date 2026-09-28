@@ -606,15 +606,3 @@ export async function getPlaybackDescriptorForSessionRecovery(
   }
 }
 
-export async function getPlaybackUrlForRecovery(
-  contentId: string | number,
-  kind?: 'audio' | 'video',
-  quality?: VideoQuality
-): Promise<string> {
-  const descriptor = await getPlaybackDescriptorForRecovery(
-    contentId,
-    kind,
-    quality
-  );
-  return descriptor.playbackUrl;
-}
