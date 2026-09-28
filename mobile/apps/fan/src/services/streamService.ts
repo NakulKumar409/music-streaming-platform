@@ -272,6 +272,20 @@ export function markActivePlaybackLeaseAlive(sessionId: number): void {
   };
 }
 
+/**
+ * Reconcile the foreground lease cache with the authoritative session carried
+ * by RNTP's active native track after background playback/recovery.
+ */
+export function adoptActivePlaybackLease(
+  contentId: string | number,
+  sessionId: number
+): ActivePlaybackLease | null {
+  const validContentId = positiveInteger(contentId);
+  const validSessionId = positiveInteger(sessionId);
+  if (!validContentId || !validSessionId) return null;
+  return storeActiveLease(validContentId, validSessionId);
+}
+
 function clearActivePlaybackLease(expectedSessionId?: number) {
   if (
     expectedSessionId === undefined ||
