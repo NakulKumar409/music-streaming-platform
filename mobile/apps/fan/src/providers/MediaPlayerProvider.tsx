@@ -1694,7 +1694,12 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     const playbackQueueEndedSubscription = TrackPlayer.addEventListener(
       Event?.PlaybackQueueEnded,
       () => {
-        if (currentItemRef.current?.mediaType !== "audio") return;
+        if (
+          currentItemRef.current?.mediaType !== "audio" ||
+          !audioSourceRef.current
+        ) {
+          return;
+        }
         // The background service deliberately does not own the React queue.
         // While the UI runtime is active, apply the same repeat/advance policy
         // used by the web HTMLAudioElement ended event.
