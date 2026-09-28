@@ -34,7 +34,7 @@ Remove timing-based/player-UI workarounds and make audio playback progress, dura
 | APS-09 | P1 | Verify seekable HTTP Range behavior across local + configured provider delivery | IMPLEMENTED — LIVE VERIFY PENDING | `6de8c3c7`, `b2e98bcb`, `f2cb8ed3`, `f9e6f1ce`: local single-range semantics hardened and executable MIME/Range contract added. S3/GCS support contiguous byte ranges by provider contract; configured Cloudinary/S3/Firebase endpoints still require one real-environment seek check before VERIFIED COMPLETE. |
 | APS-10 | P1 | Harden signed playback lease/source refresh during long audio playback | DONE | Timer-based URL rotation/replay retry and dead signed-URL preload are removed. Foreground/background recovery ownership is explicit, duplicate errors are serialized, lease replacement is single-flight across heartbeat/media recovery, the observed expired session is preserved, native track metadata carries the exact session, foreground re-adopts background-recovered sessions, position/seek target and latest user intent are preserved. |
 | APS-11 | P0 | Add deterministic regression tests for stale-progress-after-seek and rapid repeated seeks | IMPLEMENTED — EXECUTION PENDING | Regression contracts now cover stale progress, target convergence, rapid seek, remote seek/jumps, timer removal, protected-source recovery, single-flight lease recovery, rapid track loads, heartbeat resume, duration propagation, MIME normalization/provider overrides, and Web lifecycle/CORS behavior. Existing `mobile: npm test` picks them up; local execution remains required. |
-| APS-12 | P0 | Final source review + local/manual Web/Android/iOS acceptance matrix | MANUAL SOURCE QA DONE — DEVICE VERIFY PENDING | Latest-source manual QA completed across queue → load → seek → progress → pause/resume → skip/end → foreground/background → recovery → heartbeat → MIME/duration/range. A focused 20-invariant source audit passed 20/20. Browser/real-device execution remains the final certification gate. |
+| APS-12 | P0 | Final source review + local/manual Web/Android/iOS acceptance matrix | MANUAL SOURCE QA DONE — DEVICE VERIFY PENDING | Latest-source manual QA completed across queue → load → seek → progress → pause/resume → skip/end → foreground/background → recovery → heartbeat → MIME/duration/range. A focused 23-invariant source audit passed 23/23. Browser/real-device execution remains the final certification gate. |
 
 ## Manual QA findings fixed
 
@@ -55,11 +55,12 @@ The final source-level QA pass found and fixed issues beyond the original slider
 - Failed upload compensation now clears `duration_ms`.
 - Web audio no longer forces anonymous CORS for ordinary playback and listeners are attached before source loading.
 - Remote Play no longer marks the UI playing before RNTP confirms `Playing`.
+- Lock-screen Play/Pause changes made while React is suspended are reconciled from native RNTP state when the app returns to foreground.
 - Restore-seek and stop/unload async boundaries now re-check load generation before mutating/starting the engine.
 
 ### Source audit evidence
 
-Latest focused invariants checked directly against branch source: **20/20 PASS**.
+Latest focused invariants checked directly against branch source: **23/23 PASS**.
 
 This source audit is not a substitute for TypeScript/build/test execution or physical-device/browser validation.
 
