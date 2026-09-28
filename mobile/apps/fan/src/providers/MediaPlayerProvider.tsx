@@ -262,6 +262,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   const audioLoadTokenRef = useRef(0);
 
+  const cancelPendingAudioLoad = useCallback(() => {
+    audioLoadTokenRef.current += 1;
+    foregroundRecoveryInFlightRef.current = false;
+  }, []);
+
   const currentItem = state.queue.length
     ? state.queue[state.currentIndex] ?? null
     : null;
@@ -1259,8 +1264,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   }, [recoverAudioPlayback]);
 
   const prepareVideo = useCallback(async () => {
+    cancelPendingAudioLoad();
+    audioPlayIntentRef.current = false;
     await unloadAudio();
-  }, [unloadAudio]);
+  }, [cancelPendingAudioLoad, unloadAudio]);
 
   const playQueue = useCallback(
     async (queue: MediaItem[], index: number) => {
@@ -1278,6 +1285,12 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       // A denied selection must not replace the visible/current item while the
       // previously authorized source is still playing.
       if (await blockLockedPlayback(item)) return;
+
+      if (item.mediaType === "video") {
+        // Cancel any older async audio source resolution immediately. Do not
+        // stop the currently playing source until video authorization succeeds.
+        cancelPendingAudioLoad();
+      }
 
       if (item.mediaType === "video" && item.useStreamAccess) {
         try {
@@ -1333,6 +1346,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       loadAndPlayAudio,
       prepareVideo,
       preferredQuality,
+      cancelPendingAudioLoad,
       shuffleQueueKeepCurrent,
     ]
   );
@@ -1606,11 +1620,13 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   );
 
   const close = useCallback(async () => {
+    cancelPendingAudioLoad();
     audioPlayIntentRef.current = false;
+    currentItemRef.current = null;
     await stopVideo();
     await unloadAudio();
     setState(EMPTY_STATE);
-  }, [stopVideo, unloadAudio]);
+  }, [cancelPendingAudioLoad, stopVideo, unloadAudio]);
 
   const setExpanded = useCallback((expanded: boolean) => {
     setState((s) => ({ ...s, isExpanded: expanded }));
@@ -1618,10 +1634,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     return () => {
+      cancelPendingAudioLoad();
       stopVideo().catch(() => undefined);
       unloadAudio().catch(() => undefined);
     };
-  }, [stopVideo, unloadAudio]);
+  }, [cancelPendingAudioLoad, stopVideo, unloadAudio]);
 
   // TrackPlayer remote event listeners for background/lock screen control synchronization
   useEffect(() => {
