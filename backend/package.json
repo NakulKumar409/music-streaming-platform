@@ -25,6 +25,7 @@
     "test:payment-integrity": "ts-node --transpile-only src/scripts/test-payment-integrity.ts",
     "test:module06-subscriptions": "ts-node --transpile-only src/scripts/test-module06-subscriptions-complete.ts",
     "test:module07-payments-refunds": "ts-node --transpile-only src/scripts/test-module07-payments-refunds-complete.ts",
+    "test:module08-admin-governance": "ts-node --transpile-only src/scripts/test-module08-admin-governance-complete.ts",
     "test:refund-integrity-contract": "ts-node --transpile-only src/scripts/test-refund-integrity-contract.ts",
     "test:refund-integrity-db": "ts-node --transpile-only src/scripts/test-refund-integrity-db.ts",
     "test:auth-hardening": "ts-node --transpile-only src/scripts/test-auth-hardening.ts",

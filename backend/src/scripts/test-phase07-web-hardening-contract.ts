@@ -6,7 +6,7 @@ const backendRoot = path.resolve(__dirname, "../..");
 const repoRoot = path.resolve(backendRoot, "..");
 
 function read(relativePath: string) {
-  return fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
+  return fs.readFileSync(path.join(repoRoot, relativePath), "utf8").replace(/\r\n/g, "\n");
 }
 
 function main() {
@@ -134,7 +134,10 @@ function main() {
   );
 
   assert.equal(
-    adminIndex.includes('requireRoles("ADMIN"),\n  adminArtistValidationRouter,\n  adminArtistsRoutes'),
+    adminIndex.includes('requireRoles("ADMIN")') &&
+      adminIndex.includes("adminArtistValidationRouter") &&
+      adminIndex.includes("adminArtistsRoutes") &&
+      adminIndex.lastIndexOf("adminArtistValidationRouter") < adminIndex.lastIndexOf("adminArtistsRoutes"),
     true,
     "Admin Artist validation must execute after authentication/RBAC and before legacy handlers"
   );

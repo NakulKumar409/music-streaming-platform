@@ -445,23 +445,41 @@ export default function HomeScreen({ navigation }: any) {
                 style={styles.headerLogo}
                 resizeMode="cover"
               />
-              <Text style={styles.headerTitle}>Discover</Text>
+              <Text style={styles.headerTitle} numberOfLines={1}>Discover</Text>
             </View>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-              <Pressable onPress={() => navigation.getParent()?.navigate('SearchTab')}>
-                <Search color="#fff" size={22} />
-              </Pressable>
+            <View style={styles.headerRight}>
+              <TouchableOpacity
+                style={styles.headerIconButton}
+                onPress={() => navigation.getParent()?.navigate('SearchTab')}
+                activeOpacity={0.7}
+                accessibilityLabel="Search"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Search color="#fff" size={18} />
+              </TouchableOpacity>
 
               {Platform.OS === 'web' && (
                 <>
-                  <Pressable onPress={() => { /* Notifications click placeholder */ }} style={{ padding: 4 }}>
-                    <Bell color="#fff" size={22} />
-                  </Pressable>
+                  <TouchableOpacity
+                    style={styles.headerIconButton}
+                    onPress={() => { /* Notifications click placeholder */ }}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Notifications"
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Bell color="#fff" size={18} />
+                  </TouchableOpacity>
 
-                  <Pressable onPress={() => navigation.getParent()?.navigate('AccountTab')} style={{ padding: 4 }}>
-                    <Settings color="#fff" size={22} />
-                  </Pressable>
+                  <TouchableOpacity
+                    style={styles.headerIconButton}
+                    onPress={() => navigation.getParent()?.navigate('AccountTab')}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Settings"
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Settings color="#fff" size={18} />
+                  </TouchableOpacity>
 
                   <ThemeSwitcher />
                 </>
@@ -688,28 +706,49 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingTop: 12,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'android' ? 8 : 12,
     paddingBottom: 10,
   },
 
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+    flexShrink: 1,
+    marginRight: 8,
   },
 
   headerLogo: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
 
   headerTitle: {
     color: '#fff',
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '800',
-    letterSpacing: 0.2,
+    letterSpacing: -0.2,
+  },
+
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
+  },
+
+  headerIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
 
   sectionTitleTop: {

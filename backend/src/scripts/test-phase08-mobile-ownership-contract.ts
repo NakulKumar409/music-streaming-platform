@@ -5,9 +5,9 @@ import path from "node:path";
 const SRC = path.resolve(__dirname, "..");
 const REPO = path.resolve(SRC, "..", "..");
 const readBackend = (relativePath: string) =>
-  fs.readFileSync(path.join(SRC, relativePath), "utf8");
+  fs.readFileSync(path.join(SRC, relativePath), "utf8").replace(/\r\n/g, "\n");
 const readRepo = (relativePath: string) =>
-  fs.readFileSync(path.join(REPO, relativePath), "utf8");
+  fs.readFileSync(path.join(REPO, relativePath), "utf8").replace(/\r\n/g, "\n");
 
 function testMobileLeaseRecovery() {
   const streamService = readRepo("mobile/apps/fan/src/services/streamService.ts");

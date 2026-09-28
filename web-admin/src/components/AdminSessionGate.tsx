@@ -21,8 +21,7 @@ export default function AdminSessionGate() {
       };
     }
 
-    void http
-      .get("/api/v1/admin/session")
+    void http.get("/api/v1/admin/session")
       .then((response) => {
         if (!active) return;
         const role = setPrivilegedRole(response.data?.user?.role);

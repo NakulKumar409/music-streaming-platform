@@ -76,6 +76,15 @@ export default function ArtistPricingPage() {
     monthlyAmount > 0 &&
     hasAtMostTwoDecimals(monthlyAmount);
 
+  const inrFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency: "INR",
+      }),
+    []
+  );
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -252,6 +261,11 @@ export default function ArtistPricingPage() {
                   className="h-14 w-full rounded-xl border border-white/10 bg-background/60 px-4 text-2xl font-bold text-white outline-none transition-all focus:border-primary/50 disabled:opacity-50"
                 />
               </div>
+              {monthlyValid && (
+                <p className="mt-2 text-xs font-medium text-emerald-400">
+                  Preview: {inrFormatter.format(monthlyAmount)} / month
+                </p>
+              )}
               <p className="mt-2 text-xs text-[#8D7B77]">
                 The backend resolves this configured rupee price and converts it to integer paise at the payment boundary. The browser never supplies the checkout amount.
               </p>

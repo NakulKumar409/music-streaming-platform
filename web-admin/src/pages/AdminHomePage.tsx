@@ -158,7 +158,7 @@ export default function AdminHomePage() {
         <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-400/20 bg-red-500/10 p-5">
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-300" />
           <div className="min-w-0 flex-1">
-            <p className="font-medium text-red-100">Dashboard data is unavailable</p>
+            <p className="font-medium text-red-100">Dashboard unavailable</p>
             <p className="mt-1 text-sm text-red-200/80">
               {status === 403
                 ? "Your authenticated account is not authorized to view the admin dashboard."

@@ -142,3 +142,42 @@ Every admin list/detail must cover loading, empty, error and success. For mutati
 ## Exit criteria
 
 All privileged actions are server-role-gated, destructive and money operations are safe under duplicate/concurrent use, every required sensitive action is auditable, and direct API testing confirms no UI-only security assumption.
+
+---
+
+## Automated QA Execution & Real Entity Verification Evidence
+
+### 1. Test Command & Suite
+```bash
+npm --prefix backend run test:module08-admin-governance
+```
+- **Execution Command**: `ts-node src/scripts/test-module08-admin-governance-complete.ts`
+- **Result**: `10/10 SECTIONS PASSED (100%)`
+- **Exit Code**: `0`
+
+### 2. Discovered & Verified Database Entities
+- **Primary Admin**: User ID `1` (`admin@test.com`, role `ADMIN`)
+- **Secondary Admin**: User ID `59` (`admin2@test.com`, role `ADMIN`)
+- **Moderator**: User ID `58` (`moderator@test.com`, role `MODERATOR`)
+- **Finance Officer**: User ID `57` (`finance@test.com`, role `FINANCE`)
+- **Verified Artist**: User ID `31` ("Arjit Singh", verified `true`, price `₹49`)
+- **Pending Artist**: User ID `30` (`arijit.artist@test.com`, onboarding candidate)
+- **Fan A**: User ID `28` (`user2@test.com`, active subscription)
+- **Fan B**: User ID `25` (`user@test.com`)
+- **Moderated Content**: Content ID `9` ('Qehar', Early Access audio)
+
+### 3. Detailed Results by Test Area
+
+| Section | Area Tested | Verified Real Server Behavior | Status |
+|---|---|---|---|
+| **01** | Privileged Session Gate | Admin (1, 59), Moderator (58), and Finance (57) session verification; Dashboard KPI & Pending Counts; correlation ID tracing | **PASS** |
+| **02** | Artist Suspension & Immediate Playback Invalidation | `PATCH /api/v1/admin/artists/31/status` -> `SUSPENDED`; Fan subscription access-check revoked (`isAllowed: false`, `requiresSubscription: true`); Artist restored to `ACTIVE` | **PASS** |
+| **03** | Artist Approval/Rejection Lifecycle | `PATCH /api/v1/admin/resolve-artist/30` -> `APPROVED` (creates `artist_stats`, evicts caches); Transition to `REJECTED` with required reason recorded; Audit event `admin.artist_approved`/`admin.artist_rejected` | **PASS** |
+| **04** | Content Moderation & Playback Revocation | Moderator accesses queue (`/admin/content/pending`); Takedown Content ID 9 -> `is_taken_down = true`; Fan immediate access BLOCKED; Content restored to healthy state | **PASS** |
+| **05** | Pricing Governance & Advisory Locks | Admin updates revenue share config; invalid share totals (!= 100) rejected with 400 `INVALID_REVENUE_SHARE`; Existing captured transaction ledger invariant | **PASS** |
+| **06** | Complete RBAC Security Matrix | Moderator forbidden (403) from refunds/pricing/artist-approval; Finance forbidden (403) from content/artist approval; Artist/Fan forbidden (403) from admin endpoints; Unauthenticated rejected with 401 | **PASS** |
+| **07** | Destructive Action Safety | Whitespace/empty takedown reason rejected (400 `INVALID_TAKEDOWN_REASON`); Reason < 3 chars rejected (400); Empty artist rejection reason rejected (400 `REJECTION_REASON_REQUIRED`) | **PASS** |
+| **08** | Concurrent Admin Scenarios | Admin A approves while Admin B rejects concurrently -> deterministic final state (`REJECTED`) with zero state corruption; Concurrent audit read during active write succeeds | **PASS** |
+| **09** | Input Security (XSS / SQL / Unicode) | XSS payload stored purely as raw text data without execution; SQL meta-characters preserved as data in audit log metadata without syntax deviation; Unicode multi-byte handled cleanly | **PASS** |
+| **10** | Session Security & Secret Redaction | Revoked session rejected immediately with 401; Audit logs verified to have zero leakage of password hashes, JWT secrets, or encryption keys | **PASS** |
+

@@ -20,7 +20,7 @@ function positiveInteger(value: unknown): number | null {
  * Client analytics ingestion is intentionally limited to non-financial content
  * views. PLAY_STARTED/PLAY_COMPLETED are server-owned playback events so a
  * scripted client cannot manufacture trusted play metrics merely by holding an
- * active lease. Payment/earnings totals never depend on this table.
+ * active lease. Financial and revenue totals never depend on this table.
  */
 router.post("/event", requireAuth, requireFan, async (req: any, res: any) => {
   const correlationId = req?.correlationId || "-";
