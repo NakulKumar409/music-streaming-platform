@@ -162,16 +162,22 @@ export default async function playbackService() {
     logger.log('[PlaybackService] PlaybackState changed:', state.state);
     if (state.state === State.Playing) {
       servicePlayIntent = true;
-    } else if (state.state === State.Paused && !resumeAfterTemporaryDuck) {
+    } else if (
+      state.state === State.Paused &&
+      !resumeAfterTemporaryDuck &&
+      !recoveryInFlight
+    ) {
       servicePlayIntent = false;
     } else if (
-      state.state === State.Stopped ||
-      state.state === State.Ended ||
-      state.state === State.Error ||
-      state.state === State.None
+      !recoveryInFlight &&
+      (state.state === State.Stopped ||
+        state.state === State.Ended ||
+        state.state === State.None)
     ) {
       servicePlayIntent = false;
     }
+    // State.Error deliberately preserves intent until PlaybackError either
+    // restores the protected source or fails closed.
   });
 
   TrackPlayer.addEventListener(Event.PlaybackTrackChanged, async (event) => {
