@@ -53,6 +53,7 @@ import {
   type VideoQuality,
 } from "../services/streamService";
 import { evaluateAudioProgressSample } from "../utils/audioProgressSync";
+import { toFiniteDurationMs } from "../utils/mediaTime";
 import { decodeJwtExpMsFromUrl } from "../utils/streaming";
 
 import type { MediaItem, PlayerState } from "../media.types";
@@ -905,7 +906,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           });
 
           // Reset position state before starting
-          setState((s) => ({ ...s, positionMs: 0, durationMs: item.duration || 0 }));
+          setState((s) => ({
+            ...s,
+            positionMs: 0,
+            durationMs: toFiniteDurationMs(item.duration),
+          }));
 
           // Start playback
           const playPromise = wa.play();
@@ -1045,7 +1050,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         queue: nextState.queue,
         currentIndex: nextState.currentIndex,
         positionMs: 0,
-        durationMs: 0,
+        durationMs: toFiniteDurationMs(item.duration),
         isExpanded: false,
       }));
 
@@ -1189,17 +1194,17 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         Math.max(0, s.queue.length - 1)
       );
 
+      const item = s.queue[safeIndex];
+      if (!item) return;
+
       setState((prev) => ({
         ...prev,
         currentIndex: safeIndex,
         positionMs: 0,
-        durationMs: 0,
+        durationMs: toFiniteDurationMs(item.duration),
         isExpanded: false,
         isPlaying: true,
       }));
-
-      const item = s.queue[safeIndex];
-      if (!item) return;
 
       // Use preloaded URL if available
       let playbackUrl = item.mediaUrl;
