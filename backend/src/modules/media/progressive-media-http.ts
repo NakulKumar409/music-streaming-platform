@@ -25,8 +25,8 @@ export function normalizeStreamContentType(
 
   return (
     normalize(value) ||
-    inferContentTypeFromKey(storageKey) ||
     normalize(fallback) ||
+    inferContentTypeFromKey(storageKey) ||
     "application/octet-stream"
   );
 }
