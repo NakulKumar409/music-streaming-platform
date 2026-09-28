@@ -1192,23 +1192,31 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
     if (item.mediaType === "audio") {
       if (!TrackPlayerAvailable) {
-        // Web fallback: use HTMLAudioElement
+        // Web fallback: use HTMLAudioElement. If a failed recovery tore the
+        // element down, Play is an explicit retry of the current track.
         const wa = webAudioRef.current;
-        if (wa) {
-          if (stateRef.current.isPlaying) {
-            audioPlayIntentRef.current = false;
-            wa.pause();
-            // state updated by 'pause' DOM event
-          } else {
-            audioPlayIntentRef.current = true;
-            const p = wa.play();
-            if (p && typeof p.catch === 'function') {
-              p.catch((err: any) => {
-                if (err?.name !== 'AbortError') logger.warn('[MediaPlayer] togglePlayPause play() failed', err);
-              });
-            }
-            // state updated by 'play' DOM event
+        if (!wa || !audioSourceRef.current) {
+          audioPlayIntentRef.current = true;
+          await loadAndPlayAudio(item, {
+            resumePositionMs: stateRef.current.positionMs,
+            shouldPlay: true,
+          });
+          return;
+        }
+
+        if (stateRef.current.isPlaying) {
+          audioPlayIntentRef.current = false;
+          wa.pause();
+          // state updated by 'pause' DOM event
+        } else {
+          audioPlayIntentRef.current = true;
+          const p = wa.play();
+          if (p && typeof p.catch === 'function') {
+            p.catch((err: any) => {
+              if (err?.name !== 'AbortError') logger.warn('[MediaPlayer] togglePlayPause play() failed', err);
+            });
           }
+          // state updated by 'play' DOM event
         }
         return;
       }
@@ -1216,14 +1224,22 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         const isCurrentlyPlaying = stateRef.current.isPlaying;
         if (isCurrentlyPlaying) {
           audioPlayIntentRef.current = false;
-          TrackPlayer.pause();
+          await TrackPlayer.pause();
           setState((s) => ({ ...s, isPlaying: false }));
+        } else if (!audioSourceRef.current) {
+          audioPlayIntentRef.current = true;
+          await loadAndPlayAudio(item, {
+            resumePositionMs: stateRef.current.positionMs,
+            shouldPlay: true,
+          });
         } else {
           audioPlayIntentRef.current = true;
-          TrackPlayer.play();
+          await TrackPlayer.play();
           setState((s) => ({ ...s, isPlaying: true }));
         }
       } catch (err) {
+        audioPlayIntentRef.current = false;
+        setState((s) => ({ ...s, isPlaying: false }));
         logger.warn("[MediaPlayer] togglePlayPause audio failed", err);
       }
       return;
@@ -1243,7 +1259,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       logger.warn("[MediaPlayer] togglePlayPause video failed", err);
     }
-  }, [currentItem, audioPlayer, videoPlayer]);
+  }, [audioPlayer, videoPlayer, loadAndPlayAudio]);
 
   const seekTo = useCallback(
     async (positionMs: number) => {
