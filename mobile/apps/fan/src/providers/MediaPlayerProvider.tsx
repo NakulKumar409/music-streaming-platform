@@ -52,6 +52,7 @@ type AudioLoadOptions = {
 import { startHeartbeat, stopHeartbeat } from "../services/heartbeatService";
 import { recordPlayback } from "../services/libraryService";
 import {
+  adoptActivePlaybackLease,
   getPlaybackDescriptor,
   getPlaybackDescriptorForRecovery,
   getPlaybackErrorPresentation,
@@ -441,6 +442,57 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Back to active: reconcile protected native audio first. Background
+      // recovery can rotate both URL and server session while React is suspended.
+      if (item?.mediaType === "audio" && TrackPlayerAvailable) {
+        void (async () => {
+          try {
+            const activeTrack: any = await TrackPlayer.getActiveTrack();
+            if (!activeTrack) {
+              audioSourceRef.current = null;
+              audioPlayIntentRef.current = false;
+              resetSeekCoordinator();
+              setState((prev) => ({
+                ...prev,
+                isPlaying: false,
+                positionMs: 0,
+              }));
+              return;
+            }
+
+            const expectedContentId = String(item.contentId ?? item.id);
+            const nativeContentId = String(
+              activeTrack.contentId ?? activeTrack.id ?? ""
+            );
+            if (
+              nativeContentId &&
+              expectedContentId &&
+              nativeContentId !== expectedContentId
+            ) {
+              logger.warn("[MediaPlayer] Native audio track does not match React queue", {
+                expectedContentId,
+                nativeContentId,
+              });
+              return;
+            }
+
+            const nativeUrl = String(activeTrack.url || "");
+            if (nativeUrl) {
+              audioSourceRef.current = nativeUrl;
+            }
+
+            if (activeTrack.useStreamAccess) {
+              adoptActivePlaybackLease(
+                item.contentId ?? item.id,
+                Number(activeTrack.playbackSessionId)
+              );
+            }
+          } catch (error) {
+            logger.warn("[MediaPlayer] Failed to reconcile native audio on foreground", error);
+          }
+        })();
+      }
+
       // Back to active: re-show video and ask consumers to restore position.
       if (videoAudioOnlyMode) {
         setVideoAudioOnlyMode(false);
@@ -468,7 +520,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     return () => {
       sub.remove();
     };
-  }, [videoAudioOnlyMode]);
+  }, [videoAudioOnlyMode, resetSeekCoordinator]);
 
   useEffect(() => {
     if (!currentItem?.id) return;
@@ -1643,6 +1695,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       Event?.PlaybackError,
       (error: any) => {
         logger.warn("[MediaPlayer] TrackPlayer playback error", error);
+
+        if (AppState.currentState !== "active") {
+          return;
+        }
 
         const failedUrl = audioSourceRef.current;
         const item = currentItemRef.current;
