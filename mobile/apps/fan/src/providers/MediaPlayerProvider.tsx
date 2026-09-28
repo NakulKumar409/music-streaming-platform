@@ -52,6 +52,7 @@ type AudioLoadOptions = {
 import { recordPlayback } from "../services/libraryService";
 import {
   adoptActivePlaybackLease,
+  getActivePlaybackLease,
   getPlaybackDescriptor,
   getPlaybackDescriptorForRecovery,
   getPlaybackErrorPresentation,
@@ -480,10 +481,28 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             }
 
             if (activeTrack.useStreamAccess) {
-              adoptActivePlaybackLease(
-                item.contentId ?? item.id,
-                Number(activeTrack.playbackSessionId)
-              );
+              const contentId = item.contentId ?? item.id;
+              const nativeSessionId = Number(activeTrack.playbackSessionId);
+              const cachedLease = getActivePlaybackLease(contentId);
+
+              if (
+                !cachedLease ||
+                cachedLease.sessionId === nativeSessionId
+              ) {
+                adoptActivePlaybackLease(contentId, nativeSessionId);
+              } else {
+                // A heartbeat/recovery path already installed a newer lease
+                // while React was suspended. Never overwrite it with stale
+                // session metadata from the still-loaded native source.
+                logger.warn(
+                  "[MediaPlayer] Preserving newer foreground playback lease",
+                  {
+                    contentId,
+                    nativeSessionId,
+                    cachedSessionId: cachedLease.sessionId,
+                  }
+                );
+              }
             }
 
             // React may have been suspended while lock-screen controls changed
@@ -498,11 +517,19 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             } else if (
               nativeState === TrackPlayerState?.Paused ||
               nativeState === TrackPlayerState?.Stopped ||
-              nativeState === TrackPlayerState?.Ended ||
+              nativeState === TrackPlayerState?.Ended
+            ) {
+              audioPlayIntentRef.current = false;
+              setState((prev) =>
+                prev.isPlaying ? { ...prev, isPlaying: false } : prev
+              );
+            } else if (
               nativeState === TrackPlayerState?.Error ||
               nativeState === TrackPlayerState?.None
             ) {
-              audioPlayIntentRef.current = false;
+              // Error/None may be observed while a protected source is being
+              // replaced. Reflect the engine as not playing but preserve the
+              // user's intent until recovery definitively succeeds or fails.
               setState((prev) =>
                 prev.isPlaying ? { ...prev, isPlaying: false } : prev
               );
@@ -1807,10 +1834,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       (error: any) => {
         logger.warn("[MediaPlayer] TrackPlayer playback error", error);
 
-        if (
-          AppState.currentState === "background" ||
-          AppState.currentState === "inactive"
-        ) {
+        if (AppState.currentState !== "active") {
           return;
         }
 
