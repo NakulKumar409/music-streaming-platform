@@ -1298,6 +1298,13 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       const isCurrentSelection = () =>
         selectionToken === mediaSelectionTokenRef.current;
 
+      if (item.mediaType === "video") {
+        // The newest video selection must invalidate an older audio load
+        // immediately, while leaving any already-playing audio source alone
+        // until video authorization has succeeded.
+        cancelPendingAudioLoad();
+      }
+
       if (item.mediaType === "video" && item.useStreamAccess) {
         try {
           const url = await getPlaybackUrl(
@@ -1358,6 +1365,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       loadAndPlayAudio,
       prepareVideo,
       preferredQuality,
+      cancelPendingAudioLoad,
       shuffleQueueKeepCurrent,
     ]
   );
