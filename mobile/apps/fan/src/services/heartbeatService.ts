@@ -95,7 +95,9 @@ export function startHeartbeat(
     heartbeatInFlight = true;
 
     try {
-      const lease = await ensureActivePlaybackLease(contentId);
+      const lease = await ensureActivePlaybackLease(contentId, {
+        isStillRelevant: () => currentContentId === contentId,
+      });
       if (currentContentId !== contentId) return;
 
       try {
