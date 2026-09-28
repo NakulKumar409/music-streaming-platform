@@ -229,13 +229,13 @@ export default function FullPlayerScreen({ navigation, route }: any) {
   const positionForUi =
     scrubPosition !== null ? scrubPosition : enginePositionForUi;
   const sliderValue = durationKnown
-    ? Math.min(Math.max(enginePositionForUi, 0), playerState.durationMs)
+    ? Math.min(Math.max(positionForUi, 0), playerState.durationMs)
     : 0;
 
   // ── Seek ───────────────────────────────────────────────────────────────────
   const onSeekStart = useCallback(() => {
-    setScrubPosition(playerState.positionMs);
-  }, [playerState.positionMs]);
+    setScrubPosition(enginePositionForUi);
+  }, [enginePositionForUi]);
 
   const onSeekChange = useCallback((v: number) => {
     setScrubPosition(v);
