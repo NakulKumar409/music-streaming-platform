@@ -4,12 +4,16 @@ import TrackPlayer, {
   Event,
   State,
 } from 'react-native-track-player';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import logger from '../utils/logger';
+import { getPlaybackDescriptorForSessionRecovery } from './streamService';
 
 // Only resume after a temporary interruption when this service itself paused a
 // track that had actually been playing. Never auto-resume user-paused audio.
 let resumeAfterTemporaryDuck = false;
+let servicePlayIntent = false;
+let recoveryInFlight = false;
+let lastRecoveredSourceUrl: string | null = null;
 
 /**
  * Background Playback Service
@@ -60,6 +64,7 @@ export default async function playbackService() {
 
   TrackPlayer.addEventListener(Event.RemotePlay, async () => {
     try {
+      servicePlayIntent = true;
       const state = await TrackPlayer.getState();
       if (state !== State.Playing) await TrackPlayer.play();
     } catch (error) {
@@ -69,6 +74,7 @@ export default async function playbackService() {
 
   TrackPlayer.addEventListener(Event.RemotePause, async () => {
     try {
+      servicePlayIntent = false;
       const state = await TrackPlayer.getState();
       if (state === State.Playing) await TrackPlayer.pause();
       resumeAfterTemporaryDuck = false;
@@ -79,6 +85,7 @@ export default async function playbackService() {
 
   TrackPlayer.addEventListener(Event.RemoteStop, async () => {
     try {
+      servicePlayIntent = false;
       resumeAfterTemporaryDuck = false;
       await TrackPlayer.reset();
     } catch (error) {
@@ -118,6 +125,7 @@ export default async function playbackService() {
   TrackPlayer.addEventListener(Event.RemoteDuck, async (event) => {
     try {
       if (event.permanent) {
+        servicePlayIntent = false;
         resumeAfterTemporaryDuck = false;
         await TrackPlayer.pause();
         return;
@@ -142,6 +150,18 @@ export default async function playbackService() {
 
   TrackPlayer.addEventListener(Event.PlaybackState, async (state) => {
     logger.log('[PlaybackService] PlaybackState changed:', state.state);
+    if (state.state === State.Playing) {
+      servicePlayIntent = true;
+    } else if (state.state === State.Paused && !resumeAfterTemporaryDuck) {
+      servicePlayIntent = false;
+    } else if (
+      state.state === State.Stopped ||
+      state.state === State.Ended ||
+      state.state === State.Error ||
+      state.state === State.None
+    ) {
+      servicePlayIntent = false;
+    }
   });
 
   TrackPlayer.addEventListener(Event.PlaybackTrackChanged, async (event) => {
@@ -158,11 +178,76 @@ export default async function playbackService() {
 
   TrackPlayer.addEventListener(Event.PlaybackError, async (error) => {
     logger.error('[PlaybackService] PlaybackError:', error);
-    resumeAfterTemporaryDuck = false;
+
+    // While the app is active the foreground provider owns recovery so the UI
+    // can preserve pending seek state and present a user-readable error if
+    // recovery fails. The background service becomes the sole owner only when
+    // React UI is inactive/suspended.
+    if (AppState.currentState === 'active') return;
+    if (recoveryInFlight) return;
+
+    recoveryInFlight = true;
     try {
-      await TrackPlayer.pause();
-    } catch {
-      // Best-effort recovery only.
+      const track: any = await TrackPlayer.getActiveTrack();
+      const failedUrl = String(track?.url || '');
+      const contentId = Number(track?.contentId);
+      const sessionId = Number(track?.playbackSessionId);
+
+      if (
+        !track ||
+        !track.useStreamAccess ||
+        !failedUrl ||
+        !Number.isSafeInteger(contentId) ||
+        contentId <= 0 ||
+        !Number.isSafeInteger(sessionId) ||
+        sessionId <= 0 ||
+        lastRecoveredSourceUrl === failedUrl
+      ) {
+        servicePlayIntent = false;
+        await TrackPlayer.pause().catch(() => undefined);
+        return;
+      }
+
+      lastRecoveredSourceUrl = failedUrl;
+      const progress = await TrackPlayer.getProgress().catch(() => ({
+        position: 0,
+        duration: 0,
+        buffered: 0,
+      }));
+      const resumePosition = Math.max(0, Number(progress.position) || 0);
+
+      const descriptor = await getPlaybackDescriptorForSessionRecovery(
+        contentId,
+        sessionId,
+        'audio',
+        track.preferredQuality
+      );
+
+      const replacementTrack = {
+        ...track,
+        url: descriptor.playbackUrl,
+        playbackSessionId: descriptor.sessionId,
+      };
+
+      await TrackPlayer.load(replacementTrack);
+      if (resumePosition > 0) {
+        await TrackPlayer.seekTo(resumePosition);
+      }
+      if (servicePlayIntent) {
+        await TrackPlayer.play();
+      }
+
+      logger.log('[PlaybackService] Protected audio source recovered in background', {
+        contentId,
+        resumedAtSeconds: resumePosition,
+      });
+    } catch (recoveryError) {
+      servicePlayIntent = false;
+      logger.error('[PlaybackService] Background audio recovery failed:', recoveryError);
+      await TrackPlayer.pause().catch(() => undefined);
+    } finally {
+      recoveryInFlight = false;
+      resumeAfterTemporaryDuck = false;
     }
   });
 
