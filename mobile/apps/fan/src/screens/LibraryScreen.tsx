@@ -192,6 +192,7 @@ export default function LibraryScreen({ navigation }: any) {
                       artworkUrl: item.artworkUrl,
                       mediaUrl: item.mediaUrl || '',
                       useStreamAccess: item.useStreamAccess,
+                      duration: item.durationMs,
                     },
                   ],
                   0
