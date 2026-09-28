@@ -29,6 +29,32 @@ function inferContentTypeFromKey(storageKey: string | null | undefined): string 
   return null;
 }
 
+function normalizeStreamContentType(
+  value: string | null | undefined,
+  storageKey: string | null | undefined,
+  fallback: string | null | undefined
+): string {
+  const normalize = (candidate: string | null | undefined) => {
+    const raw = String(candidate || "").trim().toLowerCase();
+    if (!raw) return null;
+
+    // Parameters are unnecessary for progressive MP3/M4A/MP4 delivery and an
+    // empty codecs parameter (for example "audio/x-m4a; codecs=") is invalid.
+    const base = raw.split(";")[0]?.trim() || "";
+    if (!base || base === "application/octet-stream") return null;
+    if (base === "audio/x-m4a" || base === "audio/m4a") return "audio/mp4";
+    if (base === "audio/mp3") return "audio/mpeg";
+    return base;
+  };
+
+  return (
+    normalize(value) ||
+    inferContentTypeFromKey(storageKey) ||
+    normalize(fallback) ||
+    "application/octet-stream"
+  );
+}
+
 router.get("/:mediaId", async (req: Request, res: Response) => {
   const mediaId = Number(req.params.mediaId);
   const token = String(req.query.token || "").trim();
@@ -167,11 +193,11 @@ router.get("/:mediaId", async (req: Request, res: Response) => {
       return res.status(502).json({ success: false, message: "Invalid media metadata" });
     }
 
-    const inferredType = inferContentTypeFromKey(storageKey);
-    const contentType =
-      metadata.contentType && metadata.contentType !== "application/octet-stream"
-        ? metadata.contentType
-        : inferredType || content.mime_type || "application/octet-stream";
+    const contentType = normalizeStreamContentType(
+      metadata.contentType,
+      storageKey,
+      content.mime_type
+    );
 
     let start = 0;
     let end = totalLength - 1;
