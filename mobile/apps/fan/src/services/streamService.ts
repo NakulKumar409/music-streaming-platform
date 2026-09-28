@@ -524,12 +524,15 @@ export async function ensureActivePlaybackLease(
       ) {
         throw error;
       }
-      clearActivePlaybackLease(existing.sessionId);
+
+      return reacquireExpiredPlaybackLease(
+        numericContentId,
+        existing.sessionId
+      );
     }
   }
 
-  const created = await getPlaybackAccess(numericContentId);
-  return storeActiveLease(numericContentId, created.sessionId);
+  return reacquireExpiredPlaybackLease(numericContentId);
 }
 
 export async function getPlaybackDescriptor(
