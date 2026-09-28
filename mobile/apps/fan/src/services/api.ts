@@ -46,18 +46,68 @@ export function normalizeApiError(error: unknown): NormalizedApiError {
   const isNetwork = isAxios && !axiosError?.response;
   const retryable = isTimeout || isNetwork;
 
+  const responseData = axiosError?.response?.data;
+  const code = String(
+    responseData?.code ||
+      (status === 401
+        ? 'UNAUTHORIZED'
+        : status === 403
+          ? 'FORBIDDEN'
+          : status && status >= 500
+            ? 'INTERNAL_ERROR'
+            : isNetwork
+              ? 'NETWORK_ERROR'
+              : 'REQUEST_FAILED')
+  );
+
   const rawMessage = String(
-    axiosError?.response?.data?.message ||
+    responseData?.message ||
     (error instanceof Error ? error.message : '')
   );
+
   const isTechnicalLeak =
     !rawMessage ||
-    /prisma|syntaxerror|sql|database|econnrefused|failed with status code|\[object Object\]|column.*does not exist|relation.*does not exist|jwt malformed/i.test(
+    rawMessage.trim().startsWith('{') ||
+    rawMessage.trim().startsWith('[') ||
+    /prisma|syntaxerror|sql|database|postgres|econnrefused|failed with status code|\[object Object\]|column.*does not exist|relation.*does not exist|jwt malformed|secret|key_secret|at\s+\w+\s+\(|Traceback/i.test(
       rawMessage
     );
 
   let message = rawMessage;
-  if (status === 401) {
+
+  // Domain-specific friendly error mappings
+  if (code === 'PAYMENT_ALREADY_PROCESSED' || /payment.*already.*processed/i.test(rawMessage)) {
+    message = 'Payment already processed. Please check your transaction history.';
+  } else if (
+    code === 'REFUND_NOT_ALLOWED' ||
+    code === 'PAYMENT_NOT_REFUNDABLE' ||
+    /refund.*not.*allowed|cannot.*refund/i.test(rawMessage)
+  ) {
+    message = 'Refund cannot be processed for this payment.';
+  } else if (code === 'SUBSCRIPTION_EXPIRED' || /subscription.*expired/i.test(rawMessage)) {
+    message = 'Your subscription has expired.';
+  } else if (code === 'PAYMENT_GATEWAY_ERROR') {
+    message = 'Payment gateway is currently unavailable. Please try again later.';
+  } else if (
+    code === 'SUBSCRIPTION_PRICE_NOT_CONFIGURED' ||
+    code === 'INVALID_PRICE_CONFIGURATION'
+  ) {
+    message = 'This artist is not currently accepting subscriptions.';
+  } else if (code === 'SUBSCRIPTION_ALREADY_ACTIVE') {
+    message = 'You already have an active subscription for this artist.';
+  } else if (code === 'REFUND_FORBIDDEN' || code === 'UNAUTHORIZED_REFUND') {
+    message = 'You do not have permission to perform this action.';
+  } else if (
+    code === 'WEBHOOK_SIGNATURE_INVALID' ||
+    code === 'WEBHOOK_SIGNATURE_REQUIRED' ||
+    code === 'INVALID_SIGNATURE'
+  ) {
+    message = 'Security validation failed. Please try again.';
+  } else if (code === 'PAYMENT_NOT_FOUND') {
+    message = 'Payment record could not be found.';
+  } else if (code === 'SUBSCRIPTION_NOT_FOUND') {
+    message = 'Subscription could not be found.';
+  } else if (status === 401) {
     message = 'Your session has expired. Please log in again.';
   } else if (status === 403) {
     message = "You don't have permission to access this content.";
@@ -70,19 +120,6 @@ export function normalizeApiError(error: unknown): NormalizedApiError {
   } else if (isTechnicalLeak) {
     message = 'Something went wrong. Please try again.';
   }
-
-  const code = String(
-    axiosError?.response?.data?.code ||
-      (status === 401
-        ? 'UNAUTHORIZED'
-        : status === 403
-          ? 'FORBIDDEN'
-          : status && status >= 500
-            ? 'INTERNAL_ERROR'
-            : isNetwork
-              ? 'NETWORK_ERROR'
-              : 'REQUEST_FAILED')
-  );
 
   return { status, code, message, retryable };
 }

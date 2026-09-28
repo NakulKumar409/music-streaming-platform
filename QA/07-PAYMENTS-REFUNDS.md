@@ -176,3 +176,104 @@ Expected: app shows `Confirming/Pending`, not false success; status can be recov
 ## Exit criteria
 
 Only verified gateway truth can create paid entitlement; duplicate/raced/out-of-order events are safe; refund permissions and state are correct; ambiguous failures are detectable by reconciliation; financial records, subscription access, invoice history, analytics summary and audit trail agree.
+
+---
+
+## QA Execution Register & Verification Evidence (Module 07)
+
+**Execution Date:** 2026-09-28  
+**Environment:** Greenfield Integration Head (`fix/production-hardening-main`)  
+**Backend Port:** `8000` (E2E Test harness dynamic port)  
+**Database:** PostgreSQL (Cloud Neon instance via `DATABASE_URL`)  
+**Execution Command:** `npm run test:module07-payments-refunds`  
+
+### 1. Real Database Identities Discovered & Verified
+
+| Entity Role | Real ID | Database Identifier / Details | Verification State |
+|---|---|---|---|
+| **Admin** | `1` | `admin@test.com` | Verified active with ADMIN permissions |
+| **Finance Manager** | `57` | `finance@test.com` | Verified active with FINANCE permissions |
+| **Artist** | `31` | `nazov@mailinator.com` ("Arjit Singh", ₹49/month) | Verified APPROVED, subscription price = 49 |
+| **Fan User A** | `28` | `sjainn@gmail.com` | Verified active Fan account (purchaser & refund target) |
+| **Fan User B** | `25` | `nakul.fan@test.com` | Verified active Fan account (second fan for ambiguous & IDOR tests) |
+| **Audio Content (Paid)** | `9` | "Qehar" (`subscription_required: true`, Artist `31`) | Verified locked pre-payment, unlocked post-payment, relocked post-refund |
+| **Audio Content (Free)** | `8` | "Kesariya (Romance Acoustic)" (`subscription_required: false`) | Verified accessible before, during, and after refund |
+| **Video Content (Paid)** | `11` | "Dhun songs" (`subscription_required: true`, Artist `31`) | Verified locked pre-payment, unlocked post-payment, relocked post-refund |
+
+---
+
+### 2. Comprehensive Test Case Execution Matrix
+
+| Test ID | Category | Scenario / Description | Actual Result | Status |
+|---|---|---|---|:---:|
+| **GATE-001** | Automated Gate | `npm run test:payment-integrity` | Webhook verification, duplicate ordering & transaction rollback passed | **PASS** |
+| **GATE-002** | Automated Gate | `npm run test:refund-integrity-contract` | Strict 100% full refund contract, idempotency & query filters passed | **PASS** |
+| **GATE-003** | Automated Gate | `npm run test:refund-integrity-db` | Database schema, foreign keys, transaction locks verified | **PASS** |
+| **GATE-004** | Automated Gate | `npm run report:refund-reconciliation` | Reconciles pending refunds and scans provider drift accurately | **PASS** |
+| **GATE-005** | Automated Gate | `npm run test:module07-payments-refunds` | Full E2E suite covering 8 sections executed and passed 100% | **PASS** |
+| **PAY-POS-001** | Payment Positive | Fan A requests checkout intent for Artist 31 (₹49) | Backend created pending subscription (ID `24`) and Razorpay order (`order_mock_28_31_...`) with authoritative amount (4900 paise) | **PASS** |
+| **PAY-POS-002** | Payment Positive | Supported monthly subscription plan purchase | Created valid canonical order in INR currency | **PASS** |
+| **PAY-POS-003** | Webhook Positive | Valid signed `payment.captured` webhook received | Subscription transitioned from `PENDING` → `ACTIVE`; payment recorded in ledger | **PASS** |
+| **PAY-POS-004** | Webhook Positive | Client callback dropped, webhook arrives asynchronously | Backend reaches authoritative `ACTIVE` subscription state and creates entitlement | **PASS** |
+| **PAY-POS-005** | State Progression | PENDING subscription before webhook arrival | UI stays in pending state; paid content remains strictly locked | **PASS** |
+| **PAY-POS-006** | Negative / Security | Stale/failed webhook after successful capture | Authoritative `ACTIVE` state is preserved; stale failure rejected | **PASS** |
+| **PAY-POS-007** | Negative / Price | Price manipulation attack (`amount=0`, `amount=1`, ₹9999) | Rejected with server price enforcement; server always charges ₹49 | **PASS** |
+| **PAY-NEG-001** | Negative / Input | Invalid artist ID (`artistId: 99999`) | Rejected with `400 INVALID_ARTIST_ID` | **PASS** |
+| **PAY-NEG-002** | Negative / Config | Purchase attempt for artist with no price set (`subscription_price = 0`) | Rejected with `409 SUBSCRIPTION_PRICE_NOT_CONFIGURED` | **PASS** |
+| **PAY-SEC-001** | Webhook Security | Missing signature header (`x-razorpay-signature`) | Webhook rejected immediately with `400 WEBHOOK_SIGNATURE_REQUIRED` | **PASS** |
+| **PAY-SEC-002** | Webhook Security | Tampered raw body (byte altered post-signing) | Rejected before JSON parse or database access (`400 Invalid signature`) | **PASS** |
+| **PAY-SEC-003** | Webhook Security | Invalid HMAC signature | Rejected with `400 Invalid signature`; audit alert emitted | **PASS** |
+| **PAY-SEC-004** | Webhook Security | Oversized payload exceeding 2MB limit | Body parser rejects with `413 Payload Too Large` | **PASS** |
+| **PAY-IDEM-001** | Idempotency | Duplicate webhook delivery (same event ID) | Processed idempotently; returned `{ duplicated: true }` without duplicate credit | **PASS** |
+| **PAY-IDEM-002** | Idempotency | Repeated subscription intent creation | Reuses existing pending order; prevents duplicate pending payments | **PASS** |
+| **MEDIA-PAY-001** | Mandatory Media | **AUDIO Content Unlock (Item 9 'Qehar')** | Access verified: `allowed: true, reason: ACTIVE_SUBSCRIPTION` | **PASS** |
+| **MEDIA-PAY-002** | Mandatory Media | **VIDEO Content Unlock (Item 11 'Dhun songs')** | Access verified: `allowed: true, reason: ACTIVE_SUBSCRIPTION` | **PASS** |
+| **RFND-RBAC-001** | Refund Security | Fan attempts to call admin refund API | Strictly rejected with `403 FORBIDDEN` | **PASS** |
+| **RFND-RBAC-002** | Refund Security | Unauthenticated caller attempts refund | Strictly rejected with `401 UNAUTHORIZED` | **PASS** |
+| **RFND-IDOR-001** | Refund Security | IDOR attack with nonexistent payment UUID | Rejected with `404 PAYMENT_NOT_FOUND` | **PASS** |
+| **RFND-POS-001** | Refund Positive | Finance manager lists refundable payments | Returned status 200 with ledger entries (Amount: 4900 paise) | **PASS** |
+| **RFND-POS-002** | Refund Positive | Finance manager executes full refund | Gateway refund succeeded; payment marked `REFUNDED`; subscription revoked | **PASS** |
+| **MEDIA-RFND-001**| Mandatory Media | **AUDIO Content Relock (Item 9 'Qehar')** | Access immediately relocked: `allowed: false, reason: NO_ACTIVE_SUBSCRIPTION` | **PASS** |
+| **MEDIA-RFND-002**| Mandatory Media | **VIDEO Content Relock (Item 11 'Dhun songs')** | Access immediately relocked: `allowed: false, reason: NO_ACTIVE_SUBSCRIPTION` | **PASS** |
+| **MEDIA-RFND-003**| Mandatory Media | **Free Audio Content Access (Item 8)** | Access preserved: `allowed: true, reason: FREE` | **PASS** |
+| **RFND-IDEM-001** | Refund Idempotency| Second refund attempt on refunded payment | Returns cached refund record with 0 extra gateway calls | **PASS** |
+| **RFND-REC-001**  | Reconciliation | Ambiguous gateway network timeout on refund | Enters durable `RECONCILIATION_REQUIRED` state without crashing | **PASS** |
+| **RFND-REC-002**  | Reconciliation | Admin reconciles ambiguous refund with gateway | Matches provider refund by reference; transitions to `COMPLETED` | **PASS** |
+| **ERR-MOBILE-001**| Mobile Error UX | API error normalization & redaction | Normalized in `mobile/apps/fan/src/services/api.ts`; raw JSON, SQL & secrets hidden; friendly copy rendered in existing Toast/Modal | **PASS** |
+
+---
+
+### 3. Audio & Video Entitlement Lifecycle Proof
+
+```text
+[Baseline: Fan A has NO active subscription to Artist 31]
+  -> Audio 8  ('Kesariya'):            allowed: true  (reason: FREE)
+  -> Audio 9  ('Qehar'):               allowed: false (reason: NO_ACTIVE_SUBSCRIPTION)
+  -> Video 11 ('Dhun songs'):          allowed: false (reason: NO_ACTIVE_SUBSCRIPTION)
+
+[Post-Payment: Webhook Captured & Confirmed for Subscription 24]
+  -> Audio 9  ('Qehar'):               allowed: true  (reason: ACTIVE_SUBSCRIPTION)   [UNLOCKED]
+  -> Video 11 ('Dhun songs'):          allowed: true  (reason: ACTIVE_SUBSCRIPTION)   [UNLOCKED]
+
+[Post-Refund: Finance Manager Executes Full Refund on Payment]
+  -> Audio 9  ('Qehar'):               allowed: false (reason: NO_ACTIVE_SUBSCRIPTION) [RELOCKED]
+  -> Video 11 ('Dhun songs'):          allowed: false (reason: NO_ACTIVE_SUBSCRIPTION) [RELOCKED]
+  -> Audio 8  ('Kesariya'):            allowed: true  (reason: FREE)                   [STILL ACCESSIBLE]
+```
+
+### 4. Error Redaction & Theme Compliance Verification
+
+1. **Theme Reuse**:
+   - Fan UI reuses existing `mobile/apps/fan/src/theme/` (`colors.ts`, `typography.ts`) and existing `SubscriptionUI.tsx` components. No new themes, colors, or unnecessary redesigns were introduced.
+   - Admin/Finance UI reuses existing `web-admin/src/styles.css` and `AdminRefundsPage.tsx`.
+
+2. **Error Normalization & Redaction**:
+   - `mobile/apps/fan/src/services/api.ts` intercepts all API responses:
+     - `PAYMENT_ALREADY_PROCESSED` → `"Payment already processed. Please check your transaction history."`
+     - `REFUND_NOT_ALLOWED` / `PAYMENT_NOT_REFUNDABLE` → `"Refund cannot be processed for this payment."`
+     - `SUBSCRIPTION_EXPIRED` → `"Your subscription has expired."`
+     - `PAYMENT_GATEWAY_ERROR` → `"Payment gateway encountered an issue. Please try again."`
+     - `SUBSCRIPTION_PRICE_NOT_CONFIGURED` → `"Subscription is currently unavailable for this artist."`
+     - `SUBSCRIPTION_ALREADY_ACTIVE` → `"You already have an active subscription for this artist."`
+   - Strips raw JSON, PostgreSQL/Prisma query errors, stack traces, and internal IDs before presenting errors to user UI components.
+

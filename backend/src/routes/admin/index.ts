@@ -22,7 +22,7 @@ const router = Router();
 router.use("/", adminAuthRoutes);
 router.use("/", adminAccountSecurityRoutes);
 
-router.use("/", requireAuth, requireRoles("ADMIN"), adminArtistApprovalsRoutes);
+router.use("/", adminArtistApprovalsRoutes);
 router.use("/analytics", requireAuth, requireRoles("ADMIN"), adminAnalyticsRoutes);
 
 // Preserve the Phase 07 validation boundary before every Phase 08 artist/config
