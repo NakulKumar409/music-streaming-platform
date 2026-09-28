@@ -485,6 +485,28 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
                 Number(activeTrack.playbackSessionId)
               );
             }
+
+            // React may have been suspended while lock-screen controls changed
+            // native playback. Reconcile explicit native play/pause/terminal
+            // states so the foreground button and heartbeat cannot return stale.
+            const nativeState = await TrackPlayer.getState();
+            if (nativeState === TrackPlayerState?.Playing) {
+              audioPlayIntentRef.current = true;
+              setState((prev) =>
+                prev.isPlaying ? prev : { ...prev, isPlaying: true }
+              );
+            } else if (
+              nativeState === TrackPlayerState?.Paused ||
+              nativeState === TrackPlayerState?.Stopped ||
+              nativeState === TrackPlayerState?.Ended ||
+              nativeState === TrackPlayerState?.Error ||
+              nativeState === TrackPlayerState?.None
+            ) {
+              audioPlayIntentRef.current = false;
+              setState((prev) =>
+                prev.isPlaying ? { ...prev, isPlaying: false } : prev
+              );
+            }
           } catch (error) {
             logger.warn("[MediaPlayer] Failed to reconcile native audio on foreground", error);
           }
