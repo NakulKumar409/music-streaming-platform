@@ -752,11 +752,18 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       }
 
       const loadToken = (audioLoadTokenRef.current += 1);
+      const isCurrentLoad = () => loadToken === audioLoadTokenRef.current;
+      const failCurrentInitialLoad = () => {
+        if (!isCurrentLoad() || options.recovery) return;
+        audioPlayIntentRef.current = false;
+        setState((s) => ({ ...s, isPlaying: false }));
+      };
+
       await stopVideo();
       await unloadAudio();
 
       // If another load started while we were stopping/unloading, abort.
-      if (loadToken !== audioLoadTokenRef.current) return;
+      if (!isCurrentLoad()) return;
 
       let playbackUrl = item.mediaUrl
         ? normalizePlaybackUrl(item.mediaUrl)
@@ -781,7 +788,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         } catch (e) {
           const presentation = getPlaybackErrorPresentation(e);
           logger.warn("[MediaPlayer] getPlaybackUrl failed", e);
-          if (!options.recovery) {
+          if (!options.recovery && isCurrentLoad()) {
+            failCurrentInitialLoad();
             Alert.alert(presentation.title, presentation.message);
           }
           return;
@@ -807,7 +815,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         } catch (e) {
           const presentation = getPlaybackErrorPresentation(e);
           logger.warn("[MediaPlayer] fallback stream resolution failed", e);
-          if (!options.recovery) {
+          if (!options.recovery && isCurrentLoad()) {
+            failCurrentInitialLoad();
             Alert.alert(presentation.title, presentation.message);
           }
           return;
@@ -815,7 +824,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       }
 
       if (!playbackUrl) {
-        if (!options.recovery) {
+        if (!options.recovery && isCurrentLoad()) {
+          failCurrentInitialLoad();
           Alert.alert(
             "Playback Error",
             "No playback URL available for this track."
@@ -824,11 +834,16 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (!validatePlaybackUrl(playbackUrl, "audio")) {
-        if (!options.recovery) {
+        if (!options.recovery && isCurrentLoad()) {
+          failCurrentInitialLoad();
           Alert.alert("Playback Error", "Received an invalid audio source URL.");
         }
         return;
       }
+
+      // A newer selection may have won while access/source resolution was in
+      // flight. The older request must never replace that newer source.
+      if (!isCurrentLoad()) return;
 
       // track-player automatically handles background audio settings when configured with capabilities
 
@@ -852,7 +867,18 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             if (audioSourceRef.current === playbackUrl) {
               audioSourceRef.current = null;
             }
+            failCurrentInitialLoad();
             logger.warn("[MediaPlayer] HTMLAudioElement not available, cannot play audio on this platform");
+            return;
+          }
+
+          if (!isCurrentLoad()) {
+            try {
+              wa.pause();
+              wa.src = "";
+            } catch {
+              // ignore stale element cleanup failures
+            }
             return;
           }
 
@@ -1000,7 +1026,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           if (audioSourceRef.current === playbackUrl) {
             audioSourceRef.current = null;
           }
-          setState((s) => ({ ...s, isPlaying: false }));
+          failCurrentInitialLoad();
           logger.warn("[MediaPlayer] HTMLAudioElement fallback for audio failed", err);
         }
         return;
@@ -1040,7 +1066,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         });
 
         await TrackPlayer.reset();
+        if (!isCurrentLoad()) return;
+
         await TrackPlayer.add([track]);
+        if (!isCurrentLoad()) return;
+
         audioSourceRef.current = playbackUrl;
 
         const seededDuration = toFiniteDurationMs(item.duration);
@@ -1075,9 +1105,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         if (audioSourceRef.current === playbackUrl) {
           audioSourceRef.current = null;
         }
-        setState((s) => ({ ...s, isPlaying: false }));
+        failCurrentInitialLoad();
         logger.warn("[MediaPlayer] Failed to create or play audio", err);
-        if (!options.recovery) {
+        if (!options.recovery && isCurrentLoad()) {
           Alert.alert(
             "Playback Error",
             "Could not start audio playback. Please check the media URL and try again."
