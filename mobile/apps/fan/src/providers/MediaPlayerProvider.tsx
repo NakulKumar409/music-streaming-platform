@@ -52,9 +52,10 @@ type AudioLoadOptions = {
 import { startHeartbeat, stopHeartbeat } from "../services/heartbeatService";
 import { recordPlayback } from "../services/libraryService";
 import {
+  getPlaybackDescriptor,
+  getPlaybackDescriptorForRecovery,
   getPlaybackErrorPresentation,
   getPlaybackUrl,
-  getPlaybackUrlForRecovery,
   normalizePlaybackUrl,
   validatePlaybackUrl,
   type VideoQuality,
@@ -705,18 +706,23 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       let playbackUrl = item.mediaUrl
         ? normalizePlaybackUrl(item.mediaUrl)
         : null;
+      let playbackSessionId: number | null = null;
 
-      // Always fetch a fresh playback URL if stream access is required.
+      // Always fetch a fresh playback descriptor if stream access is required.
       // Do not reuse the `mediaUrl` populated by the initial list fetch because the JWT token might have expired.
       if (item.useStreamAccess) {
         try {
-          playbackUrl = await (
-            options.recovery ? getPlaybackUrlForRecovery : getPlaybackUrl
+          const descriptor = await (
+            options.recovery
+              ? getPlaybackDescriptorForRecovery
+              : getPlaybackDescriptor
           )(
             item.contentId ?? item.id,
             "audio",
             preferredQuality
           );
+          playbackUrl = descriptor.playbackUrl;
+          playbackSessionId = descriptor.sessionId;
         } catch (e) {
           const presentation = getPlaybackErrorPresentation(e);
           logger.warn("[MediaPlayer] getPlaybackUrl failed", e);
@@ -730,13 +736,14 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       // Fallback: if still no URL but we have an item ID, try canonical stream resolution anyway.
       if (!playbackUrl && (item.contentId || item.id)) {
         try {
-          const fallbackUrl = await getPlaybackUrl(
+          const descriptor = await getPlaybackDescriptor(
             item.contentId ?? item.id,
             "audio",
             preferredQuality
           );
-          if (fallbackUrl) {
-            playbackUrl = normalizePlaybackUrl(fallbackUrl);
+          if (descriptor.playbackUrl) {
+            playbackUrl = normalizePlaybackUrl(descriptor.playbackUrl);
+            playbackSessionId = descriptor.sessionId;
             logger.log(
               "[MediaPlayer] Used fallback stream URL for",
               item.title
@@ -960,6 +967,12 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           // Additional metadata for better lock screen display
           album: (item as any).albumName || undefined,
           duration: item.duration ? item.duration / 1000 : undefined, // Convert ms to seconds
+          // Preserve protected-playback identity inside RNTP so the background
+          // service can recover an expired source without React state.
+          contentId: String(item.contentId ?? item.id),
+          playbackSessionId: playbackSessionId ?? undefined,
+          useStreamAccess: Boolean(item.useStreamAccess),
+          preferredQuality,
           // For proper notification styling
           isLiveStream: false,
         };
