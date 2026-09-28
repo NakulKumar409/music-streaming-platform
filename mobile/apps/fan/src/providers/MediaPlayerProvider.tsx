@@ -724,7 +724,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         } catch (e) {
           const presentation = getPlaybackErrorPresentation(e);
           logger.warn("[MediaPlayer] getPlaybackUrl failed", e);
-          Alert.alert(presentation.title, presentation.message);
+          if (!options.recovery) {
+            Alert.alert(presentation.title, presentation.message);
+          }
           return;
         }
       }
@@ -747,20 +749,26 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         } catch (e) {
           const presentation = getPlaybackErrorPresentation(e);
           logger.warn("[MediaPlayer] fallback stream resolution failed", e);
-          Alert.alert(presentation.title, presentation.message);
+          if (!options.recovery) {
+            Alert.alert(presentation.title, presentation.message);
+          }
           return;
         }
       }
 
       if (!playbackUrl) {
-        Alert.alert(
-          "Playback Error",
-          "No playback URL available for this track."
-        );
+        if (!options.recovery) {
+          Alert.alert(
+            "Playback Error",
+            "No playback URL available for this track."
+          );
+        }
         return;
       }
       if (!validatePlaybackUrl(playbackUrl, "audio")) {
-        Alert.alert("Playback Error", "Received an invalid audio source URL.");
+        if (!options.recovery) {
+          Alert.alert("Playback Error", "Received an invalid audio source URL.");
+        }
         return;
       }
 
@@ -770,7 +778,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       if (!TrackPlayerAvailable) {
         try {
           logger.log("[MediaPlayer] TrackPlayer not available, using HTMLAudioElement for audio on web");
-          audioSourceRef.current = playbackUrl;
 
           // Tear down any previous web audio element
           if (webAudioRef.current) {
@@ -792,6 +799,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           }
 
           webAudioRef.current = wa;
+          audioSourceRef.current = playbackUrl;
           wa.crossOrigin = 'anonymous';
 
           // Wire DOM events → context state (real source of truth, no fake timers)
@@ -852,10 +860,14 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             logger.warn('[MediaPlayer] HTMLAudioElement error', e);
 
             const recovery = recoverAudioPlaybackRef.current;
-            const resumeMs = Math.max(
-              stateRef.current.positionMs,
-              Math.max(0, Math.round((wa.currentTime || 0) * 1000))
-            );
+            const pendingTargetMs = pendingSeekRef.current?.targetMs;
+            const resumeMs =
+              pendingTargetMs !== undefined
+                ? pendingTargetMs
+                : Math.max(
+                    stateRef.current.positionMs,
+                    Math.max(0, Math.round((wa.currentTime || 0) * 1000))
+                  );
             const shouldResume = audioPlayIntentRef.current;
             if (!recovery) {
               setState((s) => ({ ...s, isPlaying: false }));
@@ -871,6 +883,12 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
               if (!recovered) {
                 audioPlayIntentRef.current = false;
                 setState((s) => ({ ...s, isPlaying: false }));
+                if (AppState.currentState === "active") {
+                  Alert.alert(
+                    "Playback interrupted",
+                    "The audio stream could not be restored. Please try playing it again."
+                  );
+                }
               }
             });
           });
@@ -932,7 +950,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       try {
         logger.log("[MediaPlayer] Loading audio", { playbackUrl });
-        audioSourceRef.current = playbackUrl;
 
         // Build track metadata for notification/lock screen display
         // Use artworkUrl from MediaItem type - this is the correct field for artwork
@@ -960,6 +977,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
         await TrackPlayer.reset();
         await TrackPlayer.add([track]);
+        audioSourceRef.current = playbackUrl;
 
         const seededDuration = toFiniteDurationMs(item.duration);
         const shouldPlayNow = options.recovery
@@ -995,10 +1013,12 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         }
         setState((s) => ({ ...s, isPlaying: false }));
         logger.warn("[MediaPlayer] Failed to create or play audio", err);
-        Alert.alert(
-          "Playback Error",
-          "Could not start audio playback. Please check the media URL and try again."
-        );
+        if (!options.recovery) {
+          Alert.alert(
+            "Playback Error",
+            "Could not start audio playback. Please check the media URL and try again."
+          );
+        }
       }
     },
     [
@@ -1516,17 +1536,39 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     const playbackStateSubscription = TrackPlayer.addEventListener(
       Event?.PlaybackState,
       (playbackState: any) => {
-        const isPlaying = playbackState.state === TrackPlayerState?.Playing;
-        console.log(
-          "[MediaPlayer] PlaybackState changed:",
-          playbackState.state,
-          "isPlaying:",
-          isPlaying
-        );
+        const nativeState = playbackState.state;
+        logger.log("[MediaPlayer] PlaybackState changed:", nativeState);
 
-        // Sync state if different from current
-        if (stateRef.current.isPlaying !== isPlaying) {
-          setState((s) => ({ ...s, isPlaying }));
+        if (nativeState === TrackPlayerState?.Playing) {
+          if (!stateRef.current.isPlaying) {
+            setState((s) => ({ ...s, isPlaying: true }));
+          }
+          return;
+        }
+
+        // Ready/Loading/Buffering are transitional. In particular RNTP can
+        // report Ready while a seek is settling, so treating every non-Playing
+        // state as paused causes the UI and heartbeat to flap incorrectly.
+        const explicitlyNotPlaying =
+          nativeState === TrackPlayerState?.Paused ||
+          nativeState === TrackPlayerState?.Stopped ||
+          nativeState === TrackPlayerState?.Ended ||
+          nativeState === TrackPlayerState?.Error ||
+          nativeState === TrackPlayerState?.None;
+
+        if (!explicitlyNotPlaying) return;
+
+        if (
+          nativeState === TrackPlayerState?.Stopped ||
+          nativeState === TrackPlayerState?.Ended ||
+          nativeState === TrackPlayerState?.Error ||
+          nativeState === TrackPlayerState?.None
+        ) {
+          audioPlayIntentRef.current = false;
+        }
+
+        if (stateRef.current.isPlaying) {
+          setState((s) => ({ ...s, isPlaying: false }));
         }
       }
     );
@@ -1558,7 +1600,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const resumePositionMs = Math.max(0, stateRef.current.positionMs);
+        const pendingTargetMs = pendingSeekRef.current?.targetMs;
+        const resumePositionMs =
+          pendingTargetMs !== undefined
+            ? pendingTargetMs
+            : Math.max(0, stateRef.current.positionMs);
         const shouldPlay = audioPlayIntentRef.current;
 
         void recovery({
