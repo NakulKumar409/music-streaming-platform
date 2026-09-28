@@ -594,6 +594,12 @@ export async function getPlaybackDescriptorForRecovery(
   kind?: 'audio' | 'video',
   quality?: VideoQuality
 ): Promise<PlaybackAccess> {
+  // Capture the session that this recovery attempt actually observed. The
+  // normal descriptor path may clear that stale cache entry before throwing.
+  // Passing the observed id into single-flight recovery prevents a concurrent
+  // heartbeat/background recovery from having its newer lease terminated.
+  const observedLease = getActivePlaybackLease(contentId);
+
   try {
     return await getPlaybackDescriptor(contentId, kind, quality);
   } catch (error) {
@@ -605,8 +611,18 @@ export async function getPlaybackDescriptorForRecovery(
       throw error;
     }
 
-    await reacquireExpiredPlaybackLease(contentId);
-    return getPlaybackDescriptor(contentId, kind, quality);
+    const recoveredLease = await reacquireExpiredPlaybackLease(
+      contentId,
+      observedLease?.sessionId
+    );
+    const refreshed = await getPlaybackAccess(
+      contentId,
+      kind,
+      quality,
+      recoveredLease.sessionId
+    );
+    storeActiveLease(recoveredLease.contentId, refreshed.sessionId);
+    return refreshed;
   }
 }
 
