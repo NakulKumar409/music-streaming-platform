@@ -263,6 +263,14 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     setPendingSeekPositionMs(null);
   }, []);
 
+  const resetSeekCoordinator = useCallback(() => {
+    // Invalidate every in-flight progress read and clear any seek owned by the
+    // previous source. This is required on reset/track change.
+    seekGenerationRef.current += 1;
+    pendingSeekRef.current = null;
+    setPendingSeekPositionMs(null);
+  }, []);
+
   const beginPendingSeek = useCallback((targetMs: number) => {
     const generation = seekGenerationRef.current + 1;
     seekGenerationRef.current = generation;
@@ -613,6 +621,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const unloadAudio = useCallback(async () => {
+    resetSeekCoordinator();
     setAudioSource(null);
     // Tear down web audio element
     if (!TrackPlayerAvailable && webAudioRef.current) {
@@ -633,7 +642,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         // ignore
       }
     }
-  }, []);
+  }, [resetSeekCoordinator]);
 
   const stopVideo = useCallback(async () => {
     videoPlayer?.pause();
@@ -838,11 +847,22 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             }
           };
 
-          wa.addEventListener('loadedmetadata', syncDuration);
-          wa.addEventListener('durationchange', syncDuration);
-          wa.addEventListener('canplay', syncDuration);
+          const isCurrentWebAudio = () =>
+            webAudioRef.current === wa &&
+            loadToken === audioLoadTokenRef.current;
+
+          wa.addEventListener('loadedmetadata', () => {
+            if (isCurrentWebAudio()) syncDuration();
+          });
+          wa.addEventListener('durationchange', () => {
+            if (isCurrentWebAudio()) syncDuration();
+          });
+          wa.addEventListener('canplay', () => {
+            if (isCurrentWebAudio()) syncDuration();
+          });
 
           wa.addEventListener('timeupdate', () => {
+            if (!isCurrentWebAudio()) return;
             const pos = Math.round((wa.currentTime || 0) * 1000);
             const dur =
               Number.isFinite(wa.duration) && wa.duration > 0
@@ -851,6 +871,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             applyAudioProgress(pos, dur);
           });
           wa.addEventListener('seeked', () => {
+            if (!isCurrentWebAudio()) return;
             const pos = Math.round((wa.currentTime || 0) * 1000);
             const dur =
               Number.isFinite(wa.duration) && wa.duration > 0
@@ -859,16 +880,20 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             applyAudioProgress(pos, dur, seekGenerationRef.current);
           });
           wa.addEventListener('play', () => {
+            if (!isCurrentWebAudio()) return;
             setState((s) => ({ ...s, isPlaying: true }));
           });
           wa.addEventListener('pause', () => {
+            if (!isCurrentWebAudio()) return;
             setState((s) => ({ ...s, isPlaying: false }));
           });
           wa.addEventListener('ended', () => {
+            if (!isCurrentWebAudio()) return;
             setState((s) => ({ ...s, isPlaying: false, positionMs: s.durationMs }));
             handleDidJustFinish();
           });
           wa.addEventListener('error', (e: any) => {
+            if (!isCurrentWebAudio()) return;
             logger.warn('[MediaPlayer] HTMLAudioElement error', e);
             setState((s) => ({ ...s, isPlaying: false }));
           });
