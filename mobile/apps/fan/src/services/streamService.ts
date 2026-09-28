@@ -524,13 +524,13 @@ export async function getPlaybackUrl(
  * This is intentionally event-driven. Callers must not rotate an active source
  * on a wall-clock timer.
  */
-export async function getPlaybackUrlForRecovery(
+export async function getPlaybackDescriptorForRecovery(
   contentId: string | number,
   kind?: 'audio' | 'video',
   quality?: VideoQuality
-): Promise<string> {
+): Promise<PlaybackAccess> {
   try {
-    return await getPlaybackUrl(contentId, kind, quality);
+    return await getPlaybackDescriptor(contentId, kind, quality);
   } catch (error) {
     if (
       !(error instanceof StreamAccessError) ||
@@ -541,6 +541,66 @@ export async function getPlaybackUrlForRecovery(
     }
 
     await reacquireExpiredPlaybackLease(contentId);
-    return getPlaybackUrl(contentId, kind, quality);
+    return getPlaybackDescriptor(contentId, kind, quality);
   }
+}
+
+/**
+ * Recovery entry point for the RNTP background playback service. It cannot
+ * safely rely on an in-memory foreground lease singleton, so the exact session
+ * carried in the native track metadata is revalidated explicitly.
+ */
+export async function getPlaybackDescriptorForSessionRecovery(
+  contentId: string | number,
+  existingSessionId: number,
+  kind?: 'audio' | 'video',
+  quality?: VideoQuality
+): Promise<PlaybackAccess> {
+  const numericContentId = positiveInteger(contentId);
+  const sessionId = positiveInteger(existingSessionId);
+  if (!numericContentId || !sessionId) {
+    throw new StreamAccessError(
+      'Playback session is invalid',
+      'PLAYBACK_SESSION_EXPIRED',
+      null
+    );
+  }
+
+  try {
+    const refreshed = await getPlaybackAccess(
+      numericContentId,
+      kind,
+      quality,
+      sessionId
+    );
+    storeActiveLease(numericContentId, refreshed.sessionId);
+    return refreshed;
+  } catch (error) {
+    if (
+      !(error instanceof StreamAccessError) ||
+      (error.code !== 'PLAYBACK_SESSION_EXPIRED' &&
+        error.code !== 'PLAYBACK_SESSION_MISMATCH')
+    ) {
+      throw error;
+    }
+
+    clearActivePlaybackLease(sessionId);
+    await terminatePlaybackAccess(sessionId, numericContentId).catch(() => false);
+    const created = await getPlaybackAccess(numericContentId, kind, quality);
+    storeActiveLease(numericContentId, created.sessionId);
+    return created;
+  }
+}
+
+export async function getPlaybackUrlForRecovery(
+  contentId: string | number,
+  kind?: 'audio' | 'video',
+  quality?: VideoQuality
+): Promise<string> {
+  const descriptor = await getPlaybackDescriptorForRecovery(
+    contentId,
+    kind,
+    quality
+  );
+  return descriptor.playbackUrl;
 }
