@@ -261,6 +261,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     useState<VideoQuality>("Auto");
 
   const audioLoadTokenRef = useRef(0);
+  const mediaSelectionTokenRef = useRef(0);
+
+  const cancelPendingMediaSelection = useCallback(() => {
+    mediaSelectionTokenRef.current += 1;
+  }, []);
 
   const cancelPendingAudioLoad = useCallback(() => {
     audioLoadTokenRef.current += 1;
@@ -1286,11 +1291,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       // previously authorized source is still playing.
       if (await blockLockedPlayback(item)) return;
 
-      if (item.mediaType === "video") {
-        // Cancel any older async audio source resolution immediately. Do not
-        // stop the currently playing source until video authorization succeeds.
-        cancelPendingAudioLoad();
-      }
+      const selectionToken = mediaSelectionTokenRef.current + 1;
+      mediaSelectionTokenRef.current = selectionToken;
+      const isCurrentSelection = () =>
+        selectionToken === mediaSelectionTokenRef.current;
 
       if (item.mediaType === "video" && item.useStreamAccess) {
         try {
@@ -1299,6 +1303,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             "video",
             preferredQuality
           );
+          if (!isCurrentSelection()) return;
           if (!validatePlaybackUrl(url, "video")) {
             Alert.alert(
               "Playback Error",
@@ -1310,12 +1315,15 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           nextState.queue[nextState.currentIndex] = item;
           currentItemRef.current = item;
         } catch (e) {
+          if (!isCurrentSelection()) return;
           const presentation = getPlaybackErrorPresentation(e);
           logger.warn("[MediaPlayer] getPlaybackUrl for video failed", e);
           Alert.alert(presentation.title, presentation.message);
           return;
         }
       }
+
+      if (!isCurrentSelection()) return;
 
       // Commit internal identity only after all authorization/source
       // resolution for the selected item has succeeded.
@@ -1346,7 +1354,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       loadAndPlayAudio,
       prepareVideo,
       preferredQuality,
-      cancelPendingAudioLoad,
       shuffleQueueKeepCurrent,
     ]
   );
@@ -1487,6 +1494,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   const skipToIndex = useCallback(
     async (nextIndex: number) => {
+      cancelPendingMediaSelection();
       const s = stateRef.current;
       const safeIndex = Math.min(
         Math.max(0, nextIndex),
@@ -1519,6 +1527,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       blockLockedPlayback,
       loadAndPlayAudio,
       prepareVideo,
+      cancelPendingMediaSelection,
     ]
   );
 
@@ -1620,13 +1629,19 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   );
 
   const close = useCallback(async () => {
+    cancelPendingMediaSelection();
     cancelPendingAudioLoad();
     audioPlayIntentRef.current = false;
     currentItemRef.current = null;
     await stopVideo();
     await unloadAudio();
     setState(EMPTY_STATE);
-  }, [cancelPendingAudioLoad, stopVideo, unloadAudio]);
+  }, [
+    cancelPendingMediaSelection,
+    cancelPendingAudioLoad,
+    stopVideo,
+    unloadAudio,
+  ]);
 
   const setExpanded = useCallback((expanded: boolean) => {
     setState((s) => ({ ...s, isExpanded: expanded }));
@@ -1634,11 +1649,17 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     return () => {
+      cancelPendingMediaSelection();
       cancelPendingAudioLoad();
       stopVideo().catch(() => undefined);
       unloadAudio().catch(() => undefined);
     };
-  }, [cancelPendingAudioLoad, stopVideo, unloadAudio]);
+  }, [
+    cancelPendingMediaSelection,
+    cancelPendingAudioLoad,
+    stopVideo,
+    unloadAudio,
+  ]);
 
   // TrackPlayer remote event listeners for background/lock screen control synchronization
   useEffect(() => {
