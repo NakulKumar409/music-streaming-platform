@@ -92,7 +92,12 @@ type ProgressSnapshot = {
  * reusing a signed media URL. Playback authorization remains server-side.
  */
 function PlaybackProgressLifecycleBridge() {
-  const { currentItem, state, seekTo } = useMediaPlayer();
+  const {
+    currentItem,
+    state,
+    seekTo,
+    pendingSeekPositionMs,
+  } = useMediaPlayer();
   const { isAuthenticated, isRestoring } = useAuth();
   const rawContentId = currentItem?.contentId ?? currentItem?.id ?? null;
   const contentKey = rawContentId === null ? null : String(rawContentId);
@@ -101,6 +106,7 @@ function PlaybackProgressLifecycleBridge() {
   const hydratedKeyRef = useRef<string | null>(null);
   const pendingResumeRef = useRef<{ key: string; progress: PlaybackProgress | null } | null>(null);
   const resumeAppliedKeyRef = useRef<string | null>(null);
+  const seekBeforeResumeKeyRef = useRef<string | null>(null);
   const previousPlayingRef = useRef(false);
 
   const flushSnapshot = useCallback(async (snapshot: ProgressSnapshot | null | undefined) => {
@@ -134,6 +140,7 @@ function PlaybackProgressLifecycleBridge() {
       hydratedKeyRef.current = null;
       pendingResumeRef.current = null;
       resumeAppliedKeyRef.current = null;
+      seekBeforeResumeKeyRef.current = null;
       return;
     }
 
@@ -141,6 +148,7 @@ function PlaybackProgressLifecycleBridge() {
     hydratedKeyRef.current = null;
     pendingResumeRef.current = null;
     resumeAppliedKeyRef.current = null;
+    seekBeforeResumeKeyRef.current = null;
 
     void fetchPlaybackProgress(rawContentId)
       .then((progress) => {
@@ -168,11 +176,27 @@ function PlaybackProgressLifecycleBridge() {
   }, [contentKey, rawContentId, isAuthenticated, isRestoring, flushSnapshot]);
 
   useEffect(() => {
+    if (!contentKey || pendingSeekPositionMs === null) return;
+    if (resumeAppliedKeyRef.current === contentKey) return;
+
+    // Any seek that begins before saved progress has been applied represents a
+    // newer playback decision than the asynchronous resume lookup. This also
+    // covers lock-screen seeks and source-recovery position restoration.
+    seekBeforeResumeKeyRef.current = contentKey;
+  }, [contentKey, pendingSeekPositionMs]);
+
+  useEffect(() => {
     if (!contentKey || hydratedKeyRef.current !== contentKey) return;
     if (resumeAppliedKeyRef.current === contentKey) return;
 
     const pending = pendingResumeRef.current;
     if (!pending || pending.key !== contentKey) return;
+
+    if (seekBeforeResumeKeyRef.current === contentKey) {
+      resumeAppliedKeyRef.current = contentKey;
+      pendingResumeRef.current = null;
+      return;
+    }
 
     // Wait until the native player has started or exposed duration so seekTo
     // cannot race an unloaded TrackPlayer/VideoPlayer instance.
