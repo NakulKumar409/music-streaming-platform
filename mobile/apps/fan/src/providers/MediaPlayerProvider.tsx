@@ -152,6 +152,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   // reset during recovery may emit pause/stopped events, but must not override
   // a newer user pause/play action.
   const audioPlayIntentRef = useRef(false);
+  const foregroundRecoveryInFlightRef = useRef(false);
   const recoverAudioPlaybackRef = useRef<
     ((input: {
       failedUrl: string;
@@ -947,6 +948,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             logger.warn('[MediaPlayer] HTMLAudioElement error', e);
 
             const recovery = recoverAudioPlaybackRef.current;
+            if (foregroundRecoveryInFlightRef.current) return;
+
             const pendingTargetMs = pendingSeekRef.current?.targetMs;
             const resumeMs =
               pendingTargetMs !== undefined
@@ -961,23 +964,28 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
               return;
             }
 
+            foregroundRecoveryInFlightRef.current = true;
             void recovery({
               failedUrl: playbackUrl,
               resumePositionMs: resumeMs,
               shouldPlay: shouldResume,
               reason: e,
-            }).then((recovered) => {
-              if (!recovered) {
-                audioPlayIntentRef.current = false;
-                setState((s) => ({ ...s, isPlaying: false }));
-                if (AppState.currentState === "active") {
-                  Alert.alert(
-                    "Playback interrupted",
-                    "The audio stream could not be restored. Please try playing it again."
-                  );
+            })
+              .then((recovered) => {
+                if (!recovered) {
+                  audioPlayIntentRef.current = false;
+                  setState((s) => ({ ...s, isPlaying: false }));
+                  if (AppState.currentState === "active") {
+                    Alert.alert(
+                      "Playback interrupted",
+                      "The audio stream could not be restored. Please try playing it again."
+                    );
+                  }
                 }
-              }
-            });
+              })
+              .finally(() => {
+                foregroundRecoveryInFlightRef.current = false;
+              });
           });
 
           // Start network loading only after all source lifecycle listeners are
@@ -1578,6 +1586,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       () => {
         logger.log("[MediaPlayer] RemotePlay event received");
         if (currentItemRef.current?.mediaType !== "audio") return;
+        lastRecoveredAudioSourceRef.current = null;
         audioPlayIntentRef.current = true;
         setState((s) => ({ ...s, isPlaying: true }));
       }
@@ -1707,7 +1716,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       () => {
         if (
           currentItemRef.current?.mediaType !== "audio" ||
-          !audioSourceRef.current
+          !audioSourceRef.current ||
+          foregroundRecoveryInFlightRef.current
         ) {
           return;
         }
@@ -1782,6 +1792,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        if (foregroundRecoveryInFlightRef.current) return;
+
         const failedUrl = audioSourceRef.current;
         const item = currentItemRef.current;
         if (item?.mediaType !== "audio") return;
@@ -1808,22 +1820,27 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             : Math.max(0, stateRef.current.positionMs);
         const shouldPlay = audioPlayIntentRef.current;
 
+        foregroundRecoveryInFlightRef.current = true;
         void recovery({
           failedUrl,
           resumePositionMs,
           shouldPlay,
           reason: error,
-        }).then((recovered) => {
-          if (recovered) return;
-          audioPlayIntentRef.current = false;
-          setState((s) => ({ ...s, isPlaying: false }));
-          if (AppState.currentState === "active") {
-            Alert.alert(
-              "Playback interrupted",
-              "The audio stream could not be restored. Please try playing it again."
-            );
-          }
-        });
+        })
+          .then((recovered) => {
+            if (recovered) return;
+            audioPlayIntentRef.current = false;
+            setState((s) => ({ ...s, isPlaying: false }));
+            if (AppState.currentState === "active") {
+              Alert.alert(
+                "Playback interrupted",
+                "The audio stream could not be restored. Please try playing it again."
+              );
+            }
+          })
+          .finally(() => {
+            foregroundRecoveryInFlightRef.current = false;
+          });
       }
     );
 
