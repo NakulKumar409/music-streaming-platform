@@ -386,3 +386,58 @@ test('late saved-position hydration cannot overwrite a newer seek decision', () 
     /if \(seekBeforeResumeKeyRef\.current === contentKey\)[\s\S]{0,180}resumeAppliedKeyRef\.current = contentKey/s
   );
 });
+
+
+test('manual QA locks rapid-load and duplicate-recovery races', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+  const stream = read('apps/fan/src/services/streamService.ts');
+
+  assert.match(
+    provider,
+    /await stopVideo\(\);[\s\S]{0,180}if \(!isCurrentLoad\(\)\) return;[\s\S]{0,180}await unloadAudio\(\);/
+  );
+  assert.match(
+    provider,
+    /await TrackPlayer\.seekTo\(resumePositionMs \/ 1000\);[\s\S]{0,180}if \(!isCurrentLoad\(\)\) return;/
+  );
+  assert.match(provider, /foregroundRecoveryInFlightRef/);
+  assert.match(
+    provider,
+    /foregroundRecoveryInFlightRef\.current = true;[\s\S]{0,700}\.finally\(\(\) => \{[\s\S]{0,100}foregroundRecoveryInFlightRef\.current = false/
+  );
+
+  assert.match(
+    stream,
+    /const observedLease = getActivePlaybackLease\(contentId\)/
+  );
+  assert.match(
+    stream,
+    /reacquireExpiredPlaybackLease\([\s\S]{0,120}observedLease\?\.sessionId/
+  );
+});
+
+test('web audio does not force anonymous CORS and syncs cached metadata', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+
+  assert.doesNotMatch(provider, /\.crossOrigin\s*=/);
+  assert.match(provider, /wa\.src = playbackUrl;\s*wa\.load\(\)/);
+  assert.match(
+    provider,
+    /if \(wa\.readyState >= 1\) \{\s*syncDuration\(\);\s*void restoreAndMaybePlay\(\);/
+  );
+});
+
+test('remote play waits for RNTP playback-state confirmation', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+  const remotePlayBlock = provider.slice(
+    provider.indexOf('const remotePlaySubscription'),
+    provider.indexOf('const remotePauseSubscription')
+  );
+
+  assert.match(remotePlayBlock, /audioPlayIntentRef\.current = true/);
+  assert.doesNotMatch(remotePlayBlock, /isPlaying: true/);
+  assert.match(
+    provider,
+    /nativeState === TrackPlayerState\?\.Playing[\s\S]{0,180}isPlaying: true/
+  );
+});
