@@ -1124,16 +1124,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       let item = nextState.queue[nextState.currentIndex];
       if (!item) return;
-      currentItemRef.current = item;
 
-      if (await blockLockedPlayback(item)) {
-        setState((s) => ({
-          ...s,
-          queue: nextState.queue,
-          currentIndex: nextState.currentIndex,
-        }));
-        return;
-      }
+      // A denied selection must not replace the visible/current item while the
+      // previously authorized source is still playing.
+      if (await blockLockedPlayback(item)) return;
+      currentItemRef.current = item;
 
       if (item.mediaType === "video" && item.useStreamAccess) {
         try {
@@ -1330,6 +1325,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       const item = s.queue[safeIndex];
       if (!item) return;
+      if (await blockLockedPlayback(item)) return;
       currentItemRef.current = item;
 
       setState((prev) => ({
@@ -1348,7 +1344,12 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         await applyPlaybackConfigToCurrent();
       }
     },
-    [applyPlaybackConfigToCurrent, loadAndPlayAudio, prepareVideo]
+    [
+      applyPlaybackConfigToCurrent,
+      blockLockedPlayback,
+      loadAndPlayAudio,
+      prepareVideo,
+    ]
   );
 
   useEffect(() => {
