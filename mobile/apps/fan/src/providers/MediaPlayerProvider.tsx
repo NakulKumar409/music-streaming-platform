@@ -1244,6 +1244,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         positionMs: 0,
         durationMs: toFiniteDurationMs(item.duration),
         isExpanded: false,
+        // A newly selected audio track is not "playing" until its source has
+        // actually loaded and the engine accepts play().
+        isPlaying: item.mediaType === "video",
       }));
 
       if (item.mediaType === "audio") {
@@ -1416,7 +1419,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         positionMs: 0,
         durationMs: toFiniteDurationMs(item.duration),
         isExpanded: false,
-        isPlaying: true,
+        isPlaying: item.mediaType === "video",
       }));
 
       if (item.mediaType === "audio") {
