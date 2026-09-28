@@ -198,9 +198,15 @@ function PlaybackProgressLifecycleBridge() {
       return;
     }
 
-    // Wait until the native player has started or exposed duration so seekTo
-    // cannot race an unloaded TrackPlayer/VideoPlayer instance.
-    if (!state.isPlaying && state.durationMs <= 0) return;
+    // Catalog duration can be available before RNTP has actually loaded the
+    // audio source. For audio, wait for confirmed engine playback before
+    // applying persisted resume position so seekTo cannot target an old/empty
+    // native track. Video may safely use its source-loaded duration signal.
+    if (currentItem?.mediaType === 'audio') {
+      if (!state.isPlaying) return;
+    } else if (!state.isPlaying && state.durationMs <= 0) {
+      return;
+    }
 
     const itemDuration = Math.max(0, Math.floor(Number(currentItem?.duration) || 0));
     const target = resolveResumePosition(
@@ -217,7 +223,7 @@ function PlaybackProgressLifecycleBridge() {
         });
       });
     }
-  }, [contentKey, currentItem?.duration, seekTo, state.durationMs, state.isPlaying, state.positionMs]);
+  }, [contentKey, currentItem?.duration, currentItem?.mediaType, seekTo, state.durationMs, state.isPlaying, state.positionMs]);
 
   useEffect(() => {
     const wasPlaying = previousPlayingRef.current;
