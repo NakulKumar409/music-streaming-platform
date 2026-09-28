@@ -69,6 +69,9 @@ export default async function playbackService() {
 
   TrackPlayer.addEventListener(Event.RemotePlay, async () => {
     try {
+      // Explicit user retry is allowed to attempt recovery again for the same
+      // failed URL; automatic error loops remain deduplicated.
+      lastRecoveredSourceUrl = null;
       servicePlayIntent = true;
       const state = await TrackPlayer.getState();
       if (state !== State.Playing) await TrackPlayer.play();
@@ -198,7 +201,8 @@ export default async function playbackService() {
     // can preserve pending seek state and present a user-readable error if
     // recovery fails. The background service becomes the sole owner only when
     // React UI is inactive/suspended.
-    if (AppState.currentState === 'active') return;
+    const appState = AppState.currentState;
+    if (appState !== 'background' && appState !== 'inactive') return;
     if (recoveryInFlight) return;
 
     recoveryInFlight = true;
