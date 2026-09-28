@@ -753,9 +753,15 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       };
 
       await stopVideo();
+
+      // stopVideo() can yield long enough for a newer user selection to win.
+      // Never let that older request destructively reset the newer source.
+      if (!isCurrentLoad()) return;
+
       await unloadAudio();
 
-      // If another load started while we were stopping/unloading, abort.
+      // If another load started while unload/reset was in flight, abort before
+      // resolving access or mutating the newly selected source.
       if (!isCurrentLoad()) return;
 
       let playbackUrl = item.mediaUrl
