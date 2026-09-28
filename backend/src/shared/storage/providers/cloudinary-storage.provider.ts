@@ -95,6 +95,11 @@ export class CloudinaryStorageProvider implements IStorageProvider {
 
         const sourceWidth = Number.isFinite(Number(result.width)) ? Number(result.width) : undefined;
         const sourceHeight = Number.isFinite(Number(result.height)) ? Number(result.height) : undefined;
+        const durationSeconds = Number(result.duration);
+        const durationMs =
+          Number.isFinite(durationSeconds) && durationSeconds > 0
+            ? Math.round(durationSeconds * 1000)
+            : undefined;
         const adaptiveQualities = kind === "video" ? qualitiesForSourceHeight(sourceHeight) : undefined;
 
         try {
@@ -118,6 +123,7 @@ export class CloudinaryStorageProvider implements IStorageProvider {
             providerUrl: kind === "thumbnail" ? String(result.secure_url || "") || undefined : undefined,
             etag: result.etag ? String(result.etag) : undefined,
             sizeBytes: Number.isFinite(Number(result.bytes)) ? Number(result.bytes) : undefined,
+            durationMs,
             sourceWidth,
             sourceHeight,
             adaptiveQualities,
