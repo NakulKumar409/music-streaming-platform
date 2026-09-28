@@ -861,8 +861,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             } catch { /* ignore */ }
           }
 
-          // Create a fresh HTMLAudioElement (available on web)
-          const wa = typeof Audio !== 'undefined' ? new (Audio as any)(playbackUrl) : null;
+          // Configure the element before assigning src. Creating Audio(url)
+          // can start a request immediately and race crossOrigin/metadata
+          // listeners on fast or cached responses.
+          const wa = typeof Audio !== 'undefined' ? new (Audio as any)() : null;
           if (!wa) {
             if (audioSourceRef.current === playbackUrl) {
               audioSourceRef.current = null;
@@ -885,6 +887,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           webAudioRef.current = wa;
           audioSourceRef.current = playbackUrl;
           wa.crossOrigin = 'anonymous';
+          wa.preload = 'auto';
 
           // Wire DOM events → context state (real source of truth, no fake timers)
           const syncDuration = () => {
@@ -976,6 +979,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
               }
             });
           });
+
+          // Start network loading only after all source lifecycle listeners are
+          // installed so loadedmetadata/durationchange cannot be missed.
+          wa.src = playbackUrl;
+          wa.load();
 
           const seededDuration = toFiniteDurationMs(item.duration);
           setState((s) => ({
