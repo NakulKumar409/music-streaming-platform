@@ -155,3 +155,88 @@ test('canonical duration metadata is optional, persisted, exposed, and consumed 
   assert.match(homeScreen, /duration: x\.durationMs/);
   assert.match(artistService, /durationMs/);
 });
+
+
+test('manual QA hardening keeps heartbeat, engine state and source load lifecycles independent', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+
+  assert.doesNotMatch(provider, /if \(lastRecordedRef\.current === key\) return/);
+  assert.match(provider, /if \(lastRecordedRef\.current !== key\)/);
+  assert.match(provider, /startHeartbeat\(\s*key,/s);
+
+  assert.match(provider, /Ready\/Loading\/Buffering are transitional/);
+  assert.match(provider, /nativeState === TrackPlayerState\?\.Paused/);
+  assert.match(provider, /nativeState === TrackPlayerState\?\.Error/);
+  assert.doesNotMatch(
+    provider,
+    /nativeState === TrackPlayerState\?\.Error[\s\S]{0,250}audioPlayIntentRef\.current = false/
+  );
+
+  assert.match(provider, /const isCurrentLoad = \(\) => loadToken === audioLoadTokenRef\.current/);
+  assert.match(provider, /if \(!isCurrentLoad\(\)\) return/);
+  assert.match(provider, /await TrackPlayer\.reset\(\);\s*if \(!isCurrentLoad\(\)\) return;/s);
+  assert.match(provider, /await TrackPlayer\.add\(\[track\]\);\s*if \(!isCurrentLoad\(\)\) return;/s);
+
+  assert.match(provider, /item\?\.mediaType === "audio" && audioSourceRef\.current/);
+});
+
+test('locked tracks cannot replace current playback and native audio end uses the same queue policy', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+
+  assert.match(
+    provider,
+    /if \(await blockLockedPlayback\(item\)\) return;\s*currentItemRef\.current = item;/s
+  );
+  assert.match(provider, /Event\?\.PlaybackQueueEnded/);
+  assert.match(provider, /handleDidJustFinish\(\)\.catch/);
+  assert.match(provider, /skipToIndexRef\.current\(nextIndex\)/);
+});
+
+test('full audio player cannot receive video items and does not restart the active logical track', () => {
+  const artist = read('apps/fan/src/screens/ArtistScreen.tsx');
+  const fullPlayer = read('apps/fan/src/screens/FullPlayerScreen.tsx');
+
+  assert.match(
+    artist,
+    /s\.mediaType === "audio"[\s\S]{0,120}Boolean\(s\.mediaUrl\) \|\| s\.useStreamAccess/
+  );
+  assert.match(fullPlayer, /const sameTrack =/);
+  assert.match(
+    fullPlayer,
+    /String\(currentItem\.contentId \?\? currentItem\.id \?\? ''\) ===[\s\S]{0,120}String\(targetItem\.contentId/
+  );
+});
+
+test('background protected-audio recovery carries and re-adopts the exact playback session', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+  const service = read('apps/fan/src/services/playbackService.ts');
+  const stream = read('apps/fan/src/services/streamService.ts');
+
+  assert.match(provider, /playbackSessionId: playbackSessionId \?\? undefined/);
+  assert.match(provider, /adoptActivePlaybackLease/);
+  assert.match(service, /getPlaybackDescriptorForSessionRecovery/);
+  assert.match(service, /AppState\.currentState === 'active'/);
+  assert.match(service, /await TrackPlayer\.load\(replacementTrack\)/);
+  assert.match(service, /await TrackPlayer\.seekTo\(resumePosition\)/);
+  assert.match(stream, /export async function getPlaybackDescriptorForSessionRecovery/);
+  assert.match(stream, /export function adoptActivePlaybackLease/);
+});
+
+test('remote capability contract does not advertise a native queue that is not mirrored', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+  const service = read('apps/fan/src/services/playbackService.ts');
+
+  const providerOptions = provider.slice(
+    provider.indexOf('await TrackPlayer.updateOptions'),
+    provider.indexOf('TrackPlayer setup complete')
+  );
+  const serviceOptions = service.slice(
+    service.indexOf('await TrackPlayer.updateOptions'),
+    service.indexOf("Failed to enforce remote capabilities")
+  );
+
+  assert.doesNotMatch(providerOptions, /Capability\?\.SkipToNext/);
+  assert.doesNotMatch(providerOptions, /Capability\?\.SkipToPrevious/);
+  assert.doesNotMatch(serviceOptions, /Capability\.SkipToNext/);
+  assert.doesNotMatch(serviceOptions, /Capability\.SkipToPrevious/);
+});
