@@ -1504,7 +1504,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       try {
         if (item.mediaType === "audio") {
           if (TrackPlayerAvailable) {
-            TrackPlayer.setRate(safe);
+            await TrackPlayer.setRate(safe);
           }
         } else if (videoPlayer) {
           videoPlayer.playbackRate = safe;
@@ -1526,7 +1526,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       try {
         if (item.mediaType === "audio") {
           if (TrackPlayerAvailable) {
-            TrackPlayer.setVolume(safe);
+            await TrackPlayer.setVolume(safe);
           }
         } else if (videoPlayer) {
           videoPlayer.volume = safe;
