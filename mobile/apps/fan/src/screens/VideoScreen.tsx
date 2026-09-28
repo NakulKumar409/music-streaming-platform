@@ -1232,18 +1232,19 @@ export default function VideoScreen() {
           setSelectedQuality(q as streamService.VideoQuality);
           const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
           if (activeVideoMeta?.id) {
+            const sessionId = playbackSessionRef.current;
+            const qualityGeneration =
+              qualityAccessGenerationRef.current + 1;
+            qualityAccessGenerationRef.current = qualityGeneration;
+            const isStillRelevant = () =>
+              sessionId === playbackSessionRef.current &&
+              qualityGeneration === qualityAccessGenerationRef.current;
+
             setLoadingPlaybackUrl(true);
             try {
               // Use the pending quality directly - backend will enforce subscription
               const qParam: streamService.VideoQuality =
                 getStreamQualityParam(q);
-              const sessionId = playbackSessionRef.current;
-              const qualityGeneration =
-                qualityAccessGenerationRef.current + 1;
-              qualityAccessGenerationRef.current = qualityGeneration;
-              const isStillRelevant = () =>
-                sessionId === playbackSessionRef.current &&
-                qualityGeneration === qualityAccessGenerationRef.current;
               const nextUrl = await streamService.getPlaybackUrl(
                 activeVideoMeta.id,
                 "video",
@@ -1254,13 +1255,15 @@ export default function VideoScreen() {
               isQualitySwitchRef.current = true;
               qualityResumePositionRef.current = pos / 1000;
               setActivePlaybackUrl(nextUrl);
-            } catch (e) {
-              console.warn("[VideoScreen] Auto-retry quality switch failed", e);
-            } finally {
+            } catch (e: any) {
               if (
-                activeVideoMeta?.id &&
-                playbackSessionRef.current > 0
+                isStillRelevant() &&
+                e?.code !== "PLAYBACK_REQUEST_SUPERSEDED"
               ) {
+                console.warn("[VideoScreen] Auto-retry quality switch failed", e);
+              }
+            } finally {
+              if (isStillRelevant()) {
                 setLoadingPlaybackUrl(false);
               }
             }
@@ -1556,16 +1559,17 @@ export default function VideoScreen() {
       setIsVideoReady(false);
       setIsBuffering(true);
 
+      const sessionId = playbackSessionRef.current;
+      const qualityGeneration =
+        qualityAccessGenerationRef.current + 1;
+      qualityAccessGenerationRef.current = qualityGeneration;
+      const isStillRelevant = () =>
+        sessionId === playbackSessionRef.current &&
+        qualityGeneration === qualityAccessGenerationRef.current;
+
       try {
         const qualityParam = getStreamQualityParam(q);
         console.log(`[VideoScreen] Quality selection: ${q} => ${qualityParam}`);
-        const sessionId = playbackSessionRef.current;
-        const qualityGeneration =
-          qualityAccessGenerationRef.current + 1;
-        qualityAccessGenerationRef.current = qualityGeneration;
-        const isStillRelevant = () =>
-          sessionId === playbackSessionRef.current &&
-          qualityGeneration === qualityAccessGenerationRef.current;
         const url = await streamService.getPlaybackUrl(
           activeVideoMeta.id,
           "video",
@@ -1579,13 +1583,18 @@ export default function VideoScreen() {
         setActivePlaybackUrl(url);
         setIsVideoPlaying(true);
       } catch (error: any) {
-        if (error?.code !== "PLAYBACK_REQUEST_SUPERSEDED") {
+        if (
+          isStillRelevant() &&
+          error?.code !== "PLAYBACK_REQUEST_SUPERSEDED"
+        ) {
           // Clear the pending seek only for the request that actually failed.
           qualityResumePositionRef.current = null;
           isQualitySwitchRef.current = false;
         }
       } finally {
-        setLoadingPlaybackUrl(false);
+        if (isStillRelevant()) {
+          setLoadingPlaybackUrl(false);
+        }
       }
     },
     [
