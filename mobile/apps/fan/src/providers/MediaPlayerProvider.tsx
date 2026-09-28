@@ -1178,7 +1178,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       // A denied selection must not replace the visible/current item while the
       // previously authorized source is still playing.
       if (await blockLockedPlayback(item)) return;
-      currentItemRef.current = item;
 
       if (item.mediaType === "video" && item.useStreamAccess) {
         try {
@@ -1205,6 +1204,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      // Commit internal identity only after all authorization/source
+      // resolution for the selected item has succeeded.
+      currentItemRef.current = item;
       setState((s) => ({
         ...s,
         queue: nextState.queue,
