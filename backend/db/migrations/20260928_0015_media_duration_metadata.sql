@@ -12,7 +12,6 @@ BEGIN
       FROM pg_constraint
      WHERE conname = 'content_items_duration_ms_positive'
        AND conrelid = 'content_items'::regclass
-       AND conrelid = 'content_items'::regclass
   ) THEN
     ALTER TABLE content_items
     ADD CONSTRAINT content_items_duration_ms_positive
