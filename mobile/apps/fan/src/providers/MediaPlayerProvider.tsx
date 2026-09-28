@@ -1124,6 +1124,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       let item = nextState.queue[nextState.currentIndex];
       if (!item) return;
+      currentItemRef.current = item;
 
       if (await blockLockedPlayback(item)) {
         setState((s) => ({
@@ -1150,6 +1151,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           }
           item = { ...item, mediaUrl: url };
           nextState.queue[nextState.currentIndex] = item;
+          currentItemRef.current = item;
         } catch (e) {
           const presentation = getPlaybackErrorPresentation(e);
           logger.warn("[MediaPlayer] getPlaybackUrl for video failed", e);
@@ -1312,6 +1314,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       const item = s.queue[safeIndex];
       if (!item) return;
+      currentItemRef.current = item;
 
       setState((prev) => ({
         ...prev,
@@ -1628,9 +1631,13 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         const item = currentItemRef.current;
         if (item?.mediaType !== "audio") return;
 
+        // A null source means the error belongs to a deliberate reset/unload
+        // or an already-abandoned load. Never let that stale event cancel the
+        // next track's play intent.
+        if (!failedUrl) return;
+
         const recovery = recoverAudioPlaybackRef.current;
         if (
-          !failedUrl ||
           !item.useStreamAccess ||
           !recovery
         ) {
