@@ -1588,7 +1588,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         if (currentItemRef.current?.mediaType !== "audio") return;
         lastRecoveredAudioSourceRef.current = null;
         audioPlayIntentRef.current = true;
-        setState((s) => ({ ...s, isPlaying: true }));
+        // PlaybackState.Playing is the authoritative confirmation.
       }
     );
 
