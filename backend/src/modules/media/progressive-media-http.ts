@@ -1,3 +1,5 @@
+import { normalizeMediaMimeType } from "../../shared/storage/utils/file-metadata.util";
+
 export function inferContentTypeFromKey(
   storageKey: string | null | undefined
 ): string | null {
@@ -16,16 +18,9 @@ export function normalizeStreamContentType(
   fallback: string | null | undefined
 ): string {
   const normalize = (candidate: string | null | undefined) => {
-    const raw = String(candidate || "").trim().toLowerCase();
-    if (!raw) return null;
-
-    // Progressive MP3/M4A/MP4 delivery does not need codec parameters here.
-    // Strip malformed/empty parameters such as "audio/x-m4a; codecs=".
-    const base = raw.split(";")[0]?.trim() || "";
-    if (!base || base === "application/octet-stream") return null;
-    if (base === "audio/x-m4a" || base === "audio/m4a") return "audio/mp4";
-    if (base === "audio/mp3") return "audio/mpeg";
-    return base;
+    const normalized = normalizeMediaMimeType(String(candidate || ""));
+    if (!normalized || normalized === "application/octet-stream") return null;
+    return normalized;
   };
 
   return (
