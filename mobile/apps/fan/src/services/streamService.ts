@@ -435,7 +435,8 @@ export async function releaseActivePlaybackLease(): Promise<boolean> {
 
 export async function reacquireExpiredPlaybackLease(
   contentId: string | number,
-  expectedExpiredSessionId?: number
+  expectedExpiredSessionId?: number,
+  options: PlaybackDescriptorOptions = {}
 ): Promise<ActivePlaybackLease> {
   const numericContentId = positiveInteger(contentId);
   if (!numericContentId) {
@@ -479,6 +480,18 @@ export async function reacquireExpiredPlaybackLease(
     }
 
     const access = await getPlaybackAccess(numericContentId);
+
+    if (options.isStillRelevant && !options.isStillRelevant()) {
+      await terminatePlaybackAccess(
+        access.sessionId,
+        numericContentId
+      ).catch(() => false);
+      throw new StreamAccessError(
+        'Playback request was superseded',
+        'PLAYBACK_REQUEST_SUPERSEDED',
+        null
+      );
+    }
 
     // Another content/session may have won while this replacement was waiting
     // on the server. Never overwrite that newer lease with this older result.
@@ -764,7 +777,8 @@ export async function getPlaybackDescriptorForRecovery(
 
     const recoveredLease = await reacquireExpiredPlaybackLease(
       contentId,
-      observedLease?.sessionId
+      observedLease?.sessionId,
+      options
     );
     if (options.isStillRelevant && !options.isStillRelevant()) {
       throw new StreamAccessError(
