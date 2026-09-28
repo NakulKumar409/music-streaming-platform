@@ -2,7 +2,7 @@
 
 Branch: `fix/audio-player-seek-sync-hardening`
 Baseline: `fix/production-hardening-main@73bec9815555df5a9b76fe5bf22956d23ce74cdd`
-Status: **IMPLEMENTATION + MANUAL SOURCE QA COMPLETE — LOCAL / REAL-DEVICE EXECUTION PENDING**
+Status: **IMPLEMENTATION + EXPANDED MANUAL SOURCE QA COMPLETE — LOCAL / REAL-DEVICE EXECUTION PENDING**
 Scope: Fan audio playback only unless a shared media-delivery fix is technically inseparable.
 
 ## Goal
@@ -34,7 +34,7 @@ Remove timing-based/player-UI workarounds and make audio playback progress, dura
 | APS-09 | P1 | Verify seekable HTTP Range behavior across local + configured provider delivery | IMPLEMENTED — LIVE VERIFY PENDING | `6de8c3c7`, `b2e98bcb`, `f2cb8ed3`, `f9e6f1ce`: local single-range semantics hardened and executable MIME/Range contract added. S3/GCS support contiguous byte ranges by provider contract; configured Cloudinary/S3/Firebase endpoints still require one real-environment seek check before VERIFIED COMPLETE. |
 | APS-10 | P1 | Harden signed playback lease/source refresh during long audio playback | DONE | Timer-based URL rotation/replay retry and dead signed-URL preload are removed. Foreground/background recovery ownership is explicit, duplicate errors are serialized, lease replacement is single-flight across heartbeat/media recovery, the observed expired session is preserved, native track metadata carries the exact session, foreground re-adopts background-recovered sessions, position/seek target and latest user intent are preserved. |
 | APS-11 | P0 | Add deterministic regression tests for stale-progress-after-seek and rapid repeated seeks | IMPLEMENTED — EXECUTION PENDING | Regression contracts now cover stale progress, target convergence, rapid seek, remote seek/jumps, timer removal, protected-source recovery, single-flight lease recovery, rapid track loads, heartbeat resume, duration propagation, MIME normalization/provider overrides, and Web lifecycle/CORS behavior. Existing `mobile: npm test` picks them up; local execution remains required. |
-| APS-12 | P0 | Final source review + local/manual Web/Android/iOS acceptance matrix | MANUAL SOURCE QA DONE — DEVICE VERIFY PENDING | Latest-source manual QA completed across queue → load → seek → progress → pause/resume → skip/end → foreground/background → recovery → heartbeat → MIME/duration/range. A focused 23-invariant source audit passed 23/23. Browser/real-device execution remains the final certification gate. |
+| APS-12 | P0 | Final source review + local/manual Web/Android/iOS acceptance matrix | MANUAL SOURCE QA DONE — DEVICE VERIFY PENDING | Latest-source manual QA completed across queue → load → seek → progress → pause/resume → skip/end → foreground/background → recovery → heartbeat → cross-media lease ownership → MIME/duration/range. Final focused source audit passed **38/38** at `eeae7ed4`. Browser/real-device execution remains the final certification gate. |
 
 ## Manual QA findings fixed
 
@@ -57,10 +57,17 @@ The final source-level QA pass found and fixed issues beyond the original slider
 - Remote Play no longer marks the UI playing before RNTP confirms `Playing`.
 - Lock-screen Play/Pause changes made while React is suspended are reconciled from native RNTP state when the app returns to foreground.
 - Restore-seek and stop/unload async boundaries now re-check load generation before mutating/starting the engine.
+- Persisted resume no longer trusts catalog duration as proof that RNTP is loaded; audio resume waits for confirmed engine playback.
+- Close, unmount, and video selection invalidate stale audio/source-selection requests so old async work cannot restart or overwrite newer media.
+- Cross-media access is caller-scoped latest-wins; failed video authorization no longer discards the healthy current lease before replacement is accepted.
+- Stale heartbeat renewal cannot overwrite or terminate a newer audio/video lease after the player has moved on.
+- Legacy `ContentPlayerScreen` no longer owns a second `expo-audio` engine/heartbeat/seek loop; legacy/deep-link audio is redirected into the hardened global `FullPlayer`.
+- VideoScreen signed-URL refresh and quality-switch requests now use the same relevance contract so stale video requests cannot overwrite current source/UI state.
+- The duration migration duplicate constraint predicate was cleaned up during final QA.
 
 ### Source audit evidence
 
-Latest focused invariants checked directly against branch source: **23/23 PASS**.
+Latest focused invariants checked directly against branch source: **38/38 PASS** at HEAD `eeae7ed4f5497187bdfbd86ea8b6117609380a8d`.
 
 This source audit is not a substitute for TypeScript/build/test execution or physical-device/browser validation.
 
@@ -128,4 +135,17 @@ No GitHub Actions / CI are required or added.
 
 ### Verification note
 
-Implementation, architecture review, and manual source-level QA are complete. A focused 20-invariant source audit passed 20/20. No local build/typecheck/test/device command is claimed as passed from this remote repository session. `VERIFIED COMPLETE` still requires the commands above plus Chrome, real Android, and iOS acceptance evidence from the manual matrix.
+Implementation, architecture review, and expanded manual source-level QA are complete. The final focused source audit passed **38/38**. No local build/typecheck/test/device command is claimed as passed from this remote repository session. `VERIFIED COMPLETE` still requires the commands above plus Chrome, real Android, and iOS acceptance evidence from the manual matrix.
+
+
+## Final manual-QA hardening commits
+
+- `43d624c4` — cleaned duplicate duration migration predicate.
+- `26221b4d` — gated persisted audio resume on confirmed engine readiness.
+- `603825d1` / `250efcbe` — tightened foreground/background recovery ownership and protected newer recovered leases.
+- `a8ad20ce` / `8b2f0125` — cancelled stale audio work on close/video/unmount and closed post-reset cross-media selection races.
+- `d45475a2` / `3e79728f` — removed the legacy second audio engine by routing ContentPlayer into FullPlayer, with stale-route cancellation.
+- `94bcfd81` / `5da76306` / `c4a70623` — made playback lease adoption caller-scoped and latest-wins while preserving healthy current playback until replacement is authorized.
+- `68c4dce7` — made heartbeat lease renewal cancellation-aware.
+- `8a54524f` / `3b13bc38` — made VideoScreen URL refresh/quality switching latest-wins and protected loading UI from stale completions.
+- `c618dfc8`–`eeae7ed4` — expanded and aligned deterministic regression/source contracts for the final architecture.
