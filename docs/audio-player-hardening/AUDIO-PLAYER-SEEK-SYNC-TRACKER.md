@@ -2,7 +2,7 @@
 
 Branch: `fix/audio-player-seek-sync-hardening`
 Baseline: `fix/production-hardening-main@73bec9815555df5a9b76fe5bf22956d23ce74cdd`
-Status: **IMPLEMENTATION COMPLETE — LOCAL / REAL-DEVICE VERIFICATION PENDING**
+Status: **IMPLEMENTATION + MANUAL SOURCE QA COMPLETE — LOCAL / REAL-DEVICE EXECUTION PENDING**
 Scope: Fan audio playback only unless a shared media-delivery fix is technically inseparable.
 
 ## Goal
@@ -29,12 +29,39 @@ Remove timing-based/player-UI workarounds and make audio playback progress, dura
 | APS-04 | P0 | Make web progress synchronization event-driven with one progress owner | DONE | `0e3406cf`, `9af363e1`: HTML `timeupdate`/`seeked` drive progress; duplicate 100ms web ticker removed; stale element events rejected. |
 | APS-05 | P0 | Remove FullPlayer fixed 80ms seek timeout and bind UI to scrub/pending/engine state | DONE | `92196a6c`: no fixed seek timer; UI precedence is scrub → pending target → engine progress. |
 | APS-06 | P0 | Fix unknown-duration slider semantics | DONE | `92196a6c`: unknown duration renders `--:--`, slider value 0 and disabled; no fake `durationMs || 1` clamp. |
-| APS-07 | P1 | Normalize audio MIME delivery (especially M4A) | DONE | `d52d5495`: stream response strips invalid parameters and normalizes M4A to `audio/mp4`, MP3 aliases to `audio/mpeg`. |
+| APS-07 | P1 | Normalize audio MIME delivery (especially M4A) | DONE | MIME is now canonicalized at upload/validation/DB/storage, local progressive responses, and S3/Firebase signed-response overrides; legacy malformed `audio/x-m4a; codecs=` is normalized to `audio/mp4`. Cloudinary transformed audio descriptors report `audio/mpeg`. |
 | APS-08 | P1 | Persist/expose canonical media duration metadata | DONE | `87136d73`–`a0d713b3`: optional `duration_ms` schema, Cloudinary ingestion metadata, catalog/library APIs, and all identified mobile audio queue producers; runtime engine duration still overrides when available. |
 | APS-09 | P1 | Verify seekable HTTP Range behavior across local + configured provider delivery | IMPLEMENTED — LIVE VERIFY PENDING | `6de8c3c7`, `b2e98bcb`, `f2cb8ed3`, `f9e6f1ce`: local single-range semantics hardened and executable MIME/Range contract added. S3/GCS support contiguous byte ranges by provider contract; configured Cloudinary/S3/Firebase endpoints still require one real-environment seek check before VERIFIED COMPLETE. |
-| APS-10 | P1 | Harden signed playback lease/source refresh during long audio playback | DONE | `c42d2c5e`–`47daa53e`: removed timer-based URL rotation/replay retry and dead signed-URL preload. Recovery is media-error-driven, one attempt per failed URL, reuses the active lease when valid, explicitly reacquires only an expired/mismatched lease, restores position through the seek coordinator, and preserves latest user play/pause intent. |
-| APS-11 | P0 | Add deterministic regression tests for stale-progress-after-seek and rapid repeated seeks | IMPLEMENTED — EXECUTION PENDING | `049ba53c`, `a472b019`: executable stale-read, target convergence, rapid second seek, timer-removal, source-recovery and duration-contract tests. Test files are picked up by existing `mobile: npm test`; local execution remains required. |
-| APS-12 | P0 | Final source review + local/manual Web/Android/iOS acceptance matrix | SOURCE REVIEW DONE — DEVICE VERIFY PENDING | Final source audit confirms no audio `setInterval`, fixed seek-unlock timeout, scheduled audio URL rotation, 3-second replay retry, or signed-URL preloading remains. Browser/real-device execution is the final certification gate. |
+| APS-10 | P1 | Harden signed playback lease/source refresh during long audio playback | DONE | Timer-based URL rotation/replay retry and dead signed-URL preload are removed. Foreground/background recovery ownership is explicit, duplicate errors are serialized, lease replacement is single-flight across heartbeat/media recovery, the observed expired session is preserved, native track metadata carries the exact session, foreground re-adopts background-recovered sessions, position/seek target and latest user intent are preserved. |
+| APS-11 | P0 | Add deterministic regression tests for stale-progress-after-seek and rapid repeated seeks | IMPLEMENTED — EXECUTION PENDING | Regression contracts now cover stale progress, target convergence, rapid seek, remote seek/jumps, timer removal, protected-source recovery, single-flight lease recovery, rapid track loads, heartbeat resume, duration propagation, MIME normalization/provider overrides, and Web lifecycle/CORS behavior. Existing `mobile: npm test` picks them up; local execution remains required. |
+| APS-12 | P0 | Final source review + local/manual Web/Android/iOS acceptance matrix | MANUAL SOURCE QA DONE — DEVICE VERIFY PENDING | Latest-source manual QA completed across queue → load → seek → progress → pause/resume → skip/end → foreground/background → recovery → heartbeat → MIME/duration/range. A focused 20-invariant source audit passed 20/20. Browser/real-device execution remains the final certification gate. |
+
+## Manual QA findings fixed
+
+The final source-level QA pass found and fixed issues beyond the original slider race:
+
+- Heartbeat did not restart after pausing/resuming the same track because playback-history dedupe returned too early.
+- RNTP `Ready/Loading/Buffering` transitions were incorrectly capable of looking paused.
+- Protected-source recovery could race between foreground, background service and heartbeat; recovery is now ownership-scoped and lease replacement single-flight.
+- A stale/older audio load could destructively reset or start a newer selection after async yields.
+- Duplicate `PlaybackError` events could fight the recovery already in progress.
+- Failed recovery left Play able to target an empty/reset player; explicit Play now performs a real source retry.
+- Native remote seek was guarded, but jump-forward/backward initially bypassed the seek generation.
+- Opening Full Player for the already-active logical track could restart playback at zero.
+- Native queue-end and Web `ended` behavior were inconsistent; foreground native completion now uses the same repeat/advance policy while deliberate resets are ignored.
+- Foreground/background session identity could diverge after background recovery; the native track now carries the session and foreground re-adopts it.
+- Artist fallback catalog omitted canonical duration metadata.
+- M4A MIME normalization initially covered the proxy response but not provider object metadata; canonical MIME now spans ingestion, DB/storage and signed delivery, including legacy provider objects.
+- Failed upload compensation now clears `duration_ms`.
+- Web audio no longer forces anonymous CORS for ordinary playback and listeners are attached before source loading.
+- Remote Play no longer marks the UI playing before RNTP confirms `Playing`.
+- Restore-seek and stop/unload async boundaries now re-check load generation before mutating/starting the engine.
+
+### Source audit evidence
+
+Latest focused invariants checked directly against branch source: **20/20 PASS**.
+
+This source audit is not a substitute for TypeScript/build/test execution or physical-device/browser validation.
 
 ## Required manual scenarios
 
@@ -100,4 +127,4 @@ No GitHub Actions / CI are required or added.
 
 ### Verification note
 
-Implementation and source-level architecture review are complete. No local build/typecheck/test/device command is claimed as passed from this remote repository session. `VERIFIED COMPLETE` still requires the commands above plus Chrome, real Android, and iOS acceptance evidence from the manual matrix.
+Implementation, architecture review, and manual source-level QA are complete. A focused 20-invariant source audit passed 20/20. No local build/typecheck/test/device command is claimed as passed from this remote repository session. `VERIFIED COMPLETE` still requires the commands above plus Chrome, real Android, and iOS acceptance evidence from the manual matrix.
