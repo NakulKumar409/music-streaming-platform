@@ -5,7 +5,6 @@
 
 import type { IMediaDeliveryStrategy } from "../interfaces/media-delivery-strategy.interface";
 import type { GeneratePlaybackAccessParams, PlaybackAccessResult } from "../interfaces/media-delivery-strategy.interface";
-import { getStorageProvider } from "../../storage/factory/storage-provider.factory";
 import { getStorageConfig } from "../../../config/storage.config";
 import { DeliveryFailedException } from "../../exceptions/delivery.exception";
 import { normalizeMediaMimeType } from "../../storage/utils/file-metadata.util";
