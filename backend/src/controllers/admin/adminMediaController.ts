@@ -331,7 +331,8 @@ export async function uploadAdminMedia(req: any, res: Response) {
                   audio_provider_asset_id = NULL,
                   video_provider_asset_id = NULL,
                   thumbnail_provider_asset_id = NULL,
-                  thumbnail_url = NULL
+                  thumbnail_url = NULL,
+                  duration_ms = NULL
             WHERE id = $1`,
           [contentId]
         )
