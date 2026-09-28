@@ -159,10 +159,13 @@ test('canonical duration metadata is optional, persisted, exposed, and consumed 
 
 test('manual QA hardening keeps heartbeat, engine state and source load lifecycles independent', () => {
   const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+  const app = read('../mobile/App.tsx');
 
   assert.doesNotMatch(provider, /if \(lastRecordedRef\.current === key\) return/);
   assert.match(provider, /if \(lastRecordedRef\.current !== key\)/);
-  assert.match(provider, /startHeartbeat\(\s*key,/s);
+  assert.doesNotMatch(provider, /startHeartbeat\(/);
+  assert.match(app, /function PlaybackHeartbeatLifecycleBridge\(\)/);
+  assert.match(app, /startHeartbeat\(\s*contentKey,/s);
 
   assert.match(provider, /Ready\/Loading\/Buffering are transitional/);
   assert.match(provider, /nativeState === TrackPlayerState\?\.Paused/);
@@ -253,7 +256,8 @@ test('manual QA fixes protect reset events, heartbeat resume, and explicit sourc
     /item\?\.mediaType === "audio" && audioSourceRef\.current/
   );
   assert.match(provider, /if \(lastRecordedRef\.current !== key\)/);
-  assert.match(provider, /startHeartbeat\(\s*key,/s);
+  const app = read('../mobile/App.tsx');
+  assert.match(app, /startHeartbeat\(\s*contentKey,/s);
   assert.match(
     provider,
     /!audioSourceRef\.current[\s\S]{0,300}loadAndPlayAudio\(item, \{[\s\S]{0,160}resumePositionMs: stateRef\.current\.positionMs/s
