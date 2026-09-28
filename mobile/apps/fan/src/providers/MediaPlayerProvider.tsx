@@ -1095,6 +1095,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             clearPendingSeek(restoreSeekGeneration);
             throw error;
           }
+          if (!isCurrentLoad()) return;
         }
 
         const shouldPlayAtCommit = options.recovery
@@ -1132,6 +1133,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       applyAudioProgress,
       beginPendingSeek,
       clearPendingSeek,
+      handleDidJustFinish,
       preferredQuality,
       unloadAudio,
       blockLockedPlayback,
