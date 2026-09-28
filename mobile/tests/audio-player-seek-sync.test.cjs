@@ -107,3 +107,51 @@ test('unknown duration cannot render as 100 percent progress', () => {
   assert.match(fullPlayer, /disabled=\{!durationKnown\}/);
   assert.match(fullPlayer, /: 0;/);
 });
+
+
+test('protected audio source recovery is event-driven, position-preserving, and timer-free', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+  const stream = read('apps/fan/src/services/streamService.ts');
+
+  assert.match(provider, /getPlaybackUrlForRecovery/);
+  assert.match(provider, /lastRecoveredAudioSourceRef\.current === input\.failedUrl/);
+  assert.match(provider, /resumePositionMs: input\.resumePositionMs/);
+  assert.match(provider, /recovery: true/);
+  assert.match(provider, /Event\?\.PlaybackError/);
+  assert.match(provider, /HTMLAudioElement error/);
+
+  assert.doesNotMatch(provider, /scheduleTokenRefresh/);
+  assert.doesNotMatch(provider, /decodeJwtExpMsFromUrl/);
+  assert.doesNotMatch(provider, /setAudioSource/);
+  assert.doesNotMatch(provider, /3000/);
+  assert.doesNotMatch(provider, /preloadNextItem/);
+
+  assert.match(stream, /export async function getPlaybackUrlForRecovery/);
+  assert.match(stream, /reacquireExpiredPlaybackLease\(contentId\)/);
+  assert.match(stream, /PLAYBACK_SESSION_EXPIRED/);
+  assert.match(stream, /PLAYBACK_SESSION_MISMATCH/);
+});
+
+test('canonical duration metadata is optional, persisted, exposed, and consumed by audio queues', () => {
+  const migration = read('../backend/db/migrations/20260928_0015_media_duration_metadata.sql');
+  const schema = read('../backend/prisma/schema.prisma');
+  const contentRoutes = read('../backend/src/modules/content/content.routes.ts');
+  const upload = read('../backend/src/controllers/admin/adminMediaController.ts');
+  const cloudinaryStorage = read('../backend/src/shared/storage/providers/cloudinary-storage.provider.ts');
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+  const audioScreen = read('apps/fan/src/screens/AudioScreen.tsx');
+  const homeScreen = read('apps/fan/src/screens/HomeScreen.tsx');
+  const artistService = read('apps/fan/src/services/artistService.ts');
+
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS duration_ms INTEGER/);
+  assert.match(schema, /durationMs\s+Int\?\s+@map\("duration_ms"\)/);
+  assert.match(cloudinaryStorage, /durationMs/);
+  assert.match(upload, /duration_ms = \$12/);
+  assert.match(contentRoutes, /c\.duration_ms/);
+  assert.match(contentRoutes, /durationMs:/);
+
+  assert.match(provider, /toFiniteDurationMs\(item\.duration\)/);
+  assert.match(audioScreen, /duration: x\.durationMs/);
+  assert.match(homeScreen, /duration: x\.durationMs/);
+  assert.match(artistService, /durationMs/);
+});
