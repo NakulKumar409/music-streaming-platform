@@ -585,3 +585,66 @@ test('expired lease recovery never returns a different-content winner to its cal
     /options\.isStillRelevant && !options\.isStillRelevant\(\)[\s\S]{0,300}PLAYBACK_REQUEST_SUPERSEDED/s
   );
 });
+
+
+test('stale heartbeat cannot mutate a lease after playback moves to another media item', () => {
+  const stream = read('apps/fan/src/services/streamService.ts');
+  const heartbeat = read('apps/fan/src/services/heartbeatService.ts');
+
+  assert.match(
+    heartbeat,
+    /ensureActivePlaybackLease\(contentId, \{\s*isStillRelevant: \(\) => currentContentId === contentId,/s
+  );
+  assert.match(
+    stream,
+    /export async function ensureActivePlaybackLease\([\s\S]{0,160}options: PlaybackDescriptorOptions = \{\}/s
+  );
+  assert.match(stream, /const assertRelevant = \(\) =>/);
+  assert.match(
+    stream,
+    /const refreshed = await getPlaybackAccess[\s\S]{0,240}assertRelevant\(\)/s
+  );
+  assert.match(
+    stream,
+    /winner\.contentId !== numericContentId[\s\S]{0,180}PLAYBACK_REQUEST_SUPERSEDED/s
+  );
+});
+
+test('VideoScreen protected URL refresh and quality switching are latest-wins', () => {
+  const video = read('apps/fan/src/screens/VideoScreen.tsx');
+
+  assert.match(video, /qualityAccessGenerationRef/);
+  assert.match(
+    video,
+    /Background refreshing video URL[\s\S]{0,650}\{ isStillRelevant \}/s
+  );
+  assert.match(
+    video,
+    /Player status failed or URL expired[\s\S]{0,900}\{ isStillRelevant \}/s
+  );
+  assert.match(
+    video,
+    /resolvePlaybackUrl = useCallback[\s\S]{0,650}\{ isStillRelevant \}/s
+  );
+  assert.match(
+    video,
+    /Quality selection:[\s\S]{0,700}qualityAccessGenerationRef[\s\S]{0,500}\{ isStillRelevant \}/s
+  );
+  assert.match(
+    video,
+    /finally \{\s*if \(isStillRelevant\(\)\) \{\s*setLoadingPlaybackUrl\(false\)/s
+  );
+});
+
+test('newer video selection invalidates pending audio load without pre-emptively unloading active audio', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+
+  assert.match(
+    provider,
+    /if \(item\.mediaType === "video"\) \{[\s\S]{0,260}cancelPendingAudioLoad\(\)/s
+  );
+  assert.match(
+    provider,
+    /cancelPendingAudioLoad\(\);[\s\S]{0,500}getPlaybackUrl\([\s\S]{0,260}\{ isStillRelevant: isCurrentSelection \}/s
+  );
+});
