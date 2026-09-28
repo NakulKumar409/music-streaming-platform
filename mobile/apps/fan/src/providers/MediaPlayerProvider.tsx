@@ -396,8 +396,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             Capability?.SeekTo,
             Capability?.Stop,
           ],
-          // Progress bar on notification
-          progressUpdateEventInterval: 1,
         });
         if (!unmounted) setIsPlayerReady(true);
         logger.log(
