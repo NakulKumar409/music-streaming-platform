@@ -578,6 +578,10 @@ test('expired lease recovery never returns a different-content winner to its cal
   );
   assert.match(
     stream,
-    /winner &&[\s\S]{0,180}expectedSessionId[\s\S]{0,300}return \{ \.\.\.winner \}/s
+    /winner\.sessionId !== expectedSessionId[\s\S]{0,500}return \{ \.\.\.winner \}/s
+  );
+  assert.match(
+    stream,
+    /options\.isStillRelevant && !options\.isStillRelevant\(\)[\s\S]{0,300}PLAYBACK_REQUEST_SUPERSEDED/s
   );
 });
