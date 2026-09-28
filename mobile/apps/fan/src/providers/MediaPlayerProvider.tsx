@@ -52,6 +52,7 @@ import {
   validatePlaybackUrl,
   type VideoQuality,
 } from "../services/streamService";
+import { evaluateAudioProgressSample } from "../utils/audioProgressSync";
 import { decodeJwtExpMsFromUrl } from "../utils/streaming";
 
 import type { MediaItem, PlayerState } from "../media.types";
@@ -287,23 +288,16 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           ? Math.round(durationMs)
           : 0;
 
-      // A promise that began before the latest seek is stale by definition.
-      if (
-        generationAtRead !== undefined &&
-        generationAtRead !== seekGenerationRef.current
-      ) {
-        return false;
-      }
-
       const pending = pendingSeekRef.current;
-      if (pending) {
-        // RNTP seekTo() resolves when the command is accepted, not when the
-        // native player has reached the target. Keep rejecting pre-seek
-        // progress until the engine itself reports the requested location.
-        const SEEK_CONFIRM_TOLERANCE_MS = 1000;
-        if (Math.abs(safePosition - pending.targetMs) > SEEK_CONFIRM_TOLERANCE_MS) {
-          return false;
-        }
+      const decision = evaluateAudioProgressSample({
+        positionMs: safePosition,
+        generationAtRead,
+        currentGeneration: seekGenerationRef.current,
+        pendingSeek: pending,
+      });
+
+      if (!decision.accept) return false;
+      if (decision.confirmsSeek && pending) {
         clearPendingSeek(pending.generation);
       }
 
