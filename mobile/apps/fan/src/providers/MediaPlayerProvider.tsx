@@ -784,6 +784,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           // Create a fresh HTMLAudioElement (available on web)
           const wa = typeof Audio !== 'undefined' ? new (Audio as any)(playbackUrl) : null;
           if (!wa) {
+            if (audioSourceRef.current === playbackUrl) {
+              audioSourceRef.current = null;
+            }
             logger.warn("[MediaPlayer] HTMLAudioElement not available, cannot play audio on this platform");
             return;
           }
@@ -866,6 +869,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
               reason: e,
             }).then((recovered) => {
               if (!recovered) {
+                audioPlayIntentRef.current = false;
                 setState((s) => ({ ...s, isPlaying: false }));
               }
             });
@@ -917,6 +921,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             }, { once: true });
           }
         } catch (err) {
+          if (audioSourceRef.current === playbackUrl) {
+            audioSourceRef.current = null;
+          }
+          setState((s) => ({ ...s, isPlaying: false }));
           logger.warn("[MediaPlayer] HTMLAudioElement fallback for audio failed", err);
         }
         return;
@@ -982,6 +990,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           shouldPlay: shouldPlayAtCommit,
         });
       } catch (err) {
+        if (audioSourceRef.current === playbackUrl) {
+          audioSourceRef.current = null;
+        }
+        setState((s) => ({ ...s, isPlaying: false }));
         logger.warn("[MediaPlayer] Failed to create or play audio", err);
         Alert.alert(
           "Playback Error",
@@ -1470,18 +1482,28 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     const remoteDuckSubscription = TrackPlayer.addEventListener(
       Event?.RemoteDuck,
       async (event: any) => {
-        console.log("[MediaPlayer] RemoteDuck event:", event);
+        logger.log("[MediaPlayer] RemoteDuck event:", event);
         if (event.permanent) {
-          // Permanent interruption (phone call) - pause and update state
+          // Permanent interruption cancels the user's active play intent.
+          audioPlayIntentRef.current = false;
           setState((s) => ({ ...s, isPlaying: false }));
-        } else if (event.paused) {
-          // Temporary interruption started
+          return;
+        }
+
+        if (event.paused) {
+          // Temporary interruption pauses engine state but preserves intent.
           setState((s) => ({ ...s, isPlaying: false }));
-        } else {
-          // Temporary interruption ended - resume if we were playing
-          const wasPlaying = stateRef.current.isPlaying;
-          if (wasPlaying) {
+          return;
+        }
+
+        // Resume only if the user has not paused while interrupted.
+        if (audioPlayIntentRef.current) {
+          try {
+            await TrackPlayer.play();
             setState((s) => ({ ...s, isPlaying: true }));
+          } catch (error) {
+            logger.warn("[MediaPlayer] Failed to resume after interruption", error);
+            setState((s) => ({ ...s, isPlaying: false }));
           }
         }
       }
@@ -1546,6 +1568,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           reason: error,
         }).then((recovered) => {
           if (recovered) return;
+          audioPlayIntentRef.current = false;
           setState((s) => ({ ...s, isPlaying: false }));
           if (AppState.currentState === "active") {
             Alert.alert(
