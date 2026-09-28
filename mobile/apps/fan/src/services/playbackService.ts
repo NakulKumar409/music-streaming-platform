@@ -202,7 +202,7 @@ export default async function playbackService() {
     // recovery fails. The background service becomes the sole owner only when
     // React UI is inactive/suspended.
     const appState = AppState.currentState;
-    if (appState !== 'background' && appState !== 'inactive') return;
+    if (appState === 'active') return;
     if (recoveryInFlight) return;
 
     recoveryInFlight = true;
