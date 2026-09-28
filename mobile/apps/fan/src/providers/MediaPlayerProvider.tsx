@@ -839,7 +839,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           )(
             item.contentId ?? item.id,
             "audio",
-            preferredQuality
+            preferredQuality,
+            { isStillRelevant: isCurrentLoad }
           );
           playbackUrl = descriptor.playbackUrl;
           playbackSessionId = descriptor.sessionId;
@@ -860,7 +861,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           const descriptor = await getPlaybackDescriptor(
             item.contentId ?? item.id,
             "audio",
-            preferredQuality
+            preferredQuality,
+            { isStillRelevant: isCurrentLoad }
           );
           if (descriptor.playbackUrl) {
             playbackUrl = normalizePlaybackUrl(descriptor.playbackUrl);
@@ -1301,7 +1303,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           const url = await getPlaybackUrl(
             item.contentId ?? item.id,
             "video",
-            preferredQuality
+            preferredQuality,
+            { isStillRelevant: isCurrentSelection }
           );
           if (!isCurrentSelection()) return;
           if (!validatePlaybackUrl(url, "video")) {
