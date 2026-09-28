@@ -486,7 +486,11 @@ export default function ArtistScreen({ navigation, route }: any) {
     (song: Song) => {
       if (!artist) return null;
       const queue = filteredSongs
-        .filter((s) => Boolean(s.mediaUrl) || s.useStreamAccess)
+        .filter(
+          (s) =>
+            s.mediaType === "audio" &&
+            (Boolean(s.mediaUrl) || s.useStreamAccess)
+        )
         .map((s) => ({
           id: s.id,
           contentId: s.contentId,
