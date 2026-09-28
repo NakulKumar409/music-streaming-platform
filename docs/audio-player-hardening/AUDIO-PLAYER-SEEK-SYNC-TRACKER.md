@@ -2,7 +2,7 @@
 
 Branch: `fix/audio-player-seek-sync-hardening`
 Baseline: `fix/production-hardening-main@73bec9815555df5a9b76fe5bf22956d23ce74cdd`
-Status: **IN PROGRESS — CORE P0 IMPLEMENTED, VERIFICATION + P1 DELIVERY HARDENING PENDING**
+Status: **IMPLEMENTATION COMPLETE — LOCAL / REAL-DEVICE VERIFICATION PENDING**
 Scope: Fan audio playback only unless a shared media-delivery fix is technically inseparable.
 
 ## Goal
@@ -31,10 +31,10 @@ Remove timing-based/player-UI workarounds and make audio playback progress, dura
 | APS-06 | P0 | Fix unknown-duration slider semantics | DONE | `92196a6c`: unknown duration renders `--:--`, slider value 0 and disabled; no fake `durationMs || 1` clamp. |
 | APS-07 | P1 | Normalize audio MIME delivery (especially M4A) | DONE | `d52d5495`: stream response strips invalid parameters and normalizes M4A to `audio/mp4`, MP3 aliases to `audio/mpeg`. |
 | APS-08 | P1 | Persist/expose canonical media duration metadata | DONE | `87136d73`–`a0d713b3`: optional `duration_ms` schema, Cloudinary ingestion metadata, catalog/library APIs, and all identified mobile audio queue producers; runtime engine duration still overrides when available. |
-| APS-09 | P1 | Verify seekable HTTP Range behavior across local + configured provider delivery | IN PROGRESS | `6de8c3c7`, `b2e98bcb`, `f2cb8ed3`, `f9e6f1ce`: local single-range semantics hardened and executable MIME/Range contract added. Cloudinary/S3/Firebase live-provider verification remains. |
-| APS-10 | P1 | Harden signed playback lease/source refresh during long audio playback | NOT STARTED | Refresh cannot reset position or replace active source unsafely. |
-| APS-11 | P0 | Add deterministic regression tests for stale-progress-after-seek and rapid repeated seeks | IN PROGRESS | `049ba53c`: executable stale-read, convergence, rapid-second-seek and source-contract tests added. Local test execution + paused/buffering coverage still pending. |
-| APS-12 | P0 | Final source review + local/manual Web/Android/iOS acceptance matrix | NOT STARTED | No regression to background audio, mini player, next/previous, entitlement, heartbeat/progress persistence. |
+| APS-09 | P1 | Verify seekable HTTP Range behavior across local + configured provider delivery | IMPLEMENTED — LIVE VERIFY PENDING | `6de8c3c7`, `b2e98bcb`, `f2cb8ed3`, `f9e6f1ce`: local single-range semantics hardened and executable MIME/Range contract added. S3/GCS support contiguous byte ranges by provider contract; configured Cloudinary/S3/Firebase endpoints still require one real-environment seek check before VERIFIED COMPLETE. |
+| APS-10 | P1 | Harden signed playback lease/source refresh during long audio playback | DONE | `c42d2c5e`–`47daa53e`: removed timer-based URL rotation/replay retry and dead signed-URL preload. Recovery is media-error-driven, one attempt per failed URL, reuses the active lease when valid, explicitly reacquires only an expired/mismatched lease, restores position through the seek coordinator, and preserves latest user play/pause intent. |
+| APS-11 | P0 | Add deterministic regression tests for stale-progress-after-seek and rapid repeated seeks | IMPLEMENTED — EXECUTION PENDING | `049ba53c`, `a472b019`: executable stale-read, target convergence, rapid second seek, timer-removal, source-recovery and duration-contract tests. Test files are picked up by existing `mobile: npm test`; local execution remains required. |
+| APS-12 | P0 | Final source review + local/manual Web/Android/iOS acceptance matrix | SOURCE REVIEW DONE — DEVICE VERIFY PENDING | Final source audit confirms no audio `setInterval`, fixed seek-unlock timeout, scheduled audio URL rotation, 3-second replay retry, or signed-URL preloading remains. Browser/real-device execution is the final certification gate. |
 
 ## Required manual scenarios
 
@@ -68,7 +68,36 @@ Do not mark this work complete from a visual happy-path test alone. P0 code + de
 - `87136d73`–`a0d713b3` — canonical optional duration metadata persisted/exposed and propagated through fan queues.
 - `6de8c3c7` / `b2e98bcb` / `f2cb8ed3` / `f9e6f1ce` — correct local byte-range semantics plus executable backend streaming contract.
 - `45934109` / `f7189b1b` — rapid repeated scrubs and repeat-one seeks use the same deterministic seek coordinator.
+- `c42d2c5e`–`47daa53e` — event-driven protected-source recovery; scheduled URL rotation, 3-second replay retry and dead signed-URL preload removed; recovery preserves position and latest user intent.
+- `a472b019` — regression contract expanded for protected source recovery and canonical duration propagation.
+
+## Local verification commands
+
+Run from a clean checkout of this branch:
+
+```bash
+cd mobile
+npm run verify
+```
+
+Then:
+
+```bash
+cd ../backend
+npm run build
+npm run test:audio-progressive-http
+npm run test:unit
+```
+
+Apply the normal local database migration flow before validating duration-backed catalog responses:
+
+```bash
+npm run db:migrate
+npm run db:migrate:status
+```
+
+No GitHub Actions / CI are required or added.
 
 ### Verification note
 
-No local build/typecheck/device command is claimed as passed from this remote review session. Source review and committed regression tests are complete for the rows marked DONE; APS-11/APS-12 remain open until local execution and physical-device/browser verification evidence exists.
+Implementation and source-level architecture review are complete. No local build/typecheck/test/device command is claimed as passed from this remote repository session. `VERIFIED COMPLETE` still requires the commands above plus Chrome, real Android, and iOS acceptance evidence from the manual matrix.
