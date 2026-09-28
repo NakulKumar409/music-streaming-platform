@@ -520,7 +520,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     return () => {
       sub.remove();
     };
-  }, [videoAudioOnlyMode, resetSeekCoordinator]);
+  }, [videoAudioOnlyMode, videoPlayer, resetSeekCoordinator]);
 
   useEffect(() => {
     if (!currentItem?.id) return;
