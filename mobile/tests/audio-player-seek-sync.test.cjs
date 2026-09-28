@@ -215,7 +215,10 @@ test('background protected-audio recovery carries and re-adopts the exact playba
   assert.match(provider, /playbackSessionId: playbackSessionId \?\? undefined/);
   assert.match(provider, /adoptActivePlaybackLease/);
   assert.match(service, /getPlaybackDescriptorForSessionRecovery/);
-  assert.match(service, /AppState\.currentState === 'active'/);
+  assert.match(
+    service,
+    /appState !== 'background' && appState !== 'inactive'/
+  );
   assert.match(service, /await TrackPlayer\.load\(replacementTrack\)/);
   assert.match(service, /await TrackPlayer\.seekTo\(resumePosition\)/);
   assert.match(stream, /export async function getPlaybackDescriptorForSessionRecovery/);
@@ -283,4 +286,67 @@ test('stream recovery exports stay unique and unused RNTP progress events remain
   assert.doesNotMatch(provider, /progressUpdateEventInterval/);
   assert.doesNotMatch(service, /progressUpdateEventInterval/);
   assert.doesNotMatch(provider, /Event\?\.PlaybackProgress/);
+});
+
+
+test('remote seek and jump controls all enter the same pending-seek generation', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+
+  assert.match(provider, /Event\?\.RemoteSeek[\s\S]{0,300}beginPendingSeek\(pos\)/);
+  assert.match(
+    provider,
+    /Event\?\.RemoteJumpForward[\s\S]{0,500}beginPendingSeek\(target\)/
+  );
+  assert.match(
+    provider,
+    /Event\?\.RemoteJumpBackward[\s\S]{0,400}beginPendingSeek/
+  );
+});
+
+test('audio loading does not report playing before the engine accepts play', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+
+  assert.match(
+    provider,
+    /durationMs: seededDuration > 0 \? seededDuration : s\.durationMs,\s*isPlaying: false,/s
+  );
+  assert.match(
+    provider,
+    /await TrackPlayer\.play\(\);\s*if \(isCurrentLoad\(\)\) \{\s*setState\(\(s\) => \(\{ \.\.\.s, isPlaying: true \}\)\);/s
+  );
+  assert.match(
+    provider,
+    /clearPendingSeek\(restoreSeekGeneration\)/
+  );
+});
+
+test('MIME is canonical at upload, local delivery, and signed-provider delivery', () => {
+  const metadata = read('../backend/src/shared/storage/utils/file-metadata.util.ts');
+  const validation = read('../backend/src/modules/content/media-upload-validation.ts');
+  const upload = read('../backend/src/controllers/admin/adminMediaController.ts');
+  const progressive = read('../backend/src/modules/media/progressive-media-http.ts');
+  const signed = read('../backend/src/shared/delivery/strategies/signed-url-delivery.strategy.ts');
+
+  assert.match(metadata, /normalizeMediaMimeType/);
+  assert.match(metadata, /audio\/x-m4a/);
+  assert.match(validation, /normalizeMediaMimeType\(input\.mimeType\)/);
+  assert.match(upload, /contentType: mediaMimeType/);
+  assert.match(upload, /duration_ms = NULL/);
+  assert.match(progressive, /normalizeMediaMimeType/);
+  assert.match(signed, /ResponseContentType: canonicalContentType/);
+  assert.match(signed, /responseType: canonicalContentType/);
+});
+
+test('foreground and background recovery owners cannot intentionally overlap', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+  const service = read('apps/fan/src/services/playbackService.ts');
+
+  assert.match(
+    provider,
+    /AppState\.currentState === "background"[\s\S]{0,100}AppState\.currentState === "inactive"/
+  );
+  assert.match(
+    service,
+    /appState !== 'background' && appState !== 'inactive'/
+  );
 });
