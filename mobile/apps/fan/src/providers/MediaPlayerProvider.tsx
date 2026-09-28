@@ -668,6 +668,20 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     videoPlayer?.pause();
   }, [videoPlayer]);
 
+  const blockLockedPlayback = useCallback(async (item: MediaItem) => {
+    if (item.isLocked) {
+      Alert.alert(
+        "Subscription Required",
+        `Full access to "${item.title}" requires a subscription to ${
+          item.artistName || "this artist"
+        }.`,
+        [{ text: "Dismiss", style: "cancel" }]
+      );
+      return true;
+    }
+    return false;
+  }, []);
+
   const loadAndPlayAudio = useCallback(
     async (item: MediaItem, options: AudioLoadOptions = {}) => {
       if (await blockLockedPlayback(item)) return;
@@ -966,26 +980,74 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       clearPendingSeek,
       preferredQuality,
       unloadAudio,
+      blockLockedPlayback,
     ]
   );
+
+  const recoverAudioPlayback = useCallback(
+    async (input: {
+      failedUrl: string;
+      resumePositionMs: number;
+      shouldPlay: boolean;
+      reason?: unknown;
+    }): Promise<boolean> => {
+      const item = currentItemRef.current;
+      if (!item || item.mediaType !== "audio" || !item.useStreamAccess) {
+        return false;
+      }
+
+      // Ignore a late error emitted by a source that is no longer active.
+      if (!input.failedUrl || audioSourceRef.current !== input.failedUrl) {
+        return true;
+      }
+
+      // One recovery attempt per concrete failed URL. A successfully refreshed
+      // source gets a new URL and can independently recover if it expires later.
+      if (lastRecoveredAudioSourceRef.current === input.failedUrl) {
+        return false;
+      }
+      lastRecoveredAudioSourceRef.current = input.failedUrl;
+
+      logger.warn("[MediaPlayer] Recovering failed protected audio source", {
+        contentId: item.contentId ?? item.id,
+        resumePositionMs: input.resumePositionMs,
+        reason:
+          input.reason instanceof Error
+            ? input.reason.message
+            : String(input.reason || "media-source-error"),
+      });
+
+      try {
+        await loadAndPlayAudio(item, {
+          resumePositionMs: input.resumePositionMs,
+          shouldPlay: input.shouldPlay,
+          recovery: true,
+        });
+
+        return Boolean(
+          audioSourceRef.current &&
+          audioSourceRef.current !== input.failedUrl
+        );
+      } catch (error) {
+        logger.warn("[MediaPlayer] Protected audio recovery failed", error);
+        return false;
+      }
+    },
+    [loadAndPlayAudio]
+  );
+
+  useEffect(() => {
+    recoverAudioPlaybackRef.current = recoverAudioPlayback;
+    return () => {
+      if (recoverAudioPlaybackRef.current === recoverAudioPlayback) {
+        recoverAudioPlaybackRef.current = null;
+      }
+    };
+  }, [recoverAudioPlayback]);
 
   const prepareVideo = useCallback(async () => {
     await unloadAudio();
   }, [unloadAudio]);
-
-  const blockLockedPlayback = useCallback(async (item: MediaItem) => {
-    if (item.isLocked) {
-      Alert.alert(
-        "Subscription Required",
-        `Full access to "${item.title}" requires a subscription to ${
-          item.artistName || "this artist"
-        }.`,
-        [{ text: "Dismiss", style: "cancel" }]
-      );
-      return true;
-    }
-    return false;
-  }, []);
 
   const playQueue = useCallback(
     async (queue: MediaItem[], index: number) => {
@@ -1432,9 +1494,39 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     const playbackErrorSubscription = TrackPlayer.addEventListener(
       Event?.PlaybackError,
       (error: any) => {
-        console.error("[MediaPlayer] PlaybackError:", error);
-        // Pause on error
-        setState((s) => ({ ...s, isPlaying: false }));
+        logger.warn("[MediaPlayer] TrackPlayer playback error", error);
+
+        const failedUrl = audioSourceRef.current;
+        const item = currentItemRef.current;
+        const recovery = recoverAudioPlaybackRef.current;
+        if (
+          !failedUrl ||
+          item?.mediaType !== "audio" ||
+          !item.useStreamAccess ||
+          !recovery
+        ) {
+          setState((s) => ({ ...s, isPlaying: false }));
+          return;
+        }
+
+        const resumePositionMs = Math.max(0, stateRef.current.positionMs);
+        const shouldPlay = stateRef.current.isPlaying;
+
+        void recovery({
+          failedUrl,
+          resumePositionMs,
+          shouldPlay,
+          reason: error,
+        }).then((recovered) => {
+          if (recovered) return;
+          setState((s) => ({ ...s, isPlaying: false }));
+          if (AppState.currentState === "active") {
+            Alert.alert(
+              "Playback interrupted",
+              "The audio stream could not be restored. Please try playing it again."
+            );
+          }
+        });
       }
     );
 
