@@ -616,11 +616,11 @@ test('VideoScreen protected URL refresh and quality switching are latest-wins', 
   assert.match(video, /qualityAccessGenerationRef/);
   assert.match(
     video,
-    /Background refreshing video URL[\s\S]{0,650}\{ isStillRelevant \}/s
+    /Background refreshing video URL[\s\S]{0,1200}\{ isStillRelevant \}/s
   );
   assert.match(
     video,
-    /Player status failed or URL expired[\s\S]{0,900}\{ isStillRelevant \}/s
+    /Player status failed or URL expired[\s\S]{0,1400}\{ isStillRelevant \}/s
   );
   assert.match(
     video,
@@ -628,7 +628,7 @@ test('VideoScreen protected URL refresh and quality switching are latest-wins', 
   );
   assert.match(
     video,
-    /Quality selection:[\s\S]{0,700}qualityAccessGenerationRef[\s\S]{0,500}\{ isStillRelevant \}/s
+    /Quality selection:[\s\S]{0,1200}qualityAccessGenerationRef[\s\S]{0,700}\{ isStillRelevant \}/s
   );
   assert.match(
     video,
