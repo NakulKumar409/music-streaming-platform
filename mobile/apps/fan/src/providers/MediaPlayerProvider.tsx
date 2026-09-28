@@ -890,7 +890,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
           webAudioRef.current = wa;
           audioSourceRef.current = playbackUrl;
-          wa.crossOrigin = 'anonymous';
+          // Plain <audio> playback does not need CORS-enabled pixel/audio
+          // extraction. Avoid forcing anonymous CORS on signed provider URLs.
           wa.preload = 'auto';
 
           // Wire DOM events → context state (real source of truth, no fake timers)
@@ -1032,6 +1033,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           };
 
           if (wa.readyState >= 1) {
+            syncDuration();
             void restoreAndMaybePlay();
           } else {
             wa.addEventListener('loadedmetadata', () => {
