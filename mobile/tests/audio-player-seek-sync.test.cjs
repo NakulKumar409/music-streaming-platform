@@ -374,3 +374,15 @@ test('heartbeat and media recovery share one expired-lease replacement', () => {
     /reacquireExpiredPlaybackLease\(\s*contentId,\s*lease\.sessionId\s*\)/s
   );
 });
+
+
+test('late saved-position hydration cannot overwrite a newer seek decision', () => {
+  const app = read('../mobile/App.tsx');
+
+  assert.match(app, /pendingSeekPositionMs/);
+  assert.match(app, /seekBeforeResumeKeyRef/);
+  assert.match(
+    app,
+    /if \(seekBeforeResumeKeyRef\.current === contentKey\)[\s\S]{0,180}resumeAppliedKeyRef\.current = contentKey/s
+  );
+});
