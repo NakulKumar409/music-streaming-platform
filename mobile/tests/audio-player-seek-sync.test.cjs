@@ -628,7 +628,7 @@ test('VideoScreen protected URL refresh and quality switching are latest-wins', 
   );
   assert.match(
     video,
-    /Quality selection:[\s\S]{0,1200}qualityAccessGenerationRef[\s\S]{0,700}\{ isStillRelevant \}/s
+    /qualityAccessGenerationRef[\s\S]{0,500}Quality selection:[\s\S]{0,700}\{ isStillRelevant \}/s
   );
   assert.match(
     video,
