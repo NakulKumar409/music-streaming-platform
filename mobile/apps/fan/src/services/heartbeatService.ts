@@ -108,7 +108,10 @@ export function startHeartbeat(
         // lease window between local checks. Recover once by explicitly creating
         // a fresh same-content lease, then establish its baseline heartbeat.
         if (isExpiredSessionError(error) && currentContentId === contentId) {
-          const recovered = await reacquireExpiredPlaybackLease(contentId);
+          const recovered = await reacquireExpiredPlaybackLease(
+            contentId,
+            lease.sessionId
+          );
           if (currentContentId !== contentId) return;
           await postForLease(recovered);
           return;
