@@ -481,20 +481,20 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
     const key = `${currentItem.contentId ?? currentItem.id}`;
 
-    // avoid multiple immediate calls when state updates rapidly
-    if (lastRecordedRef.current === key) return;
+    // Playback history is recorded once per content item, but the trusted
+    // heartbeat must restart every time playback resumes after a pause.
+    if (lastRecordedRef.current !== key) {
+      if (playbackRecordTimerRef.current) {
+        clearTimeout(playbackRecordTimerRef.current);
+        playbackRecordTimerRef.current = null;
+      }
 
-    if (playbackRecordTimerRef.current) {
-      clearTimeout(playbackRecordTimerRef.current);
-      playbackRecordTimerRef.current = null;
+      playbackRecordTimerRef.current = setTimeout(() => {
+        lastRecordedRef.current = key;
+        recordPlayback(key).catch(() => undefined);
+      }, 500);
     }
 
-    playbackRecordTimerRef.current = setTimeout(() => {
-      lastRecordedRef.current = key;
-      recordPlayback(key).catch(() => undefined);
-    }, 500);
-
-    // Start heartbeat for listening time tracking
     startHeartbeat(
       key,
       () => stateRef.current.positionMs,
