@@ -462,18 +462,7 @@ export async function reacquireExpiredPlaybackLease(
     return current;
   }
 
-  let resolveRecovery!: (lease: ActivePlaybackLease) => void;
-  let rejectRecovery!: (error: unknown) => void;
-  const sharedPromise = new Promise<ActivePlaybackLease>((resolve, reject) => {
-    resolveRecovery = resolve;
-    rejectRecovery = reject;
-  });
-  leaseRecoveryInFlight = {
-    contentId: numericContentId,
-    promise: sharedPromise,
-  };
-
-  try {
+  const recoveryPromise = (async (): Promise<ActivePlaybackLease> => {
     const stale = getActivePlaybackLease(numericContentId);
     if (stale) {
       clearActivePlaybackLease(stale.sessionId);
@@ -481,14 +470,18 @@ export async function reacquireExpiredPlaybackLease(
     }
 
     const access = await getPlaybackAccess(numericContentId);
-    const lease = storeActiveLease(numericContentId, access.sessionId);
-    resolveRecovery(lease);
-    return lease;
-  } catch (error) {
-    rejectRecovery(error);
-    throw error;
+    return storeActiveLease(numericContentId, access.sessionId);
+  })();
+
+  leaseRecoveryInFlight = {
+    contentId: numericContentId,
+    promise: recoveryPromise,
+  };
+
+  try {
+    return await recoveryPromise;
   } finally {
-    if (leaseRecoveryInFlight?.promise === sharedPromise) {
+    if (leaseRecoveryInFlight?.promise === recoveryPromise) {
       leaseRecoveryInFlight = null;
     }
   }
