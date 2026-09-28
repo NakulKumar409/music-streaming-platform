@@ -1586,6 +1586,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         logger.log("[MediaPlayer] RemoteStop event received");
         if (currentItemRef.current?.mediaType !== "audio") return;
         audioPlayIntentRef.current = false;
+        audioSourceRef.current = null;
         resetSeekCoordinator();
         setState((s) => ({ ...s, isPlaying: false, positionMs: 0 }));
       }
@@ -1843,7 +1844,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       if (!active) return;
 
       const item = currentItemRef.current;
-      if (item?.mediaType === "audio") {
+      if (item?.mediaType === "audio" && audioSourceRef.current) {
         const generationAtRead = seekGenerationRef.current;
         try {
           const progress = await TrackPlayer.getProgress();
