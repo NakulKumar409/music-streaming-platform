@@ -978,14 +978,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           });
 
           const seededDuration = toFiniteDurationMs(item.duration);
-          const shouldPlayNow = options.recovery
-            ? audioPlayIntentRef.current
-            : shouldPlay;
           setState((s) => ({
             ...s,
             positionMs: resumePositionMs,
             durationMs: seededDuration > 0 ? seededDuration : s.durationMs,
-            isPlaying: shouldPlayNow,
+            isPlaying: false,
           }));
 
           const restoreAndMaybePlay = async () => {
@@ -1074,19 +1071,22 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         audioSourceRef.current = playbackUrl;
 
         const seededDuration = toFiniteDurationMs(item.duration);
-        const shouldPlayNow = options.recovery
-          ? audioPlayIntentRef.current
-          : shouldPlay;
         setState((s) => ({
           ...s,
           positionMs: resumePositionMs,
           durationMs: seededDuration > 0 ? seededDuration : s.durationMs,
-          isPlaying: shouldPlayNow,
+          isPlaying: false,
         }));
 
+        let restoreSeekGeneration: number | null = null;
         if (resumePositionMs > 0) {
-          beginPendingSeek(resumePositionMs);
-          await TrackPlayer.seekTo(resumePositionMs / 1000);
+          restoreSeekGeneration = beginPendingSeek(resumePositionMs);
+          try {
+            await TrackPlayer.seekTo(resumePositionMs / 1000);
+          } catch (error) {
+            clearPendingSeek(restoreSeekGeneration);
+            throw error;
+          }
         }
 
         const shouldPlayAtCommit = options.recovery
@@ -1094,6 +1094,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           : shouldPlay;
         if (shouldPlayAtCommit) {
           await TrackPlayer.play();
+          if (isCurrentLoad()) {
+            setState((s) => ({ ...s, isPlaying: true }));
+          }
         }
 
         logger.log("[MediaPlayer] Audio source loaded successfully", {
@@ -1756,7 +1759,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       (error: any) => {
         logger.warn("[MediaPlayer] TrackPlayer playback error", error);
 
-        if (AppState.currentState !== "active") {
+        if (
+          AppState.currentState === "background" ||
+          AppState.currentState === "inactive"
+        ) {
           return;
         }
 
