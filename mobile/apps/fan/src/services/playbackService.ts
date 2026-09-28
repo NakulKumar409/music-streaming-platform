@@ -56,7 +56,6 @@ export default async function playbackService() {
         Capability.SeekTo,
         Capability.Stop,
       ],
-      progressUpdateEventInterval: 1,
     });
   } catch (error) {
     logger.error('[PlaybackService] Failed to enforce remote capabilities:', error);
