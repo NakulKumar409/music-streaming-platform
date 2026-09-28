@@ -350,3 +350,23 @@ test('foreground and background recovery owners cannot intentionally overlap', (
     /appState !== 'background' && appState !== 'inactive'/
   );
 });
+
+
+test('heartbeat and media recovery share one expired-lease replacement', () => {
+  const stream = read('apps/fan/src/services/streamService.ts');
+  const heartbeat = read('apps/fan/src/services/heartbeatService.ts');
+
+  assert.match(stream, /leaseRecoveryInFlight/);
+  assert.match(
+    stream,
+    /if \(leaseRecoveryInFlight\?\.contentId === numericContentId\)[\s\S]{0,120}return leaseRecoveryInFlight\.promise/
+  );
+  assert.match(
+    stream,
+    /return reacquireExpiredPlaybackLease\(\s*numericContentId,\s*existing\.sessionId\s*\)/s
+  );
+  assert.match(
+    heartbeat,
+    /reacquireExpiredPlaybackLease\(\s*contentId,\s*lease\.sessionId\s*\)/s
+  );
+});
