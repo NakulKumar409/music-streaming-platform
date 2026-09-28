@@ -62,6 +62,12 @@ export default async function playbackService() {
     logger.error('[PlaybackService] Failed to enforce remote capabilities:', error);
   }
 
+  try {
+    servicePlayIntent = (await TrackPlayer.getState()) === State.Playing;
+  } catch {
+    servicePlayIntent = false;
+  }
+
   TrackPlayer.addEventListener(Event.RemotePlay, async () => {
     try {
       servicePlayIntent = true;
@@ -105,7 +111,11 @@ export default async function playbackService() {
     try {
       const progress = await TrackPlayer.getProgress();
       const jumpAmount = event.interval || 10;
-      const newPosition = Math.min(progress.position + jumpAmount, progress.duration);
+      const requestedPosition = Math.max(0, progress.position + jumpAmount);
+      const newPosition =
+        Number.isFinite(progress.duration) && progress.duration > 0
+          ? Math.min(requestedPosition, progress.duration)
+          : requestedPosition;
       await TrackPlayer.seekTo(newPosition);
     } catch (error) {
       logger.error('[PlaybackService] RemoteJumpForward error:', error);
