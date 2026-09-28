@@ -748,6 +748,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       );
       const shouldPlay = options.shouldPlay ?? true;
       if (!options.recovery) {
+        // A direct user selection/retry supersedes any older automatic
+        // recovery. The load generation below will make that older work stale.
+        foregroundRecoveryInFlightRef.current = false;
         lastRecoveredAudioSourceRef.current = null;
         audioPlayIntentRef.current = shouldPlay;
       }
