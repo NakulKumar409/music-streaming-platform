@@ -119,13 +119,14 @@ export async function uploadAdminMedia(req: any, res: Response) {
 
     const mediaConfig = getMediaConfig();
     const expectedKind = metadata.contentType === "VIDEO" ? "video" : "audio";
-    await validateSpooledFile({
+    const validatedThumbnail = await validateSpooledFile({
       path: thumbnail.path,
       mimeType: thumbnail.mimetype,
       sizeBytes: thumbnail.size,
       maxSizeBytes: mediaConfig.maxUploadImageBytes,
       kind: "thumbnail",
     });
+    const thumbnailMimeType = validatedThumbnail.mimeType;
     const validatedMedia = await validateSpooledFile({
       path: media.path,
       mimeType: media.mimetype,
@@ -138,7 +139,7 @@ export async function uploadAdminMedia(req: any, res: Response) {
     });
     const mediaMimeType = validatedMedia.mimeType;
 
-    const thumbnailExt = getExtensionFromMime(thumbnail.mimetype) || "jpg";
+    const thumbnailExt = getExtensionFromMime(thumbnailMimeType) || "jpg";
     const mediaExt =
       getExtensionFromMime(mediaMimeType) || (metadata.contentType === "VIDEO" ? "mp4" : "mp3");
     const thumbnailKey = generateStorageKey(metadata.artistId, "thumbnails", thumbnailExt);
@@ -184,7 +185,7 @@ export async function uploadAdminMedia(req: any, res: Response) {
     const thumbnailUpload = await storage.upload({
       storageKey: thumbnailKey,
       body: fs.createReadStream(thumbnail.path),
-      contentType: thumbnail.mimetype,
+      contentType: thumbnailMimeType,
       contentLength: thumbnail.size,
       metadata: { contentId: String(contentId), artistId: String(metadata.artistId) },
     });
