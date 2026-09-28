@@ -55,6 +55,46 @@ function normalizeStreamContentType(
   );
 }
 
+function parseSingleByteRange(
+  header: string,
+  totalLength: number
+): { start: number; end: number } | null {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(String(header || "").trim());
+  if (!match) return null;
+
+  const startRaw = match[1];
+  const endRaw = match[2];
+  if (!startRaw && !endRaw) return null;
+
+  // RFC 9110 suffix-byte-range-spec: "bytes=-N" means the final N bytes.
+  if (!startRaw) {
+    const suffixLength = Number(endRaw);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) return null;
+    const boundedLength = Math.min(suffixLength, totalLength);
+    return {
+      start: totalLength - boundedLength,
+      end: totalLength - 1,
+    };
+  }
+
+  const start = Number(startRaw);
+  const requestedEnd = endRaw ? Number(endRaw) : totalLength - 1;
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(requestedEnd) ||
+    start < 0 ||
+    requestedEnd < start ||
+    start >= totalLength
+  ) {
+    return null;
+  }
+
+  return {
+    start,
+    end: Math.min(requestedEnd, totalLength - 1),
+  };
+}
+
 router.get("/:mediaId", async (req: Request, res: Response) => {
   const mediaId = Number(req.params.mediaId);
   const token = String(req.query.token || "").trim();
@@ -204,30 +244,19 @@ router.get("/:mediaId", async (req: Request, res: Response) => {
     let statusCode = 200;
     const rangeHeader = req.headers.range;
 
+    res.setHeader("Accept-Ranges", "bytes");
     if (rangeHeader) {
-      const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
-      if (!match) {
+      const parsedRange = parseSingleByteRange(rangeHeader, totalLength);
+      if (!parsedRange) {
         res.setHeader("Content-Range", `bytes */${totalLength}`);
         return res.status(416).end();
       }
-      start = match[1] ? Number(match[1]) : 0;
-      end = match[2] ? Number(match[2]) : totalLength - 1;
-      if (
-        !Number.isSafeInteger(start) ||
-        !Number.isSafeInteger(end) ||
-        start < 0 ||
-        end < start ||
-        start >= totalLength
-      ) {
-        res.setHeader("Content-Range", `bytes */${totalLength}`);
-        return res.status(416).end();
-      }
-      end = Math.min(end, totalLength - 1);
+      start = parsedRange.start;
+      end = parsedRange.end;
       statusCode = 206;
     }
 
     res.setHeader("Content-Type", contentType);
-    res.setHeader("Accept-Ranges", "bytes");
     res.setHeader("Cache-Control", "private, no-store");
     res.setHeader("Content-Disposition", "inline");
 
