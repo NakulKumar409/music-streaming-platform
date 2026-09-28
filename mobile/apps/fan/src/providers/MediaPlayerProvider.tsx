@@ -43,6 +43,12 @@ try {
 // Type for Track when module is available
 type Track = any;
 
+type AudioLoadOptions = {
+  resumePositionMs?: number;
+  shouldPlay?: boolean;
+  recovery?: boolean;
+};
+
 import { startHeartbeat, stopHeartbeat } from "../services/heartbeatService";
 import { recordPlayback } from "../services/libraryService";
 import {
@@ -258,7 +264,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     null
   );
   const lastRecordedRef = useRef<string | null>(null);
-  const preloadedUrlRef = useRef<{ id: string; url: string } | null>(null);
 
   const stateRef = useRef<PlayerState>(state);
   useEffect(() => {
@@ -663,45 +668,24 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     videoPlayer?.pause();
   }, [videoPlayer]);
 
-  const preloadNextItem = useCallback(async () => {
-    const s = stateRef.current;
-    if (!s.queue.length) return;
-    const nextIdx = s.currentIndex + 1;
-    if (nextIdx >= s.queue.length) return;
-    const item = s.queue[nextIdx];
-    if (!item?.id || preloadedUrlRef.current?.id === item.id) return;
-
-    try {
-      logger.log("[MediaPlayer] Preloading next item", { id: item.id });
-      const url = await getPlaybackUrl(
-        item.contentId ?? item.id,
-        item.mediaType,
-        preferredQuality
-      );
-      preloadedUrlRef.current = { id: item.id, url };
-    } catch {
-      // ignore
-    }
-  }, []);
-
   const loadAndPlayAudio = useCallback(
-    async (item: MediaItem) => {
+    async (item: MediaItem, options: AudioLoadOptions = {}) => {
       if (await blockLockedPlayback(item)) return;
+      const resumePositionMs = Math.max(
+        0,
+        Math.round(options.resumePositionMs ?? 0)
+      );
+      const shouldPlay = options.shouldPlay ?? true;
+      if (!options.recovery) {
+        lastRecoveredAudioSourceRef.current = null;
+      }
+
       const loadToken = (audioLoadTokenRef.current += 1);
       await stopVideo();
       await unloadAudio();
 
       // If another load started while we were stopping/unloading, abort.
       if (loadToken !== audioLoadTokenRef.current) return;
-
-      const isSignedStreamUrl = (url: string) => {
-        const u = (url ?? "").toString();
-        if (!u) return false;
-        // Signed local stream URLs look like /media/stream/:id?token=...&kind=audio
-        if (/\/media\/stream\//i.test(u)) return true;
-        if (/\btoken=/i.test(u) && /\bkind=audio\b/i.test(u)) return true;
-        return false;
-      };
 
       let playbackUrl = item.mediaUrl
         ? normalizePlaybackUrl(item.mediaUrl)
@@ -711,7 +695,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       // Do not reuse the `mediaUrl` populated by the initial list fetch because the JWT token might have expired.
       if (item.useStreamAccess) {
         try {
-          playbackUrl = await getPlaybackUrl(
+          playbackUrl = await (
+            options.recovery ? getPlaybackUrlForRecovery : getPlaybackUrl
+          )(
             item.contentId ?? item.id,
             "audio",
             preferredQuality
@@ -765,7 +751,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       if (!TrackPlayerAvailable) {
         try {
           logger.log("[MediaPlayer] TrackPlayer not available, using HTMLAudioElement for audio on web");
-          scheduleTokenRefresh(playbackUrl, "audio");
+          audioSourceRef.current = playbackUrl;
 
           // Tear down any previous web audio element
           if (webAudioRef.current) {
@@ -842,25 +828,68 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           wa.addEventListener('error', (e: any) => {
             if (!isCurrentWebAudio()) return;
             logger.warn('[MediaPlayer] HTMLAudioElement error', e);
-            setState((s) => ({ ...s, isPlaying: false }));
+
+            const recovery = recoverAudioPlaybackRef.current;
+            const resumeMs = Math.max(
+              stateRef.current.positionMs,
+              Math.max(0, Math.round((wa.currentTime || 0) * 1000))
+            );
+            const shouldResume = stateRef.current.isPlaying;
+            if (!recovery) {
+              setState((s) => ({ ...s, isPlaying: false }));
+              return;
+            }
+
+            void recovery({
+              failedUrl: playbackUrl,
+              resumePositionMs: resumeMs,
+              shouldPlay: shouldResume,
+              reason: e,
+            }).then((recovered) => {
+              if (!recovered) {
+                setState((s) => ({ ...s, isPlaying: false }));
+              }
+            });
           });
 
-          // Reset position state before starting
+          const seededDuration = toFiniteDurationMs(item.duration);
           setState((s) => ({
             ...s,
-            positionMs: 0,
-            durationMs: toFiniteDurationMs(item.duration),
+            positionMs: resumePositionMs,
+            durationMs: seededDuration > 0 ? seededDuration : s.durationMs,
+            isPlaying: shouldPlay,
           }));
 
-          // Start playback
-          const playPromise = wa.play();
-          if (playPromise && typeof playPromise.catch === 'function') {
-            playPromise.catch((err: any) => {
+          const restoreAndMaybePlay = async () => {
+            if (!isCurrentWebAudio()) return;
+
+            if (resumePositionMs > 0) {
+              const generation = beginPendingSeek(resumePositionMs);
+              try {
+                wa.currentTime = resumePositionMs / 1000;
+              } catch (error) {
+                clearPendingSeek(generation);
+                throw error;
+              }
+            }
+
+            if (!shouldPlay) return;
+            try {
+              await wa.play();
+            } catch (err: any) {
               if (err?.name !== 'AbortError') {
                 logger.warn('[MediaPlayer] HTMLAudioElement play() failed', err);
                 setState((s) => ({ ...s, isPlaying: false }));
               }
-            });
+            }
+          };
+
+          if (wa.readyState >= 1) {
+            void restoreAndMaybePlay();
+          } else {
+            wa.addEventListener('loadedmetadata', () => {
+              void restoreAndMaybePlay();
+            }, { once: true });
           }
         } catch (err) {
           logger.warn("[MediaPlayer] HTMLAudioElement fallback for audio failed", err);
@@ -870,10 +899,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       try {
         logger.log("[MediaPlayer] Loading audio", { playbackUrl });
-        setAudioSource(playbackUrl);
-        scheduleTokenRefresh(playbackUrl, "audio");
-
-
+        audioSourceRef.current = playbackUrl;
 
         // Build track metadata for notification/lock screen display
         // Use artworkUrl from MediaItem type - this is the correct field for artwork
@@ -901,15 +927,29 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
         await TrackPlayer.reset();
         await TrackPlayer.add([track]);
-        await TrackPlayer.play();
 
-        // Update state to playing immediately
+        const seededDuration = toFiniteDurationMs(item.duration);
         setState((s) => ({
           ...s,
-          isPlaying: true,
+          positionMs: resumePositionMs,
+          durationMs: seededDuration > 0 ? seededDuration : s.durationMs,
+          isPlaying: shouldPlay,
         }));
 
-        logger.log("[MediaPlayer] Audio playback started successfully");
+        if (resumePositionMs > 0) {
+          beginPendingSeek(resumePositionMs);
+          await TrackPlayer.seekTo(resumePositionMs / 1000);
+        }
+
+        if (shouldPlay) {
+          await TrackPlayer.play();
+        }
+
+        logger.log("[MediaPlayer] Audio source loaded successfully", {
+          recovered: Boolean(options.recovery),
+          resumePositionMs,
+          shouldPlay,
+        });
       } catch (err) {
         logger.warn("[MediaPlayer] Failed to create or play audio", err);
         Alert.alert(
@@ -918,7 +958,15 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         );
       }
     },
-    [stopVideo, audioPlayer, applyAudioProgress]
+    [
+      stopVideo,
+      audioPlayer,
+      applyAudioProgress,
+      beginPendingSeek,
+      clearPendingSeek,
+      preferredQuality,
+      unloadAudio,
+    ]
   );
 
   const prepareVideo = useCallback(async () => {
@@ -1145,13 +1193,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         isExpanded: false,
         isPlaying: true,
       }));
-
-      // Use preloaded URL if available
-      let playbackUrl = item.mediaUrl;
-      if (preloadedUrlRef.current?.id === item.id) {
-        playbackUrl = preloadedUrlRef.current.url;
-        preloadedUrlRef.current = null; // consume it
-      }
 
       if (item.mediaType === "audio") {
         await loadAndPlayAudio(item);
