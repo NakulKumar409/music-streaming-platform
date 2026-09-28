@@ -224,7 +224,8 @@ export async function uploadAdminMedia(req: any, res: Response) {
                 adaptive_status = $8,
                 adaptive_qualities = $9::text[],
                 source_width = $10,
-                source_height = $11
+                source_height = $11,
+                duration_ms = $12
           WHERE id = $1`,
         [
           contentId,
@@ -238,6 +239,7 @@ export async function uploadAdminMedia(req: any, res: Response) {
           adaptiveQualities,
           mediaUpload.sourceWidth || null,
           mediaUpload.sourceHeight || null,
+          mediaUpload.durationMs || null,
         ]
       );
 
@@ -273,6 +275,7 @@ export async function uploadAdminMedia(req: any, res: Response) {
             adaptive_qualities: adaptiveQualities,
             source_width: mediaUpload.sourceWidth || null,
             source_height: mediaUpload.sourceHeight || null,
+            duration_ms: mediaUpload.durationMs || null,
             ...(releaseMapping
               ? {
                   release_id: releaseMapping.releaseId,
@@ -302,6 +305,7 @@ export async function uploadAdminMedia(req: any, res: Response) {
         technicalStatus,
         adaptiveStatus,
         adaptiveQualities,
+        durationMs: mediaUpload.durationMs || null,
         isApproved: false,
         isTakenDown: false,
         ...(releaseMapping
