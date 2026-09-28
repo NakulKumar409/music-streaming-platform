@@ -127,7 +127,10 @@ test('protected audio source recovery is event-driven, position-preserving, and 
   assert.doesNotMatch(provider, /preloadNextItem/);
 
   assert.match(stream, /export async function getPlaybackDescriptorForRecovery/);
-  assert.match(stream, /reacquireExpiredPlaybackLease\(contentId\)/);
+  assert.match(
+    stream,
+    /reacquireExpiredPlaybackLease\(\s*contentId,\s*observedLease\?\.sessionId\s*\)/s
+  );
   assert.match(stream, /PLAYBACK_SESSION_EXPIRED/);
   assert.match(stream, /PLAYBACK_SESSION_MISMATCH/);
 });
@@ -188,7 +191,7 @@ test('locked tracks cannot replace current playback and native audio end uses th
 
   assert.match(
     provider,
-    /if \(await blockLockedPlayback\(item\)\) return;\s*currentItemRef\.current = item;/s
+    /if \(await blockLockedPlayback\(item\)\) return;[\s\S]{0,260}currentItemRef\.current = item;/s
   );
   assert.match(provider, /Event\?\.PlaybackQueueEnded/);
   assert.match(provider, /handleDidJustFinish\(\)\.catch/);
@@ -220,7 +223,7 @@ test('background protected-audio recovery carries and re-adopts the exact playba
   assert.match(service, /getPlaybackDescriptorForSessionRecovery/);
   assert.match(
     service,
-    /appState !== 'background' && appState !== 'inactive'/
+    /if \(appState === 'active'\) return;/
   );
   assert.match(service, /await TrackPlayer\.load\(replacementTrack\)/);
   assert.match(service, /await TrackPlayer\.seekTo\(resumePosition\)/);
@@ -347,11 +350,11 @@ test('foreground and background recovery owners cannot intentionally overlap', (
 
   assert.match(
     provider,
-    /AppState\.currentState === "background"[\s\S]{0,100}AppState\.currentState === "inactive"/
+    /if \(AppState\.currentState !== "active"\) \{\s*return;\s*\}/s
   );
   assert.match(
     service,
-    /appState !== 'background' && appState !== 'inactive'/
+    /if \(appState === 'active'\) return;/
   );
 });
 
@@ -458,4 +461,74 @@ test('foreground resume reconciles lock-screen native play and pause state', () 
     provider,
     /nativeState === TrackPlayerState\?\.Paused[\s\S]{0,350}audioPlayIntentRef\.current = false/
   );
+});
+
+
+test('persisted audio resume waits for confirmed engine playback rather than catalog duration', () => {
+  const app = read('../mobile/App.tsx');
+
+  assert.match(app, /currentItem\?\.mediaType === 'audio'/);
+  assert.match(
+    app,
+    /if \(currentItem\?\.mediaType === 'audio'\) \{\s*if \(!state\.isPlaying\) return;\s*\}/s
+  );
+});
+
+test('close video switch and unmount invalidate stale audio loads', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+
+  assert.match(provider, /const cancelPendingAudioLoad = useCallback/);
+  assert.match(
+    provider,
+    /const prepareVideo = useCallback[\s\S]{0,180}cancelPendingAudioLoad\(\)/
+  );
+  assert.match(
+    provider,
+    /const close = useCallback[\s\S]{0,200}cancelPendingMediaSelection\(\);[\s\S]{0,100}cancelPendingAudioLoad\(\)/
+  );
+  assert.match(
+    provider,
+    /return \(\) => \{\s*cancelPendingMediaSelection\(\);\s*cancelPendingAudioLoad\(\);/s
+  );
+});
+
+test('cross-media selections are latest-wins before and after async video preparation', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+
+  assert.match(provider, /mediaSelectionTokenRef/);
+  assert.match(provider, /const isCurrentSelection = \(\) =>/);
+  assert.match(
+    provider,
+    /const url = await getPlaybackUrl[\s\S]{0,180}if \(!isCurrentSelection\(\)\) return;/s
+  );
+  assert.match(
+    provider,
+    /await prepareVideo\(\);\s*if \(!isCurrentSelection\(\)\) return;/s
+  );
+});
+
+test('out-of-order playback descriptors cannot replace the newest active lease', () => {
+  const stream = read('apps/fan/src/services/streamService.ts');
+
+  assert.match(stream, /playbackDescriptorRequestGeneration/);
+  assert.match(stream, /latestPlaybackDescriptorRequest/);
+  assert.match(
+    stream,
+    /if \(!latest \|\| latest\.generation !== requestGeneration\)[\s\S]{0,500}return access;/s
+  );
+  assert.match(
+    stream,
+    /if \(!existing\) \{[\s\S]{0,180}terminatePlaybackAccess/s
+  );
+});
+
+test('foreground reconciliation never overwrites a newer recovered lease with stale native metadata', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+
+  assert.match(provider, /const cachedLease = getActivePlaybackLease\(contentId\)/);
+  assert.match(
+    provider,
+    /!cachedLease \|\|\s*cachedLease\.sessionId === nativeSessionId[\s\S]{0,160}adoptActivePlaybackLease/s
+  );
+  assert.match(provider, /Preserving newer foreground playback lease/);
 });
