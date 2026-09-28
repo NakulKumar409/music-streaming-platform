@@ -113,7 +113,7 @@ test('protected audio source recovery is event-driven, position-preserving, and 
   const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
   const stream = read('apps/fan/src/services/streamService.ts');
 
-  assert.match(provider, /getPlaybackUrlForRecovery/);
+  assert.match(provider, /getPlaybackDescriptorForRecovery/);
   assert.match(provider, /lastRecoveredAudioSourceRef\.current === input\.failedUrl/);
   assert.match(provider, /resumePositionMs: input\.resumePositionMs/);
   assert.match(provider, /recovery: true/);
@@ -126,7 +126,7 @@ test('protected audio source recovery is event-driven, position-preserving, and 
   assert.doesNotMatch(provider, /3000/);
   assert.doesNotMatch(provider, /preloadNextItem/);
 
-  assert.match(stream, /export async function getPlaybackUrlForRecovery/);
+  assert.match(stream, /export async function getPlaybackDescriptorForRecovery/);
   assert.match(stream, /reacquireExpiredPlaybackLease\(contentId\)/);
   assert.match(stream, /PLAYBACK_SESSION_EXPIRED/);
   assert.match(stream, /PLAYBACK_SESSION_MISMATCH/);
@@ -239,4 +239,27 @@ test('remote capability contract does not advertise a native queue that is not m
   assert.doesNotMatch(providerOptions, /Capability\?\.SkipToPrevious/);
   assert.doesNotMatch(serviceOptions, /Capability\.SkipToNext/);
   assert.doesNotMatch(serviceOptions, /Capability\.SkipToPrevious/);
+});
+
+
+test('manual QA fixes protect reset events, heartbeat resume, and explicit source retry', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+
+  assert.match(
+    provider,
+    /currentItemRef\.current\?\.mediaType !== "audio" \|\|\s*!audioSourceRef\.current/s
+  );
+  assert.match(provider, /if \(lastRecordedRef\.current !== key\)/);
+  assert.match(provider, /startHeartbeat\(\s*key,/s);
+  assert.match(
+    provider,
+    /!audioSourceRef\.current[\s\S]{0,300}loadAndPlayAudio\(item, \{[\s\S]{0,160}resumePositionMs: stateRef\.current\.positionMs/s
+  );
+});
+
+test('background service allows an explicit remote Play to retry a previously failed source', () => {
+  const service = read('apps/fan/src/services/playbackService.ts');
+
+  assert.match(service, /Event\.RemotePlay/);
+  assert.match(service, /servicePlayIntent = true/);
 });
