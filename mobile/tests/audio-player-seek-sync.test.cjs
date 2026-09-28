@@ -441,3 +441,21 @@ test('remote play waits for RNTP playback-state confirmation', () => {
     /nativeState === TrackPlayerState\?\.Playing[\s\S]{0,180}isPlaying: true/
   );
 });
+
+
+test('foreground resume reconciles lock-screen native play and pause state', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+
+  assert.match(
+    provider,
+    /const nativeState = await TrackPlayer\.getState\(\)/
+  );
+  assert.match(
+    provider,
+    /nativeState === TrackPlayerState\?\.Playing[\s\S]{0,220}audioPlayIntentRef\.current = true/
+  );
+  assert.match(
+    provider,
+    /nativeState === TrackPlayerState\?\.Paused[\s\S]{0,350}audioPlayIntentRef\.current = false/
+  );
+});
