@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -24,18 +24,24 @@ export default function ContentPlayerScreen({ navigation, route }: any) {
   const contentId = route?.params?.contentId;
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const resolveGenerationRef = useRef(0);
 
   const resolveContent = useCallback(async () => {
+    const generation = resolveGenerationRef.current + 1;
+    resolveGenerationRef.current = generation;
+    const isCurrent = () => generation === resolveGenerationRef.current;
+
     const id = String(contentId || '').trim();
     if (!id) {
-      setError('Content is unavailable.');
+      if (isCurrent()) setError('Content is unavailable.');
       return;
     }
 
-    setError(null);
+    if (isCurrent()) setError(null);
 
     try {
       const res = await apiV1.get(`/content/${encodeURIComponent(id)}`);
+      if (!isCurrent()) return;
       const c = res.data?.content ?? null;
       if (!c) {
         setError('Content could not be found.');
@@ -80,6 +86,7 @@ export default function ContentPlayerScreen({ navigation, route }: any) {
         duration: durationMs,
       };
 
+      if (!isCurrent()) return;
       navigation.replace('FullPlayer', {
         songId: String(item.contentId ?? item.id),
         title: item.title,
@@ -90,6 +97,7 @@ export default function ContentPlayerScreen({ navigation, route }: any) {
         queue: [item],
       });
     } catch (err: any) {
+      if (!isCurrent()) return;
       setError(
         err?.response?.data?.message ||
           'Could not prepare this audio. Please try again.'
@@ -99,6 +107,9 @@ export default function ContentPlayerScreen({ navigation, route }: any) {
 
   useEffect(() => {
     void resolveContent();
+    return () => {
+      resolveGenerationRef.current += 1;
+    };
   }, [resolveContent, reloadKey]);
 
   return (
