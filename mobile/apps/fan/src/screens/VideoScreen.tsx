@@ -453,6 +453,7 @@ export default function VideoScreen() {
   const lastTapRef = useRef(0);
   const lastTapXRef = useRef(0);
   const playbackSessionRef = useRef(0);
+  const qualityAccessGenerationRef = useRef(0);
 
   const [bgAudioOnlyMode, setBgAudioOnlyMode] = useState(false);
   const bgWasPlayingRef = useRef(false);
@@ -598,11 +599,18 @@ export default function VideoScreen() {
               isStreamingHdAllowed
                 ? (selectedQuality as streamService.VideoQuality)
                 : "240p";
+            const sessionId = playbackSessionRef.current;
+            const qualityGeneration = qualityAccessGenerationRef.current;
+            const isStillRelevant = () =>
+              sessionId === playbackSessionRef.current &&
+              qualityGeneration === qualityAccessGenerationRef.current;
             const nextUrl = await streamService.getPlaybackUrl(
               activeVideoMeta.id,
               "video",
-              refreshQuality
+              refreshQuality,
+              { isStillRelevant }
             );
+            if (!isStillRelevant()) return;
             resumeAfterUrlChangeRef.current = pos;
             setActivePlaybackUrl(nextUrl);
           } catch {
@@ -611,7 +619,7 @@ export default function VideoScreen() {
         })().catch(() => undefined);
       }, delay);
     },
-    [activeVideoMeta?.id, isStreamingHdAllowed, videoPlayer]
+    [activeVideoMeta?.id, isStreamingHdAllowed, selectedQuality, videoPlayer]
   );
 
   useEffect(() => {
@@ -776,6 +784,8 @@ export default function VideoScreen() {
   }, []);
 
   const stopAndReset = useCallback(async () => {
+    playbackSessionRef.current += 1;
+    qualityAccessGenerationRef.current += 1;
     try {
       videoPlayer.pause();
       videoPlayer.seekBy(-videoPlayer.currentTime);
@@ -946,11 +956,18 @@ export default function VideoScreen() {
               isStreamingHdAllowed
                 ? (selectedQuality as streamService.VideoQuality)
                 : "240p";
+            const sessionId = playbackSessionRef.current;
+            const qualityGeneration = qualityAccessGenerationRef.current;
+            const isStillRelevant = () =>
+              sessionId === playbackSessionRef.current &&
+              qualityGeneration === qualityAccessGenerationRef.current;
             const nextUrl = await streamService.getPlaybackUrl(
               activeVideoMeta.id,
               "video",
-              refreshQuality
+              refreshQuality,
+              { isStillRelevant }
             );
+            if (!isStillRelevant()) return;
             resumeAfterUrlChangeRef.current = pos;
             setActivePlaybackUrl(nextUrl);
           } catch {
@@ -1037,7 +1054,7 @@ export default function VideoScreen() {
   }, [activePlaybackUrl, pauseInlineVideoIfNeeded]);
 
   const resolvePlaybackUrl = useCallback(
-    async (video: VideoCard) => {
+    async (video: VideoCard, sessionId: number) => {
       try {
         // Use current selected quality or default to 240p for free users, Auto for paid
         const q: streamService.VideoQuality =
@@ -1046,8 +1063,18 @@ export default function VideoScreen() {
             : isStreamingHdAllowed
             ? "Auto"
             : "240p";
-        return await streamService.getPlaybackUrl(video.id, "video", q);
+        const isStillRelevant = () =>
+          sessionId === playbackSessionRef.current;
+        return await streamService.getPlaybackUrl(
+          video.id,
+          "video",
+          q,
+          { isStillRelevant }
+        );
       } catch (err: any) {
+        if (err?.code === "PLAYBACK_REQUEST_SUPERSEDED") {
+          throw err;
+        }
         if (
           err?.message &&
           (err.message.toLowerCase().includes("subscription") ||
@@ -1119,7 +1146,7 @@ export default function VideoScreen() {
             return;
           }
 
-          const playbackUrl = await resolvePlaybackUrl(video);
+          const playbackUrl = await resolvePlaybackUrl(video, sessionId);
 
           if (sessionId !== playbackSessionRef.current) return;
           if (!streamService.validatePlaybackUrl(playbackUrl, "video")) {
@@ -1150,6 +1177,12 @@ export default function VideoScreen() {
             }
           }, 100);
         } catch (err: any) {
+          if (
+            sessionId !== playbackSessionRef.current ||
+            err?.code === "PLAYBACK_REQUEST_SUPERSEDED"
+          ) {
+            return;
+          }
           const msg = (err?.message || "").toLowerCase();
           if (msg.includes("subscription") || msg.includes("access denied")) {
             setLastAttemptedVideo(video);
@@ -1162,7 +1195,9 @@ export default function VideoScreen() {
           setPlaybackError("Could not load playback URL");
           setActivePlaybackUrl(null);
         } finally {
-          setLoadingPlaybackUrl(false);
+          if (sessionId === playbackSessionRef.current) {
+            setLoadingPlaybackUrl(false);
+          }
         }
       })().catch(() => undefined);
     },
@@ -1202,18 +1237,32 @@ export default function VideoScreen() {
               // Use the pending quality directly - backend will enforce subscription
               const qParam: streamService.VideoQuality =
                 getStreamQualityParam(q);
+              const sessionId = playbackSessionRef.current;
+              const qualityGeneration =
+                qualityAccessGenerationRef.current + 1;
+              qualityAccessGenerationRef.current = qualityGeneration;
+              const isStillRelevant = () =>
+                sessionId === playbackSessionRef.current &&
+                qualityGeneration === qualityAccessGenerationRef.current;
               const nextUrl = await streamService.getPlaybackUrl(
                 activeVideoMeta.id,
                 "video",
-                qParam
+                qParam,
+                { isStillRelevant }
               );
+              if (!isStillRelevant()) return;
               isQualitySwitchRef.current = true;
               qualityResumePositionRef.current = pos / 1000;
               setActivePlaybackUrl(nextUrl);
             } catch (e) {
               console.warn("[VideoScreen] Auto-retry quality switch failed", e);
             } finally {
-              setLoadingPlaybackUrl(false);
+              if (
+                activeVideoMeta?.id &&
+                playbackSessionRef.current > 0
+              ) {
+                setLoadingPlaybackUrl(false);
+              }
             }
           }
         }
@@ -1510,20 +1559,31 @@ export default function VideoScreen() {
       try {
         const qualityParam = getStreamQualityParam(q);
         console.log(`[VideoScreen] Quality selection: ${q} => ${qualityParam}`);
+        const sessionId = playbackSessionRef.current;
+        const qualityGeneration =
+          qualityAccessGenerationRef.current + 1;
+        qualityAccessGenerationRef.current = qualityGeneration;
+        const isStillRelevant = () =>
+          sessionId === playbackSessionRef.current &&
+          qualityGeneration === qualityAccessGenerationRef.current;
         const url = await streamService.getPlaybackUrl(
           activeVideoMeta.id,
           "video",
-          qualityParam
+          qualityParam,
+          { isStillRelevant }
         );
+        if (!isStillRelevant()) return;
         // Setting the URL causes useVideoPlayer to reload the source.
         // useEventListener('statusChange') above will fire seek+play atomically
         // as soon as status === 'readyToPlay' — no setTimeout needed.
         setActivePlaybackUrl(url);
         setIsVideoPlaying(true);
-      } catch {
-        // Clear the pending seek on error so we don't seek into a stale state.
-        qualityResumePositionRef.current = null;
-        isQualitySwitchRef.current = false;
+      } catch (error: any) {
+        if (error?.code !== "PLAYBACK_REQUEST_SUPERSEDED") {
+          // Clear the pending seek only for the request that actually failed.
+          qualityResumePositionRef.current = null;
+          isQualitySwitchRef.current = false;
+        }
       } finally {
         setLoadingPlaybackUrl(false);
       }
