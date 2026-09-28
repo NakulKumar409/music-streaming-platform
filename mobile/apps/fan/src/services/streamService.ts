@@ -483,16 +483,26 @@ export async function reacquireExpiredPlaybackLease(
     // Another content/session may have won while this replacement was waiting
     // on the server. Never overwrite that newer lease with this older result.
     const winner = activePlaybackLease;
+    if (winner && winner.contentId !== numericContentId) {
+      await terminatePlaybackAccess(
+        access.sessionId,
+        numericContentId
+      ).catch(() => false);
+      throw new StreamAccessError(
+        'Playback request was superseded',
+        'PLAYBACK_REQUEST_SUPERSEDED',
+        null
+      );
+    }
+
     if (
       winner &&
-      (
-        winner.contentId !== numericContentId ||
-        (
-          expectedSessionId &&
-          winner.sessionId !== expectedSessionId
-        )
-      )
+      expectedSessionId &&
+      winner.sessionId !== expectedSessionId
     ) {
+      // A newer same-content recovery already won. The access allocated by
+      // this older attempt is independent, so clean it up and converge on the
+      // newer same-content lease.
       await terminatePlaybackAccess(
         access.sessionId,
         numericContentId
@@ -576,24 +586,89 @@ export async function getPlaybackDescriptor(
     throw new StreamAccessError('Invalid content id', 'INVALID_CONTENT_ID', null);
   }
 
-  if (activePlaybackLease && activePlaybackLease.contentId !== numericContentId) {
-    await releaseActivePlaybackLease();
-  }
-
+  const previousDifferentContentLease =
+    activePlaybackLease &&
+    activePlaybackLease.contentId !== numericContentId
+      ? { ...activePlaybackLease }
+      : null;
   const existing = getActivePlaybackLease(numericContentId);
-  try {
-    const access = await getPlaybackAccess(
+
+  const requestNewAccess = () =>
+    getPlaybackAccess(
       numericContentId,
       kind,
       quality,
       existing?.sessionId
     );
 
+  try {
+    let access: PlaybackAccess;
+    try {
+      // Keep the currently playing different-content lease alive until the new
+      // source is actually authorized. This prevents a failed navigation from
+      // killing otherwise healthy playback.
+      access = await requestNewAccess();
+    } catch (error) {
+      // With the product limit of two playback sessions, an old current stream
+      // plus another device can consume both slots. In that one explicit case,
+      // switching content is allowed to release the old current slot and retry.
+      if (
+        previousDifferentContentLease &&
+        error instanceof StreamAccessError &&
+        error.code === 'PLAYBACK_SESSION_LIMIT'
+      ) {
+        if (options.isStillRelevant && !options.isStillRelevant()) {
+          throw new StreamAccessError(
+            'Playback request was superseded',
+            'PLAYBACK_REQUEST_SUPERSEDED',
+            null
+          );
+        }
+
+        if (
+          activePlaybackLease?.contentId ===
+            previousDifferentContentLease.contentId &&
+          activePlaybackLease?.sessionId ===
+            previousDifferentContentLease.sessionId
+        ) {
+          clearActivePlaybackLease(previousDifferentContentLease.sessionId);
+          await terminatePlaybackAccess(
+            previousDifferentContentLease.sessionId,
+            previousDifferentContentLease.contentId
+          ).catch(() => false);
+        }
+        access = await requestNewAccess();
+      } else {
+        throw error;
+      }
+    }
+
     if (options.isStillRelevant && !options.isStillRelevant()) {
-      // A newer user/media action won while access was in flight. A fresh
-      // session allocated solely for this stale request can be terminated
-      // safely; a reused session may still belong to the newer same-content
-      // request, so leave it alone.
+      if (!existing) {
+        await terminatePlaybackAccess(
+          access.sessionId,
+          numericContentId
+        ).catch(() => false);
+      }
+      throw new StreamAccessError(
+        'Playback request was superseded',
+        'PLAYBACK_REQUEST_SUPERSEDED',
+        null
+      );
+    }
+
+    // A newer action may have installed a different lease while the request
+    // was in flight. Do not overwrite it.
+    const winner = activePlaybackLease;
+    if (
+      winner &&
+      previousDifferentContentLease &&
+      (
+        winner.contentId !== previousDifferentContentLease.contentId ||
+        winner.sessionId !== previousDifferentContentLease.sessionId
+      ) &&
+      winner.contentId !== numericContentId
+    ) {
       if (!existing) {
         await terminatePlaybackAccess(
           access.sessionId,
@@ -608,6 +683,20 @@ export async function getPlaybackDescriptor(
     }
 
     storeActiveLease(numericContentId, access.sessionId);
+
+    if (
+      previousDifferentContentLease &&
+      (
+        previousDifferentContentLease.contentId !== numericContentId ||
+        previousDifferentContentLease.sessionId !== access.sessionId
+      )
+    ) {
+      await terminatePlaybackAccess(
+        previousDifferentContentLease.sessionId,
+        previousDifferentContentLease.contentId
+      ).catch(() => false);
+    }
+
     return access;
   } catch (error) {
     if (
