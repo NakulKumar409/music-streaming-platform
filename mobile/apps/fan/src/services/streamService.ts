@@ -50,6 +50,9 @@ export type ActivePlaybackLease = {
 
 const ACTIVE_LEASE_LOCAL_FRESHNESS_MS = 4 * 60 * 1000;
 let activePlaybackLease: ActivePlaybackLease | null = null;
+let leaseRecoveryInFlight:
+  | { contentId: number; promise: Promise<ActivePlaybackLease> }
+  | null = null;
 
 export class StreamAccessError extends Error {
   readonly code: string;
@@ -422,21 +425,73 @@ export async function releaseActivePlaybackLease(): Promise<boolean> {
 }
 
 export async function reacquireExpiredPlaybackLease(
-  contentId: string | number
+  contentId: string | number,
+  expectedExpiredSessionId?: number
 ): Promise<ActivePlaybackLease> {
   const numericContentId = positiveInteger(contentId);
   if (!numericContentId) {
     throw new StreamAccessError('Invalid content id', 'INVALID_CONTENT_ID', null);
   }
 
-  const stale = getActivePlaybackLease(numericContentId);
-  if (stale) {
-    clearActivePlaybackLease(stale.sessionId);
-    await terminatePlaybackAccess(stale.sessionId, stale.contentId);
+  const expectedSessionId =
+    expectedExpiredSessionId === undefined
+      ? null
+      : positiveInteger(expectedExpiredSessionId);
+  if (expectedExpiredSessionId !== undefined && !expectedSessionId) {
+    throw new StreamAccessError(
+      'Playback session is invalid',
+      'PLAYBACK_SESSION_EXPIRED',
+      null
+    );
   }
 
-  const access = await getPlaybackAccess(numericContentId);
-  return storeActiveLease(numericContentId, access.sessionId);
+  // Heartbeat and media-engine recovery may observe the same expired lease at
+  // the same time. They must converge on one server session, not each allocate
+  // their own replacement.
+  if (leaseRecoveryInFlight?.contentId === numericContentId) {
+    return leaseRecoveryInFlight.promise;
+  }
+
+  const current = getActivePlaybackLease(numericContentId);
+  if (
+    current &&
+    expectedSessionId &&
+    current.sessionId !== expectedSessionId
+  ) {
+    // Another recovery already installed a newer lease.
+    return current;
+  }
+
+  let resolveRecovery!: (lease: ActivePlaybackLease) => void;
+  let rejectRecovery!: (error: unknown) => void;
+  const sharedPromise = new Promise<ActivePlaybackLease>((resolve, reject) => {
+    resolveRecovery = resolve;
+    rejectRecovery = reject;
+  });
+  leaseRecoveryInFlight = {
+    contentId: numericContentId,
+    promise: sharedPromise,
+  };
+
+  try {
+    const stale = getActivePlaybackLease(numericContentId);
+    if (stale) {
+      clearActivePlaybackLease(stale.sessionId);
+      await terminatePlaybackAccess(stale.sessionId, stale.contentId);
+    }
+
+    const access = await getPlaybackAccess(numericContentId);
+    const lease = storeActiveLease(numericContentId, access.sessionId);
+    resolveRecovery(lease);
+    return lease;
+  } catch (error) {
+    rejectRecovery(error);
+    throw error;
+  } finally {
+    if (leaseRecoveryInFlight?.promise === sharedPromise) {
+      leaseRecoveryInFlight = null;
+    }
+  }
 }
 
 export async function ensureActivePlaybackLease(
@@ -598,11 +653,18 @@ export async function getPlaybackDescriptorForSessionRecovery(
       throw error;
     }
 
-    clearActivePlaybackLease(sessionId);
-    await terminatePlaybackAccess(sessionId, numericContentId).catch(() => false);
-    const created = await getPlaybackAccess(numericContentId, kind, quality);
-    storeActiveLease(numericContentId, created.sessionId);
-    return created;
+    const recoveredLease = await reacquireExpiredPlaybackLease(
+      numericContentId,
+      sessionId
+    );
+    const refreshed = await getPlaybackAccess(
+      numericContentId,
+      kind,
+      quality,
+      recoveredLease.sessionId
+    );
+    storeActiveLease(numericContentId, refreshed.sessionId);
+    return refreshed;
   }
 }
 
