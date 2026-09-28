@@ -7,9 +7,9 @@ const SRC = path.resolve(__dirname, "..");
 const ROOT = path.resolve(SRC, "..");
 const REPO = path.resolve(ROOT, "..");
 const readBackend = (relativePath: string) =>
-  fs.readFileSync(path.join(SRC, relativePath), "utf8");
+  fs.readFileSync(path.join(SRC, relativePath), "utf8").replace(/\r\n/g, "\n");
 const readRepo = (relativePath: string) =>
-  fs.readFileSync(path.join(REPO, relativePath), "utf8");
+  fs.readFileSync(path.join(REPO, relativePath), "utf8").replace(/\r\n/g, "\n");
 
 function testHeartbeatPolicy() {
   const first = calculateHeartbeatAcceptance({

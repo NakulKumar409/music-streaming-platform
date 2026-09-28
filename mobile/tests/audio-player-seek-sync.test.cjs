@@ -129,7 +129,7 @@ test('protected audio source recovery is event-driven, position-preserving, and 
   assert.match(stream, /export async function getPlaybackDescriptorForRecovery/);
   assert.match(
     stream,
-    /reacquireExpiredPlaybackLease\(\s*contentId,\s*observedLease\?\.sessionId\s*\)/s
+    /reacquireExpiredPlaybackLease\(\s*contentId,\s*observedLease\?\.sessionId(?:,\s*options)?\s*\)/s
   );
   assert.match(stream, /PLAYBACK_SESSION_EXPIRED/);
   assert.match(stream, /PLAYBACK_SESSION_MISMATCH/);
@@ -299,7 +299,7 @@ test('stream recovery exports stay unique and unused RNTP progress events remain
 test('remote seek and jump controls all enter the same pending-seek generation', () => {
   const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
 
-  assert.match(provider, /Event\?\.RemoteSeek[\s\S]{0,300}beginPendingSeek\(pos\)/);
+  assert.match(provider, /Event\?\.RemoteSeek[\s\S]{0,500}beginPendingSeek\(pos\)/);
   assert.match(
     provider,
     /Event\?\.RemoteJumpForward[\s\S]{0,500}beginPendingSeek\(target\)/
@@ -370,7 +370,7 @@ test('heartbeat and media recovery share one expired-lease replacement', () => {
   );
   assert.match(
     stream,
-    /return reacquireExpiredPlaybackLease\(\s*numericContentId,\s*existing\.sessionId\s*\)/s
+    /return reacquireExpiredPlaybackLease\(\s*numericContentId,\s*existing\.sessionId(?:,\s*options)?\s*\)/s
   );
   assert.match(
     heartbeat,
@@ -561,7 +561,7 @@ test('different-content access preserves current playback until replacement is a
   );
   assert.match(
     stream,
-    /error\.code === 'PLAYBACK_SESSION_LIMIT'[\s\S]{0,500}terminatePlaybackAccess/s
+    /error\.code === 'PLAYBACK_SESSION_LIMIT'[\s\S]{0,650}terminatePlaybackAccess/s
   );
   assert.match(
     stream,

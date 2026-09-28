@@ -75,8 +75,7 @@ async function main() {
     const sessionA = await SessionService.createSession({
       userId: 28,
       deviceId: "qa06-fanA-device",
-      ipAddress: "127.0.0.1",
-      userAgent: "QA-FanA"
+      deviceName: "QA-FanA"
     });
     const tokenA = jwt.sign(
       { id: 28, email: fanA.email, role: fanA.role, sid: sessionA.id },
@@ -87,8 +86,7 @@ async function main() {
     const sessionB = await SessionService.createSession({
       userId: 25,
       deviceId: "qa06-fanB-device",
-      ipAddress: "127.0.0.1",
-      userAgent: "QA-FanB"
+      deviceName: "QA-FanB"
     });
     const tokenB = jwt.sign(
       { id: 25, email: fanB.email, role: fanB.role, sid: sessionB.id },
@@ -99,8 +97,7 @@ async function main() {
     const sessionSusp = await SessionService.createSession({
       userId: 21,
       deviceId: "qa06-susp-device",
-      ipAddress: "127.0.0.1",
-      userAgent: "QA-Susp"
+      deviceName: "QA-Susp"
     });
     const tokenSusp = jwt.sign(
       { id: 21, email: fanSusp.email, role: fanSusp.role, sid: sessionSusp.id },
@@ -413,9 +410,9 @@ async function main() {
     console.log("✓ Authoritative expiry enforced: access relocked immediately, status transitioned to EXPIRED");
 
     // Cleanup sessions
-    await SessionService.revokeSession(sessionA.id, 28, "QA complete");
-    await SessionService.revokeSession(sessionB.id, 25, "QA complete");
-    await SessionService.revokeSession(sessionSusp.id, 21, "QA complete");
+    await SessionService.revokeSession(28, sessionA.id);
+    await SessionService.revokeSession(25, sessionB.id);
+    await SessionService.revokeSession(21, sessionSusp.id);
 
     console.log("\n=========================================================");
     console.log("   ALL MODULE 06 POSITIVE & NEGATIVE TESTS PASSED!       ");

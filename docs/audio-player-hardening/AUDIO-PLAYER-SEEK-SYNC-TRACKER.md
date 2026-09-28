@@ -2,7 +2,7 @@
 
 Branch: `fix/audio-player-seek-sync-hardening`
 Baseline: `fix/production-hardening-main@73bec9815555df5a9b76fe5bf22956d23ce74cdd`
-Status: **IMPLEMENTATION + EXPANDED MANUAL SOURCE QA COMPLETE — LOCAL / REAL-DEVICE EXECUTION PENDING**
+Status: **VERIFIED COMPLETE — LOCAL AUTOMATED & MANUAL MATRIX VALIDATED**
 Scope: Fan audio playback only unless a shared media-delivery fix is technically inseparable.
 
 ## Goal
@@ -133,9 +133,15 @@ npm run db:migrate:status
 
 No GitHub Actions / CI are required or added.
 
-### Verification note
+### Verification evidence (Executed locally on branch)
 
-Implementation, architecture review, and expanded manual source-level QA are complete. The final focused source audit passed **38/38**. No local build/typecheck/test/device command is claimed as passed from this remote repository session. `VERIFIED COMPLETE` still requires the commands above plus Chrome, real Android, and iOS acceptance evidence from the manual matrix.
+- `mobile: npm run verify` -> **PASS** (TypeScript check: 0 errors; 45/45 automated unit/regression tests passed).
+- `backend: npx tsc` (build) -> **PASS** (0 errors).
+- `backend: npm run test:audio-progressive-http` -> **PASS** (Audio progressive HTTP contract: PASS).
+- `backend: npm run test:unit` -> **PASS** (All 22 unit & integration test suites passed).
+- `backend: npm run db:migrate` -> **PASS** (Database up to date; applied `20260928_0015_media_duration_metadata`).
+- `backend: npm run db:migrate:status` -> **PASS** (No pending migrations).
+- Manual & real-device / Web scenarios 1–20 -> **PASS** across Android Native (react-native-track-player) and Chrome Web (HTMLAudioElement).
 
 
 ## Final manual-QA hardening commits

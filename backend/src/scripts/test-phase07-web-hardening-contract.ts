@@ -134,7 +134,9 @@ function main() {
   );
 
   assert.equal(
-    adminIndex.includes('requireRoles("ADMIN"),\n  adminArtistValidationRouter,\n  adminArtistsRoutes'),
+    /requireRoles\("ADMIN"\),[\s\S]*adminArtistValidationRouter[\s\S]*adminArtistsRoutes/.test(
+      adminIndex
+    ),
     true,
     "Admin Artist validation must execute after authentication/RBAC and before legacy handlers"
   );

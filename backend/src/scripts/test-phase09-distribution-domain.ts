@@ -131,7 +131,8 @@ function testMigrationAndBackfillContract() {
     assert.match(schema, new RegExp(`${table}: \\[`));
   }
 
-  assert.match(schema, /LATEST_SCHEMA_VERSION = "20260914_0011_distribution_ready_domain"/);
+  const latestSchemaMatch = schema.match(/LATEST_SCHEMA_VERSION\s*=\s*"([^"]+)"/);
+  assert.ok(latestSchemaMatch && latestSchemaMatch[1] >= "20260914_0011_distribution_ready_domain");
   assert.match(schema, /"release_track_id"/);
   assert.match(schema, /releases_distribution_status_valid/);
   assert.match(schema, /releases_exclusivity_after_release_dates/);

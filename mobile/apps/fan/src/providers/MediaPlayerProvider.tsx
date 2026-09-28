@@ -848,7 +848,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           const presentation = getPlaybackErrorPresentation(e);
           logger.warn("[MediaPlayer] getPlaybackUrl failed", e);
           if (!options.recovery && isCurrentLoad()) {
-            failCurrentInitialLoad();
+            if (presentation.shouldStopPlayback) {
+              failCurrentInitialLoad();
+            }
             Alert.alert(presentation.title, presentation.message);
           }
           return;
@@ -876,7 +878,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           const presentation = getPlaybackErrorPresentation(e);
           logger.warn("[MediaPlayer] fallback stream resolution failed", e);
           if (!options.recovery && isCurrentLoad()) {
-            failCurrentInitialLoad();
+            if (presentation.shouldStopPlayback) {
+              failCurrentInitialLoad();
+            }
             Alert.alert(presentation.title, presentation.message);
           }
           return;
