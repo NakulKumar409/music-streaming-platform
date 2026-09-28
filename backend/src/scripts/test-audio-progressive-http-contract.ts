@@ -3,6 +3,24 @@ import {
   normalizeStreamContentType,
   parseSingleByteRange,
 } from "../modules/media/progressive-media-http";
+import { normalizeMediaMimeType } from "../shared/storage/utils/file-metadata.util";
+
+assert.equal(
+  normalizeMediaMimeType("audio/x-m4a; codecs="),
+  "audio/mp4"
+);
+assert.equal(
+  normalizeMediaMimeType("audio/mp3; charset=binary"),
+  "audio/mpeg"
+);
+assert.equal(
+  normalizeStreamContentType(
+    "application/octet-stream",
+    "legacy/audio.mp4",
+    "audio/mp4"
+  ),
+  "audio/mp4"
+);
 
 assert.equal(
   normalizeStreamContentType("audio/x-m4a; codecs=", "artists/1/audio/file.m4a", null),
