@@ -1630,6 +1630,32 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       }
     );
 
+    const remoteJumpForwardSubscription = TrackPlayer.addEventListener(
+      Event?.RemoteJumpForward,
+      (event: any) => {
+        if (currentItemRef.current?.mediaType !== "audio") return;
+        const jumpMs = Math.max(0, Number(event?.interval || 10) * 1000);
+        const durationMs = stateRef.current.durationMs;
+        const requested = Math.max(0, stateRef.current.positionMs + jumpMs);
+        const target =
+          Number.isFinite(durationMs) && durationMs > 0
+            ? Math.min(requested, durationMs)
+            : requested;
+        beginPendingSeek(target);
+      }
+    );
+
+    const remoteJumpBackwardSubscription = TrackPlayer.addEventListener(
+      Event?.RemoteJumpBackward,
+      (event: any) => {
+        if (currentItemRef.current?.mediaType !== "audio") return;
+        const jumpMs = Math.max(0, Number(event?.interval || 10) * 1000);
+        beginPendingSeek(
+          Math.max(0, stateRef.current.positionMs - jumpMs)
+        );
+      }
+    );
+
     // Handle audio ducking (interruptions like phone calls)
     const remoteDuckSubscription = TrackPlayer.addEventListener(
       Event?.RemoteDuck,
@@ -1788,6 +1814,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       remoteNextSubscription.remove();
       remotePrevSubscription.remove();
       remoteSeekSubscription.remove();
+      remoteJumpForwardSubscription.remove();
+      remoteJumpBackwardSubscription.remove();
       remoteDuckSubscription.remove();
       playbackQueueEndedSubscription.remove();
       playbackStateSubscription.remove();
