@@ -50,6 +50,10 @@ export type ActivePlaybackLease = {
 
 const ACTIVE_LEASE_LOCAL_FRESHNESS_MS = 4 * 60 * 1000;
 let activePlaybackLease: ActivePlaybackLease | null = null;
+let playbackDescriptorRequestGeneration = 0;
+let latestPlaybackDescriptorRequest:
+  | { generation: number; contentId: number }
+  | null = null;
 let leaseRecoveryInFlight:
   | { contentId: number; promise: Promise<ActivePlaybackLease> }
   | null = null;
@@ -545,6 +549,13 @@ export async function getPlaybackDescriptor(
     throw new StreamAccessError('Invalid content id', 'INVALID_CONTENT_ID', null);
   }
 
+  const requestGeneration = playbackDescriptorRequestGeneration + 1;
+  playbackDescriptorRequestGeneration = requestGeneration;
+  latestPlaybackDescriptorRequest = {
+    generation: requestGeneration,
+    contentId: numericContentId,
+  };
+
   if (activePlaybackLease && activePlaybackLease.contentId !== numericContentId) {
     await releaseActivePlaybackLease();
   }
@@ -557,6 +568,21 @@ export async function getPlaybackDescriptor(
       quality,
       existing?.sessionId
     );
+
+    const latest = latestPlaybackDescriptorRequest;
+    if (!latest || latest.generation !== requestGeneration) {
+      // A newer media selection/access request has already won. Never let this
+      // older response replace the foreground lease cache. If this request
+      // allocated its own fresh server session, clean that exact stale session.
+      if (!existing) {
+        await terminatePlaybackAccess(
+          access.sessionId,
+          numericContentId
+        ).catch(() => false);
+      }
+      return access;
+    }
+
     storeActiveLease(numericContentId, access.sessionId);
     return access;
   } catch (error) {
