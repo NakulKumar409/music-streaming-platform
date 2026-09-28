@@ -55,6 +55,7 @@ type ApiContentItem = {
   createdAt?: string | null;
   useStreamAccess?: boolean;
   isLocked?: boolean;
+  durationMs?: number | null;
 };
 
 type AudioCard = AudioItemData & {
@@ -64,6 +65,7 @@ type AudioCard = AudioItemData & {
   useStreamAccess?: boolean;
   isLocked?: boolean;
   createdAt?: string | null;
+  durationMs?: number;
 };
 
 const FALLBACK_ARTWORK =
@@ -184,6 +186,10 @@ export default function AudioScreen({ navigation }: any) {
               useStreamAccess: Boolean(it.useStreamAccess),
               isLocked: Boolean(it.isLocked),
               createdAt: (it.createdAt ?? null) as any,
+              durationMs:
+                Number.isFinite(Number(it.durationMs)) && Number(it.durationMs) > 0
+                  ? Math.round(Number(it.durationMs))
+                  : undefined,
             };
           })
           .filter(Boolean) as AudioCard[];
@@ -405,6 +411,7 @@ export default function AudioScreen({ navigation }: any) {
             (x.mediaUrl ? normalizePlaybackUrl(x.mediaUrl) : ""),
           isLocked: x.isLocked ?? false,
           useStreamAccess: x.useStreamAccess,
+          duration: x.durationMs,
         }));
       const queueIndex = Math.max(
         0,
