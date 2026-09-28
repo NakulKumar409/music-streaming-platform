@@ -541,15 +541,30 @@ export async function reacquireExpiredPlaybackLease(
 }
 
 export async function ensureActivePlaybackLease(
-  contentId: string | number
+  contentId: string | number,
+  options: PlaybackDescriptorOptions = {}
 ): Promise<ActivePlaybackLease> {
   const numericContentId = positiveInteger(contentId);
   if (!numericContentId) {
     throw new StreamAccessError('Invalid content id', 'INVALID_CONTENT_ID', null);
   }
 
+  const assertRelevant = () => {
+    if (options.isStillRelevant && !options.isStillRelevant()) {
+      throw new StreamAccessError(
+        'Playback request was superseded',
+        'PLAYBACK_REQUEST_SUPERSEDED',
+        null
+      );
+    }
+  };
+
+  assertRelevant();
+
   if (activePlaybackLease && activePlaybackLease.contentId !== numericContentId) {
+    assertRelevant();
     await releaseActivePlaybackLease();
+    assertRelevant();
   }
 
   const existing = getActivePlaybackLease(numericContentId);
@@ -557,6 +572,7 @@ export async function ensureActivePlaybackLease(
     existing &&
     Date.now() - existing.lastValidatedAtMs < ACTIVE_LEASE_LOCAL_FRESHNESS_MS
   ) {
+    assertRelevant();
     return existing;
   }
 
@@ -568,6 +584,23 @@ export async function ensureActivePlaybackLease(
         undefined,
         existing.sessionId
       );
+      assertRelevant();
+
+      const winner = activePlaybackLease;
+      if (
+        winner &&
+        (
+          winner.contentId !== numericContentId ||
+          winner.sessionId !== existing.sessionId
+        )
+      ) {
+        throw new StreamAccessError(
+          'Playback request was superseded',
+          'PLAYBACK_REQUEST_SUPERSEDED',
+          null
+        );
+      }
+
       return storeActiveLease(numericContentId, refreshed.sessionId);
     } catch (error) {
       if (
@@ -580,12 +613,17 @@ export async function ensureActivePlaybackLease(
 
       return reacquireExpiredPlaybackLease(
         numericContentId,
-        existing.sessionId
+        existing.sessionId,
+        options
       );
     }
   }
 
-  return reacquireExpiredPlaybackLease(numericContentId);
+  return reacquireExpiredPlaybackLease(
+    numericContentId,
+    undefined,
+    options
+  );
 }
 
 export async function getPlaybackDescriptor(
