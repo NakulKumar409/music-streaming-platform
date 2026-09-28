@@ -57,7 +57,7 @@ export class SignedUrlDeliveryStrategy implements IMediaDeliveryStrategy {
       return {
         playbackUrl,
         expiresIn,
-        contentType,
+        contentType: canonicalContentType || contentType,
         contentLength
       };
     } catch (err: any) {
@@ -96,7 +96,7 @@ export class SignedUrlDeliveryStrategy implements IMediaDeliveryStrategy {
       return {
         playbackUrl: signedUrl,
         expiresIn,
-        contentType
+        contentType: canonicalContentType || contentType
       };
     } catch (err: any) {
       const msg = (err?.message || "").toString();
