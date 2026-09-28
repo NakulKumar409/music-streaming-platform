@@ -199,14 +199,22 @@ export default function FullPlayerScreen({ navigation, route }: any) {
     const queueIndex = params.queueIndex ?? 0;
     if (!queue || queue.length === 0) return;
 
-    const currentKey =
-      currentItem?.mediaType === 'audio'
-        ? String(currentItem.contentId ?? currentItem.id ?? '')
-        : '';
-    const targetKey = params.songId ?? '';
+    const targetItem = queue[Math.min(
+      Math.max(0, queueIndex),
+      Math.max(0, queue.length - 1)
+    )];
+    const sameTrack =
+      currentItem?.mediaType === 'audio' &&
+      targetItem?.mediaType === 'audio' &&
+      (
+        String(currentItem.id ?? '') === String(targetItem.id ?? '') ||
+        String(currentItem.contentId ?? currentItem.id ?? '') ===
+          String(targetItem.contentId ?? targetItem.id ?? '')
+      );
 
-    // Already playing the right song — don't restart
-    if (currentKey && targetKey && currentKey === targetKey && playerState.isPlaying) {
+    // Opening the full player for the already-active logical audio item must
+    // not reset playback to 0 (notably for ids such as "123:audio").
+    if (sameTrack) {
       setHasAutoPlayed(true);
       return;
     }
