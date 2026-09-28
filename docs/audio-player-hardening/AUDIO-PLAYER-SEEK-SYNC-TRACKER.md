@@ -30,8 +30,8 @@ Remove timing-based/player-UI workarounds and make audio playback progress, dura
 | APS-05 | P0 | Remove FullPlayer fixed 80ms seek timeout and bind UI to scrub/pending/engine state | DONE | `92196a6c`: no fixed seek timer; UI precedence is scrub → pending target → engine progress. |
 | APS-06 | P0 | Fix unknown-duration slider semantics | DONE | `92196a6c`: unknown duration renders `--:--`, slider value 0 and disabled; no fake `durationMs || 1` clamp. |
 | APS-07 | P1 | Normalize audio MIME delivery (especially M4A) | DONE | `d52d5495`: stream response strips invalid parameters and normalizes M4A to `audio/mp4`, MP3 aliases to `audio/mpeg`. |
-| APS-08 | P1 | Persist/expose canonical media duration metadata | NOT STARTED | Catalog/API can return duration; runtime player metadata remains authoritative after load. |
-| APS-09 | P1 | Verify seekable HTTP Range behavior across local + configured provider delivery | NOT STARTED | Seek requests support byte ranges / provider equivalent without entitlement bypass. |
+| APS-08 | P1 | Persist/expose canonical media duration metadata | DONE | `87136d73`–`a0d713b3`: optional `duration_ms` schema, Cloudinary ingestion metadata, catalog/library APIs, and all identified mobile audio queue producers; runtime engine duration still overrides when available. |
+| APS-09 | P1 | Verify seekable HTTP Range behavior across local + configured provider delivery | IN PROGRESS | `6de8c3c7`, `b2e98bcb`, `f2cb8ed3`, `f9e6f1ce`: local single-range semantics hardened and executable MIME/Range contract added. Cloudinary/S3/Firebase live-provider verification remains. |
 | APS-10 | P1 | Harden signed playback lease/source refresh during long audio playback | NOT STARTED | Refresh cannot reset position or replace active source unsafely. |
 | APS-11 | P0 | Add deterministic regression tests for stale-progress-after-seek and rapid repeated seeks | IN PROGRESS | `049ba53c`: executable stale-read, convergence, rapid-second-seek and source-contract tests added. Local test execution + paused/buffering coverage still pending. |
 | APS-12 | P0 | Final source review + local/manual Web/Android/iOS acceptance matrix | NOT STARTED | No regression to background audio, mini player, next/previous, entitlement, heartbeat/progress persistence. |
@@ -65,6 +65,9 @@ Do not mark this work complete from a visual happy-path test alone. P0 code + de
 - `3ffe8998` / `e22e75c6` — pure, testable audio progress acceptance policy wired into provider.
 - `049ba53c` — deterministic regression tests added.
 - `d52d5495` — progressive audio MIME normalization.
+- `87136d73`–`a0d713b3` — canonical optional duration metadata persisted/exposed and propagated through fan queues.
+- `6de8c3c7` / `b2e98bcb` / `f2cb8ed3` / `f9e6f1ce` — correct local byte-range semantics plus executable backend streaming contract.
+- `45934109` / `f7189b1b` — rapid repeated scrubs and repeat-one seeks use the same deterministic seek coordinator.
 
 ### Verification note
 
