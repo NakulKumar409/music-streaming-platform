@@ -48,13 +48,13 @@ import { recordPlayback } from "../services/libraryService";
 import {
   getPlaybackErrorPresentation,
   getPlaybackUrl,
+  getPlaybackUrlForRecovery,
   normalizePlaybackUrl,
   validatePlaybackUrl,
   type VideoQuality,
 } from "../services/streamService";
 import { evaluateAudioProgressSample } from "../utils/audioProgressSync";
 import { toFiniteDurationMs } from "../utils/mediaTime";
-import { decodeJwtExpMsFromUrl } from "../utils/streaming";
 
 import type { MediaItem, PlayerState } from "../media.types";
 
@@ -135,7 +135,19 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const audioPlayer = null;
-  const [audioSource, setAudioSource] = useState<string | null>(null);
+
+  // Audio source identity is deliberately kept outside render state. It is used
+  // only to reject duplicate recovery for the same failed signed URL.
+  const audioSourceRef = useRef<string | null>(null);
+  const lastRecoveredAudioSourceRef = useRef<string | null>(null);
+  const recoverAudioPlaybackRef = useRef<
+    ((input: {
+      failedUrl: string;
+      resumePositionMs: number;
+      shouldPlay: boolean;
+      reason?: unknown;
+    }) => Promise<boolean>) | null
+  >(null);
 
   // Web fallback: dedicated HTMLAudioElement when TrackPlayer is unavailable (Expo Web / browser)
   const webAudioRef = useRef<any | null>(null);
@@ -235,7 +247,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     useState<VideoQuality>("Auto");
 
   const audioLoadTokenRef = useRef(0);
-  const hasStartedPlayingRef = useRef(false);
 
   const currentItem = state.queue.length
     ? state.queue[state.currentIndex] ?? null
@@ -247,9 +258,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     null
   );
   const lastRecordedRef = useRef<string | null>(null);
-  const tokenRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
-  );
   const preloadedUrlRef = useRef<{ id: string; url: string } | null>(null);
 
   const stateRef = useRef<PlayerState>(state);
@@ -629,7 +637,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   const unloadAudio = useCallback(async () => {
     resetSeekCoordinator();
-    setAudioSource(null);
+    audioSourceRef.current = null;
     // Tear down web audio element
     if (!TrackPlayerAvailable && webAudioRef.current) {
       try {
@@ -654,74 +662,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   const stopVideo = useCallback(async () => {
     videoPlayer?.pause();
   }, [videoPlayer]);
-
-  const scheduleTokenRefresh = useCallback(
-    (url: string | null, type: "audio" | "video") => {
-      if (tokenRefreshTimerRef.current) {
-        clearTimeout(tokenRefreshTimerRef.current);
-        tokenRefreshTimerRef.current = null;
-      }
-
-      const expMs = decodeJwtExpMsFromUrl(url);
-      if (!expMs) return;
-
-      const now = Date.now();
-      const delay = Math.max(10_000, expMs - now - 35_000); // 35s buffer
-      logger.log(
-        `[MediaPlayer] Scheduling ${type} refresh in ${Math.round(
-          delay / 1000
-        )}s`
-      );
-
-      tokenRefreshTimerRef.current = setTimeout(() => {
-        (async () => {
-          const item = currentItemRef.current;
-          if (!item?.id) return;
-          logger.log(`[MediaPlayer] Background refreshing ${type} URL...`);
-          try {
-            const nextUrl = await getPlaybackUrl(
-              item.contentId ?? item.id,
-              type,
-              preferredQuality
-            );
-            if (type === "audio") {
-              setAudioSource(nextUrl);
-              scheduleTokenRefresh(nextUrl, "audio");
-            } else {
-              setVideoSource(nextUrl);
-              scheduleTokenRefresh(nextUrl, "video");
-            }
-          } catch (e) {
-            const presentation = getPlaybackErrorPresentation(e);
-            logger.warn(
-              `[MediaPlayer] Failed to background refresh ${type} token`,
-              e
-            );
-            if (presentation.shouldStopPlayback) {
-              if (type === "audio" && TrackPlayerAvailable) {
-                try {
-                  await TrackPlayer.pause();
-                } catch {
-                  // ignore native pause failures; state still fails closed
-                }
-              } else {
-                try {
-                  videoPlayer?.pause();
-                } catch {
-                  // ignore native pause failures; state still fails closed
-                }
-              }
-              setState((s) => ({ ...s, isPlaying: false }));
-              if (AppState.currentState === "active") {
-                Alert.alert(presentation.title, presentation.message);
-              }
-            }
-          }
-        })().catch(() => undefined);
-      }, delay);
-    },
-    [preferredQuality, videoPlayer]
-  );
 
   const preloadNextItem = useCallback(async () => {
     const s = stateRef.current;
@@ -933,7 +873,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         setAudioSource(playbackUrl);
         scheduleTokenRefresh(playbackUrl, "audio");
 
-        hasStartedPlayingRef.current = false;
+
 
         // Build track metadata for notification/lock screen display
         // Use artworkUrl from MediaItem type - this is the correct field for artwork
@@ -1101,7 +1041,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           TrackPlayer.pause();
           setState((s) => ({ ...s, isPlaying: false }));
         } else {
-          hasStartedPlayingRef.current = false;
+
           TrackPlayer.play();
           setState((s) => ({ ...s, isPlaying: true }));
         }
@@ -1118,7 +1058,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         videoPlayer.pause();
         setState((s) => ({ ...s, isPlaying: false }));
       } else {
-        hasStartedPlayingRef.current = false;
+
         videoPlayer.play();
         setState((s) => ({ ...s, isPlaying: true }));
       }
@@ -1326,40 +1266,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, isExpanded: expanded }));
   }, []);
 
-  // Retry effect: if state says we should be playing but native isn't playing yet,
-  // retry calling play(). This handles cases where the direct play() call in
-  // loadAndPlayAudio fired before the native player finished initializing.
-  useEffect(() => {
-    if (
-      !TrackPlayerAvailable ||
-      !state.isPlaying ||
-      !audioSource ||
-      !isPlayerReady
-    )
-      return;
-
-    // Polling retry
-    const timer = setTimeout(async () => {
-      try {
-        const ts = await TrackPlayer.getState();
-        if (ts !== TrackPlayerState?.Playing && stateRef.current.isPlaying) {
-          TrackPlayer.play();
-        }
-      } catch {
-        // Ignore errors from TrackPlayer in Expo Go
-      }
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [audioSource, state.isPlaying, isPlayerReady]);
-
   useEffect(() => {
     return () => {
       stopVideo().catch(() => undefined);
       unloadAudio().catch(() => undefined);
-      if (tokenRefreshTimerRef.current) {
-        clearTimeout(tokenRefreshTimerRef.current);
-        tokenRefreshTimerRef.current = null;
-      }
     };
   }, [stopVideo, unloadAudio]);
 
