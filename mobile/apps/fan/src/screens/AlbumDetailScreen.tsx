@@ -38,6 +38,11 @@ export default function AlbumDetailScreen({ route, navigation }: any) {
       mediaUrl: x.mediaUrl || '',
       isLocked: Boolean(x.isLocked || x.locked),
       useStreamAccess: x.useStreamAccess,
+      duration:
+        Number.isFinite(Number(x.durationMs ?? x.duration)) &&
+        Number(x.durationMs ?? x.duration) > 0
+          ? Math.round(Number(x.durationMs ?? x.duration))
+          : undefined,
     }));
 
     navigation.navigate('FullPlayer', {
@@ -68,6 +73,11 @@ export default function AlbumDetailScreen({ route, navigation }: any) {
       mediaUrl: x.mediaUrl || '',
       isLocked: Boolean(x.isLocked || x.locked),
       useStreamAccess: x.useStreamAccess,
+      duration:
+        Number.isFinite(Number(x.durationMs ?? x.duration)) &&
+        Number(x.durationMs ?? x.duration) > 0
+          ? Math.round(Number(x.durationMs ?? x.duration))
+          : undefined,
     }));
     
     const queueIndex = Math.max(0, queue.findIndex((q: any) => q.id === song.id || q.contentId === song.id));
