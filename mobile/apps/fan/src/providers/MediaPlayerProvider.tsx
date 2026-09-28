@@ -168,6 +168,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   const seekGenerationRef = useRef(0);
   const pendingSeekRef = useRef<{ generation: number; targetMs: number } | null>(null);
   const [pendingSeekPositionMs, setPendingSeekPositionMs] = useState<number | null>(null);
+  const skipToIndexRef = useRef<(index: number) => Promise<void>>(async () => {});
 
   const [videoSource, setVideoSource] = useState<string | null>(null);
   const [videoPlayer, setVideoPlayer] = useState<VideoPlayer | null>(null);
@@ -622,6 +623,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
     const isLast = s.currentIndex >= Math.max(0, s.queue.length - 1);
     if (isLast && s.repeatMode === "off") {
+      if (item.mediaType === "audio") {
+        audioPlayIntentRef.current = false;
+      }
       setState((prev) => ({
         ...prev,
         isPlaying: false,
@@ -633,8 +637,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     const nextIndex = s.queue.length
       ? (s.currentIndex + 1) % s.queue.length
       : 0;
-    // Use the same skip logic, but avoid capturing stale state by delegating.
-    await skipToIndex(nextIndex);
+    // Use the latest skip implementation without capturing the first render's
+    // load callbacks in this finish handler.
+    await skipToIndexRef.current(nextIndex);
   }, [beginPendingSeek, clearPendingSeek, videoPlayer]);
 
   const onVideoPlaybackStatusUpdate = useCallback((status: any) => {
@@ -1327,6 +1332,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     [applyPlaybackConfigToCurrent, loadAndPlayAudio, prepareVideo]
   );
 
+  useEffect(() => {
+    skipToIndexRef.current = skipToIndex;
+  }, [skipToIndex]);
+
   const skipNext = useCallback(async () => {
     const s = stateRef.current;
     if (!s.queue.length) return;
@@ -1547,6 +1556,19 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       }
     );
 
+    const playbackQueueEndedSubscription = TrackPlayer.addEventListener(
+      Event?.PlaybackQueueEnded,
+      () => {
+        if (currentItemRef.current?.mediaType !== "audio") return;
+        // The background service deliberately does not own the React queue.
+        // While the UI runtime is active, apply the same repeat/advance policy
+        // used by the web HTMLAudioElement ended event.
+        if (AppState.currentState === "active") {
+          handleDidJustFinish().catch(() => undefined);
+        }
+      }
+    );
+
     // Position/duration are intentionally NOT written from PlaybackProgress.
     // One sequential getProgress loop below owns authoritative audio progress.
 
@@ -1654,11 +1676,18 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       remotePrevSubscription.remove();
       remoteSeekSubscription.remove();
       remoteDuckSubscription.remove();
+      playbackQueueEndedSubscription.remove();
       playbackStateSubscription.remove();
       trackChangedSubscription.remove();
       playbackErrorSubscription.remove();
     };
-  }, [isPlayerReady, skipToIndex, beginPendingSeek, resetSeekCoordinator]);
+  }, [
+    isPlayerReady,
+    skipToIndex,
+    beginPendingSeek,
+    resetSeekCoordinator,
+    handleDidJustFinish,
+  ]);
 
   // Canonical native audio progress synchronization.
   // Sequential polling mirrors RNTP's own useProgress design: one read
