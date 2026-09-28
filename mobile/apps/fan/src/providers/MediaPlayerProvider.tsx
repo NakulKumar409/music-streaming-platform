@@ -575,15 +575,27 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     if (!item) return;
 
     if (s.repeatMode === "one") {
+      if (item.mediaType === "audio") {
+        const generation = beginPendingSeek(0);
+        try {
+          if (TrackPlayerAvailable) {
+            await TrackPlayer.seekTo(0);
+            await TrackPlayer.play();
+          } else if (webAudioRef.current) {
+            // Web completion is confirmed by the HTMLMediaElement 'seeked' event.
+            webAudioRef.current.currentTime = 0;
+            await webAudioRef.current.play();
+          } else {
+            clearPendingSeek(generation);
+          }
+        } catch {
+          clearPendingSeek(generation);
+        }
+        return;
+      }
+
       try {
-        if (item.mediaType === "audio" && TrackPlayerAvailable) {
-          TrackPlayer.seekTo(0);
-          TrackPlayer.play();
-        } else if (item.mediaType === "audio" && webAudioRef.current) {
-          // Web HTMLAudioElement repeat
-          webAudioRef.current.currentTime = 0;
-          webAudioRef.current.play().catch(() => undefined);
-        } else if (videoPlayer) {
+        if (videoPlayer) {
           videoPlayer.seekBy(-videoPlayer.currentTime);
           videoPlayer.play();
         }
@@ -608,7 +620,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       : 0;
     // Use the same skip logic, but avoid capturing stale state by delegating.
     await skipToIndex(nextIndex);
-  }, []);
+  }, [beginPendingSeek, clearPendingSeek, videoPlayer]);
 
   const onVideoPlaybackStatusUpdate = useCallback((status: any) => {
     void status;
