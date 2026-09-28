@@ -514,3 +514,33 @@ export async function getPlaybackUrl(
   const access = await getPlaybackDescriptor(contentId, kind, quality);
   return access.playbackUrl;
 }
+
+/**
+ * Explicit recovery path for a media engine that reports the currently loaded
+ * source is no longer usable. Reuse the existing server playback session when
+ * it is still active; if that exact lease expired during a long pause/background
+ * interval, terminate/reacquire once and request a fresh descriptor.
+ *
+ * This is intentionally event-driven. Callers must not rotate an active source
+ * on a wall-clock timer.
+ */
+export async function getPlaybackUrlForRecovery(
+  contentId: string | number,
+  kind?: 'audio' | 'video',
+  quality?: VideoQuality
+): Promise<string> {
+  try {
+    return await getPlaybackUrl(contentId, kind, quality);
+  } catch (error) {
+    if (
+      !(error instanceof StreamAccessError) ||
+      (error.code !== 'PLAYBACK_SESSION_EXPIRED' &&
+        error.code !== 'PLAYBACK_SESSION_MISMATCH')
+    ) {
+      throw error;
+    }
+
+    await reacquireExpiredPlaybackLease(contentId);
+    return getPlaybackUrl(contentId, kind, quality);
+  }
+}
