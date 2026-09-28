@@ -247,7 +247,7 @@ test('manual QA fixes protect reset events, heartbeat resume, and explicit sourc
 
   assert.match(
     provider,
-    /currentItemRef\.current\?\.mediaType !== "audio" \|\|\s*!audioSourceRef\.current/s
+    /item\?\.mediaType === "audio" && audioSourceRef\.current/
   );
   assert.match(provider, /if \(lastRecordedRef\.current !== key\)/);
   assert.match(provider, /startHeartbeat\(\s*key,/s);
@@ -262,4 +262,24 @@ test('background service allows an explicit remote Play to retry a previously fa
 
   assert.match(service, /Event\.RemotePlay/);
   assert.match(service, /servicePlayIntent = true/);
+});
+
+
+test('stream recovery exports stay unique and unused RNTP progress events remain disabled', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+  const service = read('apps/fan/src/services/playbackService.ts');
+  const stream = read('apps/fan/src/services/streamService.ts');
+
+  assert.equal(
+    (stream.match(/export function adoptActivePlaybackLease\s*\(/g) || []).length,
+    1
+  );
+  assert.equal(
+    (stream.match(/export async function getPlaybackDescriptorForSessionRecovery\s*\(/g) || []).length,
+    1
+  );
+
+  assert.doesNotMatch(provider, /progressUpdateEventInterval/);
+  assert.doesNotMatch(service, /progressUpdateEventInterval/);
+  assert.doesNotMatch(provider, /Event\?\.PlaybackProgress/);
 });
