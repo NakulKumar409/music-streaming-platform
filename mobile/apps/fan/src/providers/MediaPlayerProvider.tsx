@@ -1466,6 +1466,17 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       }
     );
 
+    const remoteStopSubscription = TrackPlayer.addEventListener(
+      Event?.RemoteStop,
+      () => {
+        logger.log("[MediaPlayer] RemoteStop event received");
+        if (currentItemRef.current?.mediaType !== "audio") return;
+        audioPlayIntentRef.current = false;
+        resetSeekCoordinator();
+        setState((s) => ({ ...s, isPlaying: false, positionMs: 0 }));
+      }
+    );
+
     // Listen for remote next events from notification/lock screen
     const remoteNextSubscription = TrackPlayer.addEventListener(
       Event?.RemoteNext,
@@ -1567,15 +1578,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
         if (!explicitlyNotPlaying) return;
 
-        if (
-          nativeState === TrackPlayerState?.Stopped ||
-          nativeState === TrackPlayerState?.Ended ||
-          nativeState === TrackPlayerState?.Error ||
-          nativeState === TrackPlayerState?.None
-        ) {
-          audioPlayIntentRef.current = false;
-        }
-
+        // Engine state describes what RNTP is doing right now. It must not
+        // overwrite user intent: Error/None/Stopped can be emitted while a
+        // protected source is being recovered. Explicit controls and final
+        // recovery failure own audioPlayIntentRef instead.
         if (stateRef.current.isPlaying) {
           setState((s) => ({ ...s, isPlaying: false }));
         }
@@ -1643,6 +1649,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       console.log("[MediaPlayer] Cleaning up TrackPlayer event listeners");
       remotePlaySubscription.remove();
       remotePauseSubscription.remove();
+      remoteStopSubscription.remove();
       remoteNextSubscription.remove();
       remotePrevSubscription.remove();
       remoteSeekSubscription.remove();
@@ -1651,7 +1658,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       trackChangedSubscription.remove();
       playbackErrorSubscription.remove();
     };
-  }, [isPlayerReady, skipToIndex, beginPendingSeek]);
+  }, [isPlayerReady, skipToIndex, beginPendingSeek, resetSeekCoordinator]);
 
   // Canonical native audio progress synchronization.
   // Sequential polling mirrors RNTP's own useProgress design: one read
