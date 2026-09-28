@@ -64,6 +64,7 @@ type MediaPlayerContextValue = {
   playQueue: (queue: MediaItem[], index: number) => Promise<void>;
   togglePlayPause: () => Promise<void>;
   seekTo: (positionMs: number) => Promise<void>;
+  pendingSeekPositionMs: number | null;
   skipNext: () => Promise<void>;
   skipPrev: () => Promise<void>;
   setShuffle: (enabled: boolean) => void;
@@ -136,6 +137,12 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   // Web fallback: dedicated HTMLAudioElement when TrackPlayer is unavailable (Expo Web / browser)
   const webAudioRef = useRef<any | null>(null);
+
+  // Audio seek coordination. A seek increments the generation so any async
+  // progress read that started before it can never overwrite the new target.
+  const seekGenerationRef = useRef(0);
+  const pendingSeekRef = useRef<{ generation: number; targetMs: number } | null>(null);
+  const [pendingSeekPositionMs, setPendingSeekPositionMs] = useState<number | null>(null);
 
   const [videoSource, setVideoSource] = useState<string | null>(null);
   const [videoPlayer, setVideoPlayer] = useState<VideoPlayer | null>(null);
@@ -247,6 +254,69 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  const clearPendingSeek = useCallback((generation?: number) => {
+    const pending = pendingSeekRef.current;
+    if (!pending) return;
+    if (generation !== undefined && pending.generation !== generation) return;
+    pendingSeekRef.current = null;
+    setPendingSeekPositionMs(null);
+  }, []);
+
+  const beginPendingSeek = useCallback((targetMs: number) => {
+    const generation = seekGenerationRef.current + 1;
+    seekGenerationRef.current = generation;
+    pendingSeekRef.current = { generation, targetMs };
+    setPendingSeekPositionMs(targetMs);
+    return generation;
+  }, []);
+
+  const applyAudioProgress = useCallback(
+    (positionMs: number, durationMs: number, generationAtRead?: number) => {
+      const safePosition = Math.max(0, Math.round(positionMs));
+      const safeDuration =
+        Number.isFinite(durationMs) && durationMs > 0
+          ? Math.round(durationMs)
+          : 0;
+
+      // A promise that began before the latest seek is stale by definition.
+      if (
+        generationAtRead !== undefined &&
+        generationAtRead !== seekGenerationRef.current
+      ) {
+        return false;
+      }
+
+      const pending = pendingSeekRef.current;
+      if (pending) {
+        // RNTP seekTo() resolves when the command is accepted, not when the
+        // native player has reached the target. Keep rejecting pre-seek
+        // progress until the engine itself reports the requested location.
+        const SEEK_CONFIRM_TOLERANCE_MS = 1000;
+        if (Math.abs(safePosition - pending.targetMs) > SEEK_CONFIRM_TOLERANCE_MS) {
+          return false;
+        }
+        clearPendingSeek(pending.generation);
+      }
+
+      setState((s) => {
+        const nextDuration = safeDuration > 0 ? safeDuration : s.durationMs;
+        if (
+          s.positionMs === safePosition &&
+          s.durationMs === nextDuration
+        ) {
+          return s;
+        }
+        return {
+          ...s,
+          positionMs: safePosition,
+          durationMs: nextDuration,
+        };
+      });
+      return true;
+    },
+    [clearPendingSeek]
+  );
 
   useEffect(() => {
     // Skip TrackPlayer setup if not available (Expo Go compatibility)
@@ -774,7 +844,19 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
           wa.addEventListener('timeupdate', () => {
             const pos = Math.round((wa.currentTime || 0) * 1000);
-            setState((s) => ({ ...s, positionMs: pos }));
+            const dur =
+              Number.isFinite(wa.duration) && wa.duration > 0
+                ? Math.round(wa.duration * 1000)
+                : 0;
+            applyAudioProgress(pos, dur);
+          });
+          wa.addEventListener('seeked', () => {
+            const pos = Math.round((wa.currentTime || 0) * 1000);
+            const dur =
+              Number.isFinite(wa.duration) && wa.duration > 0
+                ? Math.round(wa.duration * 1000)
+                : 0;
+            applyAudioProgress(pos, dur, seekGenerationRef.current);
           });
           wa.addEventListener('play', () => {
             setState((s) => ({ ...s, isPlaying: true }));
@@ -860,7 +942,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         );
       }
     },
-    [stopVideo, audioPlayer]
+    [stopVideo, audioPlayer, applyAudioProgress]
   );
 
   const prepareVideo = useCallback(async () => {
@@ -1011,42 +1093,61 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   const seekTo = useCallback(
     async (positionMs: number) => {
-      const item = currentItem;
+      const item = currentItemRef.current;
       if (!item) return;
 
-      const safe = Math.max(0, Math.round(positionMs));
-
-      // Optimistically update the UI state to the target position
-      // to prevent "jump back" jitter on real devices while native is catching up.
-      setState((s) => ({ ...s, positionMs: safe }));
+      const durationMs = stateRef.current.durationMs;
+      const safe = Math.max(
+        0,
+        Math.min(
+          Math.round(positionMs),
+          Number.isFinite(durationMs) && durationMs > 0
+            ? durationMs
+            : Number.MAX_SAFE_INTEGER
+        )
+      );
 
       if (item.mediaType === "audio") {
+        const generation = beginPendingSeek(safe);
+
         if (!TrackPlayerAvailable) {
-          // Web fallback: seek HTMLAudioElement directly
           const wa = webAudioRef.current;
-          if (wa && isFinite(safe / 1000)) {
+          if (!wa || !Number.isFinite(safe / 1000)) {
+            clearPendingSeek(generation);
+            return;
+          }
+          try {
+            // Completion is acknowledged by the native HTMLMediaElement
+            // 'seeked' event, never by a fixed timeout.
             wa.currentTime = safe / 1000;
-            // Optimistic UI already set above via setState
+          } catch (err) {
+            clearPendingSeek(generation);
+            logger.warn("[MediaPlayer] web audio seekTo failed", err);
           }
           return;
         }
+
         try {
-          TrackPlayer.seekTo(safe / 1000);
+          // RNTP v4 resolves this promise when the seek command is accepted.
+          // The sequential progress reader below confirms actual convergence.
+          await TrackPlayer.seekTo(safe / 1000);
         } catch (err) {
+          clearPendingSeek(generation);
           logger.warn("[MediaPlayer] audio seekTo failed", err);
         }
         return;
       }
 
+      // Video has its own event-backed progress path.
+      setState((s) => ({ ...s, positionMs: safe }));
       if (!videoPlayer) return;
       try {
-        // Use direct currentTime assignment for more reliable seeking in expo-video
         videoPlayer.currentTime = safe / 1000;
       } catch (err) {
         logger.warn("[MediaPlayer] video seekTo failed", err);
       }
     },
-    [currentItem, audioPlayer, videoPlayer]
+    [beginPendingSeek, clearPendingSeek, videoPlayer]
   );
 
   const skipToIndex = useCallback(
@@ -1282,8 +1383,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       Event?.RemoteSeek,
       (event: any) => {
         console.log("[MediaPlayer] RemoteSeek event received:", event.position);
-        const pos = Math.round(event.position * 1000);
-        setState((s) => ({ ...s, positionMs: pos }));
+        const pos = Math.max(0, Math.round(event.position * 1000));
+        // The playback service performs the native seek. Foreground state waits
+        // for the canonical progress reader to confirm the new position.
+        beginPendingSeek(pos);
       }
     );
 
@@ -1308,20 +1411,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // Playback progress tracking for real-time position updates
-    const playbackProgressSubscription = TrackPlayer.addEventListener(
-      Event?.PlaybackProgress,
-      (event: any) => {
-        const pos = Math.round(event.position * 1000);
-        const dur = Math.round(event.duration * 1000);
-        console.log("[MediaPlayer] PlaybackProgress event:", { pos, dur });
-        setState((s) => ({
-          ...s,
-          positionMs: pos,
-          durationMs: dur,
-        }));
-      }
-    );
+    // Position/duration are intentionally NOT written from PlaybackProgress.
+    // One sequential getProgress loop below owns authoritative audio progress.
 
     // Playback state change tracking
     const playbackStateSubscription = TrackPlayer.addEventListener(
@@ -1370,69 +1461,57 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       remotePrevSubscription.remove();
       remoteSeekSubscription.remove();
       remoteDuckSubscription.remove();
-      playbackProgressSubscription.remove();
       playbackStateSubscription.remove();
       trackChangedSubscription.remove();
       playbackErrorSubscription.remove();
     };
-  }, [isPlayerReady, skipToIndex]);
+  }, [isPlayerReady, skipToIndex, beginPendingSeek]);
 
-  // Polling for progress updates - works on both web and native
-  // PlaybackProgress events may not fire consistently on all platforms
+  // Canonical native audio progress synchronization.
+  // Sequential polling mirrors RNTP's own useProgress design: one read
+  // completes before the next begins, so reads never overlap.
   useEffect(() => {
     if (!TrackPlayerAvailable || !isPlayerReady) return;
 
-    let isPolling = false;
-    const interval = setInterval(async () => {
-      if (!isPlayerReady || isPolling) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
-      isPolling = true;
-      try {
-        const progress = await TrackPlayer.getProgress();
-        const pos = Math.max(0, Math.round(progress.position * 1000));
-        const dur = Math.max(0, Math.round(progress.duration * 1000));
+    const poll = async () => {
+      if (!active) return;
 
-        setState((s) => ({
-          ...s,
-          positionMs: pos,
-          durationMs: dur,
-        }));
-      } catch (e) {
-        console.log("[MediaPlayer] Polling error:", e);
-      } finally {
-        isPolling = false;
-      }
-    }, 100); // 100ms for smooth updates
-    return () => {
-      clearInterval(interval);
-      isPolling = false;
-    };
-  }, [isPlayerReady]);
+      const item = currentItemRef.current;
+      if (item?.mediaType === "audio") {
+        const generationAtRead = seekGenerationRef.current;
+        try {
+          const progress = await TrackPlayer.getProgress();
+          if (!active) return;
 
-  // Smooth 100ms ticker for Web Audio fallback (since browser timeupdate is ~250ms)
-  useEffect(() => {
-    if (TrackPlayerAvailable || !state.isPlaying) return;
+          const pos = Math.max(0, Math.round(progress.position * 1000));
+          const dur =
+            Number.isFinite(progress.duration) && progress.duration > 0
+              ? Math.round(progress.duration * 1000)
+              : 0;
 
-    const interval = setInterval(() => {
-      const wa = webAudioRef.current;
-      if (!wa || wa.paused) return;
-      const pos = Math.max(0, Math.round((wa.currentTime || 0) * 1000));
-      const dur = isFinite(wa.duration) && wa.duration > 0 ? Math.round(wa.duration * 1000) : 0;
-
-      setState((s) => {
-        if (Math.abs(s.positionMs - pos) < 40 && (dur <= 0 || s.durationMs === dur)) {
-          return s;
+          applyAudioProgress(pos, dur, generationAtRead);
+        } catch (e) {
+          logger.warn("[MediaPlayer] Progress read failed", e);
         }
-        return {
-          ...s,
-          positionMs: pos,
-          durationMs: dur > 0 ? dur : s.durationMs,
-        };
-      });
-    }, 100);
+      }
 
-    return () => clearInterval(interval);
-  }, [state.isPlaying]);
+      if (active) {
+        timer = setTimeout(() => {
+          void poll();
+        }, 250);
+      }
+    };
+
+    void poll();
+
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [isPlayerReady, applyAudioProgress]);
 
   const value = useMemo<MediaPlayerContextValue>(
     () => ({
@@ -1441,6 +1520,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       playQueue,
       togglePlayPause,
       seekTo,
+      pendingSeekPositionMs,
       skipNext,
       skipPrev,
       setShuffle,
@@ -1477,6 +1557,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       onVideoPlaybackStatusUpdate,
       playQueue,
       seekTo,
+      pendingSeekPositionMs,
       setPlaybackRate,
       setRepeatMode,
       setExpanded,
