@@ -585,7 +585,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     return () => {
       clearTimeout(t);
     };
-  }, [currentItem]);
+  }, [currentItem, videoPlayer]);
 
   const applyPlaybackConfigToCurrent = useCallback(async () => {
     const s = stateRef.current;
@@ -594,12 +594,12 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
     if (item.mediaType === "audio" && TrackPlayerAvailable) {
       try {
-        TrackPlayer.setRate(s.playbackRate);
+        await TrackPlayer.setRate(s.playbackRate);
       } catch {
         // ignore
       }
       try {
-        TrackPlayer.setVolume(s.volume);
+        await TrackPlayer.setVolume(s.volume);
       } catch {
         // ignore
       }
@@ -617,7 +617,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
-  }, []);
+  }, [videoPlayer]);
 
   const shuffleQueueKeepCurrent = useCallback(
     (queue: MediaItem[], currentIndex: number) => {
@@ -1265,13 +1265,14 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       blockLockedPlayback,
       loadAndPlayAudio,
       prepareVideo,
+      preferredQuality,
       shuffleQueueKeepCurrent,
     ]
   );
 
   const togglePlayPause = useCallback(async () => {
     const item = currentItemRef.current;
-    if (stateRef.current.queue.length === 0) return;
+    if (!item || stateRef.current.queue.length === 0) return;
 
     if (item.mediaType === "audio") {
       if (!TrackPlayerAvailable) {
