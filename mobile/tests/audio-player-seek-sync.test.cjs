@@ -507,18 +507,24 @@ test('cross-media selections are latest-wins before and after async video prepar
   );
 });
 
-test('out-of-order playback descriptors cannot replace the newest active lease', () => {
+test('out-of-order playback access cannot overwrite the newest media or lease', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
   const stream = read('apps/fan/src/services/streamService.ts');
 
-  assert.match(stream, /playbackDescriptorRequestGeneration/);
-  assert.match(stream, /latestPlaybackDescriptorRequest/);
+  assert.match(stream, /export type PlaybackDescriptorOptions/);
+  assert.match(stream, /isStillRelevant\?: \(\) => boolean/);
+  assert.match(stream, /PLAYBACK_REQUEST_SUPERSEDED/);
   assert.match(
-    stream,
-    /if \(!latest \|\| latest\.generation !== requestGeneration\)[\s\S]{0,500}return access;/s
+    provider,
+    /getPlaybackDescriptorForRecovery[\s\S]{0,260}\{ isStillRelevant: isCurrentLoad \}/s
+  );
+  assert.match(
+    provider,
+    /getPlaybackUrl\([\s\S]{0,220}"video"[\s\S]{0,180}\{ isStillRelevant: isCurrentSelection \}/s
   );
   assert.match(
     stream,
-    /if \(!existing\) \{[\s\S]{0,180}terminatePlaybackAccess/s
+    /previousDifferentContentLease[\s\S]{0,900}Playback request was superseded/s
   );
 });
 
@@ -531,4 +537,47 @@ test('foreground reconciliation never overwrites a newer recovered lease with st
     /!cachedLease \|\|\s*cachedLease\.sessionId === nativeSessionId[\s\S]{0,160}adoptActivePlaybackLease/s
   );
   assert.match(provider, /Preserving newer foreground playback lease/);
+});
+
+
+test('legacy ContentPlayer route no longer owns a second audio engine', () => {
+  const legacy = read('apps/fan/src/screens/ContentPlayerScreen.tsx');
+
+  assert.doesNotMatch(legacy, /expo-audio/);
+  assert.doesNotMatch(legacy, /createAudioPlayer/);
+  assert.doesNotMatch(legacy, /setInterval\(/);
+  assert.doesNotMatch(legacy, /\/stream\/access/);
+  assert.match(legacy, /navigation\.replace\('FullPlayer'/);
+  assert.match(legacy, /resolveGenerationRef/);
+});
+
+test('different-content access preserves current playback until replacement is authorized', () => {
+  const stream = read('apps/fan/src/services/streamService.ts');
+
+  assert.match(stream, /const previousDifferentContentLease/);
+  assert.match(
+    stream,
+    /Keep the currently playing different-content lease alive until the new[\s\S]{0,180}access = await requestNewAccess\(\)/s
+  );
+  assert.match(
+    stream,
+    /error\.code === 'PLAYBACK_SESSION_LIMIT'[\s\S]{0,500}terminatePlaybackAccess/s
+  );
+  assert.match(
+    stream,
+    /storeActiveLease\(numericContentId, access\.sessionId\)[\s\S]{0,400}previousDifferentContentLease\.sessionId/s
+  );
+});
+
+test('expired lease recovery never returns a different-content winner to its caller', () => {
+  const stream = read('apps/fan/src/services/streamService.ts');
+
+  assert.match(
+    stream,
+    /winner && winner\.contentId !== numericContentId[\s\S]{0,300}PLAYBACK_REQUEST_SUPERSEDED/s
+  );
+  assert.match(
+    stream,
+    /winner &&[\s\S]{0,180}expectedSessionId[\s\S]{0,300}return \{ \.\.\.winner \}/s
+  );
 });
