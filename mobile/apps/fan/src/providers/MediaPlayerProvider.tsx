@@ -1346,6 +1346,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       }
 
       await prepareVideo();
+      if (!isCurrentSelection()) return;
       setState((s) => ({ ...s, isPlaying: true }));
       // actual play is handled by Video component when it renders with shouldPlay
     },
@@ -1494,7 +1495,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   const skipToIndex = useCallback(
     async (nextIndex: number) => {
-      cancelPendingMediaSelection();
       const s = stateRef.current;
       const safeIndex = Math.min(
         Math.max(0, nextIndex),
@@ -1504,6 +1504,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       const item = s.queue[safeIndex];
       if (!item) return;
       if (await blockLockedPlayback(item)) return;
+
+      const selectionToken = mediaSelectionTokenRef.current + 1;
+      mediaSelectionTokenRef.current = selectionToken;
       currentItemRef.current = item;
 
       setState((prev) => ({
@@ -1527,7 +1530,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       blockLockedPlayback,
       loadAndPlayAudio,
       prepareVideo,
-      cancelPendingMediaSelection,
     ]
   );
 
