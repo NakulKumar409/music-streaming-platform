@@ -49,7 +49,6 @@ type AudioLoadOptions = {
   recovery?: boolean;
 };
 
-import { startHeartbeat, stopHeartbeat } from "../services/heartbeatService";
 import { recordPlayback } from "../services/libraryService";
 import {
   adoptActivePlaybackLease,
@@ -522,16 +521,12 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   }, [videoAudioOnlyMode, videoPlayer, resetSeekCoordinator]);
 
   useEffect(() => {
-    if (!currentItem?.id) return;
-    if (!state.isPlaying) {
-      stopHeartbeat();
-      return;
-    }
+    if (!currentItem?.id || !state.isPlaying) return;
 
     const key = `${currentItem.contentId ?? currentItem.id}`;
 
-    // Playback history is recorded once per content item, but the trusted
-    // heartbeat must restart every time playback resumes after a pause.
+    // This effect owns UX playback-history recording only. Trusted heartbeat
+    // lifecycle is owned once, at App level, by PlaybackHeartbeatLifecycleBridge.
     if (lastRecordedRef.current !== key) {
       if (playbackRecordTimerRef.current) {
         clearTimeout(playbackRecordTimerRef.current);
@@ -543,12 +538,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         recordPlayback(key).catch(() => undefined);
       }, 500);
     }
-
-    startHeartbeat(
-      key,
-      () => stateRef.current.positionMs,
-      () => stateRef.current.durationMs
-    );
 
     return () => {
       if (playbackRecordTimerRef.current) {
