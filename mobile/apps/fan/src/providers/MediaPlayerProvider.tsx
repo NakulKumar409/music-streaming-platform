@@ -146,6 +146,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   // only to reject duplicate recovery for the same failed signed URL.
   const audioSourceRef = useRef<string | null>(null);
   const lastRecoveredAudioSourceRef = useRef<string | null>(null);
+  // User playback intent is separate from transient engine state. A source
+  // reset during recovery may emit pause/stopped events, but must not override
+  // a newer user pause/play action.
+  const audioPlayIntentRef = useRef(false);
   const recoverAudioPlaybackRef = useRef<
     ((input: {
       failedUrl: string;
@@ -692,6 +696,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       const shouldPlay = options.shouldPlay ?? true;
       if (!options.recovery) {
         lastRecoveredAudioSourceRef.current = null;
+        audioPlayIntentRef.current = shouldPlay;
       }
 
       const loadToken = (audioLoadTokenRef.current += 1);
@@ -848,7 +853,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
               stateRef.current.positionMs,
               Math.max(0, Math.round((wa.currentTime || 0) * 1000))
             );
-            const shouldResume = stateRef.current.isPlaying;
+            const shouldResume = audioPlayIntentRef.current;
             if (!recovery) {
               setState((s) => ({ ...s, isPlaying: false }));
               return;
@@ -867,11 +872,14 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           });
 
           const seededDuration = toFiniteDurationMs(item.duration);
+          const shouldPlayNow = options.recovery
+            ? audioPlayIntentRef.current
+            : shouldPlay;
           setState((s) => ({
             ...s,
             positionMs: resumePositionMs,
             durationMs: seededDuration > 0 ? seededDuration : s.durationMs,
-            isPlaying: shouldPlay,
+            isPlaying: shouldPlayNow,
           }));
 
           const restoreAndMaybePlay = async () => {
@@ -887,7 +895,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
               }
             }
 
-            if (!shouldPlay) return;
+            const shouldPlayAtCommit = options.recovery
+              ? audioPlayIntentRef.current
+              : shouldPlay;
+            if (!shouldPlayAtCommit) return;
             try {
               await wa.play();
             } catch (err: any) {
@@ -943,11 +954,14 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         await TrackPlayer.add([track]);
 
         const seededDuration = toFiniteDurationMs(item.duration);
+        const shouldPlayNow = options.recovery
+          ? audioPlayIntentRef.current
+          : shouldPlay;
         setState((s) => ({
           ...s,
           positionMs: resumePositionMs,
           durationMs: seededDuration > 0 ? seededDuration : s.durationMs,
-          isPlaying: shouldPlay,
+          isPlaying: shouldPlayNow,
         }));
 
         if (resumePositionMs > 0) {
@@ -955,14 +969,17 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           await TrackPlayer.seekTo(resumePositionMs / 1000);
         }
 
-        if (shouldPlay) {
+        const shouldPlayAtCommit = options.recovery
+          ? audioPlayIntentRef.current
+          : shouldPlay;
+        if (shouldPlayAtCommit) {
           await TrackPlayer.play();
         }
 
         logger.log("[MediaPlayer] Audio source loaded successfully", {
           recovered: Boolean(options.recovery),
           resumePositionMs,
-          shouldPlay,
+          shouldPlay: shouldPlayAtCommit,
         });
       } catch (err) {
         logger.warn("[MediaPlayer] Failed to create or play audio", err);
@@ -1131,9 +1148,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         const wa = webAudioRef.current;
         if (wa) {
           if (stateRef.current.isPlaying) {
+            audioPlayIntentRef.current = false;
             wa.pause();
             // state updated by 'pause' DOM event
           } else {
+            audioPlayIntentRef.current = true;
             const p = wa.play();
             if (p && typeof p.catch === 'function') {
               p.catch((err: any) => {
@@ -1148,10 +1167,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       try {
         const isCurrentlyPlaying = stateRef.current.isPlaying;
         if (isCurrentlyPlaying) {
+          audioPlayIntentRef.current = false;
           TrackPlayer.pause();
           setState((s) => ({ ...s, isPlaying: false }));
         } else {
-
+          audioPlayIntentRef.current = true;
           TrackPlayer.play();
           setState((s) => ({ ...s, isPlaying: true }));
         }
@@ -1360,6 +1380,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   );
 
   const close = useCallback(async () => {
+    audioPlayIntentRef.current = false;
     await stopVideo();
     await unloadAudio();
     setState(EMPTY_STATE);
@@ -1387,6 +1408,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       Event?.RemotePlay,
       () => {
         logger.log("[MediaPlayer] RemotePlay event received");
+        if (currentItemRef.current?.mediaType === "audio") {
+          audioPlayIntentRef.current = true;
+        }
         setState((s) => ({ ...s, isPlaying: true }));
       }
     );
@@ -1396,6 +1420,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       Event?.RemotePause,
       () => {
         logger.log("[MediaPlayer] RemotePause event received");
+        if (currentItemRef.current?.mediaType === "audio") {
+          audioPlayIntentRef.current = false;
+        }
         setState((s) => ({ ...s, isPlaying: false }));
       }
     );
@@ -1510,7 +1537,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         }
 
         const resumePositionMs = Math.max(0, stateRef.current.positionMs);
-        const shouldPlay = stateRef.current.isPlaying;
+        const shouldPlay = audioPlayIntentRef.current;
 
         void recovery({
           failedUrl,
