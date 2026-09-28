@@ -261,6 +261,7 @@ test('background service allows an explicit remote Play to retry a previously fa
   const service = read('apps/fan/src/services/playbackService.ts');
 
   assert.match(service, /Event\.RemotePlay/);
+  assert.match(service, /lastRecoveredSourceUrl = null/);
   assert.match(service, /servicePlayIntent = true/);
 });
 
