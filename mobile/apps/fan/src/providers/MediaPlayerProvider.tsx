@@ -372,28 +372,24 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             stopForegroundGracePeriod: 0,
           },
           // Main capabilities shown in notification/lock screen
+          // Keep this identical to playbackService.ts. The React queue is not
+          // mirrored into TrackPlayer's native queue, so advertising native
+          // next/previous would be unreliable once the app is backgrounded.
           capabilities: [
             Capability?.Play,
             Capability?.Pause,
-            Capability?.SkipToNext,
-            Capability?.SkipToPrevious,
             Capability?.SeekTo,
             Capability?.JumpForward,
             Capability?.JumpBackward,
             Capability?.Stop,
           ],
-          // Compact capabilities (small notification view)
           compactCapabilities: [
             Capability?.Play,
             Capability?.Pause,
-            Capability?.SkipToNext,
           ],
-          // Notification icon customization
           notificationCapabilities: [
             Capability?.Play,
             Capability?.Pause,
-            Capability?.SkipToNext,
-            Capability?.SkipToPrevious,
             Capability?.SeekTo,
             Capability?.Stop,
           ],
@@ -1440,9 +1436,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       Event?.RemotePlay,
       () => {
         logger.log("[MediaPlayer] RemotePlay event received");
-        if (currentItemRef.current?.mediaType === "audio") {
-          audioPlayIntentRef.current = true;
-        }
+        if (currentItemRef.current?.mediaType !== "audio") return;
+        audioPlayIntentRef.current = true;
         setState((s) => ({ ...s, isPlaying: true }));
       }
     );
@@ -1452,9 +1447,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       Event?.RemotePause,
       () => {
         logger.log("[MediaPlayer] RemotePause event received");
-        if (currentItemRef.current?.mediaType === "audio") {
-          audioPlayIntentRef.current = false;
-        }
+        if (currentItemRef.current?.mediaType !== "audio") return;
+        audioPlayIntentRef.current = false;
         setState((s) => ({ ...s, isPlaying: false }));
       }
     );
@@ -1536,6 +1530,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     const playbackStateSubscription = TrackPlayer.addEventListener(
       Event?.PlaybackState,
       (playbackState: any) => {
+        if (currentItemRef.current?.mediaType !== "audio") return;
+
         const nativeState = playbackState.state;
         logger.log("[MediaPlayer] PlaybackState changed:", nativeState);
 
@@ -1589,13 +1585,15 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
         const failedUrl = audioSourceRef.current;
         const item = currentItemRef.current;
+        if (item?.mediaType !== "audio") return;
+
         const recovery = recoverAudioPlaybackRef.current;
         if (
           !failedUrl ||
-          item?.mediaType !== "audio" ||
           !item.useStreamAccess ||
           !recovery
         ) {
+          audioPlayIntentRef.current = false;
           setState((s) => ({ ...s, isPlaying: false }));
           return;
         }
