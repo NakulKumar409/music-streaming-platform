@@ -181,3 +181,28 @@ npm --prefix backend run test:module08-admin-governance
 | **09** | Input Security (XSS / SQL / Unicode) | XSS payload stored purely as raw text data without execution; SQL meta-characters preserved as data in audit log metadata without syntax deviation; Unicode multi-byte handled cleanly | **PASS** |
 | **10** | Session Security & Secret Redaction | Revoked session rejected immediately with 401; Audit logs verified to have zero leakage of password hashes, JWT secrets, or encryption keys | **PASS** |
 
+---
+
+### 4. Real Manual UI Test Execution Register (Web Admin Portal: `localhost:5174`)
+
+**Manual Execution Date:** 2026-09-29  
+**Testers:** User (Manual QA Execution & UI Validation) + Antigravity Agent (Evidence Verification)  
+**Target Applications:** `web-admin` (`http://localhost:5174`), `backend` (`http://localhost:8000`)
+
+| Test ID | Type | Scenario Tested | Manual Action & Verified UI Evidence | Result |
+|---|---|---|---|:---:|
+| **UI-RBAC-001** | ❌ Negative | Finance Role Navigation Gate | Logged in as `finance@test.com`. Left navigation strictly hides Artist Applications, Content Moderation, Platform Plan, and Audit Logs. Shows **only** `Refund Management`. Direct privilege escalation blocked. | **PASS** |
+| **UI-RBAC-002** | ✅ Positive | Admin Master Dashboard Access | Logged in as `admin@test.com`. Full privileged navigation rendered. Dashboard KPIs loaded accurately (Revenue: ₹0, Active Artists: 6, Subscriptions: 1, Pending: 2). | **PASS** |
+| **UI-MOD-001** | ❌ Negative | Destructive Rejection Safety | In `/admin/moderation`, clicked `Reject` on "Barbaad Song \| Saiyaara" (#19). Modal enforced mandatory reason (3-500 characters). Reason `"dublicate"` submitted; item preserved in DRAFT with rejection reason badge recorded; unauthorized publication blocked. | **PASS** |
+| **UI-MOD-002** | ✅ Positive | Content Approval & Early Access | In `/admin/moderation`, clicked `Approve` on "Tera Mera Hai Pyar Amar" (#22). Status transitioned to `EARLY_ACCESS`; item immediately removed from draft queue; pending count decremented from 2 to 1. | **PASS** |
+| **UI-AUD-001** | ✅ Positive | Immutable Audit Trail Logging | Opened `/admin/audit`. Verified real-time immutable audit entries: `content.rejected` (Actor: `MODERATOR #58`, Entity: `content #19`), `content.approved` (Actor: `MODERATOR #58`, Entity: `content #22`), `admin.login`, `admin.logout`. | **PASS** |
+| **UI-AUD-002** | ❌ Negative | Sensitive Secret Redaction | Clicked `View` on Audit Log entry. Inspected detail drawer: verified correlation ID (`d230bc4e-...`) present, zero leakage of JWT tokens, password hashes, or private keys. | **PASS** |
+| **UI-ART-001** | ✅ Positive | Artist Master Registry Display | Navigated to `/admin/artists`. Verified artist directory rendering verified badges, active statuses, and authoritative subscription prices (e.g., "Arjit Singh", ₹49.00/month). | **PASS** |
+| **UI-ART-002** | ✅ Positive | Pending Artist Application Approval | Navigated to `/admin/artist-applications`. Reviewed candidate `Sonu` (`sjainnn@gmail.com`). Clicked `Approve`. Candidate transitioned to active artist, removed from pending queue, and pending count decremented from 2 to 1. | **PASS** |
+
+### 5. Final Module 08 Verification Summary
+- **Automated Integration Suite:** 10 / 10 Sections Passed (100%)
+- **Manual UI Test Scenarios:** 8 / 8 Tests Passed (5 Positive, 3 Negative) (100%)
+- **Module Status:** **VERIFIED COMPLETE** ✅
+
+

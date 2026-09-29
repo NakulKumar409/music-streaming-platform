@@ -23,6 +23,7 @@ import mediaStreamRoutes from "./modules/media/media-stream.routes";
 import artistOnboardingRoutes from "./modules/artist/artist-onboarding.routes";
 import artistSecurityRoutes from "./modules/artist/artist-security.routes";
 import artistAnalyticsRoutes from "./modules/artist/artist-analytics.routes";
+import analyticsRoutes from "./modules/analytics/analytics.routes";
 import artistPricingRoutes from "./modules/artist/artist-pricing.routes";
 import { validateArtistPricingRequest } from "./modules/artist/artist-pricing.validation";
 import {
@@ -31,21 +32,34 @@ import {
 } from "./modules/artist/artist-assets.routes";
 
 function corsMiddleware(runtime: EnvValidationResult): RequestHandler {
+  const defaultAllowed = new Set([
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    "http://127.0.0.1:5175",
+    "http://127.0.0.1:3000",
+    ...runtime.corsAllowedOrigins
+  ]);
   const allowAll = runtime.corsAllowedOrigins.includes("*");
-  const allowed = new Set(runtime.corsAllowedOrigins);
 
   return (req: any, res: any, next: any) => {
     const origin = String(req.headers.origin || "").replace(/\/$/, "");
-    const originAllowed = !origin || allowAll || allowed.has(origin);
+    const originAllowed = !origin || allowAll || defaultAllowed.has(origin);
 
     if (origin && originAllowed) {
-      res.setHeader("Access-Control-Allow-Origin", allowAll ? "*" : origin);
-      if (!allowAll) res.append("Vary", "Origin");
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.append("Vary", "Origin");
+    } else if (allowAll) {
+      res.setHeader("Access-Control-Allow-Origin", "*");
     }
 
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Auth-Token, X-Correlation-Id, Cache-Control, Pragma, Expires"
+      "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Auth-Token, X-Correlation-Id, Cache-Control, Pragma, Expires, x-device-id"
     );
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
 
@@ -176,6 +190,7 @@ export function createApp(runtime: EnvValidationResult) {
   app.use("/api/v1/content", contentRoutes);
   app.use("/api/v1/search", searchRoutes);
   app.use("/api/v1/media", mediaRoutes);
+  app.use("/api/v1/analytics", analyticsRoutes);
 
   app.use((req: any, _res: any, next: any) => {
     const error: any = new Error("Route not found");

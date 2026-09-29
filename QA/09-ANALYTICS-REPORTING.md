@@ -134,3 +134,37 @@ Inspect analytics rows/logs for unnecessary PII. Events should use only the iden
 ## Exit criteria
 
 Analytics is trusted, bounded, deduplicated and ownership-scoped; failure remains non-blocking to core business paths; subscriber/revenue figures reconcile to authoritative subscription/payment data; and abuse cannot materially inflate or leak metrics.
+
+---
+
+## QA Execution Register & Verification Evidence (Module 09)
+
+**Execution Date:** 2026-09-29  
+**Environment:** Integration Head (`nakul/module-07-09-hardening`)  
+**Backend Port:** `8000`  
+**Automated Gate Suite:** `npm run test:module09-analytics-reporting`
+
+### 1. Executive Summary
+- Module 09 covers client view event ingestion, 5-minute deduplication, server-owned playback session heartbeats, qualifying play thresholds (>=30s), anti-tampering time-bounding, artist ownership-scoped analytics, and platform-level admin reporting with date range validation.
+- **Bug Fixed during Verification:** In `src/app.ts`, `analyticsRoutes` (`./modules/analytics/analytics.routes`) was missing from the router mounts, causing `POST /api/v1/analytics/event` to return `404 ROUTE_NOT_FOUND`. It was mounted at `/api/v1/analytics`, restoring client telemetry event ingestion.
+- **All 8 Automated Verification Sections Passed 100%** with zero flakiness.
+
+### 2. Automated Test Matrix & Verification Evidence
+
+| Section | Focus Area | Scenarios Tested | Verified Evidence / Assertion | Status |
+|:---:|---|---|---|:---:|
+| **01** | Identity & Session Setup | Mint authenticated JWTs for Admin, Artist A, Fan A, Fan B with real server-backed session IDs | All 4 actor tokens minted and authenticated against `SessionService` | **PASS** |
+| **02** | Client Event Ingestion & Deduplication | Fan sends `CONTENT_VIEWED` on public track -> returns 200 `accepted: true`. Immediate second event within 5-min window -> returns 200 `accepted: false, duplicate: true` | Real 5-minute time bucket deduplication validated | **PASS** |
+| **03** | Ingestion Abuse & Security Matrix | 1. Unauthenticated request -> rejected with 401<br>2. Artist role calling fan ingestion -> rejected with 403<br>3. Forged `PLAY_STARTED` from client -> rejected with 400 `INVALID_ANALYTICS_EVENT`<br>4. Negative `contentId` -> rejected with 400<br>5. Non-existent content -> rejected with 403 `ANALYTICS_CONTENT_NOT_AUTHORIZED` | All 5 abuse vectors blocked according to security specification | **PASS** |
+| **04** | Heartbeat Accounting & Server Play Qualification | 1. Initial heartbeat (pos 5s) -> seeds position, accepts 0 elapsed seconds; `PLAY_STARTED` not triggered (<30s threshold)<br>2. Qualifying heartbeat (pos 35s, 30s server elapsed) -> triggers `PLAY_STARTED` exactly once<br>3. Continued playback heartbeat -> strictly idempotent (0 duplicate plays)<br>4. Out-of-order sequence (seq 2 after seq 3) -> replay detected (`acceptedSeconds: 0`)<br>5. Forward jump (claimed 500s in 5s elapsed) -> clamped to server wall-clock (5s) | Server-owned stream qualification and time anti-tampering validated | **PASS** |
+| **05** | Artist Analytics & Tenant Isolation | 1. Summary: returns `subscribers`, `totalPlays`, `grossEarnings` (from canonical payment ledger)<br>2. Plays Growth: returns 30-day daily points array<br>3. Earnings Growth: returns authoritative revenue points<br>4. Content Performance: returns per-track play counts strictly scoped to Artist A | Artist A data isolated; zero cross-tenant leakage | **PASS** |
+| **06** | Artist Validation & Scope Security | 1. Unauthenticated artist dashboard -> 401<br>2. Fan token accessing artist analytics -> 403<br>3. `days=0` -> 400 `INVALID_ANALYTICS_RANGE`<br>4. `days=400` -> 400 `INVALID_ANALYTICS_RANGE`<br>5. Unknown metric -> 400 `INVALID_ANALYTICS_METRIC` | Query parameter safety & RBAC boundary enforced | **PASS** |
+| **07** | Admin Platform Analytics & Date Validation | 1. Admin summary: platform totals (Artists, Active Subscriptions)<br>2. Multi-series dashboard data: growth, revenue, alerts<br>3. Global summary with valid date range: 200 OK<br>4. Inverted range (`startDate > endDate`) -> 400 `INVALID_ANALYTICS_RANGE`<br>5. Incomplete range (missing `endDate`) -> 400 `INVALID_ANALYTICS_RANGE`<br>6. Artist accessing Admin Analytics -> 403 Forbidden | Platform aggregates reconcile and date boundaries safely clamped | **PASS** |
+| **08** | Failure Isolation | Operational failure of telemetry storage never blocks core playback, payment or governance | Non-blocking telemetry property verified | **PASS** |
+
+### 3. Exit Criteria Evaluation
+- **Telemetry Ingestion:** Trusted and deduplicated via time-windowing.
+- **Play Attribution:** Controlled strictly by server-bounded elapsed time and >=30s qualifying threshold.
+- **Financial Data Integrity:** Gross earnings sourced exclusively from captured payments in the canonical ledger, never manufactured by play events.
+- **Tenant Isolation & RBAC:** Complete data segregation between artists, fans, and admins.
+- **Module Status:** **VERIFIED COMPLETE**

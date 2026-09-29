@@ -55,7 +55,8 @@
     "db:migrate": "ts-node --transpile-only src/scripts/migrate.ts",
     "db:migrate:status": "ts-node --transpile-only src/scripts/migration-status.ts",
     "db:schema:check": "ts-node --transpile-only src/scripts/check-schema.ts",
-    "db:generate": "prisma generate"
+    "db:generate": "prisma generate",
+    "test:module09-analytics-reporting": "ts-node --transpile-only src/scripts/test-module09-analytics-reporting-complete.ts"
   },
   "keywords": [],
   "author": "",
