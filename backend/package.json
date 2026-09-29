@@ -60,6 +60,7 @@
     "test:module10-audit-observability": "ts-node --transpile-only src/scripts/test-module10-audit-observability-complete.ts",
     "test:module11-distribution-readiness": "ts-node --transpile-only src/scripts/test-module11-distribution-readiness-complete.ts",
     "test:module12-privacy-retention": "ts-node --transpile-only src/scripts/test-module12-privacy-retention-complete.ts",
+    "test:module13-database-migrations-config": "ts-node --transpile-only src/scripts/test-module13-database-migrations-config-complete.ts",
     "test:audio-progressive-http": "ts-node --transpile-only src/scripts/test-audio-progressive-http-contract.ts"
   },
   "keywords": [],
