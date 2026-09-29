@@ -62,6 +62,7 @@
     "test:module12-privacy-retention": "ts-node --transpile-only src/scripts/test-module12-privacy-retention-complete.ts",
     "test:module13-database-migrations-config": "ts-node --transpile-only src/scripts/test-module13-database-migrations-config-complete.ts",
     "test:module14-clients-ux": "ts-node --transpile-only src/scripts/test-module14-clients-ux-complete.ts",
+    "test:module15-nfr": "ts-node --transpile-only src/scripts/test-module15-nfr-security-performance-resilience-complete.ts",
     "test:audio-progressive-http": "ts-node --transpile-only src/scripts/test-audio-progressive-http-contract.ts"
   },
   "keywords": [],
