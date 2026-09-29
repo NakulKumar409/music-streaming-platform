@@ -57,7 +57,7 @@ router.get("/reported", async (req: any, res: any) => {
   }
 });
 
-router.patch("/:id/approve", async (req: any, res: any) => {
+const handleApprove = async (req: any, res: any) => {
   const correlationId = req?.correlationId || "-";
   try {
     const result = await approveContent(req.params.id, actor(req));
@@ -66,9 +66,11 @@ router.patch("/:id/approve", async (req: any, res: any) => {
   } catch (error) {
     return sendError(res, error, correlationId);
   }
-});
+};
+router.patch("/:id/approve", handleApprove);
+router.post("/:id/approve", handleApprove);
 
-router.patch("/:id/reject", async (req: any, res: any) => {
+const handleReject = async (req: any, res: any) => {
   const correlationId = req?.correlationId || "-";
   try {
     const result = await rejectContent(req.params.id, req.body?.reason, actor(req));
@@ -77,7 +79,9 @@ router.patch("/:id/reject", async (req: any, res: any) => {
   } catch (error) {
     return sendError(res, error, correlationId);
   }
-});
+};
+router.patch("/:id/reject", handleReject);
+router.post("/:id/reject", handleReject);
 
 router.post("/:id/takedown", async (req: any, res: any) => {
   const correlationId = req?.correlationId || "-";

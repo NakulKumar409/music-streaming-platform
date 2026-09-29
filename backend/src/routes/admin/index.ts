@@ -44,6 +44,12 @@ router.use(
   requireRoles("ADMIN", "MODERATOR"),
   adminContentRoutes
 );
+router.use(
+  "/moderation/content",
+  requireAuth,
+  requireRoles("ADMIN", "MODERATOR"),
+  adminContentRoutes
+);
 router.use("/media", requireAuth, requireRoles("ADMIN"), adminMediaRoutes);
 router.use(
   "/featured-artists",

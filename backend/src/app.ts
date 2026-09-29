@@ -57,7 +57,7 @@ function corsMiddleware(runtime: EnvValidationResult): RequestHandler {
       res.setHeader("Access-Control-Allow-Credentials", "true");
       res.append("Vary", "Origin");
     } else if (allowAll) {
-      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Origin", origin || "null");
     }
 
     res.setHeader(
@@ -88,7 +88,12 @@ export function createApp(runtime: EnvValidationResult) {
     const incomingCorrelationId =
       (req.headers["x-correlation-id"] as string | undefined) ||
       (req.headers["x-request-id"] as string | undefined);
-    const correlationId = incomingCorrelationId || uuidv4();
+    let correlationId: string;
+    if (typeof incomingCorrelationId === "string" && incomingCorrelationId.trim().length > 0) {
+      correlationId = incomingCorrelationId.replace(/[\r\n]/g, "").slice(0, 128);
+    } else {
+      correlationId = uuidv4();
+    }
     req.correlationId = correlationId;
     res.setHeader("X-Correlation-Id", correlationId);
     res.setHeader("X-Content-Type-Options", "nosniff");
