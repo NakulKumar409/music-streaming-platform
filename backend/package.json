@@ -58,6 +58,7 @@
     "db:generate": "prisma generate",
 "test:module09-analytics-reporting": "ts-node --transpile-only src/scripts/test-module09-analytics-reporting-complete.ts",
     "test:module10-audit-observability": "ts-node --transpile-only src/scripts/test-module10-audit-observability-complete.ts",
+    "test:module11-distribution-readiness": "ts-node --transpile-only src/scripts/test-module11-distribution-readiness-complete.ts",
     "test:audio-progressive-http": "ts-node --transpile-only src/scripts/test-audio-progressive-http-contract.ts"
   },
   "keywords": [],
