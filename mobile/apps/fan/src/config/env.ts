@@ -113,10 +113,17 @@ export function isAllowedPlaybackUrl(rawValue: string): boolean {
   );
 }
 
-export const API_HOST_BASE_URL = validateMobileHttpUrl(
-  'EXPO_PUBLIC_API_URL',
-  process.env.EXPO_PUBLIC_API_URL
-);
+function getEffectiveApiUrl(): string {
+  if (typeof window !== 'undefined' && window.location && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return 'http://localhost:8000';
+  }
+  return validateMobileHttpUrl(
+    'EXPO_PUBLIC_API_URL',
+    process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000'
+  );
+}
+
+export const API_HOST_BASE_URL = getEffectiveApiUrl();
 
 export const ARTIST_WEB_URL = validateMobileHttpUrl(
   'EXPO_PUBLIC_ARTIST_WEB_URL',
