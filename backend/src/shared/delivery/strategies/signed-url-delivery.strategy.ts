@@ -5,9 +5,9 @@
 
 import type { IMediaDeliveryStrategy } from "../interfaces/media-delivery-strategy.interface";
 import type { GeneratePlaybackAccessParams, PlaybackAccessResult } from "../interfaces/media-delivery-strategy.interface";
-import { getStorageProvider } from "../../storage/factory/storage-provider.factory";
 import { getStorageConfig } from "../../../config/storage.config";
 import { DeliveryFailedException } from "../../exceptions/delivery.exception";
+import { normalizeMediaMimeType } from "../../storage/utils/file-metadata.util";
 
 export class SignedUrlDeliveryStrategy implements IMediaDeliveryStrategy {
   async generatePlaybackAccess(params: GeneratePlaybackAccessParams): Promise<PlaybackAccessResult> {
@@ -44,15 +44,19 @@ export class SignedUrlDeliveryStrategy implements IMediaDeliveryStrategy {
           secretAccessKey: config.s3.secretAccessKey
         }
       });
+      const canonicalContentType = normalizeMediaMimeType(contentType || "");
       const command = new GetObjectCommand({
         Bucket: config.s3.bucket,
-        Key: storageKey
+        Key: storageKey,
+        ...(canonicalContentType
+          ? { ResponseContentType: canonicalContentType }
+          : {}),
       });
       const playbackUrl = await getSignedUrl(client, command, { expiresIn });
       return {
         playbackUrl,
         expiresIn,
-        contentType,
+        contentType: canonicalContentType || contentType,
         contentLength
       };
     } catch (err: any) {
@@ -80,14 +84,18 @@ export class SignedUrlDeliveryStrategy implements IMediaDeliveryStrategy {
       }
       const bucket = admin.storage().bucket(config.firebase.storageBucket);
       const file = bucket.file(storageKey);
+      const canonicalContentType = normalizeMediaMimeType(contentType || "");
       const [signedUrl] = await file.getSignedUrl({
         action: "read",
-        expires: Date.now() + expiresIn * 1000
+        expires: Date.now() + expiresIn * 1000,
+        ...(canonicalContentType
+          ? { responseType: canonicalContentType }
+          : {}),
       });
       return {
         playbackUrl: signedUrl,
         expiresIn,
-        contentType
+        contentType: canonicalContentType || contentType
       };
     } catch (err: any) {
       const msg = (err?.message || "").toString();

@@ -129,6 +129,7 @@ model content_items {
   status                       String    @default("UPLOADING") @db.VarChar(20)
   mime_type                    String?   @map("mime_type") @db.VarChar(100)
   file_size_bytes              Int?      @map("file_size_bytes")
+  durationMs                   Int?      @map("duration_ms")
   original_file_name           String?   @map("original_file_name") @db.VarChar(255)
   uploaded_at                  DateTime? @map("uploaded_at") @db.Timestamptz(6)
   video_storage_key            String?   @map("video_storage_key")

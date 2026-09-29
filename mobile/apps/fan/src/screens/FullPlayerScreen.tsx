@@ -110,13 +110,13 @@ export default function FullPlayerScreen({ navigation, route }: any) {
     skipNext,
     skipPrev,
     seekTo,
+    pendingSeekPositionMs,
     setVolume,
     close,
   } = useMediaPlayer();
 
   // ── Local UI state ─────────────────────────────────────────────────────────
   const [scrubPosition, setScrubPosition] = useState<number | null>(null);
-  const isSeeking = scrubPosition !== null;
   const [isHearted, setIsHearted] = useState(false);
   const [hasAutoPlayed, setHasAutoPlayed] = useState(false);
 
@@ -199,14 +199,22 @@ export default function FullPlayerScreen({ navigation, route }: any) {
     const queueIndex = params.queueIndex ?? 0;
     if (!queue || queue.length === 0) return;
 
-    const currentKey =
-      currentItem?.mediaType === 'audio'
-        ? String(currentItem.contentId ?? currentItem.id ?? '')
-        : '';
-    const targetKey = params.songId ?? '';
+    const targetItem = queue[Math.min(
+      Math.max(0, queueIndex),
+      Math.max(0, queue.length - 1)
+    )];
+    const sameTrack =
+      currentItem?.mediaType === 'audio' &&
+      targetItem?.mediaType === 'audio' &&
+      (
+        String(currentItem.id ?? '') === String(targetItem.id ?? '') ||
+        String(currentItem.contentId ?? currentItem.id ?? '') ===
+          String(targetItem.contentId ?? targetItem.id ?? '')
+      );
 
-    // Already playing the right song — don't restart
-    if (currentKey && targetKey && currentKey === targetKey && playerState.isPlaying) {
+    // Opening the full player for the already-active logical audio item must
+    // not reset playback to 0 (notably for ids such as "123:audio").
+    if (sameTrack) {
       setHasAutoPlayed(true);
       return;
     }
@@ -221,12 +229,21 @@ export default function FullPlayerScreen({ navigation, route }: any) {
   const displayArtist = currentItem?.artistName ?? params.artist ?? 'Unknown';
   const displayImage = currentItem?.artworkUrl ?? params.imageUrl ?? FALLBACK_ARTWORK;
 
-  const positionForUi = scrubPosition !== null ? scrubPosition : playerState.positionMs;
+  const durationKnown = hasFiniteDuration(playerState.durationMs);
+  const enginePositionForUi =
+    pendingSeekPositionMs !== null
+      ? pendingSeekPositionMs
+      : playerState.positionMs;
+  const positionForUi =
+    scrubPosition !== null ? scrubPosition : enginePositionForUi;
+  const sliderValue = durationKnown
+    ? Math.min(Math.max(positionForUi, 0), playerState.durationMs)
+    : 0;
 
   // ── Seek ───────────────────────────────────────────────────────────────────
   const onSeekStart = useCallback(() => {
-    setScrubPosition(playerState.positionMs);
-  }, [playerState.positionMs]);
+    setScrubPosition(enginePositionForUi);
+  }, [enginePositionForUi]);
 
   const onSeekChange = useCallback((v: number) => {
     setScrubPosition(v);
@@ -234,13 +251,13 @@ export default function FullPlayerScreen({ navigation, route }: any) {
 
   const onSeekComplete = useCallback(
     (v: number) => {
+      // Keep the user's scrub value visible until the provider has registered
+      // the pending seek target. No fixed timing window is involved.
       setScrubPosition(v);
       seekTo(v)
         .catch(() => undefined)
         .finally(() => {
-          setTimeout(() => {
-            setScrubPosition(null);
-          }, 80);
+          setScrubPosition(null);
         });
     },
     [seekTo]
@@ -349,14 +366,16 @@ export default function FullPlayerScreen({ navigation, route }: any) {
         <View style={styles.seekSection}>
           <View style={styles.timesRow}>
             <Text style={styles.timeText}>{formatDurationLabel(positionForUi, '00:00')}</Text>
-            <Text style={styles.timeText}>{formatDurationLabel(playerState.durationMs, '--:--')}</Text>
+            <Text style={styles.timeText}>
+              {durationKnown ? formatDurationLabel(playerState.durationMs, '--:--') : '--:--'}
+            </Text>
           </View>
           <Slider
             style={styles.seekSlider}
             minimumValue={0}
-            maximumValue={Math.max(1, playerState.durationMs || 1)}
-            value={Math.min(positionForUi, playerState.durationMs || 1)}
-            disabled={!hasFiniteDuration(playerState.durationMs)}
+            maximumValue={durationKnown ? playerState.durationMs : 1}
+            value={sliderValue}
+            disabled={!durationKnown}
             minimumTrackTintColor={Colors.accent}
             maximumTrackTintColor="rgba(255,255,255,0.20)"
             thumbTintColor={Colors.accent}

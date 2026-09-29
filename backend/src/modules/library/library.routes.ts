@@ -87,6 +87,7 @@ router.get("/recently-played", requireAuth, async (req: any, res) => {
         c.title,
         c.type,
         c.thumbnail_url,
+        c.duration_ms,
         c.artist_id,
         COALESCE(a.name, a.email) as artist_name,
         a.profile_image_url as artist_profile_image_url
@@ -114,6 +115,10 @@ router.get("/recently-played", requireAuth, async (req: any, res) => {
         // The client must obtain a fresh, entitlement-checked stream lease.
         mediaUrl: null,
         useStreamAccess: true,
+        durationMs:
+          Number.isFinite(Number(r.duration_ms)) && Number(r.duration_ms) > 0
+            ? Math.round(Number(r.duration_ms))
+            : null,
         playedAt: r.played_at,
         artistProfileImageUrl: toAbsoluteUrl(req, r.artist_profile_image_url),
       };

@@ -119,14 +119,15 @@ export async function uploadAdminMedia(req: any, res: Response) {
 
     const mediaConfig = getMediaConfig();
     const expectedKind = metadata.contentType === "VIDEO" ? "video" : "audio";
-    await validateSpooledFile({
+    const validatedThumbnail = await validateSpooledFile({
       path: thumbnail.path,
       mimeType: thumbnail.mimetype,
       sizeBytes: thumbnail.size,
       maxSizeBytes: mediaConfig.maxUploadImageBytes,
       kind: "thumbnail",
     });
-    await validateSpooledFile({
+    const thumbnailMimeType = validatedThumbnail.mimeType;
+    const validatedMedia = await validateSpooledFile({
       path: media.path,
       mimeType: media.mimetype,
       sizeBytes: media.size,
@@ -136,10 +137,11 @@ export async function uploadAdminMedia(req: any, res: Response) {
           : mediaConfig.maxUploadAudioBytes,
       kind: expectedKind,
     });
+    const mediaMimeType = validatedMedia.mimeType;
 
-    const thumbnailExt = getExtensionFromMime(thumbnail.mimetype) || "jpg";
+    const thumbnailExt = getExtensionFromMime(thumbnailMimeType) || "jpg";
     const mediaExt =
-      getExtensionFromMime(media.mimetype) || (metadata.contentType === "VIDEO" ? "mp4" : "mp3");
+      getExtensionFromMime(mediaMimeType) || (metadata.contentType === "VIDEO" ? "mp4" : "mp3");
     const thumbnailKey = generateStorageKey(metadata.artistId, "thumbnails", thumbnailExt);
     const mediaKey = generateStorageKey(
       metadata.artistId,
@@ -173,7 +175,7 @@ export async function uploadAdminMedia(req: any, res: Response) {
         metadata.contentType === "AUDIO" ? mediaKey : null,
         metadata.contentType === "VIDEO" ? mediaKey : null,
         thumbnailKey,
-        media.mimetype,
+        mediaMimeType,
         media.size,
         media.originalname,
       ]
@@ -183,7 +185,7 @@ export async function uploadAdminMedia(req: any, res: Response) {
     const thumbnailUpload = await storage.upload({
       storageKey: thumbnailKey,
       body: fs.createReadStream(thumbnail.path),
-      contentType: thumbnail.mimetype,
+      contentType: thumbnailMimeType,
       contentLength: thumbnail.size,
       metadata: { contentId: String(contentId), artistId: String(metadata.artistId) },
     });
@@ -192,7 +194,7 @@ export async function uploadAdminMedia(req: any, res: Response) {
     const mediaUpload = await storage.upload({
       storageKey: mediaKey,
       body: fs.createReadStream(media.path),
-      contentType: media.mimetype,
+      contentType: mediaMimeType,
       contentLength: media.size,
       metadata: { contentId: String(contentId), artistId: String(metadata.artistId) },
     });
@@ -224,7 +226,8 @@ export async function uploadAdminMedia(req: any, res: Response) {
                 adaptive_status = $8,
                 adaptive_qualities = $9::text[],
                 source_width = $10,
-                source_height = $11
+                source_height = $11,
+                duration_ms = $12
           WHERE id = $1`,
         [
           contentId,
@@ -238,6 +241,7 @@ export async function uploadAdminMedia(req: any, res: Response) {
           adaptiveQualities,
           mediaUpload.sourceWidth || null,
           mediaUpload.sourceHeight || null,
+          mediaUpload.durationMs || null,
         ]
       );
 
@@ -273,6 +277,7 @@ export async function uploadAdminMedia(req: any, res: Response) {
             adaptive_qualities: adaptiveQualities,
             source_width: mediaUpload.sourceWidth || null,
             source_height: mediaUpload.sourceHeight || null,
+            duration_ms: mediaUpload.durationMs || null,
             ...(releaseMapping
               ? {
                   release_id: releaseMapping.releaseId,
@@ -302,6 +307,7 @@ export async function uploadAdminMedia(req: any, res: Response) {
         technicalStatus,
         adaptiveStatus,
         adaptiveQualities,
+        durationMs: mediaUpload.durationMs || null,
         isApproved: false,
         isTakenDown: false,
         ...(releaseMapping
@@ -327,7 +333,8 @@ export async function uploadAdminMedia(req: any, res: Response) {
                   audio_provider_asset_id = NULL,
                   video_provider_asset_id = NULL,
                   thumbnail_provider_asset_id = NULL,
-                  thumbnail_url = NULL
+                  thumbnail_url = NULL,
+                  duration_ms = NULL
             WHERE id = $1`,
           [contentId]
         )

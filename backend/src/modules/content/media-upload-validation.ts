@@ -1,4 +1,5 @@
 import fs from "fs/promises";
+import { normalizeMediaMimeType } from "../../shared/storage/utils/file-metadata.util";
 
 export type UploadMediaKind = "audio" | "video" | "thumbnail";
 
@@ -90,7 +91,7 @@ export async function validateSpooledFile(input: {
   maxSizeBytes: number;
   kind: UploadMediaKind;
 }) {
-  const mimeType = String(input.mimeType || "").trim().toLowerCase();
+  const mimeType = normalizeMediaMimeType(input.mimeType);
   if (!ALLOWED_MIME[input.kind].has(mimeType)) {
     throw new UploadValidationError(
       "UNSUPPORTED_MEDIA_TYPE",

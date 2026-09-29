@@ -125,10 +125,10 @@ function main() {
   assert.equal(artistApp.includes('path="/artist/upload"'), false, "Artist router must not expose binary content upload");
   assert.equal(artistHistory.includes("/api/v1/content/mine"), true, "Artist content page must use read-only canonical history endpoint");
 
-  assert.equal(player.includes("const isSeekingRef = useRef(false)"), true, "Seeking must use a ref rather than recreate playback authorization");
-  assert.equal(player.includes("[currentContent, progressOpacity, reloadKey]"), true, "Playback authorization lifecycle must not depend on seek state");
-  assert.equal(player.includes("currentPosition:"), true, "Playback heartbeat must include current position");
-  assert.equal(player.includes("duration:"), true, "Playback heartbeat must include duration");
+  assert.equal(player.includes("navigation.replace('FullPlayer'"), true, "Legacy audio route must delegate to the hardened global player");
+  const heartbeat = repo("mobile/apps/fan/src/services/heartbeatService.ts");
+  assert.equal(heartbeat.includes("currentPosition:"), true, "Playback heartbeat must include current position");
+  assert.equal(heartbeat.includes("duration:"), true, "Playback heartbeat must include duration");
 
   console.log("Content/media governance contract checks passed.");
 }

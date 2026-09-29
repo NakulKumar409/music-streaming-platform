@@ -66,6 +66,7 @@ type ContentCard = {
   mediaType?: 'audio' | 'video' | 'audio_video';
   mediaUrl?: string | null;
   useStreamAccess?: boolean;
+  durationMs?: number;
 };
 
 type ApiContentItem = {
@@ -91,6 +92,7 @@ type ApiContentItem = {
   likeCount?: number;
   dislikeCount?: number;
   userReaction?: 'LIKE' | 'DISLIKE' | null;
+  durationMs?: number | null;
   artist?: {
     id?: string | number | null;
     name?: string | null;
@@ -141,6 +143,7 @@ export default function HomeScreen({ navigation }: any) {
         mediaUrl: x.mediaUrl ?? null,
         useStreamAccess: Boolean(x.useStreamAccess),
         isLocked: x.isLocked,
+        duration: x.durationMs,
       }));
       const idx = Math.max(0, queue.findIndex((q) => q.id === item.id));
       return {
@@ -238,6 +241,10 @@ export default function HomeScreen({ navigation }: any) {
               likeCount: (it.likeCount ?? 0) as any,
               dislikeCount: (it.dislikeCount ?? 0) as any,
               userReaction: (it.userReaction ?? null) as any,
+              durationMs:
+                Number.isFinite(Number(it.durationMs)) && Number(it.durationMs) > 0
+                  ? Math.round(Number(it.durationMs))
+                  : undefined,
             };
           })
           .sort((a, b) => {

@@ -194,6 +194,7 @@ export default function MyLibraryScreen({ navigation }: any) {
                         mediaUrl: item.mediaUrl || '',
                         isLocked: false,
                         useStreamAccess: item.useStreamAccess,
+                        duration: item.durationMs,
                       },
                     ],
                     0

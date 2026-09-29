@@ -145,6 +145,7 @@ export default function ArtistPricingPage() {
     try {
       const payload: Record<string, unknown> = {
         subscriptionPrice: monthlyAmount,
+        currency: "INR",
         subscriptionFeatures: existingFeatures,
       };
       if (existingYearlyPrice !== null) {

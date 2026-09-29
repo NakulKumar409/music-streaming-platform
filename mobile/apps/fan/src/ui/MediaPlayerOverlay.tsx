@@ -16,7 +16,6 @@ import { navigationRef } from '../navigation/rootNavigation';
 import { ArrowLeft, Pause, Play, SkipForward, X } from 'lucide-react-native';
 import { VideoView, VideoPlayer } from 'expo-video';
 import { AudioPlayer } from 'expo-audio';
-import Slider from '@react-native-community/slider';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -24,7 +23,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { MediaItem, PlayerState } from '../media.types';
 import YouTubeVideoControlsOverlay from './YouTubeVideoControlsOverlay';
 import { Colors } from '../theme';
-import { formatDurationLabel } from '../utils/mediaTime';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -149,28 +147,6 @@ export default function MediaPlayerOverlay({
       },
     });
   }, [pan, currentItem?.mediaType, bottomOffset, insets.top]);
-
-  const [isSeeking, setIsSeeking] = useState(false);
-  const seekValueRef = useRef<number>(0);
-
-  const positionForUi = isSeeking ? seekValueRef.current : state.positionMs;
-
-  const onSeekStart = useCallback(() => {
-    setIsSeeking(true);
-    seekValueRef.current = state.positionMs;
-  }, [state.positionMs]);
-
-  const onSeekChange = useCallback((value: number) => {
-    seekValueRef.current = value;
-  }, []);
-
-  const onSeekComplete = useCallback(
-    (value: number) => {
-      setIsSeeking(false);
-      seekTo(value).catch(() => undefined);
-    },
-    [seekTo]
-  );
 
   const cycleSpeed = useCallback(() => {
     const current = state.playbackRate;
@@ -361,15 +337,6 @@ export default function MediaPlayerOverlay({
       </Animated.View>
     </View>
   );
-}
-
-function progressWidth(positionMs: number, durationMs: number) {
-  const p = durationMs > 0 ? Math.min(1, Math.max(0, positionMs / durationMs)) : 0;
-  return `${Math.round(p * 100)}%`;
-}
-
-function formatTime(ms: number) {
-  return formatDurationLabel(ms, '--:--');
 }
 
 const styles = StyleSheet.create({

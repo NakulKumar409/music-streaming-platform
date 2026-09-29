@@ -62,7 +62,10 @@ export class CloudinaryDeliveryStrategy implements IMediaDeliveryStrategy {
       return {
         playbackUrl: result.playbackUrl,
         expiresIn: expiresInSeconds,
-        contentType,
+        contentType:
+          fileType === "audio"
+            ? "audio/mpeg"
+            : "application/vnd.apple.mpegurl",
         contentLength,
       };
     } catch (err: any) {

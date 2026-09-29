@@ -63,7 +63,7 @@ test('mobile playback keeps one server lease across heartbeats and token refresh
   assert.match(stream, /apiV1\.post\('\/stream\/terminate'/);
 
   const heartbeat = read('apps/fan/src/services/heartbeatService.ts');
-  assert.match(heartbeat, /(?:getActivePlaybackLease|ensureActivePlaybackLease)\(contentId\)/);
+  assert.match(heartbeat, /(?:getActivePlaybackLease|ensureActivePlaybackLease)\(contentId(?:,[\s\S]*?)?\)/);
   assert.match(heartbeat, /sessionId: lease\.sessionId/);
   assert.match(heartbeat, /apiV1\.post\('\/stream\/heartbeat'/);
 
@@ -72,9 +72,8 @@ test('mobile playback keeps one server lease across heartbeats and token refresh
   assert.match(app, /releaseActivePlaybackLease/);
 
   const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
-  assert.equal(
-    (provider.match(/preloadNextItem/g) || []).length,
-    1,
+  assert.ok(
+    (provider.match(/preloadNextItem/g) || []).length <= 1,
     'protected playback preloading must stay inactive because access allocates a lease'
   );
 });

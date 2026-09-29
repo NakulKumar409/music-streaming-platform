@@ -58,6 +58,10 @@ function mapContent(row: any) {
     lifecycleState: "EARLY_ACCESS",
     technicalStatus: "READY",
     createdAt: row.created_at,
+    durationMs:
+      Number.isFinite(Number(row.duration_ms)) && Number(row.duration_ms) > 0
+        ? Math.round(Number(row.duration_ms))
+        : null,
     viewCount: Number(row.view_count || 0),
     likeCount: Number(row.like_count || 0),
     dislikeCount: Number(row.dislike_count || 0),
@@ -127,7 +131,7 @@ router.get("/", optionalAuth, async (req: any, res: any) => {
 
     const result = await pool.query(
       `SELECT c.id, c.title, c.type, c.genre, c.artist_id,
-              c.subscription_required, c.created_at,
+              c.subscription_required, c.created_at, c.duration_ms,
               COALESCE(NULLIF(u.name, ''), split_part(u.email, '@', 1)) AS artist_name,
               (SELECT COUNT(*)::int FROM content_plays p WHERE p.content_id = c.id) AS view_count,
               (SELECT COUNT(*)::int FROM content_reactions r WHERE r.content_id = c.id AND r.reaction = 'like') AS like_count,
@@ -189,7 +193,7 @@ router.get("/artist/:artistId", optionalAuth, async (req: any, res: any) => {
   try {
     const result = await pool.query(
       `SELECT c.id, c.title, c.type, c.genre, c.artist_id,
-              c.subscription_required, c.created_at,
+              c.subscription_required, c.created_at, c.duration_ms,
               COALESCE(NULLIF(u.name, ''), split_part(u.email, '@', 1)) AS artist_name,
               (SELECT COUNT(*)::int FROM content_plays p WHERE p.content_id = c.id) AS view_count,
               (SELECT COUNT(*)::int FROM content_reactions r WHERE r.content_id = c.id AND r.reaction = 'like') AS like_count,
@@ -239,7 +243,7 @@ router.get("/:id", optionalAuth, async (req: any, res: any) => {
   try {
     const result = await pool.query(
       `SELECT c.id, c.title, c.type, c.genre, c.artist_id,
-              c.subscription_required, c.created_at,
+              c.subscription_required, c.created_at, c.duration_ms,
               COALESCE(NULLIF(u.name, ''), split_part(u.email, '@', 1)) AS artist_name,
               (SELECT COUNT(*)::int FROM content_plays p WHERE p.content_id = c.id) AS view_count,
               (SELECT COUNT(*)::int FROM content_reactions r WHERE r.content_id = c.id AND r.reaction = 'like') AS like_count,

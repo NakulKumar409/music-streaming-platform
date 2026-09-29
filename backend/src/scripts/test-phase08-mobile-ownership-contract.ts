@@ -24,9 +24,9 @@ function testMobileLeaseRecovery() {
   assert.match(streamService, /PLAYBACK_SESSION_MISMATCH/);
 
   assert.match(heartbeat, /let heartbeatInFlight = false/);
-  assert.match(heartbeat, /await ensureActivePlaybackLease\(contentId\)/);
-  assert.match(heartbeat, /markActivePlaybackLeaseAlive\(lease\.sessionId\)/);
-  assert.match(heartbeat, /await reacquireExpiredPlaybackLease\(contentId\)/);
+  assert.match(heartbeat, /await ensureActivePlaybackLease\(\s*contentId/);
+  assert.match(heartbeat, /markActivePlaybackLeaseAlive\(\s*lease\.sessionId\s*\)/);
+  assert.match(heartbeat, /await reacquireExpiredPlaybackLease\(\s*contentId/);
   assert.match(heartbeat, /shouldStopHeartbeatForAuthorization/);
   assert.match(heartbeat, /status === 401/);
   assert.match(heartbeat, /status === 403/);

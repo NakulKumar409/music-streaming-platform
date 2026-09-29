@@ -21,6 +21,8 @@ export interface UploadObjectResult {
   providerUrl?: string;
   etag?: string;
   sizeBytes?: number;
+  /** Provider-reported source duration in milliseconds when available. */
+  durationMs?: number;
   sourceWidth?: number;
   sourceHeight?: number;
   /** Planned adaptive variants. They are not playable until provider completion is verified. */

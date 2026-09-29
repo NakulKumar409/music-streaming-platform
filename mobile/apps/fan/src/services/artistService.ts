@@ -138,6 +138,7 @@ export type ApiArtistContentItem = {
   userReaction?: 'like' | 'dislike' | null;
   subscriptionRequired?: boolean | number;
   subscription_required?: boolean | number;
+  durationMs?: number | null;
 };
 
 export type ArtistMediaItem = {
@@ -153,6 +154,7 @@ export type ArtistMediaItem = {
   likeCount?: number | null;
   dislikeCount?: number | null;
   userReaction?: 'like' | 'dislike' | null;
+  durationMs?: number;
 };
 
 function resolveMediaUrl(url: string) {
@@ -221,6 +223,10 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
     const effectiveVideoUrl = videoUrl || (isVideoOnly ? fallbackUrl : '');
 
     const createdAt = (it.createdAt || it.created_at || null) as string | null;
+    const durationMs =
+      Number.isFinite(Number(it.durationMs)) && Number(it.durationMs) > 0
+        ? Math.round(Number(it.durationMs))
+        : undefined;
 
     if (isAudioVideo) {
       if (effectiveAudioUrl || useStreamAccess) {
@@ -237,6 +243,7 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
           likeCount: it.likeCount,
           dislikeCount: it.dislikeCount,
           userReaction: it.userReaction,
+          durationMs,
         });
       }
       if (effectiveVideoUrl || useStreamAccess) {
@@ -253,6 +260,7 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
           likeCount: it.likeCount,
           dislikeCount: it.dislikeCount,
           userReaction: it.userReaction,
+          durationMs,
         });
       }
       continue;
@@ -275,6 +283,7 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
       likeCount: it.likeCount,
       dislikeCount: it.dislikeCount,
       userReaction: it.userReaction,
+      durationMs,
     });
   }
 

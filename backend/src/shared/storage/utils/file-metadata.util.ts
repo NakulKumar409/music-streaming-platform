@@ -40,12 +40,30 @@ export const MIME_TO_EXT: Record<string, string> = {
 
 export type LogicalMediaType = "audio" | "video" | "image";
 
+/**
+ * Canonicalize upload/storage MIME values before validation and persistence.
+ * Parameters such as an empty codecs attribute are not part of the media type
+ * identity and must not leak into object metadata.
+ */
+export function normalizeMediaMimeType(mime: string): string {
+  const base = String(mime || "")
+    .trim()
+    .toLowerCase()
+    .split(";")[0]
+    ?.trim() || "";
+
+  if (base === "audio/x-m4a" || base === "audio/m4a") return "audio/mp4";
+  if (base === "audio/mp3") return "audio/mpeg";
+  if (base === "audio/x-wav") return "audio/wav";
+  return base;
+}
+
 export function getExtensionFromMime(mime: string): string | null {
-  return MIME_TO_EXT[mime?.toLowerCase()] ?? null;
+  return MIME_TO_EXT[normalizeMediaMimeType(mime)] ?? null;
 }
 
 export function getLogicalMediaType(mime: string): LogicalMediaType | null {
-  const m = (mime || "").toLowerCase();
+  const m = normalizeMediaMimeType(mime);
   if (ALLOWED_AUDIO_MIMES.has(m)) return "audio";
   if (ALLOWED_VIDEO_MIMES.has(m)) return "video";
   if (ALLOWED_IMAGE_MIMES.has(m)) return "image";

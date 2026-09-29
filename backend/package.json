@@ -47,7 +47,7 @@
     "test:auth-account-state-db": "ts-node --transpile-only src/scripts/test-account-state-db.ts",
     "test:artist-approval-db": "ts-node --transpile-only src/scripts/test-artist-approval-db.ts",
     "test:auth-db": "npm run test:auth-session-db && npm run test:auth-account-state-db && npm run test:artist-approval-db",
-    "test:unit": "npm run test:payment-integrity && npm run test:refund-integrity-contract && npm run test:cloudinary-identity && npm run test:playback-url-guard && npm run test:stream-access-errors && npm run test:playback-session-lease-contract && npm run test:auth-hardening && npm run test:auth-account-state-contract && npm run test:artist-ownership-contract && npm run test:artist-approval-contract && npm run test:content-media-governance && npm run test:runtime-config && npm run test:runtime-api-contract && npm run test:phase07-web-contract && npm run test:artist-pricing-validation && npm run test:admin-artist-validation && npm run test:phase08-operational && npm run test:phase09-distribution-domain && npm run test:phase09a-adaptive-media && npm run test:phase09b-privacy-recovery && npm run test:phase10-final-hardening",
+    "test:unit": "npm run test:payment-integrity && npm run test:refund-integrity-contract && npm run test:cloudinary-identity && npm run test:playback-url-guard && npm run test:stream-access-errors && npm run test:playback-session-lease-contract && npm run test:auth-hardening && npm run test:auth-account-state-contract && npm run test:artist-ownership-contract && npm run test:artist-approval-contract && npm run test:content-media-governance && npm run test:runtime-config && npm run test:runtime-api-contract && npm run test:phase07-web-contract && npm run test:artist-pricing-validation && npm run test:admin-artist-validation && npm run test:phase08-operational && npm run test:phase09-distribution-domain && npm run test:phase09a-adaptive-media && npm run test:phase09b-privacy-recovery && npm run test:phase10-final-hardening && npm run test:audio-progressive-http",
     "verify": "npm run build && npm run test:unit",
     "test:storage": "ts-node --transpile-only src/scripts/test-storage-connection.ts",
     "prisma": "prisma",
@@ -56,8 +56,9 @@
     "db:migrate:status": "ts-node --transpile-only src/scripts/migration-status.ts",
     "db:schema:check": "ts-node --transpile-only src/scripts/check-schema.ts",
     "db:generate": "prisma generate",
-    "test:module09-analytics-reporting": "ts-node --transpile-only src/scripts/test-module09-analytics-reporting-complete.ts",
-    "test:module10-audit-observability": "ts-node --transpile-only src/scripts/test-module10-audit-observability-complete.ts"
+"test:module09-analytics-reporting": "ts-node --transpile-only src/scripts/test-module09-analytics-reporting-complete.ts",
+    "test:module10-audit-observability": "ts-node --transpile-only src/scripts/test-module10-audit-observability-complete.ts",
+    "test:audio-progressive-http": "ts-node --transpile-only src/scripts/test-audio-progressive-http-contract.ts"
   },
   "keywords": [],
   "author": "",
