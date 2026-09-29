@@ -168,3 +168,32 @@ Analytics is trusted, bounded, deduplicated and ownership-scoped; failure remain
 - **Financial Data Integrity:** Gross earnings sourced exclusively from captured payments in the canonical ledger, never manufactured by play events.
 - **Tenant Isolation & RBAC:** Complete data segregation between artists, fans, and admins.
 - **Module Status:** **VERIFIED COMPLETE**
+
+---
+
+### 4. Real Manual UI Test Execution Register (Artist Studio, Fan App & Admin Portal)
+
+**Manual Execution Date:** 2026-09-29  
+**Testers:** User (Manual QA Execution & UI Validation) + Antigravity Agent (Evidence Verification)  
+**Target Applications:** 
+- `web-artist` (http://localhost:5174)
+- `web-admin` (http://localhost:5173)
+- `mobile` (Expo Web: http://localhost:8081)
+- `backend` (http://localhost:8000)
+
+| Test ID | Type | Scenario Tested | Manual Action & Verified UI Evidence | Result |
+|---|---|---|---|:---:|
+| **UI-ANA-001** | Positive | Artist Studio Dashboard KPIs | Logged in as `nazov@mailinator.com` on `localhost:5174`. Dashboard loaded authoritative KPIs: Subscribers: 1, Trusted plays: 10, Gross captured revenue: 49.00 (from canonical payment ledger). | **PASS** |
+| **UI-ANA-002** | Negative | Play Qualification (<30s Threshold) | In Fan App (`localhost:8081`), played 'Khairit Audio songs #12' for 18 seconds (<30s) and paused. Refreshed Artist Studio: track count stayed strictly at 4, Trusted plays at 10. Fake play inflation blocked. | **PASS** |
+| **UI-ANA-003** | Positive | Play Qualification (>=30s Threshold) | Continued playback to 37 seconds (>=30s). Heartbeats delivered to server. Refreshed Artist Studio: track count accurately incremented from 4 to 5, Trusted plays from 10 to 11. | **PASS** |
+| **UI-ANA-004** | Positive | Real-time Subscriber Sync | Activated subscriber `sjainn@gmail.com` for Arjit Singh. Refreshed Artist Studio: Subscribers card dynamically incremented from 1 to 2. | **PASS** |
+| **UI-ANA-005** | Positive | Metric Toggles (Plays vs Gross Revenue) | In Artist Analytics, clicked `Gross revenue` toggle button. Trend graph seamlessly switched Y-axis from play counts (0-8) to revenue scale (0 to 60), accurately plotting 49 peak at 09-27. | **PASS** |
+| **UI-ANA-006** | Positive | Admin Platform Analytics Reconciliation | Logged in as `admin@test.com` on `localhost:5173/admin/analytics`. Captured Revenue: 49.00, Artists: 6, Fans: 15. 'Arjit Singh' showed 11 plays and 2 subscribers, achieving zero-drift reconciliation with Artist portal. | **PASS** |
+| **UI-ANA-007** | Negative / Boundary | Date Range Boundary Safety | In Admin Analytics, extended date range into future dates (`08/31/2026 to 10/02/2026`). System gracefully plotted zero-value tail without application crash or unhandled rejection. | **PASS** |
+| **UI-ANA-008** | Negative | Device Session & Playback Concurrency Guard | Verified rapid multiple stream requests enforce concurrent session limit with HTTP 429 (`PLAYBACK_SESSION_LIMIT`). Stale sessions strictly isolated. | **PASS** |
+
+### 5. Final Module 09 Verification Summary
+- **Automated Integration Suite:** 8 / 8 Sections Passed (100%)
+- **Manual UI Test Scenarios:** 8 / 8 Tests Passed (5 Positive, 3 Negative/Boundary) (100%)
+- **Cross-Portal Reconciliation:** Artist Studio (`localhost:5174`) <-> Admin Portal (`localhost:5173`) <-> Mobile Player (`localhost:8081`) Verified 100%
+- **Module Status:** **VERIFIED COMPLETE**
