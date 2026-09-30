@@ -75,6 +75,9 @@ declare module 'lucide-react-native' {
   export const ExternalLink: LucideIcon;
   export const Image: LucideIcon;
   export const Palette: LucideIcon;
+
+  export const ChevronRight: LucideIcon;
+  export const Disc3: LucideIcon;
 }
 
 declare module '*.png' {
