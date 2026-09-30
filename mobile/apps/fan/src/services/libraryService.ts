@@ -18,6 +18,7 @@ export type RecentlyPlayedItem = {
   artworkUrl: string | null;
   mediaUrl: string | null;
   useStreamAccess?: boolean;
+  durationMs?: number;
   playedAt: string;
 };
 
@@ -46,6 +47,10 @@ export async function fetchRecentlyPlayed(limit = 15): Promise<RecentlyPlayedIte
     artworkUrl: it.artworkUrl ?? null,
     mediaUrl: it.mediaUrl ?? null,
     useStreamAccess: Boolean(it.useStreamAccess ?? (!it.mediaUrl && it.id)),
+    durationMs:
+      Number.isFinite(Number(it.durationMs)) && Number(it.durationMs) > 0
+        ? Math.round(Number(it.durationMs))
+        : undefined,
     playedAt: (it.playedAt ?? new Date().toISOString()).toString(),
   }));
 }

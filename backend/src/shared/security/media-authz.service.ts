@@ -1,156 +1,142 @@
 /**
- * Media authorization: entitlement and visibility checks.
- * Used by MediaAccessService before issuing playback.
+ * Canonical media authorization for fan playback.
+ *
+ * This module deliberately contains no schema fallbacks or development
+ * bypasses. A database/schema failure must fail the request rather than make
+ * protected content public.
  */
 
-import { checkAccess } from "../../common/accessControl";
 import { pool } from "../../common/db";
-import { logger } from "../../common/logger";
+import { getArtistEntitlementState } from "./artist-entitlement.service";
+import {
+  MediaInvalidQualityException,
+  type MediaAccessDeniedCode,
+} from "../exceptions/media.exception";
 
 export type VisibilityType = "PUBLIC" | "PROTECTED" | "PRIVATE_INTERNAL";
 
 export interface MediaAccessCheckResult {
   allowed: boolean;
   reason?: string;
-  tier?: 'FREE' | 'ARTIST' | 'PLATFORM';
-  isPreview?: boolean;
+  code?: MediaAccessDeniedCode;
+  tier?: "FREE" | "ARTIST";
 }
 
-/**
- * Check if user has a platform-wide subscription (HD access)
- */
-export async function checkPlatformAccess(userId: number | null): Promise<boolean> {
-  if (!userId) return false;
-  try {
-    const result = await pool.query(
-      `SELECT id FROM subscriptions 
-       WHERE user_id = $1
-         AND type = 'PLATFORM'
-         AND UPPER(COALESCE(status, '')) IN ('ACTIVE', 'GRACE_PERIOD', 'PAST_DUE', 'GRACE')
-         AND (next_billing_date IS NULL OR next_billing_date > now())
-       LIMIT 1`,
-      [userId]
-    );
-    return Boolean(result.rows?.length);
-  } catch {
-    return false;
-  }
-}
+export type VideoQuality =
+  | "144p"
+  | "240p"
+  | "360p"
+  | "480p"
+  | "720p"
+  | "1080p"
+  | "Auto";
 
+const VALID_QUALITIES: VideoQuality[] = [
+  "144p",
+  "240p",
+  "360p",
+  "480p",
+  "720p",
+  "1080p",
+  "Auto",
+];
 
-/**
- * Supported video quality options.
- */
-export type VideoQuality = '144p' | '240p' | '360p' | '480p' | '720p' | '1080p' | 'Auto' | 'SD' | 'HD';
-
-/**
- * Quality tiers mapped to subscription levels.
- * - Free users: max 240p
- * - Platform subscribers: full access (144p-1080p + Auto)
- */
-const FREE_MAX_QUALITY: VideoQuality = '240p';
-const PAID_QUALITIES: VideoQuality[] = ['144p', '240p', '360p', '480p', '720p', '1080p', 'Auto'];
-
-/**
- * Validate requested quality against user's subscription level.
- * Free users: max 240p
- * Platform subscribers: full access (144p-1080p + Auto)
- * Legacy 'SD'/'HD' values are mapped to appropriate resolutions.
- */
 export async function validateQualityAccess(
-  userId: number | null,
+  _userId: number | null,
   requestedQuality?: string
-): Promise<{ authorized: boolean; quality: VideoQuality; maxAllowedQuality: VideoQuality }> {
-  const q = (requestedQuality || '').toString().toLowerCase();
-  
-  // Check if user has platform subscription
-  const isPlatform = await checkPlatformAccess(userId);
-  const maxAllowedQuality: VideoQuality = isPlatform ? '1080p' : FREE_MAX_QUALITY;
-  
-  // Handle legacy SD/HD values
-  if (q === 'sd') {
-    return { authorized: true, quality: '240p', maxAllowedQuality };
+): Promise<{
+  authorized: boolean;
+  quality: VideoQuality;
+  maxAllowedQuality: VideoQuality;
+}> {
+  const raw = String(requestedQuality || "Auto").trim().toLowerCase();
+  if (raw === "sd") {
+    return { authorized: true, quality: "480p", maxAllowedQuality: "1080p" };
   }
-  if (q === 'hd') {
-    if (isPlatform) {
-      return { authorized: true, quality: 'Auto', maxAllowedQuality };
-    }
-    return { authorized: false, quality: '240p', maxAllowedQuality };
+  if (raw === "hd") {
+    return { authorized: true, quality: "Auto", maxAllowedQuality: "1080p" };
   }
-  
-  // Validate specific resolution request
-  const validQualities: VideoQuality[] = ['144p', '240p', '360p', '480p', '720p', '1080p', 'Auto'];
-  const normalizedQuality = validQualities.find(vq => vq.toLowerCase() === q) || '240p';
-  
-  // Define quality ranking for comparison (lower index = lower quality)
-  const qualityRanks = ['144p', '240p', '360p', '480p', '720p', '1080p'];
-  const requestedRank = qualityRanks.indexOf(normalizedQuality === 'Auto' ? '1080p' : normalizedQuality);
-  const maxAllowedRank = qualityRanks.indexOf(maxAllowedQuality);
-  
-  // Check if requested quality exceeds subscription tier
-  if (normalizedQuality !== 'Auto' && requestedRank > maxAllowedRank) {
-    // Downgrade to max allowed
-    return { authorized: false, quality: maxAllowedQuality, maxAllowedQuality };
+
+  const quality = VALID_QUALITIES.find(
+    (candidate) => candidate.toLowerCase() === raw
+  );
+  if (!quality) {
+    throw new MediaInvalidQualityException(
+      `Unsupported playback quality: ${String(requestedQuality || "")}`
+    );
   }
-  
-  // Auto is allowed for platform users
-  if (normalizedQuality === 'Auto' && !isPlatform) {
-    return { authorized: false, quality: '240p', maxAllowedQuality };
-  }
-  
-  return { authorized: true, quality: normalizedQuality, maxAllowedQuality };
+  return { authorized: true, quality, maxAllowedQuality: "1080p" };
 }
 
-/**
- * Check if user is allowed to play this content based on subscription and visibility.
- */
 export async function checkMediaEntitlement(
   userId: number | null,
   artistId: number,
   visibility: VisibilityType,
-  subscriptionRequired: boolean,
-  allowPreview: boolean = false
+  subscriptionRequired: boolean
 ): Promise<MediaAccessCheckResult> {
+  if (!userId) {
+    return {
+      allowed: false,
+      reason: "Authentication required",
+      code: "AUTHENTICATION_REQUIRED",
+      tier: "FREE",
+    };
+  }
+
   if (visibility === "PRIVATE_INTERNAL") {
-    return { allowed: false, reason: "Content is internal only", tier: 'FREE' };
+    return {
+      allowed: false,
+      reason: "Content is internal only",
+      code: "CONTENT_INTERNAL",
+      tier: "FREE",
+    };
   }
 
-  if (visibility === "PUBLIC") {
-    const isPlatform = await checkPlatformAccess(userId);
-    return { allowed: true, tier: isPlatform ? 'PLATFORM' : 'FREE' };
-  }
-
-  if (visibility === "PROTECTED") {
-    if (!userId) {
-      logger.warn({ artistId, visibility }, "[AUTHZ] Access denied: Authentication required for PROTECTED content");
-      return { allowed: false, reason: "Authentication required", tier: 'FREE' };
+  if (subscriptionRequired) {
+    const entitlementState = await getArtistEntitlementState(userId, artistId);
+    if (entitlementState === "ACTIVE") {
+      return { allowed: true, tier: "ARTIST" };
     }
-    
-    const isPlatform = await checkPlatformAccess(userId);
-    if (isPlatform) return { allowed: true, tier: 'PLATFORM' };
 
-    if (!subscriptionRequired) return { allowed: true, tier: 'FREE' };
-
-    const hasArtistAccess = await checkAccess(userId, artistId);
-
-    if (!hasArtistAccess) {
-      if (allowPreview) {
-         logger.info({ userId, artistId, tier: 'FREE' }, "[AUTHZ] Access granted via PREVIEW");
-         return { allowed: true, tier: 'FREE', isPreview: true };
-      }
-      logger.info({ userId, artistId, tier: 'FREE' }, "[AUTHZ] Access denied: Subscription required");
-      return { allowed: false, reason: "Subscription required", tier: 'FREE' };
+    if (entitlementState === "EXPIRED") {
+      return {
+        allowed: false,
+        reason: "Artist subscription has expired",
+        code: "SUBSCRIPTION_EXPIRED",
+        tier: "FREE",
+      };
     }
-    return { allowed: true, tier: 'ARTIST' };
+
+    if (entitlementState === "INACTIVE") {
+      return {
+        allowed: false,
+        reason: "Artist subscription is not active",
+        code: "SUBSCRIPTION_INACTIVE",
+        tier: "FREE",
+      };
+    }
+
+    return {
+      allowed: false,
+      reason: "Active artist subscription required",
+      code: "SUBSCRIPTION_REQUIRED",
+      tier: "FREE",
+    };
   }
 
-  return { allowed: false, reason: "Unknown visibility", tier: 'FREE' };
+  if (visibility === "PUBLIC" || visibility === "PROTECTED") {
+    return { allowed: true, tier: "FREE" };
+  }
+
+  return {
+    allowed: false,
+    reason: "Unknown visibility",
+    code: "INVALID_VISIBILITY",
+    tier: "FREE",
+  };
 }
 
-/**
- * Load content row for access check. Returns storage_key, storage_provider, visibility, status, etc.
- */
-export async function getContentForAccess(contentId: number): Promise<{
+export interface ContentForAccess {
   id: number;
   artist_id: number;
   storage_provider: string | null;
@@ -163,66 +149,71 @@ export async function getContentForAccess(contentId: number): Promise<{
   thumbnail_provider_asset_id: string | null;
   visibility: string;
   status: string;
+  adaptive_status: string;
+  adaptive_qualities: string[];
+  source_width: number | null;
+  source_height: number | null;
+  lifecycle_state: string;
   is_approved: boolean;
+  is_taken_down: boolean;
   subscription_required: boolean;
   mime_type: string | null;
   file_size_bytes: number | null;
-  media_url?: string | null;
-  audio_url?: string | null;
-  video_url?: string | null;
-  type?: string;
-  file_key?: string | null;
-  thumbnail_url?: string | null;
-} | null> {
-  try {
-    const result = await pool.query(
-      `SELECT id, artist_id,
-          COALESCE(storage_provider, 'local') as storage_provider,
-          storage_key, video_storage_key, thumbnail_storage_key,
-          provider_asset_id, audio_provider_asset_id, video_provider_asset_id, thumbnail_provider_asset_id,
-          COALESCE(visibility, 'PROTECTED') as visibility,
-          COALESCE(status, lifecycle_state, 'DRAFT') as status,
-          COALESCE(is_approved, false) as is_approved,
-          COALESCE(subscription_required, true) as subscription_required,
-          mime_type, file_size_bytes,
-          media_url, audio_url, video_url, type,
-          file_key, thumbnail_url
-       FROM content_items
-       WHERE id = $1
-       LIMIT 1`,
-      [contentId]
-    );
-    const row = result.rows?.[0];
-    return row ?? null;
-  } catch (err: any) {
-    if (err?.code === '42703') {
-      // Fallback if status or is_approved columns are missing
-      const result = await pool.query(
-        `SELECT id, artist_id,
-            COALESCE(storage_provider, 'local') as storage_provider,
-            storage_key, video_storage_key, thumbnail_storage_key,
-            COALESCE(visibility, 'PROTECTED') as visibility,
-            mime_type, file_size_bytes,
-            media_url, audio_url, video_url, type,
-            file_key, thumbnail_url
-         FROM content_items
-         WHERE id = $1
-         LIMIT 1`,
-        [contentId]
-      );
-      const row = result.rows?.[0];
-      if (!row) return null;
-      return {
-        ...row,
-        provider_asset_id: null,
-        audio_provider_asset_id: null,
-        video_provider_asset_id: null,
-        thumbnail_provider_asset_id: null,
-        status: (row as any).lifecycle_state || 'READY',
-        is_approved: true,
-        subscription_required: false
-      } as any;
-    }
-    throw err;
-  }
+  media_url: string | null;
+  audio_url: string | null;
+  video_url: string | null;
+  type: string | null;
+  file_key: string | null;
+  thumbnail_url: string | null;
+}
+
+/**
+ * Load the exact current content authorization/delivery record. Artist account
+ * governance is part of the access boundary, not merely a catalog filter.
+ */
+export async function getContentForAccess(
+  contentId: number
+): Promise<ContentForAccess | null> {
+  const result = await pool.query<ContentForAccess>(
+    `SELECT c.id,
+            c.artist_id,
+            c.storage_provider,
+            c.storage_key,
+            c.video_storage_key,
+            c.thumbnail_storage_key,
+            c.provider_asset_id,
+            c.audio_provider_asset_id,
+            c.video_provider_asset_id,
+            c.thumbnail_provider_asset_id,
+            c.visibility,
+            c.status,
+            c.adaptive_status,
+            c.adaptive_qualities,
+            c.source_width,
+            c.source_height,
+            c.lifecycle_state,
+            c.is_approved,
+            c.is_taken_down,
+            c.subscription_required,
+            c.mime_type,
+            c.file_size_bytes,
+            c.media_url,
+            c.audio_url,
+            c.video_url,
+            c.type,
+            c.file_key,
+            c.thumbnail_url
+       FROM content_items c
+       JOIN users a ON a.id = c.artist_id
+      WHERE c.id = $1
+        AND UPPER(a.role) = 'ARTIST'
+        AND a.is_deleted = FALSE
+        AND UPPER(a.status) = 'ACTIVE'
+        AND a.is_verified = TRUE
+        AND UPPER(a.artist_status::text) = 'APPROVED'
+      LIMIT 1`,
+    [contentId]
+  );
+
+  return result.rows[0] ?? null;
 }

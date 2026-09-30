@@ -147,6 +147,7 @@ type Song = {
   title: string;
   artist: string;
   duration: string;
+  durationMs?: number;
   thumbnail: string;
   locked: boolean;
   mediaType: "audio" | "video";
@@ -255,7 +256,11 @@ export default function ArtistScreen({ navigation, route }: any) {
   const [showDebugToggle, setShowDebugToggle] = useState(__DEV__);
 
   const handleRenewSubscription = () => {
-    navigation.navigate("SubscriptionFlow");
+    navigation.navigate("SubscriptionFlow", {
+      artistId: artist?.id || artistId,
+      artistName: artist?.name,
+      amount: artist?.subscriptionPrice,
+    });
     setIsSubscriptionActive(true); // Reset after navigation
   };
 
@@ -368,6 +373,7 @@ export default function ArtistScreen({ navigation, route }: any) {
           title: it.title,
           artist: a.name,
           duration: it.mediaType === "video" ? "Video" : "Audio",
+          durationMs: it.durationMs,
           thumbnail: it.artworkUrl,
           locked: it.locked,
           mediaType: it.mediaType,
@@ -443,6 +449,7 @@ export default function ArtistScreen({ navigation, route }: any) {
         mediaUrl: s.mediaUrl || "",
         isLocked: s.locked ?? false,
         useStreamAccess: s.useStreamAccess,
+        duration: s.durationMs,
       }));
     const idx = queue.findIndex(
       (q) => q.id === initialMediaId || q.contentId === initialMediaId
@@ -465,21 +472,25 @@ export default function ArtistScreen({ navigation, route }: any) {
   const isTemporarilyUnlocked = isUnlocked;
 
   const filteredSongs = useMemo(() => {
-    const baseSongs = isTemporarilyUnlocked
+    const baseSongs = isTemporarilyUnlocked || isSubscribedToArtist
       ? songs.map((s) => ({ ...s, locked: false }))
       : songs;
     if (activeTab === "All") return baseSongs;
     if (activeTab === "Audio")
       return baseSongs.filter((s) => s.mediaType === "audio");
     return baseSongs.filter((s) => s.mediaType === "video");
-  }, [activeTab, isTemporarilyUnlocked, songs]);
+  }, [activeTab, isSubscribedToArtist, isTemporarilyUnlocked, songs]);
 
   // Build navigation params for FullPlayerScreen — Move after filteredSongs
   const buildFullPlayerParams = useCallback(
     (song: Song) => {
       if (!artist) return null;
       const queue = filteredSongs
-        .filter((s) => Boolean(s.mediaUrl) || s.useStreamAccess)
+        .filter(
+          (s) =>
+            s.mediaType === "audio" &&
+            (Boolean(s.mediaUrl) || s.useStreamAccess)
+        )
         .map((s) => ({
           id: s.id,
           contentId: s.contentId,
@@ -489,8 +500,9 @@ export default function ArtistScreen({ navigation, route }: any) {
           mediaType: s.mediaType,
           artworkUrl: s.thumbnail,
           mediaUrl: s.mediaUrl || "",
-          isLocked: s.locked ?? false,
+          isLocked: isSubscribedToArtist ? false : (s.locked ?? false),
           useStreamAccess: s.useStreamAccess,
+          duration: s.durationMs,
         }));
       const idx = queue.findIndex((q) => q.id === song.id);
       return {
@@ -503,7 +515,7 @@ export default function ArtistScreen({ navigation, route }: any) {
         queue,
       };
     },
-    [artist, filteredSongs]
+    [artist, filteredSongs, isSubscribedToArtist]
   );
 
   const channelContent = useMemo(() => {
@@ -516,17 +528,15 @@ export default function ArtistScreen({ navigation, route }: any) {
 
   const handleSongPress = (song: Song) => {
     if (!artist) return;
-    if (song.locked) {
+    const isSongLocked = Boolean(song.locked && !isSubscribedToArtist);
+    if (isSongLocked) {
       // Tracking locked clicks for smart upsell
       const newCount = lockedClicks + 1;
       setLockedClicks(newCount);
 
       if (newCount >= 3) {
         setShowStrongUpsell(true);
-      }
-
-      // If song is locked, show the artist lock modal for specific upsell
-      if (song.locked) {
+      } else {
         setShowArtistLockModal({ visible: true, song });
       }
 

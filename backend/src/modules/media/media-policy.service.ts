@@ -1,27 +1,38 @@
 /**
- * Media policy: is content playable? status + visibility + approval.
- * Section 12: Playback only when READY, approved, not taken down, visible to user.
+ * Production playback policy.
  */
 
-import { PLAYABLE_STATUSES } from "./media.constants";
+import { PLAYABLE_STATUSES, VISIBILITY, type Visibility } from "./media.constants";
 
 export function isStatusPlayable(status: string): boolean {
-  const normalized = (status || "").toString().trim().toUpperCase();
+  const normalized = String(status || "").trim().toUpperCase();
   return PLAYABLE_STATUSES.has(normalized);
 }
 
-export function isContentEligibleForPlayback(
-  status: string,
-  isApproved: boolean
-): boolean {
-  if (!isStatusPlayable(status)) return false;
-  // Skip isApproved check for development without Redis
-  // if (!isApproved) return false;
-  return true;
+export function isContentEligibleForPlayback(input: {
+  technicalStatus: string;
+  lifecycleState: string;
+  isApproved: boolean;
+  isTakenDown: boolean;
+}): boolean {
+  return (
+    !input.isTakenDown &&
+    Boolean(input.isApproved) &&
+    String(input.lifecycleState || "").trim().toUpperCase() === "EARLY_ACCESS" &&
+    isStatusPlayable(input.technicalStatus)
+  );
 }
 
-export function normalizeVisibilityForPlayback(visibility: string): string {
-  const v = (visibility || "").toString().toUpperCase();
-  if (v === "PROTECTED") return "PUBLIC";
-  return v;
+/**
+ * Returns null for unknown visibility so callers fail closed. PROTECTED is
+ * never rewritten to PUBLIC.
+ */
+export function normalizeVisibilityForPlayback(
+  visibility: string
+): Visibility | null {
+  const normalized = String(visibility || "").trim().toUpperCase();
+  if (normalized === VISIBILITY.PUBLIC) return VISIBILITY.PUBLIC;
+  if (normalized === VISIBILITY.PROTECTED) return VISIBILITY.PROTECTED;
+  if (normalized === VISIBILITY.PRIVATE_INTERNAL) return VISIBILITY.PRIVATE_INTERNAL;
+  return null;
 }

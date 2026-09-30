@@ -2,6 +2,7 @@ import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import ArtistShell from "./components/ArtistShell";
 import Skeleton from "./components/Skeleton";
+import { getArtistToken } from "./services/artistSession";
 
 const ArtistLandingPage = lazy(() => import("./pages/ArtistLandingPage"));
 const ArtistLoginPage = lazy(() => import("./pages/ArtistLoginPage"));
@@ -15,7 +16,6 @@ const ArtistAccountPage = lazy(() => import("./pages/ArtistAccountPage"));
 const ArtistPricingPage = lazy(() => import("./pages/ArtistPricingPage"));
 const ArtistAnalyticsSummaryPage = lazy(() => import("./pages/ArtistAnalyticsSummaryPage"));
 const ArtistContentHistoryPage = lazy(() => import("./pages/ArtistContentHistoryPage"));
-const ArtistContentUploadPage = lazy(() => import("./pages/ArtistContentUploadPage"));
 
 const PageFallback = () => (
   <div className="p-8 grow">
@@ -24,13 +24,21 @@ const PageFallback = () => (
   </div>
 );
 
+function ArtistLoginRoute() {
+  return getArtistToken() ? (
+    <Navigate to="/artist/dashboard" replace />
+  ) : (
+    <ArtistLoginPage />
+  );
+}
+
 export default function App() {
   return (
     <Suspense fallback={<PageFallback />}>
       <Routes>
         <Route path="/" element={<Navigate to="/artist/landing" replace />} />
         <Route path="/artist/landing" element={<ArtistLandingPage />} />
-        <Route path="/artist/login" element={<ArtistLoginPage />} />
+        <Route path="/artist/login" element={<ArtistLoginRoute />} />
         <Route path="/artist/signup" element={<ArtistSignupPage />} />
         <Route path="/artist/account-inactive" element={<ArtistAccountInactivePage />} />
         <Route path="/artist/under-review" element={<ArtistUnderReviewPage />} />
@@ -41,7 +49,6 @@ export default function App() {
           <Route path="/artist/account" element={<ArtistAccountPage />} />
           <Route path="/artist/pricing" element={<ArtistPricingPage />} />
           <Route path="/artist/analytics-summary" element={<ArtistAnalyticsSummaryPage />} />
-          <Route path="/artist/content-upload" element={<ArtistContentUploadPage />} />
           <Route path="/artist/content-history" element={<ArtistContentHistoryPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/artist/login" replace />} />

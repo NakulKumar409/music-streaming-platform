@@ -1,5 +1,7 @@
 import {
   MediaAccessDeniedException,
+  MediaExpiredAccessException,
+  MediaInvalidQualityException,
   MediaInvalidTokenException,
   MediaNotFoundException,
   MediaNotReadyException
@@ -20,13 +22,34 @@ export function mapStreamAccessError(err: unknown): StreamAccessErrorPayload {
     return { status: 404, code: "CONTENT_NOT_FOUND", message: "Content not found" };
   }
   if (err instanceof MediaNotReadyException) {
+    if (String(err.status || "").toUpperCase() === "TAKEN_DOWN") {
+      return {
+        status: 410,
+        code: "CONTENT_TAKEN_DOWN",
+        message: "This content is no longer available"
+      };
+    }
     return { status: 409, code: "CONTENT_NOT_READY", message: err.message };
   }
+  if (err instanceof MediaInvalidQualityException) {
+    return { status: 400, code: "INVALID_PLAYBACK_QUALITY", message: err.message };
+  }
   if (err instanceof MediaAccessDeniedException) {
-    return { status: 403, code: "ACCESS_DENIED", message: err.message };
+    const status =
+      err.code === "AUTHENTICATION_REQUIRED"
+        ? 401
+        : err.code === "PLAYBACK_SESSION_LIMIT"
+          ? 429
+          : err.code === "PLAYBACK_SESSION_EXPIRED"
+            ? 409
+            : 403;
+    return { status, code: err.code, message: err.message };
+  }
+  if (err instanceof MediaExpiredAccessException) {
+    return { status: 401, code: "PLAYBACK_ACCESS_EXPIRED", message: err.message };
   }
   if (err instanceof MediaInvalidTokenException) {
-    return { status: 401, code: "INVALID_TOKEN", message: err.message };
+    return { status: 401, code: "INVALID_PLAYBACK_TOKEN", message: err.message };
   }
   if (err instanceof DeliveryStrategyNotAvailableException) {
     return {

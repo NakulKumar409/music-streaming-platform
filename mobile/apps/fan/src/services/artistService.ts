@@ -138,6 +138,7 @@ export type ApiArtistContentItem = {
   userReaction?: 'like' | 'dislike' | null;
   subscriptionRequired?: boolean | number;
   subscription_required?: boolean | number;
+  durationMs?: number | null;
 };
 
 export type ArtistMediaItem = {
@@ -153,6 +154,7 @@ export type ArtistMediaItem = {
   likeCount?: number | null;
   dislikeCount?: number | null;
   userReaction?: 'like' | 'dislike' | null;
+  durationMs?: number;
 };
 
 function resolveMediaUrl(url: string) {
@@ -221,6 +223,10 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
     const effectiveVideoUrl = videoUrl || (isVideoOnly ? fallbackUrl : '');
 
     const createdAt = (it.createdAt || it.created_at || null) as string | null;
+    const durationMs =
+      Number.isFinite(Number(it.durationMs)) && Number(it.durationMs) > 0
+        ? Math.round(Number(it.durationMs))
+        : undefined;
 
     if (isAudioVideo) {
       if (effectiveAudioUrl || useStreamAccess) {
@@ -231,12 +237,13 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
           mediaType: 'audio',
           artworkUrl,
           mediaUrl: effectiveAudioUrl,
-          locked: Boolean(it.isLocked || it.locked || it.subscriptionRequired || it.subscription_required),
+          locked: typeof it.isLocked === 'boolean' ? it.isLocked : typeof it.locked === 'boolean' ? it.locked : Boolean(it.subscriptionRequired || it.subscription_required),
           useStreamAccess,
           createdAt,
           likeCount: it.likeCount,
           dislikeCount: it.dislikeCount,
           userReaction: it.userReaction,
+          durationMs,
         });
       }
       if (effectiveVideoUrl || useStreamAccess) {
@@ -247,12 +254,13 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
           mediaType: 'video',
           artworkUrl,
           mediaUrl: effectiveVideoUrl,
-          locked: Boolean(it.isLocked || it.locked || it.subscriptionRequired || it.subscription_required),
+          locked: typeof it.isLocked === 'boolean' ? it.isLocked : typeof it.locked === 'boolean' ? it.locked : Boolean(it.subscriptionRequired || it.subscription_required),
           useStreamAccess,
           createdAt,
           likeCount: it.likeCount,
           dislikeCount: it.dislikeCount,
           userReaction: it.userReaction,
+          durationMs,
         });
       }
       continue;
@@ -269,12 +277,13 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
       mediaType,
       artworkUrl,
       mediaUrl,
-      locked: Boolean(it.isLocked || it.locked || it.subscriptionRequired || it.subscription_required),
+      locked: typeof it.isLocked === 'boolean' ? it.isLocked : typeof it.locked === 'boolean' ? it.locked : Boolean(it.subscriptionRequired || it.subscription_required),
       useStreamAccess,
       createdAt,
       likeCount: it.likeCount,
       dislikeCount: it.dislikeCount,
       userReaction: it.userReaction,
+      durationMs,
     });
   }
 

@@ -16,6 +16,7 @@
     "assetBundlePatterns": ["**/*"],
     "plugins": [
       "expo-audio",
+      "expo-secure-store",
       [
         "expo-video",
         {
@@ -23,7 +24,6 @@
           "supportsPictureInPicture": true
         }
       ],
-      "expo-notifications",
       "expo-asset",
       "@react-native-community/datetimepicker"
     ],
@@ -34,10 +34,11 @@
     },
     "android": {
       "package": "com.moinimran.fanapp",
+      "versionCode": 1,
       "softwareKeyboardLayoutMode": "resize",
-      "usesCleartextTraffic": true,
+      "usesCleartextTraffic": false,
+      "allowBackup": false,
       "permissions": [
-        "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
@@ -46,10 +47,15 @@
     },
     "ios": {
       "bundleIdentifier": "com.moinimran.fanapp",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
-        "UIBackgroundModes": ["audio", "fetch"],
+        "UIBackgroundModes": ["audio"],
+        "NSPhotoLibraryUsageDescription": "Allow FanApp to select artwork and profile images from your photo library.",
         "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true
+          "NSAllowsArbitraryLoads": false
         }
       }
     }

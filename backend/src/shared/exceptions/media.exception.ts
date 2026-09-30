@@ -2,6 +2,18 @@
  * Media-layer exceptions. Section 28.
  */
 
+export type MediaAccessDeniedCode =
+  | "ACCESS_DENIED"
+  | "AUTHENTICATION_REQUIRED"
+  | "SUBSCRIPTION_REQUIRED"
+  | "SUBSCRIPTION_EXPIRED"
+  | "SUBSCRIPTION_INACTIVE"
+  | "CONTENT_INTERNAL"
+  | "CONTENT_TAKEN_DOWN"
+  | "INVALID_VISIBILITY"
+  | "PLAYBACK_SESSION_LIMIT"
+  | "PLAYBACK_SESSION_EXPIRED";
+
 export class MediaNotFoundException extends Error {
   constructor(public readonly mediaId: number | string) {
     super(`Media not found: ${mediaId}`);
@@ -10,16 +22,29 @@ export class MediaNotFoundException extends Error {
 }
 
 export class MediaNotReadyException extends Error {
-  constructor(public readonly mediaId: number | string, status?: string) {
+  constructor(
+    public readonly mediaId: number | string,
+    public readonly status?: string
+  ) {
     super(`Media not ready for playback: ${mediaId}${status ? ` (status: ${status})` : ""}`);
     this.name = "MediaNotReadyException";
   }
 }
 
 export class MediaAccessDeniedException extends Error {
-  constructor(message = "Access denied to this media") {
+  constructor(
+    message = "Access denied to this media",
+    public readonly code: MediaAccessDeniedCode = "ACCESS_DENIED"
+  ) {
     super(message);
     this.name = "MediaAccessDeniedException";
+  }
+}
+
+export class MediaInvalidQualityException extends Error {
+  constructor(message = "Requested playback quality is not supported") {
+    super(message);
+    this.name = "MediaInvalidQualityException";
   }
 }
 
