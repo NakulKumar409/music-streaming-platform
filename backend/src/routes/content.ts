@@ -220,4 +220,61 @@ router.get(
   }
 );
 
+/**
+ * Content history inspection endpoint for admin and privileged workflows.
+ * Exposes read-only catalog status without media stream credentials.
+ */
+router.get("/history", requireAuth, async (req: any, res: any) => {
+  const correlationId = req?.correlationId || "-";
+  const role = String(req.user?.role || "").toUpperCase();
+  const requestedArtistId = positiveInteger(req.query?.artistId);
+
+  const artistId = (role === "ADMIN" || role === "MODERATOR")
+    ? requestedArtistId
+    : positiveInteger(req.user?.id);
+
+  if (!artistId) {
+    return res.status(400).json({
+      success: false,
+      message: "artistId is required",
+      correlationId,
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT c.id,
+              c.title,
+              c.type,
+              c.genre,
+              c.lifecycle_state,
+              c.status,
+              c.is_approved,
+              c.is_taken_down,
+              c.created_at
+         FROM content_items c
+        WHERE c.artist_id = $1
+        ORDER BY c.created_at DESC
+        LIMIT 100`,
+      [artistId]
+    );
+
+    const items = result.rows.map((row: any) => ({
+      id: Number(row.id),
+      title: row.title,
+      type: String(row.type || "AUDIO"),
+      isApproved: row.is_approved === true,
+      createdAt: row.created_at,
+    }));
+
+    return res.json({ success: true, items, correlationId });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch content history",
+      correlationId,
+    });
+  }
+});
+
 export default router;
