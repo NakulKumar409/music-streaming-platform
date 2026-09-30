@@ -560,10 +560,13 @@ export default function AudioScreen({ navigation }: any) {
         )}
 
         {searchResults === null && (
-          <View style={[styles.sectionRow, { marginBottom: 10 }]}>
+          <View style={[styles.sectionRow, styles.sectionRowAllAudio]}>
             <Text style={styles.sectionTitle}>
-              {activeCategory === "All" ? "All Audio" : activeCategory}
+              {activeCategory === 'All' ? 'All Audio' : activeCategory}
             </Text>
+            <View style={styles.sortBadge}>
+              <Text style={styles.sortBadgeText}>Latest ↓</Text>
+            </View>
           </View>
         )}
       </View>
@@ -763,16 +766,36 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "transparent" },
   sectionRow: {
     paddingHorizontal: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 10,
-    marginBottom: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  sectionRowAllAudio: {
+    marginTop: 2,
+    marginBottom: 12,
   },
   sectionTitle: {
-    color: "#fff",
+    color: '#fff',
     fontSize: 18,
-    fontWeight: "800",
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  sortBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  sortBadgeText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    fontWeight: '700',
   },
   emptyWrap: {
     paddingTop: 40,
