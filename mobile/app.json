@@ -4,6 +4,7 @@
     "slug": "fan-app",
     "version": "1.0.0",
     "platforms": ["ios", "android", "web"],
+    "icon": "./logo.png",
     "web": {
       "bundler": "metro",
       "output": "single"
@@ -35,8 +36,12 @@
     "android": {
       "package": "com.moinimran.fanapp",
       "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./logo.png",
+        "backgroundColor": "#000000"
+      },
       "softwareKeyboardLayoutMode": "resize",
-      "usesCleartextTraffic": false,
+      "usesCleartextTraffic": true,
       "allowBackup": false,
       "permissions": [
         "android.permission.MODIFY_AUDIO_SETTINGS",
