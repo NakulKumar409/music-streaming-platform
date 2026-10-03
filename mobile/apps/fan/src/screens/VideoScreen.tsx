@@ -47,6 +47,8 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Video,
+  Wifi,
   X,
 } from "lucide-react-native";
 import {
@@ -58,7 +60,7 @@ import Svg, { Path } from "react-native-svg";
 import PauseButtonImg from "../pausebuttton.png";
 import PlayButtonImg from "../playbutton.png";
 import { useMediaPlayer } from "../providers/MediaPlayerProvider";
-import { apiV1, contentApi } from "../services/api";
+import { apiV1, contentApi, normalizeApiError } from "../services/api";
 import { startHeartbeat, stopHeartbeat } from "../services/heartbeatService";
 import * as streamService from "../services/streamService";
 import { userService } from "../services/userService";
@@ -278,6 +280,7 @@ export default function VideoScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [items, setItems] = useState<VideoCard[]>([]);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
   const [lastAttemptedHdQuality, setLastAttemptedHdQuality] =
@@ -849,11 +852,14 @@ export default function VideoScreen() {
       try {
         if (isRefresh) setRefreshing(true);
         else setLoading(true);
+        setFetchError(null);
 
         const next = await fetchAll();
         setItems(next);
-      } catch {
+      } catch (err: any) {
         setItems([]);
+        const normalized = normalizeApiError(err);
+        setFetchError(normalized.message || "Couldn't load videos");
       } finally {
         setRefreshing(false);
         setLoading(false);
@@ -2035,9 +2041,27 @@ export default function VideoScreen() {
 
   const listEmpty = useMemo(() => {
     if (normalizedQuery && searchLoading) {
-      return <Text style={styles.emptyText}>Searching…</Text>;
+      return (
+        <View style={styles.centerStateWrap}>
+          <ActivityIndicator size="large" color="#fff" style={{ marginBottom: 16 }} />
+          <Text style={styles.centerStateTitle}>Searching videos...</Text>
+          <Text style={styles.centerStateSub}>Please wait</Text>
+        </View>
+      );
     }
-    return <Text style={styles.emptyText}>No videos found.</Text>;
+    return (
+      <View style={styles.centerStateWrap}>
+        <View style={styles.emptyVideoWrap}>
+          <Video size={36} color="#888" />
+        </View>
+        <Text style={styles.centerStateTitle}>No videos available</Text>
+        <Text style={styles.centerStateSub}>
+          {normalizedQuery
+            ? "No videos found matching your search"
+            : "Tap a video below to start playing"}
+        </Text>
+      </View>
+    );
   }, [normalizedQuery, searchLoading]);
 
   // Refined Lock Modal for Artist Subscriptions
@@ -2151,29 +2175,45 @@ export default function VideoScreen() {
       />
 
       <SafeAreaView style={styles.safe} edges={["bottom"]}>
-        {loading ? (
-          <FlatList
-            data={Array.from({ length: 6 })}
-            keyExtractor={(_, idx) => `sk-${idx}`}
-            initialNumToRender={5}
-            windowSize={5}
-            removeClippedSubviews={true}
-            renderItem={({ item, index }) => renderSkeletonRow(item, index)}
-            showsVerticalScrollIndicator={false}
-            onScroll={onListScroll}
-            scrollEventThrottle={16}
-            contentContainerStyle={{
-              paddingTop: measuredHeaderHeight + 88,
-              paddingBottom: tabBarHeight + 120,
-            }}
+        {loading && items.length === 0 ? (
+          <View
+            style={[
+              styles.centerStateWrap,
+              { paddingTop: measuredHeaderHeight + 88 },
+            ]}>
+            <ActivityIndicator size="large" color="#fff" style={{ marginBottom: 16 }} />
+            <Text style={styles.centerStateTitle}>Loading videos...</Text>
+            <Text style={styles.centerStateSub}>Please wait</Text>
+          </View>
+        ) : fetchError && visibleItems.length === 0 ? (
+          <ScrollView
+            contentContainerStyle={[
+              styles.centerStateWrap,
+              { paddingTop: measuredHeaderHeight + 88, flexGrow: 1 },
+            ]}
             refreshControl={
               <RefreshControl
                 tintColor="#fff"
                 refreshing={refreshing}
                 onRefresh={() => load({ refresh: true })}
               />
-            }
-          />
+            }>
+            <View style={styles.errorWifiWrap}>
+              <Wifi size={40} color="#FF3366" />
+            </View>
+            <Text style={styles.centerStateTitle}>Couldn't load videos</Text>
+            <Text style={styles.centerStateSub}>
+              Please check{" "}
+              <Text style={{ color: "#FF3366" }}>your internet connection</Text>
+              {"\n"}and try again.
+            </Text>
+            <TouchableOpacity
+              style={styles.errorRetryBtn}
+              onPress={() => load({ refresh: true })}
+              activeOpacity={0.85}>
+              <Text style={styles.errorRetryBtnText}>Retry</Text>
+            </TouchableOpacity>
+          </ScrollView>
         ) : (
           <FlatList<VideoCard>
             ref={(r) => {
@@ -2191,6 +2231,7 @@ export default function VideoScreen() {
             contentContainerStyle={{
               paddingTop: measuredHeaderHeight + 88,
               paddingBottom: tabBarHeight + 120,
+              flexGrow: 1,
             }}
             refreshControl={
               <RefreshControl
@@ -3585,4 +3626,53 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.2)",
   },
+  centerStateWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+    paddingVertical: 40,
+    minHeight: 280,
+  },
+  centerStateTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textAlign: "center",
+    marginBottom: 6,
+  },
+  centerStateSub: {
+    fontSize: 13,
+    color: "#9CA3AF",
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  emptyVideoWrap: {
+    width: 72,
+    height: 60,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  errorWifiWrap: {
+    marginBottom: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorRetryBtn: {
+    marginTop: 20,
+    backgroundColor: "#FF3366",
+    borderRadius: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorRetryBtnText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
 });
+

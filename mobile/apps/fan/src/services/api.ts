@@ -76,7 +76,9 @@ export function normalizeApiError(error: unknown): NormalizedApiError {
   let message = rawMessage;
 
   // Domain-specific friendly error mappings
-  if (code === 'PAYMENT_ALREADY_PROCESSED' || /payment.*already.*processed/i.test(rawMessage)) {
+  if (code === 'DEVICE_LIMIT_REACHED' || /device.*limit/i.test(rawMessage)) {
+    message = 'You can only have 2 active sessions. Please log out from another device and try again.';
+  } else if (code === 'PAYMENT_ALREADY_PROCESSED' || /payment.*already.*processed/i.test(rawMessage)) {
     message = 'Payment already processed. Please check your transaction history.';
   } else if (
     code === 'REFUND_NOT_ALLOWED' ||
@@ -96,7 +98,7 @@ export function normalizeApiError(error: unknown): NormalizedApiError {
   } else if (code === 'SUBSCRIPTION_ALREADY_ACTIVE') {
     message = 'You already have an active subscription for this artist.';
   } else if (code === 'REFUND_FORBIDDEN' || code === 'UNAUTHORIZED_REFUND') {
-    message = 'You do not have permission to perform this action.';
+    message = "You don't have permission to perform this action.";
   } else if (
     code === 'WEBHOOK_SIGNATURE_INVALID' ||
     code === 'WEBHOOK_SIGNATURE_REQUIRED' ||
@@ -110,13 +112,17 @@ export function normalizeApiError(error: unknown): NormalizedApiError {
   } else if (status === 401) {
     message = 'Your session has expired. Please log in again.';
   } else if (status === 403) {
-    message = "You don't have permission to access this content.";
+    message = "You don't have permission to perform this action.";
+  } else if (status === 404) {
+    message = 'The requested item could not be found.';
+  } else if (status === 429) {
+    message = 'Too many requests. Please try again later.';
   } else if (status && status >= 500) {
-    message = 'Something went wrong. Please try again.';
+    message = 'Something went wrong on the server. Please try again.';
   } else if (isTimeout) {
-    message = 'Request timed out. Please try again.';
+    message = 'The request took too long. Please try again.';
   } else if (isNetwork) {
-    message = 'Network connection error. Please try again.';
+    message = 'Unable to connect to the server. Please check your internet connection and try again.';
   } else if (isTechnicalLeak) {
     message = 'Something went wrong. Please try again.';
   }

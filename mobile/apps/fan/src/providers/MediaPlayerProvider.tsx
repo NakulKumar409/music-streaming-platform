@@ -65,6 +65,10 @@ import { evaluateAudioProgressSample } from "../utils/audioProgressSync";
 import { toFiniteDurationMs } from "../utils/mediaTime";
 
 import type { MediaItem, PlayerState } from "../media.types";
+import { Lock } from "lucide-react-native";
+import StatusModal from "../components/StatusModal";
+import { navigate } from "../navigation/rootNavigation";
+import { Colors } from "../theme";
 
 // Removed SoundLike type as it is no longer needed with expo-audio
 
@@ -130,6 +134,13 @@ export function useMediaPlayer() {
 
 export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PlayerState>(EMPTY_STATE);
+  const [subscriptionRequiredModal, setSubscriptionRequiredModal] = useState<{
+    visible: boolean;
+    title: string;
+    artistName: string;
+    artistId?: string | number;
+    contentId?: string | number;
+  } | null>(null);
 
   const IOS_INTERRUPTION_DO_NOT_MIX = 1;
   const ANDROID_INTERRUPTION_DUCK_OTHERS = 1;
@@ -775,13 +786,13 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   const blockLockedPlayback = useCallback(async (item: MediaItem) => {
     if (item.isLocked) {
-      Alert.alert(
-        "Subscription Required",
-        `Full access to "${item.title}" requires a subscription to ${
-          item.artistName || "this artist"
-        }.`,
-        [{ text: "Dismiss", style: "cancel" }]
-      );
+      setSubscriptionRequiredModal({
+        visible: true,
+        title: item.title,
+        artistName: item.artistName || "this artist",
+        artistId: item.artistId,
+        contentId: item.contentId ?? item.id,
+      });
       return true;
     }
     return false;
@@ -851,7 +862,17 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             if (presentation.shouldStopPlayback) {
               failCurrentInitialLoad();
             }
-            Alert.alert(presentation.title, presentation.message);
+            if (presentation.title.toLowerCase().includes("subscription")) {
+              setSubscriptionRequiredModal({
+                visible: true,
+                title: item.title,
+                artistName: item.artistName || "this artist",
+                artistId: item.artistId,
+                contentId: item.contentId ?? item.id,
+              });
+            } else {
+              Alert.alert(presentation.title, presentation.message);
+            }
           }
           return;
         }
@@ -881,7 +902,17 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             if (presentation.shouldStopPlayback) {
               failCurrentInitialLoad();
             }
-            Alert.alert(presentation.title, presentation.message);
+            if (presentation.title.toLowerCase().includes("subscription")) {
+              setSubscriptionRequiredModal({
+                visible: true,
+                title: item.title,
+                artistName: item.artistName || "this artist",
+                artistId: item.artistId,
+                contentId: item.contentId ?? item.id,
+              });
+            } else {
+              Alert.alert(presentation.title, presentation.message);
+            }
           }
           return;
         }
@@ -2087,6 +2118,33 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   return (
     <MediaPlayerContext.Provider value={value}>
       {children}
+      {subscriptionRequiredModal ? (
+        <StatusModal
+          visible={subscriptionRequiredModal.visible}
+          onClose={() => setSubscriptionRequiredModal(null)}
+          icon={<Lock size={32} color="#4AA3FF" />}
+          iconBgColor="rgba(74, 163, 255, 0.15)"
+          iconBorderColor="rgba(74, 163, 255, 0.3)"
+          title="Subscription Required"
+          message={`Full access to "${subscriptionRequiredModal.title}" requires a subscription to ${subscriptionRequiredModal.artistName}.`}
+          buttonLayout="row"
+          secondaryButtonText="Dismiss"
+          onSecondaryPress={() => setSubscriptionRequiredModal(null)}
+          primaryButtonText="View Plan"
+          primaryButtonColor={Colors.accent}
+          primaryButtonTextColor="#000"
+          onPrimaryPress={() => {
+            const data = subscriptionRequiredModal;
+            setSubscriptionRequiredModal(null);
+            navigate("SubscriptionFlow", {
+              artistId: data.artistId,
+              artistName: data.artistName,
+              contentId: data.contentId,
+              defaultPlan: "ARTIST",
+            });
+          }}
+        />
+      ) : null}
     </MediaPlayerContext.Provider>
   );
 }

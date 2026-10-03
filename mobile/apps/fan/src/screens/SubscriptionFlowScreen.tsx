@@ -31,7 +31,7 @@ import { userService } from "../services/userService";
 import ErrorBoundary from "../ui/ErrorBoundary";
 import logger from "../utils/logger";
 
-type PaymentStep = "OFFER" | "PROCESSING" | "PENDING" | "SUCCESS" | "FAILED";
+type PaymentStep = "OFFER" | "PREPARING" | "PROCESSING" | "PENDING" | "SUCCESS" | "FAILED" | "CANCELLED";
 
 type RouteParams = {
   artistId?: string | number;
@@ -266,6 +266,7 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
       }
 
       let gatewayResult: any;
+      setStep("PREPARING");
       try {
         gatewayResult = await RazorpayCheckout.open({
           key,
@@ -288,11 +289,7 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
         // Cancellation is not payment truth. Do not tell the backend to mark a
         // transaction failed; Razorpay webhook/reconciliation owns that state.
         if (/cancel/i.test(text) || text.includes("payment_error")) {
-          setStep("OFFER");
-          Alert.alert(
-            "Payment not completed",
-            "No subscription access was activated. You can try again whenever you're ready."
-          );
+          setStep("CANCELLED");
           return;
         }
         throw error;
@@ -312,19 +309,9 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
       const message =
         normalized.message ||
         "Unable to start subscription. Please try again.";
+      // ONE clean presentation via existing UI error state per Phase 3 & 4
       setErrorMessage(String(message));
       setStep("OFFER");
-
-      Alert.alert(
-        "Subscription Request",
-        message,
-        [
-          { text: "Dismiss", style: "cancel" },
-          normalized.retryable
-            ? { text: "Retry", onPress: () => void startPayment() }
-            : { text: "OK" },
-        ]
-      );
     } finally {
       setIsStarting(false);
     }
@@ -463,9 +450,29 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
             </ScrollView>
           )}
 
+          {step === "PREPARING" && (
+            <View style={styles.centered}>
+              <View style={styles.preparingHeader}>
+                <ShieldCheck color="#3B82F6" size={18} />
+                <Text style={styles.preparingBrand}>Secured by Razorpay</Text>
+              </View>
+              <ActivityIndicator color="#3B82F6" size="large" style={{ marginVertical: 28 }} />
+              <Text style={styles.stateTitle}>Preparing Payment</Text>
+              <Text style={styles.stateBody}>
+                Please wait while we open Razorpay securely...
+              </Text>
+              <View style={[styles.trustRow, { marginTop: 36 }]}>
+                <ShieldCheck color="rgba(255,255,255,0.48)" size={15} />
+                <Text style={styles.trustText}>
+                  Your payment is safe and secure with Razorpay.
+                </Text>
+              </View>
+            </View>
+          )}
+
           {step === "PROCESSING" && (
             <View style={styles.centered}>
-              <ActivityIndicator color="#FF7A18" size="large" />
+              <ActivityIndicator color="#FF7A18" size="large" style={{ marginVertical: 20 }} />
               <Text style={styles.stateTitle}>Confirming payment…</Text>
               <Text style={styles.stateBody}>
                 Payment was returned by the gateway. We're waiting for verified server confirmation before unlocking content.
@@ -485,61 +492,103 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
 
           {step === "PENDING" && (
             <View style={styles.centered}>
-              <View style={styles.pendingIcon}>
-                <Clock3 color="#F59E0B" size={34} />
+              <View style={[styles.statusIconCircle, { backgroundColor: "rgba(245,158,11,0.15)", borderColor: "rgba(245,158,11,0.3)" }]}>
+                <Clock3 color="#F59E0B" size={36} />
               </View>
-              <Text style={styles.stateTitle}>Still confirming</Text>
+              <Text style={styles.stateTitle}>Payment Verification Pending</Text>
               <Text style={styles.stateBody}>
-                We haven't received final payment confirmation yet. Your content remains locked until verification completes.
+                Your payment was received. We're still verifying it. This may take a few minutes.
               </Text>
-              {errorMessage ? <Text style={styles.inlineError}>{errorMessage}</Text> : null}
-              <Pressable style={styles.secondaryButton} onPress={checkAgain}>
-                <Text style={styles.secondaryButtonText}>Check again</Text>
-              </Pressable>
-              <Pressable style={styles.textButton} onPress={close}>
-                <Text style={styles.textButtonText}>Close and check later</Text>
-              </Pressable>
+              <View style={styles.twoButtonRow}>
+                <Pressable style={[styles.actionBtnHalf, { backgroundColor: "#FFB608" }]} onPress={checkAgain}>
+                  <Text style={[styles.actionBtnText, { color: "#000" }]}>Check Status</Text>
+                </Pressable>
+                <Pressable style={[styles.actionBtnHalf, styles.actionBtnSecondary]} onPress={close}>
+                  <Text style={styles.actionBtnText}>Dismiss</Text>
+                </Pressable>
+              </View>
             </View>
           )}
 
           {step === "FAILED" && (
             <View style={styles.centered}>
-              <View style={styles.failedIcon}>
-                <AlertTriangle color="#EF4444" size={34} />
+              <View style={[styles.statusIconCircle, { backgroundColor: "rgba(239,68,68,0.15)", borderColor: "rgba(239,68,68,0.3)" }]}>
+                <X color="#EF4444" size={36} strokeWidth={2.5} />
               </View>
-              <Text style={styles.stateTitle}>Payment not completed</Text>
+              <Text style={styles.stateTitle}>Payment Failed</Text>
               <Text style={styles.stateBody}>
-                {failureReason || "The payment failed. No subscription access was activated."}
+                {failureReason || "We couldn't complete your payment. Please try again."}
               </Text>
-              <Pressable
-                style={styles.secondaryButton}
-                onPress={() => {
-                  setFailureReason(null);
-                  setErrorMessage(null);
-                  setStep("OFFER");
-                }}
-              >
-                <Text style={styles.secondaryButtonText}>Try again</Text>
-              </Pressable>
+              <View style={styles.twoButtonRow}>
+                <Pressable
+                  style={[styles.actionBtnHalf, { backgroundColor: "#EF4444" }]}
+                  onPress={() => void startPayment()}
+                >
+                  <Text style={[styles.actionBtnText, { color: "#fff" }]}>Try Again</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.actionBtnHalf, styles.actionBtnSecondary]}
+                  onPress={() => {
+                    setFailureReason(null);
+                    setErrorMessage(null);
+                    setStep("OFFER");
+                  }}
+                >
+                  <Text style={styles.actionBtnText}>Dismiss</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {step === "CANCELLED" && (
+            <View style={styles.centered}>
+              <View style={[styles.statusIconCircle, { backgroundColor: "rgba(156,163,175,0.15)", borderColor: "rgba(156,163,175,0.3)" }]}>
+                <X color="#9CA3AF" size={36} strokeWidth={2} />
+              </View>
+              <Text style={styles.stateTitle}>Payment Cancelled</Text>
+              <Text style={styles.stateBody}>
+                No payment was completed. You can try again whenever you're ready.
+              </Text>
+              <View style={styles.twoButtonRow}>
+                <Pressable style={[styles.actionBtnHalf, { backgroundColor: "#3B82F6" }]} onPress={() => void startPayment()}>
+                  <Text style={[styles.actionBtnText, { color: "#fff" }]}>Try Again</Text>
+                </Pressable>
+                <Pressable style={[styles.actionBtnHalf, styles.actionBtnSecondary]} onPress={() => setStep("OFFER")}>
+                  <Text style={styles.actionBtnText}>Dismiss</Text>
+                </Pressable>
+              </View>
             </View>
           )}
 
           {step === "SUCCESS" && (
             <View style={styles.centered}>
-              <View style={styles.successIcon}>
-                <BadgeCheck color="#fff" size={42} />
+              <View style={[styles.statusIconCircle, { backgroundColor: "rgba(16,185,129,0.15)", borderColor: "rgba(16,185,129,0.3)" }]}>
+                <Check color="#10B981" size={38} strokeWidth={3} />
               </View>
-              <Text style={styles.stateTitle}>Subscription active</Text>
+              <Text style={styles.stateTitle}>Payment Successful</Text>
               <Text style={styles.stateBody}>
-                Your access to {artistName} is confirmed and subscriber content is now unlocked.
+                Your artist access has been activated successfully.
               </Text>
-              {lastKnownExpiry ? (
-                <Text style={styles.expiryText}>
-                  Access until {new Date(lastKnownExpiry).toLocaleDateString()}
-                </Text>
-              ) : null}
-              <Pressable style={styles.successButton} onPress={goToArtist}>
-                <Text style={styles.successButtonText}>Explore unlocked content</Text>
+              <View style={styles.successReceiptCard}>
+                <View style={styles.receiptRow}>
+                  <Text style={styles.receiptLabel}>Amount</Text>
+                  <Text style={styles.receiptValue}>{offerPrice}</Text>
+                </View>
+                <View style={styles.receiptRow}>
+                  <Text style={styles.receiptLabel}>Artist</Text>
+                  <Text style={styles.receiptValue}>{artistName}</Text>
+                </View>
+                <View style={styles.receiptRow}>
+                  <Text style={styles.receiptLabel}>Valid till</Text>
+                  <Text style={styles.receiptValue}>
+                    {lastKnownExpiry
+                      ? new Date(lastKnownExpiry).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })
+                      : new Date(Date.now() + 30 * 24 * 3600 * 1000).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </Text>
+                </View>
+              </View>
+              <Pressable style={styles.continueBtn} onPress={goToArtist}>
+                <Text style={styles.continueBtnText}>Continue</Text>
               </Pressable>
             </View>
           )}
@@ -743,6 +792,94 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   successButtonText: { color: "#fff", fontSize: 15, fontWeight: "900" },
+  statusIconCircle: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  twoButtonRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 28,
+    width: "100%",
+    maxWidth: 340,
+  },
+  actionBtnHalf: {
+    flex: 1,
+    height: 50,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionBtnSecondary: {
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.12)",
+  },
+  actionBtnText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  successReceiptCard: {
+    width: "100%",
+    maxWidth: 340,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    borderRadius: 18,
+    padding: 18,
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  receiptRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255, 255, 255, 0.06)",
+  },
+  receiptLabel: {
+    color: "rgba(255, 255, 255, 0.6)",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  receiptValue: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  continueBtn: {
+    width: "100%",
+    maxWidth: 340,
+    height: 52,
+    backgroundColor: "#FFB608",
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 20,
+  },
+  continueBtnText: {
+    color: "#000",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  preparingHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  preparingBrand: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
   expiryText: {
     color: "rgba(255,255,255,0.5)",
     fontSize: 12,
