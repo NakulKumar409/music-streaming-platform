@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BadgeCheck } from 'lucide-react-native';
 import ImageFallback from './ImageFallback';
+import { resolveAppImageUrl, FALLBACK_ARTIST_AVATAR } from '../utils/imageUtils';
 import { colors } from '../theme-guest/colors';
 import { spacing } from '../theme-guest/spacing';
 import { typography } from '../theme-guest/typography';
@@ -50,7 +51,14 @@ export default function ArtistCard({ artist, onAction }: ArtistCardProps) {
         >
           <View style={styles.avatarInner}>
             <ImageFallback
-              source={artist.image}
+              source={
+                typeof artist.image === 'string'
+                  ? { uri: resolveAppImageUrl(artist.image, 'artist') }
+                  : (artist.image?.uri
+                  ? { uri: resolveAppImageUrl(artist.image.uri, 'artist') }
+                  : (artist.image || { uri: FALLBACK_ARTIST_AVATAR }))
+              }
+              fallbackSource={{ uri: FALLBACK_ARTIST_AVATAR }}
               style={styles.avatarImage}
               resizeMode="cover"
             />

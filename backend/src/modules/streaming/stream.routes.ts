@@ -318,24 +318,28 @@ router.get("/thumbnail/:contentId", async (req: any, res: any) => {
     }
 
     if (!storageKey || !storage.openReadStream) {
-      return res.status(404).json({ success: false, code: "THUMBNAIL_MAPPING_INCOMPLETE", message: "Thumbnail mapping incomplete", correlationId });
+      return res.redirect(302, "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=800&q=80");
     }
 
-    const metadata = await storage.getObjectMetadata(storageKey, providerAssetId || undefined);
-    const read = await storage.openReadStream({ storageKey });
-    const contentType = metadata?.contentType || read?.contentType;
-    const contentLength = metadata?.contentLength ?? read?.contentLength;
-    if (contentType) res.setHeader("Content-Type", contentType);
-    if (contentLength !== undefined) res.setHeader("Content-Length", String(contentLength));
-    res.setHeader("Cache-Control", "public, max-age=300");
-    read.stream.on("error", () => {
-      if (!res.headersSent) res.status(502).end();
-      else res.end();
-    });
-    return read.stream.pipe(res);
+    try {
+      const metadata = await storage.getObjectMetadata(storageKey, providerAssetId || undefined);
+      const read = await storage.openReadStream({ storageKey });
+      const contentType = metadata?.contentType || read?.contentType;
+      const contentLength = metadata?.contentLength ?? read?.contentLength;
+      if (contentType) res.setHeader("Content-Type", contentType);
+      if (contentLength !== undefined) res.setHeader("Content-Length", String(contentLength));
+      res.setHeader("Cache-Control", "public, max-age=300");
+      read.stream.on("error", () => {
+        if (!res.headersSent) res.redirect(302, "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=800&q=80");
+        else res.end();
+      });
+      return read.stream.pipe(res);
+    } catch {
+      return res.redirect(302, "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=800&q=80");
+    }
   } catch (error: any) {
-    logger.error({ error, contentId, correlationId }, "[stream/thumbnail] failed");
-    return res.status(502).json({ success: false, code: "THUMBNAIL_LOAD_FAILED", message: "Failed to load thumbnail", correlationId });
+    logger.warn({ error: error?.message, contentId, correlationId }, "[stream/thumbnail] fallback redirected");
+    return res.redirect(302, "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=800&q=80");
   }
 });
 

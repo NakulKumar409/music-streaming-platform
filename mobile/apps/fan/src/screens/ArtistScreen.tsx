@@ -51,6 +51,7 @@ import {
 } from "../ui/SubscriptionUI";
 import YouTubeVideoControlsOverlay from "../ui/YouTubeVideoControlsOverlay";
 import { getOptimizedImageUrl } from "../utils/cloudinary";
+import AppImage from "../components/AppImage";
 
 function SpotifyIcon({ size = 18 }: { size?: number }) {
   return (
@@ -923,9 +924,11 @@ function ProfileHeaderSection({
   return (
     <View style={styles.profileWrap}>
       <View style={styles.bannerWrap}>
-        <Image
-          source={{ uri: getOptimizedImageUrl(bannerUrl) }}
+        <AppImage
+          uri={bannerUrl}
+          fallbackType="banner"
           style={styles.bannerImg}
+          resizeMode="cover"
         />
         <LinearGradient
           colors={["rgba(0,0,0,0.08)", "rgba(0,0,0,0.75)"]}
@@ -940,9 +943,11 @@ function ProfileHeaderSection({
 
       <View style={styles.avatarRow}>
         <View style={styles.avatarWrap}>
-          <Image
-            source={{ uri: getOptimizedImageUrl(avatarUrl) }}
+          <AppImage
+            uri={avatarUrl}
+            fallbackType="artist"
             style={styles.avatarImg}
+            resizeMode="cover"
           />
         </View>
       </View>
@@ -1058,9 +1063,11 @@ function InlineArtistMetaSection({
 
       <View style={styles.inlineMetaRow}>
         <View style={styles.inlineAvatarWrap}>
-          <Image
-            source={{ uri: getOptimizedImageUrl(avatarUrl) }}
+          <AppImage
+            uri={avatarUrl}
+            fallbackType="artist"
             style={styles.inlineAvatarImg}
+            resizeMode="cover"
           />
         </View>
 
@@ -1220,9 +1227,11 @@ function MediaCard({
       style={[styles.cardPressable, styles.cardPressableList]}>
       <View style={styles.card}>
         <View style={styles.cardThumbWrap}>
-          <Image
-            source={{ uri: getOptimizedImageUrl(item.thumbnail) }}
+          <AppImage
+            uri={item.thumbnail}
+            fallbackType={item.mediaType === "video" ? "video" : "song"}
             style={styles.cardThumb}
+            resizeMode="cover"
           />
           {item.locked && (
             <View style={styles.lockOverlay}>

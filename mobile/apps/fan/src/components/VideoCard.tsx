@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { Play } from 'lucide-react-native';
 import ImageFallback from './ImageFallback';
+import { resolveAppImageUrl, FALLBACK_BANNER } from '../utils/imageUtils';
 import { colors } from '../theme-guest/colors';
 import { spacing } from '../theme-guest/spacing';
 import { radius } from '../theme-guest/radius';
@@ -47,7 +48,14 @@ export default function VideoCard({ video, onAction }: VideoCardProps) {
       <Animated.View style={[styles.container, { transform: [{ scale }] }]}>
         <View style={styles.thumbnailContainer}>
           <ImageFallback
-            source={video.thumbnail}
+            source={
+              typeof video.thumbnail === 'string'
+                ? { uri: resolveAppImageUrl(video.thumbnail, 'video') }
+                : (video.thumbnail?.uri
+                ? { uri: resolveAppImageUrl(video.thumbnail.uri, 'video') }
+                : (video.thumbnail || { uri: FALLBACK_BANNER }))
+            }
+            fallbackSource={{ uri: FALLBACK_BANNER }}
             style={styles.thumbnail}
             resizeMode="cover"
           />

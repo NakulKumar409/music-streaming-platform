@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Lock } from 'lucide-react-native';
 import ErrorBoundary from '../ui/ErrorBoundary';
 import { apiV1 } from '../services/api';
+import AppImage from '../components/AppImage';
 
 type LockedSong = {
   id: string;
@@ -130,7 +131,7 @@ export default function ArtistSubscriptionScreen({ navigation, route }: any) {
     <ErrorBoundary label="Payments: Artist Subscription">
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.heroWrap}>
-          <Image source={{ uri: songData.thumbnail }} style={styles.heroImg} />
+          <AppImage uri={songData.thumbnail} fallbackType="song" style={styles.heroImg} resizeMode="cover" />
           <LinearGradient
             colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.95)']}
             style={styles.heroGradient}

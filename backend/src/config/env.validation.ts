@@ -195,8 +195,8 @@ export function validateEnv(): EnvValidationResult {
   }
 
   const appBaseRaw = nodeEnv === "production"
-    ? envStr("APP_BASE_URL")
-    : envStr("APP_BASE_URL", "http://localhost:8000");
+    ? (envOptional("APP_BASE_URL") || envOptional("RENDER_EXTERNAL_URL"))
+    : (envOptional("APP_BASE_URL") || envOptional("RENDER_EXTERNAL_URL") || "http://localhost:8000");
   const appBaseParsed = parseUrl("APP_BASE_URL", appBaseRaw, ["http:", "https:"]);
   if (appBaseParsed.pathname !== "/" || appBaseParsed.search || appBaseParsed.hash) {
     throw new Error("[env] APP_BASE_URL must be an origin without path/query/hash");

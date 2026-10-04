@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Colors } from '../../theme';
+import AppImage from '../../components/AppImage';
 
 export interface AlbumData {
   id: string;
@@ -23,7 +24,7 @@ export default function AlbumCard({ album, onPress }: AlbumCardProps) {
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
     >
       <View style={styles.imageContainer}>
-        <Image source={{ uri: album.coverImage }} style={styles.image} />
+        <AppImage uri={album.coverImage} fallbackType="song" style={styles.image} resizeMode="cover" />
         <View style={styles.trackBadge}>
           <Text style={styles.trackBadgeText}>{album.totalTracks} tracks</Text>
         </View>

@@ -31,6 +31,8 @@ import { useAuth } from '../store/authStore';
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import { getOptimizedImageUrl } from '../utils/cloudinary';
+import AppImage from '../components/AppImage';
+import { resolveAppImageUrl, FALLBACK_ARTWORK, FALLBACK_ARTIST_AVATAR, FALLBACK_BANNER } from '../utils/imageUtils';
 import type { MediaItem } from '../media.types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -346,7 +348,7 @@ export default function HomeScreen({ navigation }: any) {
               artist: String(it.artistName ?? it.artist?.name ?? 'Artist'),
               artistId: artistId ? String(artistId) : undefined,
               description: (it.type || '').toString(),
-              thumbnail: thumb || thumbFallbackFromStorageKey || FALLBACK_THUMBNAIL,
+              thumbnail: resolveAppImageUrl(thumb || thumbFallbackFromStorageKey, 'song'),
               isLocked: Boolean(it.isLocked || it.locked),
               createdAt: (it.createdAt ?? null) as any,
               mediaType,
@@ -471,8 +473,9 @@ export default function HomeScreen({ navigation }: any) {
         onPressArtist(item.id);
       }}
     >
-      <Image
-        source={{ uri: getOptimizedImageUrl(item.avatar) || FALLBACK_THUMBNAIL }}
+      <AppImage
+        uri={item.avatar}
+        fallbackType="artist"
         style={styles.featuredImg}
         resizeMode="cover"
       />
@@ -495,8 +498,9 @@ export default function HomeScreen({ navigation }: any) {
       <View style={styles.trendingCircleOuter}>
         {/* Inner clip: enforces perfect circle crop */}
         <View style={styles.trendingCircleInner}>
-          <Image
-            source={{ uri: getOptimizedImageUrl(item.image) || FALLBACK_THUMBNAIL }}
+          <AppImage
+            uri={item.image}
+            fallbackType="artist"
             style={styles.trendingImg}
             resizeMode="cover"
           />
@@ -516,7 +520,6 @@ export default function HomeScreen({ navigation }: any) {
   /* ── Render: Recently Added Audio — premium card ── */
   const renderRecentAudio = ({ item }: { item: ContentCard }) => {
     const duration = formatDuration(item.durationMs);
-    const imgUri = getOptimizedImageUrl(item.thumbnail || FALLBACK_THUMBNAIL) || FALLBACK_THUMBNAIL;
     return (
       <Pressable
         style={styles.audioCard}
@@ -525,7 +528,12 @@ export default function HomeScreen({ navigation }: any) {
       >
         {/* Album art container — square, clipped */}
         <View style={styles.audioImgContainer}>
-          <Image source={{ uri: imgUri }} style={styles.audioImg} resizeMode="cover" />
+          <AppImage
+            uri={item.thumbnail}
+            fallbackType="song"
+            style={styles.audioImg}
+            resizeMode="cover"
+          />
           {/* Bottom fade for depth */}
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.42)']}
@@ -568,8 +576,9 @@ export default function HomeScreen({ navigation }: any) {
   const renderRecentVideo = ({ item }: { item: ContentCard }) => (
     <Pressable style={styles.videoCard} onPress={() => onPressVideoItem(item)}>
       <View style={styles.videoImgContainer}>
-        <Image
-          source={{ uri: getOptimizedImageUrl(item.thumbnail || FALLBACK_THUMBNAIL) || FALLBACK_THUMBNAIL }}
+        <AppImage
+          uri={item.thumbnail}
+          fallbackType="video"
           style={styles.videoImg}
           resizeMode="cover"
         />

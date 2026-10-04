@@ -1,6 +1,8 @@
 import { apiV1 } from './api';
 import { isAllowedPlaybackUrl } from '../config/env';
 
+import { resolveAppImageUrl } from '../utils/imageUtils';
+
 const FALLBACK_IMAGE = require('../logo.png');
 
 export type GuestArtist = {
@@ -44,9 +46,9 @@ export type GuestHomeData = {
   videos: GuestMusicVideo[];
 };
 
-function imageSource(raw: unknown) {
-  const value = String(raw || '').trim();
-  return value && isAllowedPlaybackUrl(value) ? { uri: value } : FALLBACK_IMAGE;
+function imageSource(raw: unknown, type: 'song' | 'artist' | 'video' = 'song') {
+  const resolved = resolveAppImageUrl(raw, type);
+  return { uri: resolved };
 }
 
 function compactCount(raw: unknown): string {
@@ -68,7 +70,7 @@ function uniqueDerivedArtists(items: any[]): GuestArtist[] {
     artists.push({
       id,
       name: String(item?.artistName || 'Artist'),
-      image: imageSource(item?.thumbnailUrl || item?.artwork),
+      image: imageSource(item?.thumbnailUrl || item?.artwork, 'artist'),
       subscriberCount: 'Artist on MusicWave',
       isVerified: true,
     });
@@ -90,7 +92,7 @@ export async function loadGuestHomeData(): Promise<GuestHomeData> {
   const artists: GuestArtist[] = featured.map((artist: any) => ({
     id: String(artist?.id ?? ''),
     name: String(artist?.name || 'Artist'),
-    image: imageSource(artist?.avatar || artist?.profileImageUrl),
+    image: imageSource(artist?.avatar || artist?.profileImageUrl, 'artist'),
     subscriberCount: 'Featured artist',
     isVerified: true,
   })).filter((artist: GuestArtist) => Boolean(artist.id));
@@ -105,7 +107,7 @@ export async function loadGuestHomeData(): Promise<GuestHomeData> {
 
     const title = String(item?.title || 'Untitled');
     const artistName = String(item?.artistName || 'Artist');
-    const artwork = imageSource(item?.thumbnailUrl || item?.artwork);
+    const artwork = imageSource(item?.thumbnailUrl || item?.artwork, 'song');
     const mediaType = String(item?.mediaType || item?.type || '').toLowerCase();
     const isLocked = item?.isLocked === true || item?.subscriptionRequired === true;
 
@@ -125,7 +127,7 @@ export async function loadGuestHomeData(): Promise<GuestHomeData> {
         id,
         title,
         artistName,
-        thumbnail: artwork,
+        thumbnail: imageSource(item?.thumbnailUrl || item?.artwork, 'video'),
         viewCount: compactCount(item?.viewCount),
       });
       continue;

@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Play } from 'lucide-react-native';
 import { Colors } from '../../theme';
 import { getOptimizedImageUrl } from '../../utils/cloudinary';
+import AppImage from '../../components/AppImage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -63,8 +64,9 @@ export default function FeaturedCarousel({ items, onPressItem, isLoading }: Feat
       >
         {/* ── Image container: FIXED size, overflow:hidden — image never changes card size ── */}
         <View style={styles.imgContainer}>
-          <Image
-            source={{ uri: imageUri }}
+          <AppImage
+            uri={featured.artworkUrl}
+            fallbackType="song"
             style={styles.backgroundImage}
             resizeMode="cover"
           />

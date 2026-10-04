@@ -38,6 +38,7 @@ import {
 import { SubscriptionStatusCard, DetailedPlatformCard, ArtistSubscriptionItem, EmptySubscriptionState } from '../ui/SubscriptionUI';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import AppImage from '../components/AppImage';
 import * as Sharing from 'expo-sharing';
 
 import { userService, type AudioQualityPref, type SubscriptionPlanSummary, type Transaction } from '../services/userService';
@@ -449,7 +450,7 @@ export default function AccountScreen() {
             <View style={styles.profileAvatarRow}>
               <TouchableOpacity onPress={handleChangeProfileImage} disabled={isLoading}>
                 {profileImageUrl ? (
-                  <Image source={{ uri: profileImageUrl }} style={styles.profileAvatar} />
+                  <AppImage uri={profileImageUrl} fallbackType="artist" style={styles.profileAvatar} resizeMode="cover" />
                 ) : (
                   <View style={styles.profileAvatarPlaceholder}>
                     <User size={40} color="#fff" />

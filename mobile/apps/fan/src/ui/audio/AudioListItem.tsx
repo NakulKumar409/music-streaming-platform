@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Lock, MoreVertical, Pause, Play } from 'lucide-react-native';
 import { Colors } from '../../theme';
 import { getOptimizedImageUrl } from '../../utils/cloudinary';
+import AppImage from '../../components/AppImage';
 
 const FALLBACK_ARTWORK =
   'https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=1400&q=80';
@@ -40,8 +41,9 @@ const AudioListItem = memo(({ item, onPress, isActive, isPlaying }: AudioListIte
       >
         {/* Thumbnail — fixed 54×54, clipped to square, resizeMode=cover */}
         <View style={styles.thumbWrap}>
-          <Image
-            source={{ uri: getOptimizedImageUrl(item.artworkUrl || FALLBACK_ARTWORK) }}
+          <AppImage
+            uri={item.artworkUrl}
+            fallbackType="song"
             style={styles.thumbnail}
             resizeMode="cover"
           />

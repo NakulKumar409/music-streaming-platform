@@ -7,6 +7,7 @@ import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import AudioListItem from '../ui/audio/AudioListItem';
 import { LockedContentOverlay } from '../ui/SubscriptionUI';
 import { Colors } from '../theme';
+import AppImage from '../components/AppImage';
 
 export default function AlbumDetailScreen({ route, navigation }: any) {
   const { albumId, title, artistName, coverImage, tracks } = route.params;
@@ -100,7 +101,7 @@ export default function AlbumDetailScreen({ route, navigation }: any) {
       </Pressable>
       
       <View style={styles.coverWrapper}>
-        <Image source={{ uri: coverImage }} style={styles.coverImage} />
+        <AppImage uri={coverImage} fallbackType="song" style={styles.coverImage} resizeMode="cover" />
       </View>
       
       <Text style={styles.title}>{title}</Text>

@@ -275,8 +275,12 @@ publicRouter.get("/:artistId/:kind", async (req: any, res: any) => {
       [artistId, kind]
     );
     const asset = result.rows[0];
+    const fallback = kind === "BANNER"
+      ? "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1400&q=80"
+      : "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=800&q=80";
+
     if (!asset) {
-      return res.status(404).json({ success: false, message: "Image not found", correlationId });
+      return res.redirect(302, fallback);
     }
 
     const storage = getStorageProviderByName(asset.storage_provider as StorageProviderName);
@@ -292,21 +296,28 @@ publicRouter.get("/:artistId/:kind", async (req: any, res: any) => {
     }
 
     if (!storage.openReadStream) {
-      return res.status(404).json({ success: false, message: "Image delivery unavailable", correlationId });
+      return res.redirect(302, fallback);
     }
-    const read = await storage.openReadStream({ storageKey: String(asset.storage_key) });
-    res.setHeader("Content-Type", String(asset.mime_type || read.contentType || "application/octet-stream"));
-    const size = Number(asset.size_bytes || read.contentLength);
-    if (Number.isFinite(size) && size > 0) res.setHeader("Content-Length", String(size));
-    res.setHeader("Cache-Control", "public, max-age=300");
-    read.stream.once("error", () => {
-      if (!res.headersSent) res.status(502).end();
-      else res.end();
-    });
-    return read.stream.pipe(res);
+    try {
+      const read = await storage.openReadStream({ storageKey: String(asset.storage_key) });
+      res.setHeader("Content-Type", String(asset.mime_type || read.contentType || "application/octet-stream"));
+      const size = Number(asset.size_bytes || read.contentLength);
+      if (Number.isFinite(size) && size > 0) res.setHeader("Content-Length", String(size));
+      res.setHeader("Cache-Control", "public, max-age=300");
+      read.stream.once("error", () => {
+        if (!res.headersSent) res.redirect(302, fallback);
+        else res.end();
+      });
+      return read.stream.pipe(res);
+    } catch {
+      return res.redirect(302, fallback);
+    }
   } catch (error) {
-    logger.error({ error, artistId, kind, correlationId }, "[ArtistAsset] Delivery failed");
-    return res.status(502).json({ success: false, message: "Failed to load image", correlationId });
+    logger.warn({ error, artistId, kind, correlationId }, "[ArtistAsset] Delivery failed, redirecting to fallback");
+    const fallback = kind === "BANNER"
+      ? "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1400&q=80"
+      : "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=800&q=80";
+    return res.redirect(302, fallback);
   }
 });
 
