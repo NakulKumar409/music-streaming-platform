@@ -15,8 +15,14 @@ coverage/
 *.tsbuildinfo
 *.log
 .DS_Store
-backend/storage/users/
-storage/users/
-backend/storage/artists/
+# Ignore large media audio/video files in storage, but keep images and thumbnails
+backend/storage/**/*.mp3
+backend/storage/**/*.mp4
+backend/storage/**/*.m4a
+backend/storage/**/*.wav
+backend/storage/**/*.aac
+backend/storage/**/*.flac
+backend/storage/**/*.bin
 backend/public/agreements/*.pdf
 public/agreements/*.pdf
+
