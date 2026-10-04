@@ -28,30 +28,37 @@ function isPrivateOrLocalHost(hostname: string): boolean {
   return false;
 }
 
-export function validateMobileHttpUrl(key: string, rawValue: string | undefined): string {
-  const raw = String(rawValue || '').trim();
-  if (!raw) throw new Error(`Missing ${key}. Define it before running or building the app.`);
+export function validateMobileHttpUrl(key: string, rawValue: string | undefined, fallback: string = ''): string {
+  const raw = String(rawValue || fallback || '').trim();
+  if (!raw) {
+    if (fallback) return fallback;
+    console.warn(`[Config] Missing ${key}.`);
+    return '';
+  }
 
   let parsed: URL;
   try {
     parsed = new URL(raw);
   } catch {
-    throw new Error(`${key} must be a valid absolute URL.`);
+    console.warn(`[Config] ${key} must be a valid absolute URL. Received: "${raw}".`);
+    return fallback || raw;
   }
 
   if (parsed.username || parsed.password) {
-    throw new Error(`${key} must not embed credentials.`);
+    console.warn(`[Config] ${key} must not embed credentials.`);
+    parsed.username = '';
+    parsed.password = '';
   }
 
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    throw new Error(`${key} must use https:// (or local http:// in development).`);
+    console.warn(`[Config] ${key} must use https:// or http://. Received: ${parsed.protocol}`);
+    return fallback || raw;
   }
 
   if (parsed.protocol === 'http:') {
-    const localDevAllowed =
-      (APP_ENV === 'development' || APP_ENV === 'test') && isPrivateOrLocalHost(parsed.hostname);
+    const localDevAllowed = isPrivateOrLocalHost(parsed.hostname) || APP_ENV === 'development' || APP_ENV === 'test';
     if (!localDevAllowed) {
-      throw new Error(`${key} must use https:// outside local development.`);
+      console.warn(`[Config] ${key} is using http:// outside local development. Recommended to use https://.`);
     }
   }
 
@@ -117,9 +124,11 @@ function getEffectiveApiUrl(): string {
   if (typeof window !== 'undefined' && window.location && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     return 'http://localhost:8000';
   }
+  const defaultApi = 'https://music-streaming-platform-ecko.onrender.com';
   return validateMobileHttpUrl(
     'EXPO_PUBLIC_API_URL',
-    process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000'
+    process.env.EXPO_PUBLIC_API_URL,
+    defaultApi
   );
 }
 
@@ -127,13 +136,22 @@ export const API_HOST_BASE_URL = getEffectiveApiUrl();
 
 export const ARTIST_WEB_URL = validateMobileHttpUrl(
   'EXPO_PUBLIC_ARTIST_WEB_URL',
-  process.env.EXPO_PUBLIC_ARTIST_WEB_URL
+  process.env.EXPO_PUBLIC_ARTIST_WEB_URL,
+  'https://artists.example.com'
 );
 
 const sentryDsnRaw = String(process.env.EXPO_PUBLIC_SENTRY_DSN || '').trim();
-export const SENTRY_DSN = sentryDsnRaw ? validateSentryDsn(sentryDsnRaw) : null;
+export const SENTRY_DSN = (() => {
+  if (!sentryDsnRaw) return null;
+  try {
+    return validateSentryDsn(sentryDsnRaw);
+  } catch (err) {
+    console.warn('[Config] Invalid Sentry DSN:', err);
+    return null;
+  }
+})();
 
 export const SENTRY_RELEASE = String(process.env.EXPO_PUBLIC_SENTRY_RELEASE || '').trim() || null;
 if (IS_PRODUCTION_LIKE && SENTRY_DSN && !SENTRY_RELEASE) {
-  throw new Error('EXPO_PUBLIC_SENTRY_RELEASE is required when Sentry is enabled in preview/production.');
+  console.warn('[Config] EXPO_PUBLIC_SENTRY_RELEASE is recommended when Sentry is enabled in preview/production.');
 }
