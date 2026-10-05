@@ -57,46 +57,12 @@ export async function createPlaybackSession(
     );
 
     if (deviceId) {
-      const sameDevice = await client.query<{ id: number; content_id: number }>(
-        `SELECT id, content_id
-           FROM playback_sessions
-          WHERE user_id = $1
-            AND device_id = $2
-            AND ended_at IS NULL
-            AND heartbeat_at > now() - interval '5 minutes'
-          ORDER BY heartbeat_at DESC, id DESC
-          FOR UPDATE`,
-        [userId, deviceId]
-      );
-
-      const reusable = sameDevice.rows.find(
-        (row) => Number(row.content_id) === contentId
-      );
-
-      if (reusable) {
-        const reusableId = Number(reusable.id);
-        await client.query(
-          `UPDATE playback_sessions
-              SET heartbeat_at = now()
-            WHERE id = $1`,
-          [reusableId]
-        );
-        await client.query(
-          `UPDATE playback_sessions
-              SET ended_at = now(), heartbeat_at = now()
-            WHERE user_id = $1
-              AND device_id = $2
-              AND ended_at IS NULL
-              AND id <> $3`,
-          [userId, deviceId, reusableId]
-        );
-        await client.query("COMMIT");
-        return reusableId;
-      }
-
-      // A single app/device can own only one foreground playback lease. If the
-      // process restarted or switched content before cleanup completed, close
-      // that device's old lease before applying the account-wide limit.
+      // A direct access request without an explicit sessionId represents a new
+      // playback lifecycle. Close any lease previously owned by this same
+      // device first. We intentionally create a fresh session instead of
+      // reusing the old one because heartbeat sequence state is process-local;
+      // reusing a pre-restart session would make fresh sequence values look
+      // like replayed heartbeats.
       await client.query(
         `UPDATE playback_sessions
             SET ended_at = now(), heartbeat_at = now()
