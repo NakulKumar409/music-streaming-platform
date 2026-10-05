@@ -58,11 +58,28 @@ function testStreamAccessPassesOnlyRequestedSession() {
   assert.match(routes, /code: "INVALID_PLAYBACK_SESSION"/);
 }
 
+
+function testSameDeviceLeaseRecoveryIsBounded() {
+  const sessions = read("shared/security/playback-session.service.ts");
+  const routes = read("modules/streaming/stream.routes.ts");
+  const access = read("modules/media/media-access.service.ts");
+
+  assert.match(routes, /x-device-id/);
+  assert.match(routes, /deviceId,/);
+  assert.match(access, /deviceId\?: string/);
+  assert.match(access, /createPlaybackSession\(userId, contentId, input\.deviceId\)/);
+  assert.match(sessions, /device_id = \$2/);
+  assert.match(sessions, /Number\(row\.content_id\) === contentId/);
+  assert.match(sessions, /id <> \$3/);
+  assert.match(sessions, /\(user_id, content_id, device_id,/);
+}
+
 function run() {
   testAccessSupportsExplicitLeaseReuse();
   testLeaseRefreshIsOwnedAndContentScoped();
   testHeartbeatIsSequencedAndOwned();
   testStreamAccessPassesOnlyRequestedSession();
+  testSameDeviceLeaseRecoveryIsBounded();
   console.log("test-playback-session-lease-contract: all assertions passed");
 }
 
