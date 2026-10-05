@@ -307,7 +307,7 @@ export async function uploadArtistMedia(req: any, res: Response) {
       client.release();
     }
 
-    await invalidateContentCache();
+    await invalidateContentCache().catch(() => undefined);
 
     return res.status(201).json({
       success: true,
