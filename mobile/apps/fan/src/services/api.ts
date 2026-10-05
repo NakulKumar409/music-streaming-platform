@@ -130,11 +130,18 @@ export function normalizeApiError(error: unknown): NormalizedApiError {
   return { status, code, message, retryable };
 }
 
+let cachedDeviceId: string | null = null;
+
 async function getOrCreateDeviceId() {
+  if (cachedDeviceId) return cachedDeviceId;
   const existing = await AsyncStorage.getItem(DEVICE_ID_STORAGE_KEY);
-  if (existing) return existing;
+  if (existing) {
+    cachedDeviceId = existing;
+    return existing;
+  }
 
   const generated = `${Platform.OS}-${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
+  cachedDeviceId = generated;
   await AsyncStorage.setItem(DEVICE_ID_STORAGE_KEY, generated);
   return generated;
 }

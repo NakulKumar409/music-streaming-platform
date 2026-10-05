@@ -13,13 +13,31 @@ function pageNumber(value: unknown, fallback: number, max: number) {
 function toAbsoluteUrl(req: any, value: unknown) {
   const raw = String(value ?? "").trim();
   if (!raw) return null;
-  if (/^https?:\/\//i.test(raw)) return raw;
-  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  const host = String(req.get("host") || "").trim();
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const isLocal = host.includes("localhost") || host.includes("127.0.0.1") || host.includes("10.0.2.2");
+  const protocol = isLocal
+    ? (req.protocol || "http")
+    : (forwardedProto ? String(forwardedProto).split(",")[0].trim() : "https");
+
+  if (/^https?:\/\//i.test(raw)) {
+    if (raw.startsWith("http://") && !isLocal) {
+      return `https://${raw.slice(7)}`;
+    }
+    return raw;
+  }
+  const baseUrl = `${protocol}://${host}`;
   return raw.startsWith("/") ? `${baseUrl}${raw}` : `${baseUrl}/${raw}`;
 }
 
 function artworkUrl(req: any, contentId: number) {
-  return `${req.protocol}://${req.get("host")}/api/v1/fan/stream/thumbnail/${contentId}`;
+  const host = String(req.get("host") || "").trim();
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const isLocal = host.includes("localhost") || host.includes("127.0.0.1") || host.includes("10.0.2.2");
+  const protocol = isLocal
+    ? (req.protocol || "http")
+    : (forwardedProto ? String(forwardedProto).split(",")[0].trim() : "https");
+  return `${protocol}://${host}/api/v1/fan/stream/thumbnail/${contentId}`;
 }
 
 function artistVisibilityWhere(alias = "u") {

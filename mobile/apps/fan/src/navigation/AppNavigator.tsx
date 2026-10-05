@@ -27,17 +27,12 @@ export default function AppNavigator() {
 
   React.useEffect(() => {
     let mounted = true;
-    const start = Date.now();
 
     (async () => {
       try {
         await bootstrapAuth();
       } finally {
-        const elapsed = Date.now() - start;
-        const remaining = Math.max(0, 3000 - elapsed);
-        setTimeout(() => {
-          if (mounted) setIsSplashVisible(false);
-        }, remaining);
+        if (mounted) setIsSplashVisible(false);
       }
     })();
 

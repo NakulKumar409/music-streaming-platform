@@ -81,14 +81,14 @@ const GOVERNED_CONTENT_WHERE = `
   AND UPPER(u.artist_status::text) = 'APPROVED'
 `;
 
-function subscriptionExistsSql(userParam: string) {
+function subscriptionExistsSql(userParam: string, alias = "c") {
   return `CASE
     WHEN ${userParam}::int IS NULL THEN FALSE
     ELSE EXISTS (
       SELECT 1
         FROM subscriptions s
        WHERE s.user_id = ${userParam}
-         AND s.artist_id = c.artist_id
+         AND s.artist_id = ${alias}.artist_id
          AND s.type = 'ARTIST'
          AND s.status = 'ACTIVE'
          AND s.next_billing_date IS NOT NULL
@@ -130,22 +130,40 @@ router.get("/", optionalAuth, async (req: any, res: any) => {
     }
 
     const result = await pool.query(
-      `SELECT c.id, c.title, c.type, c.genre, c.artist_id,
-              c.subscription_required, c.created_at, c.duration_ms,
-              COALESCE(NULLIF(u.name, ''), split_part(u.email, '@', 1)) AS artist_name,
-              (SELECT COUNT(*)::int FROM content_plays p WHERE p.content_id = c.id) AS view_count,
-              (SELECT COUNT(*)::int FROM content_reactions r WHERE r.content_id = c.id AND r.reaction = 'like') AS like_count,
-              (SELECT COUNT(*)::int FROM content_reactions r WHERE r.content_id = c.id AND r.reaction = 'dislike') AS dislike_count,
-              (CASE WHEN $1::int IS NULL THEN NULL ELSE
-                (SELECT r.reaction FROM content_reactions r WHERE r.content_id = c.id AND r.user_id = $1 LIMIT 1)
-               END) AS user_reaction,
-              ${subscriptionExistsSql("$1")} AS has_subscription
-         FROM content_items c
-         JOIN users u ON u.id = c.artist_id
-        WHERE ${GOVERNED_CONTENT_WHERE}
-          ${cursorClause}
-        ORDER BY c.created_at DESC, c.id DESC
-        LIMIT ${limitRef} ${offsetClause}`,
+      `WITH page AS (
+        SELECT c.id, c.title, c.type, c.genre, c.artist_id,
+               c.subscription_required, c.created_at, c.duration_ms,
+               COALESCE(NULLIF(u.name, ''), split_part(u.email, '@', 1)) AS artist_name
+          FROM content_items c
+          JOIN users u ON u.id = c.artist_id
+         WHERE ${GOVERNED_CONTENT_WHERE}
+           ${cursorClause}
+         ORDER BY c.created_at DESC, c.id DESC
+         LIMIT ${limitRef} ${offsetClause}
+      )
+      SELECT p.*,
+             COALESCE(cp.view_count, 0)::int AS view_count,
+             COALESCE(cr.like_count, 0)::int AS like_count,
+             COALESCE(cr.dislike_count, 0)::int AS dislike_count,
+             ur.reaction AS user_reaction,
+             ${subscriptionExistsSql("$1", "p")} AS has_subscription
+        FROM page p
+        LEFT JOIN (
+          SELECT content_id, COUNT(*)::int AS view_count
+            FROM content_plays
+           WHERE content_id IN (SELECT id FROM page)
+           GROUP BY content_id
+        ) cp ON cp.content_id = p.id
+        LEFT JOIN (
+          SELECT content_id,
+                 COUNT(*) FILTER (WHERE reaction = 'like')::int AS like_count,
+                 COUNT(*) FILTER (WHERE reaction = 'dislike')::int AS dislike_count
+            FROM content_reactions
+           WHERE content_id IN (SELECT id FROM page)
+           GROUP BY content_id
+        ) cr ON cr.content_id = p.id
+        LEFT JOIN content_reactions ur ON ur.content_id = p.id AND ur.user_id = $1
+       ORDER BY p.created_at DESC, p.id DESC`,
       params
     );
 
@@ -192,22 +210,40 @@ router.get("/artist/:artistId", optionalAuth, async (req: any, res: any) => {
 
   try {
     const result = await pool.query(
-      `SELECT c.id, c.title, c.type, c.genre, c.artist_id,
-              c.subscription_required, c.created_at, c.duration_ms,
-              COALESCE(NULLIF(u.name, ''), split_part(u.email, '@', 1)) AS artist_name,
-              (SELECT COUNT(*)::int FROM content_plays p WHERE p.content_id = c.id) AS view_count,
-              (SELECT COUNT(*)::int FROM content_reactions r WHERE r.content_id = c.id AND r.reaction = 'like') AS like_count,
-              (SELECT COUNT(*)::int FROM content_reactions r WHERE r.content_id = c.id AND r.reaction = 'dislike') AS dislike_count,
-              (CASE WHEN $2::int IS NULL THEN NULL ELSE
-                (SELECT r.reaction FROM content_reactions r WHERE r.content_id = c.id AND r.user_id = $2 LIMIT 1)
-               END) AS user_reaction,
-              ${subscriptionExistsSql("$2")} AS has_subscription
-         FROM content_items c
-         JOIN users u ON u.id = c.artist_id
-        WHERE c.artist_id = $1
-          AND ${GOVERNED_CONTENT_WHERE}
-        ORDER BY c.created_at DESC, c.id DESC
-        LIMIT $3 OFFSET $4`,
+      `WITH page AS (
+        SELECT c.id, c.title, c.type, c.genre, c.artist_id,
+               c.subscription_required, c.created_at, c.duration_ms,
+               COALESCE(NULLIF(u.name, ''), split_part(u.email, '@', 1)) AS artist_name
+          FROM content_items c
+          JOIN users u ON u.id = c.artist_id
+         WHERE c.artist_id = $1
+           AND ${GOVERNED_CONTENT_WHERE}
+         ORDER BY c.created_at DESC, c.id DESC
+         LIMIT $3 OFFSET $4
+      )
+      SELECT p.*,
+             COALESCE(cp.view_count, 0)::int AS view_count,
+             COALESCE(cr.like_count, 0)::int AS like_count,
+             COALESCE(cr.dislike_count, 0)::int AS dislike_count,
+             ur.reaction AS user_reaction,
+             ${subscriptionExistsSql("$2", "p")} AS has_subscription
+        FROM page p
+        LEFT JOIN (
+          SELECT content_id, COUNT(*)::int AS view_count
+            FROM content_plays
+           WHERE content_id IN (SELECT id FROM page)
+           GROUP BY content_id
+        ) cp ON cp.content_id = p.id
+        LEFT JOIN (
+          SELECT content_id,
+                 COUNT(*) FILTER (WHERE reaction = 'like')::int AS like_count,
+                 COUNT(*) FILTER (WHERE reaction = 'dislike')::int AS dislike_count
+            FROM content_reactions
+           WHERE content_id IN (SELECT id FROM page)
+           GROUP BY content_id
+        ) cr ON cr.content_id = p.id
+        LEFT JOIN content_reactions ur ON ur.content_id = p.id AND ur.user_id = $2
+       ORDER BY p.created_at DESC, p.id DESC`,
       [artistId, userId, limit, offset]
     );
 

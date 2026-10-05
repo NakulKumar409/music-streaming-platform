@@ -58,7 +58,7 @@ export function validateMobileHttpUrl(key: string, rawValue: string | undefined,
   if (parsed.protocol === 'http:') {
     const localDevAllowed = isPrivateOrLocalHost(parsed.hostname) || APP_ENV === 'development' || APP_ENV === 'test';
     if (!localDevAllowed) {
-      console.warn(`[Config] ${key} is using http:// outside local development. Recommended to use https://.`);
+      console.warn(`[Config] ${key} must use https:// outside local development. Recommended to use https://.`);
     }
   }
 

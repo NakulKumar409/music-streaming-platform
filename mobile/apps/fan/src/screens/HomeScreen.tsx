@@ -220,7 +220,7 @@ const ssStyles = StyleSheet.create({
 
 export default function HomeScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
-  const { currentItem, state: playerState, togglePlayPause, playQueue } = useMediaPlayer();
+  const { currentItem, togglePlayPause, playQueue } = useMediaPlayer();
   const { user } = useAuth();
   const activeAudioMeta = currentItem?.mediaType === 'audio' ? currentItem : null;
   const hasActiveAudio = !!activeAudioMeta;
@@ -282,7 +282,7 @@ export default function HomeScreen({ navigation }: any) {
     return {
       id: a.id,
       name: a.name,
-      image: a.image,
+      image: resolveAppImageUrl(a.image, 'artist'),
       isVerified: Boolean(a.isVerified),
       isSubscriptionBased,
       subText: '',
@@ -397,18 +397,18 @@ export default function HomeScreen({ navigation }: any) {
     return () => { mountedRef.current = false; };
   }, [fetchContent]);
 
-  const onPressArtist = (artistId: string) => {
+  const onPressArtist = useCallback((artistId: string) => {
     navigation.navigate('Artist', { artistId });
-  };
+  }, [navigation]);
 
   // Tapping an item in the AUDIO row — always play as audio
-  const onPressAudioItem = async (item: ContentCard) => {
+  const onPressAudioItem = useCallback(async (item: ContentCard) => {
     const params = buildFullPlayerParams(item);
     navigation.navigate('FullPlayer', params);
-  };
+  }, [buildFullPlayerParams, navigation]);
 
   // Tapping an item in the VIDEO row — always open in VideoTab
-  const onPressVideoItem = (item: ContentCard) => {
+  const onPressVideoItem = useCallback((item: ContentCard) => {
     if (item.isLocked) {
       setShowArtistLockModal({ visible: true, item });
       return;
@@ -429,13 +429,13 @@ export default function HomeScreen({ navigation }: any) {
         },
       },
     });
-  };
+  }, [navigation]);
 
-  const onPressSeeAllTrending = () => {
+  const onPressSeeAllTrending = useCallback(() => {
     navigation.navigate('SeeAllTrending', {
       artists: trendingArtists,
     });
-  };
+  }, [navigation, trendingArtists]);
 
   const onPressBecomeArtist = async () => {
     if (user?.role === 'ARTIST') {
@@ -465,7 +465,7 @@ export default function HomeScreen({ navigation }: any) {
   };
 
   /* ── Render: Featured Artist card ── */
-  const renderFeaturedArtist = ({ item }: { item: FeaturedArtistCard }) => (
+  const renderFeaturedArtist = useCallback(({ item }: { item: FeaturedArtistCard }) => (
     <Pressable
       style={styles.featuredCard}
       onPress={() => {
@@ -489,10 +489,10 @@ export default function HomeScreen({ navigation }: any) {
         </Text>
       </View>
     </Pressable>
-  );
+  ), [onPressArtist]);
 
   /* ── Render: Trending Artist — perfect circle ── */
-  const renderTrendingArtist = ({ item }: { item: ArtistCard }) => (
+  const renderTrendingArtist = useCallback(({ item }: { item: ArtistCard }) => (
     <Pressable style={styles.trendingCard} onPress={() => onPressArtist(item.id)}>
       {/* Outer ring border */}
       <View style={styles.trendingCircleOuter}>
@@ -515,10 +515,10 @@ export default function HomeScreen({ navigation }: any) {
         )}
       </View>
     </Pressable>
-  );
+  ), [onPressArtist]);
 
   /* ── Render: Recently Added Audio — premium card ── */
-  const renderRecentAudio = ({ item }: { item: ContentCard }) => {
+  const renderRecentAudio = useCallback(({ item }: { item: ContentCard }) => {
     const duration = formatDuration(item.durationMs);
     return (
       <Pressable
@@ -570,10 +570,10 @@ export default function HomeScreen({ navigation }: any) {
         </View>
       </Pressable>
     );
-  };
+  }, [onPressAudioItem]);
 
   /* ── Render: Recently Added Video card ── */
-  const renderRecentVideo = ({ item }: { item: ContentCard }) => (
+  const renderRecentVideo = useCallback(({ item }: { item: ContentCard }) => (
     <Pressable style={styles.videoCard} onPress={() => onPressVideoItem(item)}>
       <View style={styles.videoImgContainer}>
         <AppImage
@@ -602,7 +602,8 @@ export default function HomeScreen({ navigation }: any) {
         </Text>
       </View>
     </Pressable>
-  );
+  ), [onPressVideoItem]);
+
 
   /* ── Full-page loading state ── */
   if (loading) {

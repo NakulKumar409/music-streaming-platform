@@ -38,25 +38,12 @@ export type ArtistListItem = {
   genre: string;
 };
 
-const FALLBACK_ARTIST_IMAGE =
-  'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1000&q=80';
+import { resolveAppImageUrl, FALLBACK_ARTIST_AVATAR } from '../utils/imageUtils';
 
-function resolveImageUrl(url: string) {
-  const trimmed = (url || '').toString().trim();
-  if (!trimmed) return '';
-  
-  // Replace hardcoded localhost database entries with the current base URL
-  if (trimmed.startsWith('http://localhost') || trimmed.startsWith('http://192.168.')) {
-    const pathIndex = trimmed.indexOf('/', 8);
-    if (pathIndex !== -1) {
-      const path = trimmed.substring(pathIndex);
-      return `${API_HOST_BASE_URL}${path}`;
-    }
-  }
+const FALLBACK_ARTIST_IMAGE = FALLBACK_ARTIST_AVATAR;
 
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
-  if (trimmed.startsWith('/')) return `${API_HOST_BASE_URL}${trimmed}`;
-  return trimmed;
+function resolveImageUrl(url: string, type: 'song' | 'artist' | 'banner' | 'video' = 'artist') {
+  return resolveAppImageUrl(url, type);
 }
 
 export type ArtistDetail = {

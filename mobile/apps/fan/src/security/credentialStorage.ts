@@ -15,6 +15,8 @@ const SECURE_STORE_OPTIONS: SecureStore.SecureStoreOptions = {
 type CredentialWriteReason = 'fresh-auth' | 'session-rotation';
 
 let webMemoryCredential: string | null = null;
+let inMemoryCredentialCache: string | null = null;
+let hasLoadedFromStorage = false;
 // This process-local gate protects web and native clients from a response race:
 // after logout, an older in-flight response must not persist a rotated token.
 let sessionRotationWritesAllowed = true;
@@ -71,13 +73,19 @@ async function deleteNativeSecureCredential() {
  * logout fail-closed even if a native secure-store delete reports success before
  * its backing storage is durably updated.
  */
-export async function readAuthCredential(): Promise<string | null> {
+export async function readAuthCredential(forceReload = false): Promise<string | null> {
   if (!isNativeMobile()) {
     return webMemoryCredential;
   }
 
+  if (!forceReload && hasLoadedFromStorage) {
+    return inMemoryCredentialCache;
+  }
+
   if (await hasLogoutTombstone()) {
     sessionRotationWritesAllowed = false;
+    inMemoryCredentialCache = null;
+    hasLoadedFromStorage = true;
     // Best-effort cleanup only. Never restore while logout intent is present.
     try {
       await deleteNativeSecureCredential();
@@ -100,11 +108,17 @@ export async function readAuthCredential(): Promise<string | null> {
   if (secureCredential) {
     // Clean up any stale plaintext copies left by an interrupted older session.
     await clearLegacyCredentialCopies();
+    inMemoryCredentialCache = secureCredential;
+    hasLoadedFromStorage = true;
     return secureCredential;
   }
 
   const legacyCredential = await readLegacyCredential();
-  if (!legacyCredential) return null;
+  if (!legacyCredential) {
+    inMemoryCredentialCache = null;
+    hasLoadedFromStorage = true;
+    return null;
+  }
 
   await SecureStore.setItemAsync(
     SECURE_AUTH_CREDENTIAL_KEY,
@@ -121,6 +135,8 @@ export async function readAuthCredential(): Promise<string | null> {
   }
 
   await clearLegacyCredentialCopies();
+  inMemoryCredentialCache = verifiedCredential;
+  hasLoadedFromStorage = true;
   return verifiedCredential;
 }
 
@@ -171,6 +187,8 @@ export async function saveAuthCredential(
     sessionRotationWritesAllowed = true;
   }
 
+  inMemoryCredentialCache = normalized;
+  hasLoadedFromStorage = true;
   return true;
 }
 
@@ -178,6 +196,8 @@ export async function clearAuthCredential(): Promise<void> {
   // Block rotation immediately, before any async storage operation yields.
   sessionRotationWritesAllowed = false;
   webMemoryCredential = null;
+  inMemoryCredentialCache = null;
+  hasLoadedFromStorage = true;
 
   if (!isNativeMobile()) {
     await clearLegacyCredentialCopies();
