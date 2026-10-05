@@ -45,6 +45,7 @@ export interface RequestPlaybackInput {
    * still be active; the service never silently allocates a replacement lease.
    */
   sessionId?: number;
+  deviceId?: string;
   kind?: "audio" | "video";
   quality?: string;
   correlationId?: string;
@@ -218,7 +219,7 @@ export async function requestPlaybackAccess(
     }
     sessionId = requestedSessionId;
   } else {
-    sessionId = await createPlaybackSession(userId, contentId);
+    sessionId = await createPlaybackSession(userId, contentId, input.deviceId);
     createdNewSession = true;
   }
 
