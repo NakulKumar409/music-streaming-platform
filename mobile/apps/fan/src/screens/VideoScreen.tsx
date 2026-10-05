@@ -66,6 +66,7 @@ import * as streamService from "../services/streamService";
 import { userService } from "../services/userService";
 import { Colors } from "../theme";
 import { getOptimizedImageUrl } from "../utils/cloudinary";
+import AppImage from "../components/AppImage";
 import {
   formatDurationLabel,
   hasFiniteDuration,
@@ -1927,11 +1928,11 @@ export default function VideoScreen() {
               styles.rowThumbWrap,
               isActive ? styles.rowThumbWrapActive : null,
             ]}>
-            <Image
-              source={{
-                uri: getOptimizedImageUrl(item.artworkUrl || FALLBACK_ARTWORK),
-              }}
+            <AppImage
+              uri={item.artworkUrl}
+              fallbackType="video"
               style={styles.rowThumb}
+              resizeMode="cover"
             />
             {item.isLocked && (
               <View style={styles.lockBadgeMini}>
@@ -2007,11 +2008,11 @@ export default function VideoScreen() {
             style={styles.relatedRow}
             onPress={() => onPressVideo(v)}>
             <View>
-              <Image
-                source={{
-                  uri: getOptimizedImageUrl(v.artworkUrl || FALLBACK_ARTWORK),
-                }}
+              <AppImage
+                uri={v.artworkUrl}
+                fallbackType="video"
                 style={styles.relatedThumb}
+                resizeMode="cover"
               />
               {v.isLocked && (
                 <View style={[styles.lockBadgeMini, { top: 4, right: 4 }]}>
@@ -2566,18 +2567,11 @@ export default function VideoScreen() {
                       <Pressable
                         style={styles.artistRow}
                         onPress={onPressArtist}>
-                        <Image
-                          source={{
-                            uri: getOptimizedImageUrl(
-                              activeVideoMeta.artistProfileImage ||
-                                FALLBACK_ARTWORK
-                            ),
-                          }}
+                        <AppImage
+                          uri={activeVideoMeta.artistProfileImage}
+                          fallbackType="artist"
                           style={styles.artistAvatar}
-                          onError={(e: any) => {
-                            // Agar image load nahi hoti toh default image dikhao
-                            e.currentTarget.source = { uri: FALLBACK_ARTWORK };
-                          }}
+                          resizeMode="cover"
                         />
                         <View style={styles.artistNameCol}>
                           <Text style={styles.artistRowName} numberOfLines={1}>

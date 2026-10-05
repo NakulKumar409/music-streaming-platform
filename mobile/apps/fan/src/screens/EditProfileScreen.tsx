@@ -20,6 +20,7 @@ import { useAuth } from '../store/authStore';
 import { userService, UserProfile } from '../services/userService';
 import { normalizeApiError } from '../services/api';
 import { getOptimizedImageUrl } from '../utils/cloudinary';
+import AppImage from '../components/AppImage';
 
 export default function EditProfileScreen() {
   const navigation = useNavigation<any>();
@@ -265,7 +266,7 @@ export default function EditProfileScreen() {
           <View style={styles.avatarSection}>
             <View style={styles.avatarWrapper}>
               {profileImageUri ? (
-                <Image source={{ uri: getOptimizedImageUrl(profileImageUri) || profileImageUri }} style={styles.avatar} />
+                <AppImage uri={profileImageUri} fallbackType="artist" style={styles.avatar} />
               ) : (
                 <View style={styles.avatarPlaceholder}>
                   <Text style={styles.avatarLetter}>{fullName ? fullName.charAt(0).toUpperCase() : 'U'}</Text>

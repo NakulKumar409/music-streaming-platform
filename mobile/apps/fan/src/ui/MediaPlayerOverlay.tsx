@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { MediaItem, PlayerState } from '../media.types';
 import YouTubeVideoControlsOverlay from './YouTubeVideoControlsOverlay';
 import { Colors } from '../theme';
+import AppImage from '../components/AppImage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -304,9 +305,11 @@ export default function MediaPlayerOverlay({
             });
           }}
         >
-          <Image
-            source={{ uri: currentItem.artworkUrl || 'https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=400&q=80' }}
+          <AppImage
+            uri={currentItem.artworkUrl}
+            fallbackType="song"
             style={styles.miniArt}
+            resizeMode="cover"
           />
           <View style={styles.miniMeta}>
             <Text style={styles.miniTitle} numberOfLines={1}>{currentItem.title}</Text>

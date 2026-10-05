@@ -27,6 +27,7 @@ import { Colors } from '../theme';
 import { formatDurationLabel, hasFiniteDuration } from '../utils/mediaTime';
 import type { MediaItem } from '../media.types';
 import { navigationRef } from '../navigation/rootNavigation';
+import { resolveAppImageUrl } from '../utils/imageUtils';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const DISC_SIZE = Math.min(SCREEN_W - 72, 270);
@@ -227,7 +228,17 @@ export default function FullPlayerScreen({ navigation, route }: any) {
   // ── Derived display values ─────────────────────────────────────────────────
   const displayTitle = currentItem?.title ?? params.title ?? 'Unknown';
   const displayArtist = currentItem?.artistName ?? params.artist ?? 'Unknown';
-  const displayImage = currentItem?.artworkUrl ?? params.imageUrl ?? FALLBACK_ARTWORK;
+  const rawImage = currentItem?.artworkUrl ?? params.imageUrl;
+  const resolvedImage = React.useMemo(
+    () => (rawImage ? resolveAppImageUrl(rawImage, 'song') : FALLBACK_ARTWORK),
+    [rawImage]
+  );
+  const [imageError, setImageError] = useState(false);
+  const displayImage = imageError ? FALLBACK_ARTWORK : resolvedImage;
+
+  useEffect(() => {
+    setImageError(false);
+  }, [resolvedImage]);
 
   const durationKnown = hasFiniteDuration(playerState.durationMs);
   const enginePositionForUi =
@@ -285,9 +296,10 @@ export default function FullPlayerScreen({ navigation, route }: any) {
     <View style={styles.root}>
       {/* Blurred background */}
       <ImageBackground
-        source={{ uri: displayImage || FALLBACK_ARTWORK }}
+        source={{ uri: displayImage }}
         style={StyleSheet.absoluteFill}
         resizeMode="cover"
+        onError={() => setImageError(true)}
       >
         <BlurView intensity={85} tint="dark" style={StyleSheet.absoluteFill} />
         <LinearGradient
@@ -347,9 +359,10 @@ export default function FullPlayerScreen({ navigation, route }: any) {
           />
           {/* Spinning disc */}
           <Animated.Image
-            source={{ uri: displayImage || FALLBACK_ARTWORK }}
+            source={{ uri: displayImage }}
             style={[styles.disc, { transform: [{ rotate: spin }] }]}
             resizeMode="cover"
+            onError={() => setImageError(true)}
           />
           {/* Center hole */}
           <View style={styles.discHole} />
