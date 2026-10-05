@@ -69,8 +69,8 @@ function testSameDeviceLeaseRecoveryIsBounded() {
   assert.match(access, /deviceId\?: string/);
   assert.match(access, /createPlaybackSession\(userId, contentId, input\.deviceId\)/);
   assert.match(sessions, /device_id = \$2/);
-  assert.match(sessions, /Number\(row\.content_id\) === contentId/);
-  assert.match(sessions, /id <> \$3/);
+  assert.match(sessions, /SET ended_at = now\(\), heartbeat_at = now\(\)/);
+  assert.match(sessions, /heartbeat sequence state is process-local/);
   assert.match(sessions, /\(user_id, content_id, device_id,/);
 }
 
