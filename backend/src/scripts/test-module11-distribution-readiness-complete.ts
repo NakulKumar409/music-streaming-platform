@@ -618,10 +618,11 @@ async function main() {
       console.log(`  [SKIP] 8C. No ready video content in DB for direct stream test`);
     }
 
-    // 8D. Admin Content Approval Queue regression
+    // 8D. Legacy per-content approval is explicitly retired.
     const adminQueueRes = await api("/api/v1/admin/content/pending", { token: adminToken });
-    assert.equal(adminQueueRes.status, 200, "Admin content approval queue must return 200");
-    console.log(`  [PASS] 8D. Admin governance pending content queue non-regression verified`);
+    assert.equal(adminQueueRes.status, 410, "Admin content approval queue must be retired");
+    assert.equal(adminQueueRes.data?.code, "CONTENT_APPROVAL_RETIRED");
+    console.log(`  [PASS] 8D. Legacy admin content approval workflow is retired`);
 
     // 8E. Artist Own Content regression
     const artistContentRes = await api("/api/v1/content/mine", { token: artistToken });
