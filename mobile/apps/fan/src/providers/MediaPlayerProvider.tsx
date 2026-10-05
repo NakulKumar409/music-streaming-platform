@@ -57,6 +57,7 @@ import {
   getPlaybackDescriptorForRecovery,
   getPlaybackErrorPresentation,
   getPlaybackUrl,
+  releaseActivePlaybackLease,
   normalizePlaybackUrl,
   validatePlaybackUrl,
   type VideoQuality,
@@ -1683,6 +1684,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     currentItemRef.current = null;
     await stopVideo();
     await unloadAudio();
+    await releaseActivePlaybackLease().catch(() => false);
     setState(EMPTY_STATE);
   }, [
     cancelPendingMediaSelection,
@@ -1747,6 +1749,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         audioSourceRef.current = null;
         resetSeekCoordinator();
         setState((s) => ({ ...s, isPlaying: false, positionMs: 0 }));
+        void releaseActivePlaybackLease();
       }
     );
 
@@ -2022,10 +2025,26 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           if (!active) return;
 
           const pos = Math.max(0, Math.round(progress.position * 1000));
-          const dur =
+          let dur =
             Number.isFinite(progress.duration) && progress.duration > 0
               ? Math.round(progress.duration * 1000)
               : 0;
+
+          // RNTP can briefly report duration=0 while progressive metadata is
+          // still settling. Keep one authoritative progress writer, but use the
+          // active track's canonical metadata as a non-polling duration fallback
+          // so the seek bar does not remain disabled unnecessarily.
+          if (dur <= 0) {
+            const activeTrack = await TrackPlayer.getActiveTrack();
+            if (!active || generationAtRead !== seekGenerationRef.current) return;
+            const trackDurationSeconds = Number(activeTrack?.duration);
+            if (
+              Number.isFinite(trackDurationSeconds) &&
+              trackDurationSeconds > 0
+            ) {
+              dur = Math.round(trackDurationSeconds * 1000);
+            }
+          }
 
           applyAudioProgress(pos, dur, generationAtRead);
         } catch (e) {
