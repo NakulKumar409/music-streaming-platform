@@ -278,6 +278,7 @@ const REQUIRED_SCHEMA: Record<string, string[]> = {
     "id",
     "user_id",
     "content_id",
+    "device_id",
     "heartbeat_at",
     "started_at",
     "current_position",
