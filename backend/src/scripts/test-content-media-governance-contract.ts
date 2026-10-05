@@ -26,7 +26,8 @@ function main() {
   const app = source("app.ts");
   const adminIndex = source("routes/admin/index.ts");
   const adminMediaRoute = source("routes/admin/media.ts");
-  const adminMediaController = source("controllers/admin/adminMediaController.ts");
+  const artistMediaRoute = source("routes/artist/media.ts");
+  const artistMediaController = source("controllers/artist/artistMediaController.ts");
   const contentRoutes = source("routes/content.ts");
   const fanContentRoutes = source("modules/content/content.routes.ts");
   const governance = source("modules/content/content-governance.service.ts");
@@ -51,32 +52,33 @@ function main() {
   const player = repo("mobile/apps/fan/src/screens/ContentPlayerScreen.tsx");
 
   assert.equal(app.includes("express.static"), false, "Generic public static media serving must not be mounted");
-  assert.equal(app.includes('/api/v1/content/upload'), false, "Legacy artist content upload route must not be preserved");
+  assert.equal(app.includes('/api/v1/content/upload'), false, "Legacy unscoped artist content upload route must not be preserved");
+  assert.equal(app.includes('"/api/v1/artist/media"') && app.includes("requireVerifiedArtist"), true, "Artist content upload must be mounted behind verified-artist authorization");
   assert.equal(app.includes("artistAssetUploadRouter"), true, "Artist public-brand assets must use the governed provider-backed router");
   assert.equal(app.includes("artistPublicAssetRouter"), true, "Artist public-brand assets need a stable governed delivery route");
 
   assert.equal(adminIndex.includes('requireRoles("ADMIN", "MODERATOR")'), true, "Content moderation must remain ADMIN/MODERATOR scoped");
-  assert.equal(adminIndex.includes('router.use("/media", requireAuth, requireRoles("ADMIN")'), true, "Binary content upload must be ADMIN-only");
+  assert.equal(adminIndex.includes('router.use("/media", requireAuth, requireRoles("ADMIN")'), true, "Retired admin upload compatibility route must remain privileged");
   assert.equal(adminIndex.includes("image-upload"), false, "Direct Cloudinary admin image uploader must not be mounted");
 
-  assert.equal(adminMediaRoute.includes("multer.diskStorage"), true, "Large uploads must spool to disk instead of buffering in memory");
-  assert.equal(adminMediaRoute.includes("uploadLimiter"), true, "Admin media upload must be rate limited");
-  assert.equal(adminMediaController.includes("validateSpooledFile"), true, "Uploads must validate signature as well as declared MIME");
-  assert.equal(adminMediaController.includes("'DRAFT'"), true, "Upload must create DRAFT content");
-  assert.equal(adminMediaController.includes("'UPLOADING'"), true, "Upload must start in a technical upload state");
-  assert.equal(adminMediaController.includes("contentLength: media.size"), true, "Provider streaming must receive known media length");
-  assert.equal(adminMediaController.includes("media_url = NULL"), true, "Protected media must not persist a raw delivery URL");
+  assert.equal(adminMediaRoute.includes("ADMIN_CONTENT_UPLOAD_RETIRED"), true, "Admin binary content upload must be explicitly retired");
+  assert.equal(artistMediaRoute.includes("multer.diskStorage"), true, "Large artist uploads must spool to disk instead of buffering in memory");
+  assert.equal(artistMediaRoute.includes("uploadLimiter"), true, "Artist media upload must be rate limited");
+  assert.equal(artistMediaController.includes("validateSpooledFile"), true, "Artist uploads must validate signature as well as declared MIME");
+  assert.equal(artistMediaController.includes("'EARLY_ACCESS', TRUE"), true, "Artist-owned uploads must not enter a manual approval lifecycle");
+  assert.equal(artistMediaController.includes("'UPLOADING'"), true, "Upload must start in a technical upload state");
+  assert.equal(artistMediaController.includes("published_at = CASE WHEN $2 = 'READY'"), true, "READY uploads must become published automatically");
+  assert.equal(artistMediaController.includes("contentLength: media.size"), true, "Provider streaming must receive known media length");
+  assert.equal(artistMediaController.includes("media_url = NULL"), true, "Protected media must not persist a raw delivery URL");
+  assert.equal(artistMediaController.includes("'ARTIST', 'success'"), true, "Artist-owned uploads must be audited as ARTIST actions");
 
-  assert.equal(governance.includes("lifecycle_state = 'EARLY_ACCESS'"), true, "Approval must explicitly move DRAFT to EARLY_ACCESS");
-  assert.equal(governance.includes("current.status !== \"READY\""), true, "Approval must require media READY state");
-  assert.equal(governance.includes("content.approved"), true, "Approval must be audited");
-  assert.equal(governance.includes("content.takedown"), true, "Takedown must be audited");
+  assert.equal(governance.includes("content.takedown"), true, "Takedown must remain audited");
   assert.equal(moderationQuery.includes("report_count"), true, "Reported published content must be queryable for moderator review");
 
   assert.equal(contentRoutes.includes('router.post("/report"'), true, "Fan reports must remain available");
   assert.equal(contentRoutes.includes("status = 'FLAGGED'"), false, "Moderation signals must not overwrite technical media status");
-  assert.equal(contentRoutes.includes('router.get(\n  "/mine"'), true, "Artists need read-only content history");
-  assert.equal(contentRoutes.includes('router.post("/upload"'), false, "Artist content binary upload must not exist");
+  assert.equal(contentRoutes.includes('router.get(\n  "/mine"'), true, "Artists need canonical content history");
+  assert.equal(contentRoutes.includes('router.post("/upload"'), false, "Legacy unscoped content upload must not exist");
   assert.equal(contentRoutes.includes("router.delete("), false, "Artist content hard-delete path must not exist");
 
   assert.equal(fanContentRoutes.includes("mediaUrl: null"), true, "Catalog/detail APIs must not expose protected media URLs");
@@ -121,9 +123,10 @@ function main() {
 
   assert.equal(exists("backend/src/common/queue.ts"), false, "Legacy media upload queue must be removed");
   assert.equal(exists("backend/src/workers/upload.worker.ts"), false, "Legacy auto-publish upload worker must be removed");
-  assert.equal(exists("web-artist/src/pages/ArtistContentUploadPage.tsx"), false, "Artist binary content upload UI must be removed");
-  assert.equal(artistApp.includes('path="/artist/upload"'), false, "Artist router must not expose binary content upload");
-  assert.equal(artistHistory.includes("/api/v1/content/mine"), true, "Artist content page must use read-only canonical history endpoint");
+  assert.equal(exists("web-artist/src/pages/ArtistContentUploadPage.tsx"), true, "Artist Studio must expose ownership-scoped content upload UI");
+  assert.equal(artistApp.includes('path="/artist/content-upload"'), true, "Artist router must expose the verified self-service upload page");
+  assert.equal(artistHistory.includes("/api/v1/content/mine"), true, "Artist content page must use canonical history endpoint");
+  assert.equal(exists("web-admin/src/pages/AdminMediaUploadPage.tsx"), false, "Admin content upload page must be removed");
 
   assert.equal(player.includes("navigation.replace('FullPlayer'"), true, "Legacy audio route must delegate to the hardened global player");
   const heartbeat = repo("mobile/apps/fan/src/services/heartbeatService.ts");
