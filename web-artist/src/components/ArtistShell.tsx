@@ -9,6 +9,7 @@ import {
   LogOut,
   Menu,
   Settings,
+  UploadCloud,
   User,
   X,
 } from "lucide-react";
@@ -117,6 +118,7 @@ export default function ArtistShell() {
     () => [
       { path: "/artist/dashboard", label: "Dashboard", icon: <Gauge size={19} /> },
       { path: "/artist/account", label: "Profile", icon: <User size={19} /> },
+      { path: "/artist/content-upload", label: "Upload", icon: <UploadCloud size={19} /> },
       { path: "/artist/content-history", label: "My Content", icon: <History size={19} /> },
       { path: "/artist/analytics-summary", label: "Analytics", icon: <BarChart3 size={19} /> },
       { path: "/artist/pricing", label: "Pricing", icon: <CircleDollarSign size={19} /> },
