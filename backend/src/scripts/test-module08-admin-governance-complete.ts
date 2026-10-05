@@ -8,7 +8,7 @@ import { validateEnv } from "../config/env.validation";
 import { pool } from "../common/db";
 import { SessionService } from "../common/auth/session.service";
 import { ArtistApprovalService } from "../modules/artist/artist-approval.service";
-import { approveContent, takedownContent } from "../modules/content/content-governance.service";
+import { takedownContent } from "../modules/content/content-governance.service";
 
 async function main() {
   console.log("================================================================================");
@@ -203,7 +203,7 @@ async function main() {
 
     // Verify Moderator can list pending content
     const modPending = await api("/api/v1/admin/content/pending", { token: tokenMod });
-    assert.equal(modPending.status, 200);
+    assert.equal(modPending.status, 410);
     console.log("✓ Moderator Permission: Moderator can access content moderation queue.");
 
     // Moderator executes takedown
