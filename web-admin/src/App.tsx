@@ -11,7 +11,6 @@ const AdminAnalyticsPage = lazy(() => import("./pages/AdminAnalyticsPage"));
 const AdminArtistsPage = lazy(() => import("./pages/AdminArtistsPage"));
 const AdminArtistDetailPage = lazy(() => import("./pages/AdminArtistDetailPage"));
 const AdminContentApprovalQueuePage = lazy(() => import("./pages/AdminContentApprovalQueuePage"));
-const AdminMediaUploadPage = lazy(() => import("./pages/AdminMediaUploadPage"));
 const AdminArtistApplicationsPage = lazy(() => import("./pages/AdminArtistApplicationsPage"));
 const AdminFeaturedArtistsPage = lazy(() => import("./pages/AdminFeaturedArtistsPage"));
 const AdminSubscriptionSettingsPage = lazy(() => import("./pages/AdminSubscriptionSettingsPage"));
@@ -82,7 +81,7 @@ export default function App() {
             <Route path="/admin/artists" element={adminOnly(<AdminArtistsPage />)} />
             <Route path="/admin/artist-applications" element={adminOnly(<AdminArtistApplicationsPage />)} />
             <Route path="/admin/artists/:id" element={adminOnly(<AdminArtistDetailPage />)} />
-            <Route path="/admin/media-upload" element={adminOnly(<AdminMediaUploadPage />)} />
+            <Route path="/admin/media-upload" element={<Navigate to="/admin/artists" replace />} />
             <Route
               path="/admin/moderation"
               element={
