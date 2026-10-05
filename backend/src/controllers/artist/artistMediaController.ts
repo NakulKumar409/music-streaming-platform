@@ -213,7 +213,7 @@ export async function uploadArtistMedia(req: any, res: Response) {
       await client.query("BEGIN");
       await client.query(
         `UPDATE content_items
-            SET status = $2,
+            SET status = $2::varchar,
                 provider_asset_id = $3,
                 audio_provider_asset_id = $4,
                 video_provider_asset_id = $5,
