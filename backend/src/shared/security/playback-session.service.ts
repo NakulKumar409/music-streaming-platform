@@ -56,6 +56,17 @@ export async function createPlaybackSession(
       [userId]
     );
 
+    // Any legacy or orphan session for this user lacking device identity is terminated
+    // so it cannot indefinitely consume a concurrency slot.
+    await client.query(
+      `UPDATE playback_sessions
+          SET ended_at = now(), heartbeat_at = now()
+        WHERE user_id = $1
+          AND device_id IS NULL
+          AND ended_at IS NULL`,
+      [userId]
+    );
+
     if (deviceId) {
       // A direct access request without an explicit sessionId represents a new
       // playback lifecycle. Close any lease previously owned by this same

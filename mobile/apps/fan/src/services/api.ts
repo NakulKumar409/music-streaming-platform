@@ -132,7 +132,7 @@ export function normalizeApiError(error: unknown): NormalizedApiError {
 
 let cachedDeviceId: string | null = null;
 
-async function getOrCreateDeviceId() {
+export async function getOrCreateDeviceId() {
   if (cachedDeviceId) return cachedDeviceId;
   const existing = await AsyncStorage.getItem(DEVICE_ID_STORAGE_KEY);
   if (existing) {
@@ -183,6 +183,11 @@ function attachClientPolicy(client: AxiosInstance) {
         ? config.headers
         : new AxiosHeaders(config.headers);
 
+    headers.set('X-Device-Id', deviceId);
+    headers.set('x-device-id', deviceId);
+    (headers as any)['x-device-id'] = deviceId;
+    (headers as any)['X-Device-Id'] = deviceId;
+
     if (Platform.OS === 'web') {
       const url = String(config.url || '');
       const needsDeviceBody =
@@ -190,8 +195,6 @@ function attachClientPolicy(client: AxiosInstance) {
       if (needsDeviceBody && config.data && typeof config.data === 'object') {
         config.data = { ...config.data, deviceId };
       }
-    } else {
-      headers.set('X-Device-Id', deviceId);
     }
 
     if (token) headers.set('Authorization', `Bearer ${token}`);

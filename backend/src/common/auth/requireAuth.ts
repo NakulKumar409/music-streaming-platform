@@ -12,6 +12,7 @@ export type AuthenticatedUser = {
   isVerified: boolean;
   artistStatus?: string | null;
   sessionId: number;
+  deviceId?: string | null;
   name?: string | null;
 };
 
@@ -80,6 +81,8 @@ async function resolveAuthenticatedUser(token: string): Promise<AuthenticatedUse
     throw error;
   }
 
+  const deviceId = await SessionService.getSessionDeviceId(sessionId, userId);
+
   return {
     id: Number(user.id),
     email: String(user.email),
@@ -89,6 +92,7 @@ async function resolveAuthenticatedUser(token: string): Promise<AuthenticatedUse
     isVerified: user.is_verified === true,
     artistStatus: user.artist_status ? String(user.artist_status).toUpperCase() : null,
     sessionId,
+    deviceId,
   };
 }
 

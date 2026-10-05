@@ -319,7 +319,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   const beginPendingSeek = useCallback((targetMs: number) => {
     const generation = seekGenerationRef.current + 1;
     seekGenerationRef.current = generation;
-    pendingSeekRef.current = { generation, targetMs };
+    pendingSeekRef.current = { generation, targetMs, createdAt: Date.now() };
     setPendingSeekPositionMs(targetMs);
     return generation;
   }, []);
@@ -856,6 +856,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           );
           playbackUrl = descriptor.playbackUrl;
           playbackSessionId = descriptor.sessionId;
+          if (descriptor.durationMs && (!item.duration || item.duration <= 0)) {
+            item.duration = descriptor.durationMs;
+          }
         } catch (e) {
           const presentation = getPlaybackErrorPresentation(e);
           logger.warn("[MediaPlayer] getPlaybackUrl failed", e);
@@ -891,6 +894,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           if (descriptor.playbackUrl) {
             playbackUrl = normalizePlaybackUrl(descriptor.playbackUrl);
             playbackSessionId = descriptor.sessionId;
+            if (descriptor.durationMs && (!item.duration || item.duration <= 0)) {
+              item.duration = descriptor.durationMs;
+            }
             logger.log(
               "[MediaPlayer] Used fallback stream URL for",
               item.title
@@ -2043,7 +2049,18 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
               trackDurationSeconds > 0
             ) {
               dur = Math.round(trackDurationSeconds * 1000);
+            } else if (currentItemRef.current) {
+              const itemDur = toFiniteDurationMs(
+                (currentItemRef.current as any).duration ?? (currentItemRef.current as any).durationMs
+              );
+              if (itemDur > 0) dur = itemDur;
             }
+          } else if (
+            dur > 0 &&
+            currentItemRef.current &&
+            (!currentItemRef.current.duration || currentItemRef.current.duration <= 0)
+          ) {
+            currentItemRef.current.duration = dur;
           }
 
           applyAudioProgress(pos, dur, generationAtRead);

@@ -275,6 +275,7 @@ export async function requestPlaybackAccess(
       defaultQuality,
       contentType: access.contentType,
       contentLength: access.contentLength,
+      durationMs: content.duration_ms ? Number(content.duration_ms) : undefined,
     };
   } catch (error) {
     if (createdNewSession) {

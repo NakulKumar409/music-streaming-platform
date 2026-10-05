@@ -5,7 +5,7 @@
 
 import Constants from 'expo-constants';
 import { APP_ENV, isAllowedPlaybackUrl } from '../config/env';
-import { apiV1, normalizeApiError } from './api';
+import { apiV1, getOrCreateDeviceId, normalizeApiError } from './api';
 
 export type VideoQuality = '144p' | '240p' | '360p' | '480p' | '720p' | '1080p' | 'Auto' | 'SD' | 'HD';
 export type CanonicalVideoQuality = Exclude<VideoQuality, 'SD' | 'HD'>;
@@ -24,6 +24,7 @@ export type StreamAccessResponse = {
   defaultQuality?: CanonicalVideoQuality | 'ORIGINAL';
   contentType?: string;
   contentLength?: number;
+  durationMs?: number;
   message?: string;
   code?: string;
 };
@@ -40,6 +41,7 @@ export type PlaybackAccess = {
   defaultQuality: CanonicalVideoQuality | 'ORIGINAL';
   contentType?: string;
   contentLength?: number;
+  durationMs?: number;
 };
 
 export type ActivePlaybackLease = {
@@ -354,6 +356,7 @@ function parseDescriptor(
     defaultQuality: data.defaultQuality || 'ORIGINAL',
     contentType: data.contentType,
     contentLength: data.contentLength,
+    durationMs: positiveInteger(data.durationMs) ?? undefined,
   };
 }
 
@@ -375,9 +378,11 @@ export async function getPlaybackAccess(
       throw new StreamAccessError('Playback session is invalid', 'PLAYBACK_SESSION_EXPIRED', null);
     }
 
+    const deviceId = await getOrCreateDeviceId();
     const res = await apiV1.post<StreamAccessResponse>('/stream/access', {
       contentId: numericContentId,
       sessionId,
+      deviceId,
       kind,
       quality,
     });

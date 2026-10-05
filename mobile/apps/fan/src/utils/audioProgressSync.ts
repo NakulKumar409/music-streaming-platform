@@ -1,6 +1,7 @@
 export type PendingAudioSeek = {
   generation: number;
   targetMs: number;
+  createdAt?: number;
 };
 
 export type AudioProgressDecisionInput = {
@@ -50,8 +51,10 @@ export function evaluateAudioProgressSample({
     return { accept: false, confirmsSeek: false };
   }
 
-  const confirmsSeek =
+  const elapsedMs = pendingSeek.createdAt ? Date.now() - pendingSeek.createdAt : 0;
+  const isNearTarget =
     Math.abs(positionMs - pendingSeek.targetMs) <= Math.max(0, toleranceMs);
+  const confirmsSeek = isNearTarget || (elapsedMs > 2500);
 
   return {
     accept: confirmsSeek,

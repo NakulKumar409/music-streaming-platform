@@ -96,7 +96,11 @@ router.post("/access", requireAuth, requireFan, playbackAccessLimiter, async (re
   const kindRaw = String(req.body?.kind || "").trim().toLowerCase();
   const kind = kindRaw === "video" ? "video" : kindRaw === "audio" ? "audio" : undefined;
   const quality = String(req.body?.quality || "Auto").trim();
-  const deviceId = normalizedDeviceId(req.headers?.["x-device-id"]);
+  const deviceId =
+    normalizedDeviceId(req.headers?.["x-device-id"]) ||
+    normalizedDeviceId(req.headers?.["X-Device-Id"]) ||
+    normalizedDeviceId(req.body?.deviceId) ||
+    normalizedDeviceId((req.user as any)?.deviceId);
 
   if (!userId) {
     return res.status(401).json({ success: false, message: "Unauthorized", correlationId });
@@ -158,6 +162,7 @@ router.post("/access", requireAuth, requireFan, playbackAccessLimiter, async (re
       defaultQuality: result.defaultQuality,
       contentType: result.contentType,
       contentLength: result.contentLength,
+      durationMs: result.durationMs,
       correlationId,
     });
   } catch (error: any) {
