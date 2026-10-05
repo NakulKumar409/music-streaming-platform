@@ -32,6 +32,7 @@ export default function ArtistContentUploadPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<UploadResult | null>(null);
+  const [fileInputVersion, setFileInputVersion] = useState(0);
 
   const mediaAccept = contentType === "AUDIO"
     ? "audio/mpeg,audio/mp3,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,audio/aac"
@@ -85,6 +86,7 @@ export default function ArtistContentUploadPage() {
       setTitle("");
       setGenre("");
       resetFiles();
+      setFileInputVersion((value) => value + 1);
     } catch (e: any) {
       const failure = toApiFailure(e);
       setError(failure.message || e?.message || "Content upload failed");
@@ -207,6 +209,7 @@ export default function ArtistContentUploadPage() {
               </span>
               <div className="mt-2 text-xs text-white/40">JPEG, PNG or WebP</div>
               <input
+                key={`cover-${fileInputVersion}`}
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 disabled={submitting}
@@ -225,7 +228,7 @@ export default function ArtistContentUploadPage() {
                 {contentType === "AUDIO" ? "MP3, M4A, WAV or AAC" : "MP4 or MOV"}
               </div>
               <input
-                key={contentType}
+                key={`${contentType}-${fileInputVersion}`}
                 type="file"
                 accept={mediaAccept}
                 disabled={submitting}
