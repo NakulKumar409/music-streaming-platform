@@ -343,15 +343,20 @@ function main() {
 
   assert.equal(
     artistContentHistory.includes(
-      "Read-only Phase 1 view of content uploaded and governed by the platform team."
+      "Your releases publish automatically after media processing is ready."
     ),
     true,
-    "Artist content history must remain read-only and aligned with the admin-governed upload workflow"
+    "Artist content history must reflect the self-service direct-publishing workflow"
   );
   assert.equal(
     artistContentHistory.includes("query.isError"),
     true,
     "Artist content history must expose a visible load-error state"
+  );
+  assert.equal(
+    artistApp.includes('path="/artist/content-upload"'),
+    true,
+    "Approved artists must have a self-service upload route"
   );
 
   for (const [label, runtime] of [
