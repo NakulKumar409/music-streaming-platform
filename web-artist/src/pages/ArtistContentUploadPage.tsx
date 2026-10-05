@@ -78,7 +78,7 @@ export default function ArtistContentUploadPage() {
       setSubmitting(true);
       const response = await http.post("/api/v1/artist/media/upload", form, {
         headers: { "Content-Type": "multipart/form-data" },
-        timeout: 120_000,
+        timeout: 600_000,
       });
       const uploaded = response.data?.content as UploadResult | undefined;
       if (!uploaded) throw new Error("Upload completed but no content result was returned");

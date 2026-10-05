@@ -75,6 +75,11 @@ const parseUpload = (req: any, res: any, next: any) => {
   });
 };
 
-router.post("/upload", uploadLimiter, parseUpload, uploadArtistMedia);
+const setMediaUploadTimeout = (req: any, _res: any, next: any) => {
+  req.setTimeout?.(600_000);
+  next();
+};
+
+router.post("/upload", setMediaUploadTimeout, uploadLimiter, parseUpload, uploadArtistMedia);
 
 export default router;
