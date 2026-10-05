@@ -1,6 +1,7 @@
 import fs from "fs";
 import type { Response } from "express";
 import { pool } from "../../common/db";
+import { invalidateContentCache } from "../../common/cache";
 import { getStorageConfig } from "../../config/storage.config";
 import { getMediaConfig } from "../../config/media.config";
 import { getStorageService } from "../../shared/storage/services/storage.service";
@@ -305,6 +306,8 @@ export async function uploadArtistMedia(req: any, res: Response) {
     } finally {
       client.release();
     }
+
+    await invalidateContentCache();
 
     return res.status(201).json({
       success: true,
