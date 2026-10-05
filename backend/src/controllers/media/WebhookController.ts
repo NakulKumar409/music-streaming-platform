@@ -1,5 +1,6 @@
 import type { Response } from "express";
 import { pool } from "../../common/db";
+import { invalidateContentCache } from "../../common/cache";
 import {
   hasSuccessfulAutoHlsResult,
   successfulHlsResultCount,
@@ -202,6 +203,7 @@ export const handleMediaWebhook = async (req: any, res: Response) => {
       }
 
       await client.query("COMMIT");
+      if (legal) await invalidateContentCache();
       return res.status(200).json({
         received: true,
         contentId: Number(content.id),
