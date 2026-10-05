@@ -149,8 +149,8 @@ router.post("/reaction", requireAuth, requireFan, async (req: any, res: any) => 
 });
 
 /**
- * Phase-1 artist content is read-only. The response intentionally exposes no
- * storage/provider identifiers and no playable media URLs.
+ * Artist content history is ownership-scoped and intentionally exposes no
+ * storage/provider identifiers or playable media URLs.
  */
 router.get(
   "/mine",
