@@ -203,7 +203,7 @@ export const handleMediaWebhook = async (req: any, res: Response) => {
       }
 
       await client.query("COMMIT");
-      if (legal) await invalidateContentCache();
+      if (legal) await invalidateContentCache().catch(() => undefined);
       return res.status(200).json({
         received: true,
         contentId: Number(content.id),
