@@ -16,6 +16,12 @@ function nonNegativeInteger(value: unknown): number | null {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
+function normalizeDeviceId(value: unknown): string | null {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return null;
+  return normalized.slice(0, 200);
+}
+
 async function lockUserPlayback(client: PoolClient, userId: number): Promise<void> {
   await client.query("SELECT pg_advisory_xact_lock($1, $2)", [
     PLAYBACK_LOCK_NAMESPACE,
@@ -25,10 +31,12 @@ async function lockUserPlayback(client: PoolClient, userId: number): Promise<voi
 
 export async function createPlaybackSession(
   rawUserId: unknown,
-  rawContentId: unknown
+  rawContentId: unknown,
+  rawDeviceId?: unknown
 ): Promise<number> {
   const userId = positiveInteger(rawUserId);
   const contentId = positiveInteger(rawContentId);
+  const deviceId = normalizeDeviceId(rawDeviceId);
   if (!userId || !contentId) {
     throw new MediaAccessDeniedException(
       "Authenticated playback session required",
@@ -48,6 +56,57 @@ export async function createPlaybackSession(
       [userId]
     );
 
+    if (deviceId) {
+      const sameDevice = await client.query<{ id: number; content_id: number }>(
+        `SELECT id, content_id
+           FROM playback_sessions
+          WHERE user_id = $1
+            AND device_id = $2
+            AND ended_at IS NULL
+            AND heartbeat_at > now() - interval '5 minutes'
+          ORDER BY heartbeat_at DESC, id DESC
+          FOR UPDATE`,
+        [userId, deviceId]
+      );
+
+      const reusable = sameDevice.rows.find(
+        (row) => Number(row.content_id) === contentId
+      );
+
+      if (reusable) {
+        const reusableId = Number(reusable.id);
+        await client.query(
+          `UPDATE playback_sessions
+              SET heartbeat_at = now()
+            WHERE id = $1`,
+          [reusableId]
+        );
+        await client.query(
+          `UPDATE playback_sessions
+              SET ended_at = now(), heartbeat_at = now()
+            WHERE user_id = $1
+              AND device_id = $2
+              AND ended_at IS NULL
+              AND id <> $3`,
+          [userId, deviceId, reusableId]
+        );
+        await client.query("COMMIT");
+        return reusableId;
+      }
+
+      // A single app/device can own only one foreground playback lease. If the
+      // process restarted or switched content before cleanup completed, close
+      // that device's old lease before applying the account-wide limit.
+      await client.query(
+        `UPDATE playback_sessions
+            SET ended_at = now(), heartbeat_at = now()
+          WHERE user_id = $1
+            AND device_id = $2
+            AND ended_at IS NULL`,
+        [userId, deviceId]
+      );
+    }
+
     const active = await client.query<{ count: number }>(
       `SELECT COUNT(*)::int AS count
          FROM playback_sessions
@@ -66,10 +125,10 @@ export async function createPlaybackSession(
 
     const inserted = await client.query<{ id: number }>(
       `INSERT INTO playback_sessions
-         (user_id, content_id, started_at, heartbeat_at, current_position, duration, ended_at)
-       VALUES ($1, $2, now(), now(), 0, 0, NULL)
+         (user_id, content_id, device_id, started_at, heartbeat_at, current_position, duration, ended_at)
+       VALUES ($1, $2, $3, now(), now(), 0, 0, NULL)
        RETURNING id`,
-      [userId, contentId]
+      [userId, contentId, deviceId]
     );
 
     const sessionId = Number(inserted.rows[0]?.id);
