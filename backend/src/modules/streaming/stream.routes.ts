@@ -32,6 +32,12 @@ function positiveInteger(value: unknown): number | null {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function normalizedDeviceId(value: unknown): string | undefined {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const normalized = String(raw ?? "").trim();
+  return normalized ? normalized.slice(0, 200) : undefined;
+}
+
 function noStorePlaybackAccess(res: any) {
   res.setHeader("Cache-Control", "private, no-store, max-age=0");
   res.setHeader("Pragma", "no-cache");
@@ -90,6 +96,7 @@ router.post("/access", requireAuth, requireFan, playbackAccessLimiter, async (re
   const kindRaw = String(req.body?.kind || "").trim().toLowerCase();
   const kind = kindRaw === "video" ? "video" : kindRaw === "audio" ? "audio" : undefined;
   const quality = String(req.body?.quality || "Auto").trim();
+  const deviceId = normalizedDeviceId(req.headers?.["x-device-id"]);
 
   if (!userId) {
     return res.status(401).json({ success: false, message: "Unauthorized", correlationId });
@@ -116,6 +123,7 @@ router.post("/access", requireAuth, requireFan, playbackAccessLimiter, async (re
       contentId,
       userId,
       sessionId,
+      deviceId,
       kind,
       quality,
       correlationId,
