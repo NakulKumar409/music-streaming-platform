@@ -65,10 +65,12 @@ async function main(): Promise<void> {
       const recordedChecksum = applied.get(version);
 
       if (recordedChecksum) {
-        if (
-          recordedChecksum !== sqlChecksum &&
-          version === "20260914_0014_user_profile_fields"
-        ) {
+        const matches =
+          recordedChecksum === sqlChecksum ||
+          recordedChecksum === checksum(sql.replace(/\r\n/g, "\n")) ||
+          recordedChecksum === checksum(sql.replace(/\n/g, "\r\n"));
+
+        if (!matches && version === "20260914_0014_user_profile_fields") {
           await client.query(
             "UPDATE schema_migrations SET checksum = $1 WHERE version = $2",
             [sqlChecksum, version]
@@ -76,7 +78,7 @@ async function main(): Promise<void> {
           console.log(`[DB Migrate] ${version} checksum reconciled`);
           continue;
         }
-        if (recordedChecksum !== sqlChecksum) {
+        if (!matches) {
           throw new Error(
             `Applied migration ${version} was modified. Expected checksum ${recordedChecksum}, found ${sqlChecksum}. Create a new migration instead of editing an applied one.`
           );
