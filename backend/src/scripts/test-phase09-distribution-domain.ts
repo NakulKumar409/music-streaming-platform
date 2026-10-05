@@ -165,8 +165,8 @@ function testCompatibilityAndProviderBoundary() {
     "modules/distribution/release-compatibility.service.ts"
   );
   const provider = readBackend("modules/distribution/distributor-provider.ts");
-  const upload = readBackend("controllers/admin/adminMediaController.ts");
-  const uploadRoute = readBackend("routes/admin/media.ts");
+  const upload = readBackend("controllers/artist/artistMediaController.ts");
+  const uploadRoute = readBackend("routes/artist/media.ts");
   const governance = readBackend("modules/content/content-governance.service.ts");
   const fanContent = readBackend("modules/content/content.routes.ts");
 
@@ -188,6 +188,8 @@ function testCompatibilityAndProviderBoundary() {
   assert.match(upload, /metadata\.contentType === "AUDIO" && releaseMetadata/);
   assert.match(upload, /ensureSingleReleaseForAudioContent/);
   assert.match(upload, /distributionStatus: "NOT_SUBMITTED"/);
+  assert.match(upload, /lifecycleState: "EARLY_ACCESS"/);
+  assert.match(upload, /'ARTIST', 'success'/);
   assert.match(uploadRoute, /fields:\s*24/);
 
   assert.match(governance, /function syncLinkedReleasePhase/);
