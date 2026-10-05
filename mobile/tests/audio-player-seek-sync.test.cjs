@@ -648,3 +648,24 @@ test('newer video selection invalidates pending audio load without pre-emptively
     /cancelPendingAudioLoad\(\);[\s\S]{0,500}getPlaybackUrl\([\s\S]{0,260}\{ isStillRelevant: isCurrentSelection \}/s
   );
 });
+
+
+test('native progress keeps one writer and falls back to active-track duration metadata', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+
+  assert.match(provider, /const progress = await TrackPlayer\.getProgress\(\)/);
+  assert.match(provider, /const activeTrack = await TrackPlayer\.getActiveTrack\(\)/);
+  assert.match(provider, /trackDurationSeconds/);
+  assert.match(provider, /applyAudioProgress\(pos, dur, generationAtRead\)/);
+  assert.doesNotMatch(provider, /Event\?\.PlaybackProgress/);
+});
+
+test('explicit close and native remote stop release the active playback lease', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+
+  assert.match(provider, /await releaseActivePlaybackLease\(\)\.catch\(\(\) => false\)/);
+  assert.match(
+    provider,
+    /Event\?\.RemoteStop[\s\S]{0,500}void releaseActivePlaybackLease\(\)/
+  );
+});
