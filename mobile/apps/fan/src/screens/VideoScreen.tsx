@@ -4,6 +4,7 @@ import {
   Alert,
   Animated,
   AppState,
+  BackHandler,
   Dimensions,
   FlatList,
   Image,
@@ -16,6 +17,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -41,15 +43,22 @@ import {
   AlertTriangle,
   ArrowLeft,
   BadgeCheck,
+  Check,
+  ChevronRight,
   Crown,
   Lock,
   Maximize,
+  Minimize,
+  MoreVertical,
   Search,
   Settings,
   ShieldCheck,
   Video,
+  Volume2,
+  VolumeX,
   Wifi,
   X,
+  Zap,
 } from "lucide-react-native";
 import {
   SafeAreaView,
@@ -271,7 +280,13 @@ export default function VideoScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const tabBarHeight = useBottomTabBarHeight();
-  const { currentItem, state: playerState, togglePlayPause } = useMediaPlayer();
+  const {
+    currentItem,
+    state: playerState,
+    togglePlayPause,
+    syncActiveMediaItem,
+    setInlineVideoHostActive,
+  } = useMediaPlayer();
 
   const insets = useSafeAreaInsets();
 
@@ -343,6 +358,33 @@ export default function VideoScreen() {
   const [maxAllowedResolution, setMaxAllowedResolution] =
     useState<streamService.VideoQuality>("240p");
   const [isStreamingHdAllowed, setIsStreamingHdAllowed] = useState(false);
+
+  // Playback speed
+  const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0] as const;
+  const [selectedSpeed, setSelectedSpeed] = useState<number>(1.0);
+  const [showSpeedSheet, setShowSpeedSheet] = useState(false);
+  const [isHolding2x, setIsHolding2x] = useState(false);
+  const holding2xTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedSpeedRef = useRef<number>(1.0);
+
+  // Mute / Volume
+  const [isMuted, setIsMuted] = useState(false);
+
+  // Autoplay
+  const [isAutoplayEnabled, setIsAutoplayEnabled] = useState(true);
+
+  // More Options sheet
+  const [showMoreOptionsSheet, setShowMoreOptionsSheet] = useState(false);
+
+  // Double-tap seek visual feedback
+  const [seekFeedback, setSeekFeedback] = useState<{
+    dir: "back" | "forward";
+    id: number;
+  } | null>(null);
+  const seekFeedbackAnim = useRef(new Animated.Value(0)).current;
+  const seekFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
   const [showHdLockModal, setShowHdLockModal] = useState(false);
   const [showArtistLockModal, setShowArtistLockModal] = useState<{
@@ -806,8 +848,136 @@ export default function VideoScreen() {
       setShowControls(true);
       playedOnceRef.current = false;
       setShowQualitySheet(false);
+      setShowSpeedSheet(false);
+      setShowMoreOptionsSheet(false);
+      syncActiveMediaItem?.(null, false);
+      setInlineVideoHostActive(false);
     }
+  }, [videoPlayer, syncActiveMediaItem, setInlineVideoHostActive]);
+
+  const applyPlaybackSpeed = useCallback(
+    (speed: number) => {
+      setSelectedSpeed(speed);
+      selectedSpeedRef.current = speed;
+      setShowSpeedSheet(false);
+      setShowMoreOptionsSheet(false);
+      try {
+        if (videoPlayer) {
+          videoPlayer.playbackRate = speed;
+        }
+      } catch (e) {
+        console.warn("[VideoScreen] Failed to set playback rate", e);
+      }
+    },
+    [videoPlayer]
+  );
+
+  const toggleMute = useCallback(() => {
+    setIsMuted((prev) => {
+      const next = !prev;
+      try {
+        if (videoPlayer) {
+          videoPlayer.muted = next;
+        }
+      } catch (e) {
+        console.warn("[VideoScreen] Failed to toggle mute", e);
+      }
+      return next;
+    });
   }, [videoPlayer]);
+
+  const triggerSeekFeedback = useCallback(
+    (dir: "back" | "forward") => {
+      if (seekFeedbackTimerRef.current) {
+        clearTimeout(seekFeedbackTimerRef.current);
+      }
+      setSeekFeedback({ dir, id: Date.now() });
+      seekFeedbackAnim.setValue(0);
+      Animated.timing(seekFeedbackAnim, {
+        toValue: 1,
+        duration: 650,
+        useNativeDriver: true,
+      }).start(() => {
+        setSeekFeedback(null);
+      });
+    },
+    [seekFeedbackAnim]
+  );
+
+  const startLongPress2x = useCallback(() => {
+    if (!isVideoPlaying || !videoPlayer) return;
+    setIsHolding2x(true);
+    try {
+      videoPlayer.playbackRate = 2.0;
+    } catch {}
+  }, [isVideoPlaying, videoPlayer]);
+
+  const endLongPress2x = useCallback(() => {
+    if (holding2xTimerRef.current) {
+      clearTimeout(holding2xTimerRef.current);
+      holding2xTimerRef.current = null;
+    }
+    if (isHolding2x) {
+      setIsHolding2x(false);
+      try {
+        if (videoPlayer) {
+          videoPlayer.playbackRate = selectedSpeedRef.current;
+        }
+      } catch {}
+    }
+  }, [isHolding2x, videoPlayer]);
+
+  const handlePlayerPressIn = useCallback(() => {
+    if (holding2xTimerRef.current) clearTimeout(holding2xTimerRef.current);
+    holding2xTimerRef.current = setTimeout(() => {
+      startLongPress2x();
+    }, 280);
+  }, [startLongPress2x]);
+
+  const handlePlayerPressOut = useCallback(() => {
+    if (holding2xTimerRef.current) {
+      clearTimeout(holding2xTimerRef.current);
+      holding2xTimerRef.current = null;
+    }
+    endLongPress2x();
+  }, [endLongPress2x]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (isFullscreen) {
+        exitFullscreen();
+        return true;
+      }
+      if (showQualitySheet) {
+        setShowQualitySheet(false);
+        return true;
+      }
+      if (showSpeedSheet) {
+        setShowSpeedSheet(false);
+        return true;
+      }
+      if (showMoreOptionsSheet) {
+        setShowMoreOptionsSheet(false);
+        return true;
+      }
+      if (activePlaybackUrl) {
+        stopAndReset();
+        return true;
+      }
+      return false;
+    };
+
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => sub.remove();
+  }, [
+    isFullscreen,
+    exitFullscreen,
+    showQualitySheet,
+    showSpeedSheet,
+    showMoreOptionsSheet,
+    activePlaybackUrl,
+    stopAndReset,
+  ]);
 
   const onSeekStart = useCallback(() => {
     setIsSeeking(true);
@@ -1001,25 +1171,56 @@ export default function VideoScreen() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (!isSeeking) {
-        setPositionMs(toFiniteDurationMs(videoPlayer.currentTime * 1000));
+        const curMs = toFiniteDurationMs(videoPlayer.currentTime * 1000);
+        setPositionMs(curMs);
+        if (activeVideoMeta) {
+          syncActiveMediaItem?.(
+            {
+              id: String(activeVideoMeta.id),
+              contentId: String(activeVideoMeta.id),
+              title: activeVideoMeta.title,
+              artistName: activeVideoMeta.artistName,
+              artistId: activeVideoMeta.artistId,
+              mediaType: "video",
+              artworkUrl: activeVideoMeta.artworkUrl,
+              mediaUrl: activePlaybackUrl,
+              useStreamAccess: activeVideoMeta.useStreamAccess,
+              duration: videoPlayer.duration
+                ? Math.round(videoPlayer.duration * 1000)
+                : undefined,
+            },
+            videoPlayer.playing,
+            curMs,
+            toFiniteDurationMs(videoPlayer.duration * 1000)
+          );
+        }
       }
       setDurationMs(toFiniteDurationMs(videoPlayer.duration * 1000));
       setIsVideoPlaying(videoPlayer.playing);
       setIsBuffering(videoPlayer.status === "loading");
       setIsVideoReady(videoPlayer.status === "readyToPlay");
 
-      // Handle finished
+      // Handle finished with autoplay check
       if (
+        isAutoplayEnabled &&
         videoPlayer.duration > 0 &&
         videoPlayer.currentTime >= videoPlayer.duration - 0.2 &&
         videoPlayer.playing === false &&
         isVideoPlaying
       ) {
-        // did finish logic can go here if needed
+        setShowUpNext(true);
       }
     }, 500);
     return () => clearInterval(interval);
-  }, [videoPlayer, isSeeking, isVideoPlaying]);
+  }, [
+    videoPlayer,
+    isSeeking,
+    isVideoPlaying,
+    isAutoplayEnabled,
+    activeVideoMeta,
+    activePlaybackUrl,
+    syncActiveMediaItem,
+  ]);
 
   // ─── Heartbeat for listening time tracking ─────────────────
   useEffect(() => {
@@ -1063,13 +1264,10 @@ export default function VideoScreen() {
   const resolvePlaybackUrl = useCallback(
     async (video: VideoCard, sessionId: number) => {
       try {
-        // Use current selected quality or default to 240p for free users, Auto for paid
         const q: streamService.VideoQuality =
           selectedQuality && selectedQuality !== "Auto"
             ? selectedQuality
-            : isStreamingHdAllowed
-            ? "Auto"
-            : "240p";
+            : "Auto";
         const isStillRelevant = () =>
           sessionId === playbackSessionRef.current;
         return await streamService.getPlaybackUrl(
@@ -1166,6 +1364,25 @@ export default function VideoScreen() {
           setIsVideoReady(false);
           setIsVideoPlaying(true);
 
+          syncActiveMediaItem?.(
+            {
+              id: String(video.id),
+              contentId: String(video.id),
+              title: video.title,
+              artistName: video.artistName,
+              artistId: video.artistId,
+              mediaType: "video",
+              artworkUrl: video.artworkUrl,
+              mediaUrl: playbackUrl,
+              useStreamAccess: video.useStreamAccess,
+              duration: durationMs || undefined,
+            },
+            true,
+            0,
+            durationMs
+          );
+          setInlineVideoHostActive(true);
+
           await setAudioModeAsync({
             playsInSilentMode: true,
             shouldPlayInBackground: true,
@@ -1208,7 +1425,15 @@ export default function VideoScreen() {
         }
       })().catch(() => undefined);
     },
-    [pauseGlobalPlaybackIfNeeded, resolvePlaybackUrl, videoPlayer]
+    [
+      durationMs,
+      pauseGlobalPlaybackIfNeeded,
+      resolvePlaybackUrl,
+      safePlay,
+      setInlineVideoHostActive,
+      syncActiveMediaItem,
+      videoPlayer,
+    ]
   );
 
   const refreshSubscriptionAndRetry = useCallback(async () => {
@@ -1299,16 +1524,74 @@ export default function VideoScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      // Refresh sub status on focus (essential for instant unlock)
+      setInlineVideoHostActive(true);
       refreshSubscriptionAndRetry();
-
-      // Reload video list every time screen gains focus so new uploads appear.
       load().catch(() => undefined);
+
+      if (currentItem?.mediaType === "video" && currentItem.id === activeVideoId) {
+        if (
+          playerState.positionMs > 0 &&
+          Math.abs(videoPlayer.currentTime * 1000 - playerState.positionMs) > 600
+        ) {
+          try {
+            videoPlayer.currentTime = playerState.positionMs / 1000;
+          } catch {}
+        }
+        if (playerState.isPlaying && !videoPlayer.playing) {
+          safePlay(videoPlayer as any, "focus-sync");
+        } else if (!playerState.isPlaying && videoPlayer.playing) {
+          try {
+            videoPlayer.pause();
+          } catch {}
+        }
+      }
+
       return () => {
-        pauseInlineVideoIfNeeded().catch(() => undefined);
+        setInlineVideoHostActive(false);
       };
-    }, [load, pauseInlineVideoIfNeeded, refreshSubscriptionAndRetry])
+    }, [
+      load,
+      refreshSubscriptionAndRetry,
+      setInlineVideoHostActive,
+      currentItem,
+      activeVideoId,
+      playerState.positionMs,
+      playerState.isPlaying,
+      videoPlayer,
+      safePlay,
+    ])
   );
+
+  useEffect(() => {
+    if (route.params?.resumeVideoId) {
+      const resumeId = String(route.params.resumeVideoId);
+      navigation.setParams({ resumeVideoId: undefined });
+      if (currentItem && String(currentItem.id) === resumeId) {
+        if (activeVideoId !== resumeId && currentItem.mediaUrl) {
+          setActiveVideoId(resumeId);
+          setActiveVideoMeta({
+            id: resumeId,
+            title: currentItem.title,
+            artistName: currentItem.artistName ?? "Artist",
+            artistId: currentItem.artistId ? String(currentItem.artistId) : undefined,
+            artworkUrl: currentItem.artworkUrl ?? FALLBACK_ARTWORK,
+            mediaUrl: currentItem.mediaUrl,
+            category: "Trending",
+          });
+          setActivePlaybackUrl(currentItem.mediaUrl);
+          if (playerState.positionMs > 0) {
+            qualityResumePositionRef.current = playerState.positionMs / 1000;
+          }
+        }
+      }
+    }
+  }, [
+    route.params?.resumeVideoId,
+    currentItem,
+    activeVideoId,
+    navigation,
+    playerState.positionMs,
+  ]);
 
   useEffect(() => {
     if (route.params?.autoplayVideo) {
@@ -1613,38 +1896,43 @@ export default function VideoScreen() {
     ]
   );
 
-  const onDoubleTap = useCallback(async (dir: "back" | "forward") => {
-    try {
-      const v = videoPlayer;
-      if (!v) return;
+  const onDoubleTap = useCallback(
+    async (dir: "back" | "forward") => {
+      try {
+        const v = videoPlayer;
+        if (!v) return;
 
-      const wasPlaying = v.playing;
-      const current = toFiniteDurationMs(v.currentTime * 1000);
-      const dur = toFiniteDurationMs(v.duration * 1000);
+        triggerSeekFeedback(dir);
 
-      const next =
-        dir === "back" ? current - SEEK_DELTA_MS : current + SEEK_DELTA_MS;
+        const wasPlaying = v.playing;
+        const current = toFiniteDurationMs(v.currentTime * 1000);
+        const dur = toFiniteDurationMs(v.duration * 1000);
 
-      const target = clamp(next, 0, dur > 0 ? dur : Number.MAX_SAFE_INTEGER);
+        const next =
+          dir === "back" ? current - SEEK_DELTA_MS : current + SEEK_DELTA_MS;
 
-      // Use seekBy for better Android compatibility
-      const deltaSeconds = (target / 1000) - v.currentTime;
-      v.seekBy(deltaSeconds);
+        const target = clamp(next, 0, dur > 0 ? dur : Number.MAX_SAFE_INTEGER);
 
-      // Resume playback after a small delay on Android to ensure seek completes
-      if (wasPlaying) {
-        if (Platform.OS === "android") {
-          setTimeout(() => {
+        // Use seekBy for better Android compatibility
+        const deltaSeconds = target / 1000 - v.currentTime;
+        v.seekBy(deltaSeconds);
+
+        // Resume playback after a small delay on Android to ensure seek completes
+        if (wasPlaying) {
+          if (Platform.OS === "android") {
+            setTimeout(() => {
+              safePlay(v as any, "double-tap-seek");
+            }, 50);
+          } else {
             safePlay(v as any, "double-tap-seek");
-          }, 50);
-        } else {
-          safePlay(v as any, "double-tap-seek");
+          }
         }
+      } catch (e) {
+        console.log("SEEK ERROR", e);
       }
-    } catch (e) {
-      console.log("SEEK ERROR", e);
-    }
-  }, [safePlay]);
+    },
+    [safePlay, triggerSeekFeedback]
+  );
 
   const onPressPlayerSurface = useCallback(
     async (evt: any) => {
@@ -2282,7 +2570,9 @@ export default function VideoScreen() {
                         styles.playerSurfacePressable,
                       ]}
                       pointerEvents="auto"
-                      onPress={onPressPlayerSurface}>
+                      onPress={onPressPlayerSurface}
+                      onPressIn={handlePlayerPressIn}
+                      onPressOut={handlePlayerPressOut}>
                       <VideoView
                         player={videoPlayer}
                         style={[
@@ -2311,6 +2601,31 @@ export default function VideoScreen() {
                     </View>
                   )}
 
+                  {/* 2X Long-Press Speed Badge Overlay */}
+                  {isHolding2x ? (
+                    <View style={styles.holding2xBadge} pointerEvents="none">
+                      <Zap size={14} color="#FFF" />
+                      <Text style={styles.holding2xText}>2X Speed</Text>
+                    </View>
+                  ) : null}
+
+                  {/* Double-Tap Seek Visual Feedback Animations */}
+                  {seekFeedback ? (
+                    <Animated.View
+                      style={[
+                        seekFeedback.dir === "back"
+                          ? styles.seekRippleLeft
+                          : styles.seekRippleRight,
+                        { opacity: seekFeedbackAnim },
+                      ]}
+                      pointerEvents="none">
+                      <Text style={styles.seekRippleText}>
+                        {seekFeedback.dir === "back" ? "⏪ -10s" : "+10s ⏩"}
+                      </Text>
+                    </Animated.View>
+                  ) : null}
+
+                  {/* Top Left Navigation / Minimize Control */}
                   {activePlaybackUrl && showControls ? (
                     <View
                       style={[
@@ -2323,7 +2638,7 @@ export default function VideoScreen() {
                           if (isFullscreen) {
                             exitFullscreen();
                           } else {
-                            stopAndReset().catch(() => undefined);
+                            stopAndReset();
                           }
                         }}>
                         <ArrowLeft size={18} color="#fff" />
@@ -2331,25 +2646,40 @@ export default function VideoScreen() {
                     </View>
                   ) : null}
 
+                  {/* Top Right Controls: Mute, Speed, Settings / More Options, Fullscreen */}
                   <View
                     style={[
                       styles.playerTopRight,
                       isFullscreen ? { top: insets.top + 12 } : null,
                     ]}>
                     {activePlaybackUrl && showControls ? (
-                      <Pressable
-                        style={styles.iconBtn}
-                        onPress={() => setShowQualitySheet((s) => !s)}>
-                        <View style={styles.qualityIconWrap}>
-                          <Settings size={18} color="#fff" />
-                          {isHD ? (
-                            <View style={styles.hdBadge}>
-                              <Text style={styles.hdBadgeText}>HD</Text>
-                            </View>
-                          ) : null}
-                        </View>
+                      <Pressable style={styles.iconBtn} onPress={toggleMute}>
+                        {isMuted ? (
+                          <VolumeX size={18} color="#FF5555" />
+                        ) : (
+                          <Volume2 size={18} color="#fff" />
+                        )}
                       </Pressable>
                     ) : null}
+
+                    {activePlaybackUrl && showControls ? (
+                      <Pressable
+                        style={styles.speedBtn}
+                        onPress={() => setShowSpeedSheet(true)}>
+                        <Text style={styles.speedBtnText}>
+                          {selectedSpeed === 1 ? "1.0x" : `${selectedSpeed}x`}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+
+                    {activePlaybackUrl && showControls ? (
+                      <Pressable
+                        style={styles.iconBtn}
+                        onPress={() => setShowMoreOptionsSheet(true)}>
+                        <MoreVertical size={18} color="#fff" />
+                      </Pressable>
+                    ) : null}
+
                     {activePlaybackUrl && showControls ? (
                       <Pressable
                         style={styles.iconBtn}
@@ -2438,7 +2768,7 @@ export default function VideoScreen() {
                         onPress={async () => {
                           try {
                             const wasPlaying = videoPlayer.playing;
-                            // Use seekBy for better Android compatibility
+                            triggerSeekFeedback("back");
                             videoPlayer.seekBy(-10);
                             if (wasPlaying) {
                               if (Platform.OS === "android") {
@@ -2483,10 +2813,9 @@ export default function VideoScreen() {
                             const wasPlaying = videoPlayer.playing;
                             const dur = videoPlayer.duration;
                             const currentTime = videoPlayer.currentTime;
-                            // Calculate remaining time to avoid seeking beyond duration
                             const remaining = dur - currentTime;
                             const seekAmount = Math.min(10, remaining);
-                            // Use seekBy for better Android compatibility
+                            triggerSeekFeedback("forward");
                             videoPlayer.seekBy(seekAmount);
                             if (wasPlaying) {
                               if (Platform.OS === "android") {
@@ -2524,19 +2853,43 @@ export default function VideoScreen() {
                           {formatDurationLabel(durationMs, "--:--")}
                         </Text>
                       </View>
-                      <Slider
-                        style={styles.slider}
-                        minimumValue={0}
-                        maximumValue={Math.max(1, durationMs || 1)}
-                        value={Math.min(positionMs, durationMs || 1)}
-                        disabled={!hasFiniteDuration(durationMs)}
-                        minimumTrackTintColor="#FFFFFF"
-                        maximumTrackTintColor="rgba(255,255,255,0.22)"
-                        thumbTintColor="#FFFFFF"
-                        onSlidingStart={onSeekStart}
-                        onValueChange={onSeekChange}
-                        onSlidingComplete={onSeekComplete}
-                      />
+                      <View style={styles.sliderContainer}>
+                        {/* Buffered Progress Bar Track */}
+                        <View style={styles.bufferedTrackWrap} pointerEvents="none">
+                          <View
+                            style={[
+                              styles.bufferedTrack,
+                              {
+                                width: `${Math.min(
+                                  100,
+                                  Math.max(
+                                    0,
+                                    durationMs > 0
+                                      ? (((videoPlayer?.bufferedPosition || 0) *
+                                          1000) /
+                                          durationMs) *
+                                          100
+                                      : 0
+                                  )
+                                )}%`,
+                              },
+                            ]}
+                          />
+                        </View>
+                        <Slider
+                          style={styles.slider}
+                          minimumValue={0}
+                          maximumValue={Math.max(1, durationMs || 1)}
+                          value={Math.min(positionMs, durationMs || 1)}
+                          disabled={!hasFiniteDuration(durationMs)}
+                          minimumTrackTintColor="#FF0033"
+                          maximumTrackTintColor="rgba(255,255,255,0.22)"
+                          thumbTintColor="#FF0033"
+                          onSlidingStart={onSeekStart}
+                          onValueChange={onSeekChange}
+                          onSlidingComplete={onSeekComplete}
+                        />
+                      </View>
                     </View>
                   ) : null}
 
@@ -2848,6 +3201,160 @@ export default function VideoScreen() {
         </View>
       </Modal>
 
+      {/* ── Playback Speed Modal ──────────────────────────────────────── */}
+      <Modal
+        visible={showSpeedSheet}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSpeedSheet(false)}>
+        <Pressable
+          style={styles.sheetBackdrop}
+          onPress={() => setShowSpeedSheet(false)}
+        />
+        <View style={styles.sheetCard}>
+          <View style={styles.sheetHeaderRow}>
+            <Text style={styles.sheetTitle}>Playback speed</Text>
+            <Pressable onPress={() => setShowSpeedSheet(false)} hitSlop={10}>
+              <X size={20} color="rgba(255,255,255,0.7)" />
+            </Pressable>
+          </View>
+          <ScrollView
+            bounces={false}
+            style={{ maxHeight: 320 }}
+            showsVerticalScrollIndicator={false}>
+            {PLAYBACK_SPEEDS.map((spd) => {
+              const active = selectedSpeed === spd;
+              return (
+                <Pressable
+                  key={spd}
+                  style={[
+                    styles.sheetOptionRow,
+                    active ? styles.sheetOptionRowActive : null,
+                  ]}
+                  onPress={() => {
+                    applyPlaybackSpeed(spd);
+                    setShowSpeedSheet(false);
+                  }}>
+                  <Text
+                    style={[
+                      styles.sheetOptionText,
+                      active ? styles.sheetOptionTextActive : null,
+                    ]}>
+                    {spd === 1 ? "Normal (1x)" : `${spd}x`}
+                  </Text>
+                  {active ? <Check size={18} color="#FF5500" /> : null}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* ── More Options Modal ────────────────────────────────────────── */}
+      <Modal
+        visible={showMoreOptionsSheet}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMoreOptionsSheet(false)}>
+        <Pressable
+          style={styles.sheetBackdrop}
+          onPress={() => setShowMoreOptionsSheet(false)}
+        />
+        <View style={styles.sheetCard}>
+          <View style={styles.sheetHeaderRow}>
+            <Text style={styles.sheetTitle}>More options</Text>
+            <Pressable
+              onPress={() => setShowMoreOptionsSheet(false)}
+              hitSlop={10}>
+              <X size={20} color="rgba(255,255,255,0.7)" />
+            </Pressable>
+          </View>
+
+          {/* Quality Item */}
+          <Pressable
+            style={styles.sheetOptionRow}
+            onPress={() => {
+              setShowMoreOptionsSheet(false);
+              setShowQualitySheet(true);
+            }}>
+            <View style={styles.sheetOptionLeft}>
+              <Settings size={18} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.sheetOptionText}>Quality</Text>
+            </View>
+            <Text style={styles.sheetOptionSubText}>
+              {selectedQuality || "Auto"}
+            </Text>
+          </Pressable>
+
+          {/* Playback Speed Item */}
+          <Pressable
+            style={styles.sheetOptionRow}
+            onPress={() => {
+              setShowMoreOptionsSheet(false);
+              setShowSpeedSheet(true);
+            }}>
+            <View style={styles.sheetOptionLeft}>
+              <Settings size={18} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.sheetOptionText}>Playback speed</Text>
+            </View>
+            <Text style={styles.sheetOptionSubText}>
+              {selectedSpeed === 1 ? "Normal" : `${selectedSpeed}x`}
+            </Text>
+          </Pressable>
+
+          {/* Autoplay Next Switch */}
+          <View style={styles.sheetOptionRow}>
+            <View style={styles.sheetOptionLeft}>
+              <ChevronRight size={18} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.sheetOptionText}>Autoplay next video</Text>
+            </View>
+            <Switch
+              value={isAutoplayEnabled}
+              onValueChange={(val) => setIsAutoplayEnabled(val)}
+              thumbColor={isAutoplayEnabled ? "#FF5500" : "#888"}
+              trackColor={{ false: "#333", true: "rgba(255,85,0,0.4)" }}
+            />
+          </View>
+
+          {/* Picture in Picture / Minimize */}
+          <Pressable
+            style={styles.sheetOptionRow}
+            onPress={() => {
+              setShowMoreOptionsSheet(false);
+              if (isFullscreen) {
+                exitFullscreen();
+              }
+              setInlineVideoHostActive(false);
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.navigate("HomeTab" as any);
+              }
+            }}>
+            <View style={styles.sheetOptionLeft}>
+              <Minimize size={18} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.sheetOptionText}>
+                Picture-in-Picture / Mini Player
+              </Text>
+            </View>
+            <Text style={styles.sheetOptionSubText}>Floating</Text>
+          </Pressable>
+
+          {/* Report Content */}
+          <Pressable
+            style={styles.sheetOptionRow}
+            onPress={() => {
+              setShowMoreOptionsSheet(false);
+              setReportModalOpen(true);
+            }}>
+            <View style={styles.sheetOptionLeft}>
+              <AlertTriangle size={18} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.sheetOptionText}>Report content</Text>
+            </View>
+          </Pressable>
+        </View>
+      </Modal>
+
       {/* ── Artist Lock Modal ─────────────────────────────────────────── */}
       {renderArtistLockModal()}
     </View>
@@ -3023,6 +3530,75 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 
+  speedBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  speedBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  holding2xBadge: {
+    position: "absolute",
+    top: 14,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    zIndex: 40,
+    elevation: 40,
+  },
+  holding2xText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  seekRippleLeft: {
+    position: "absolute",
+    left: 20,
+    top: "38%",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    zIndex: 35,
+    elevation: 35,
+  },
+  seekRippleRight: {
+    position: "absolute",
+    right: 20,
+    top: "38%",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    zIndex: 35,
+    elevation: 35,
+  },
+  seekRippleText: {
+    color: "#FFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
   seekWrap: {
     position: "absolute",
     left: 10,
@@ -3048,7 +3624,95 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
   },
+  sliderContainer: {
+    width: "100%",
+    position: "relative",
+    justifyContent: "center",
+  },
+  bufferedTrackWrap: {
+    position: "absolute",
+    left: 2,
+    right: 2,
+    height: 4,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  bufferedTrack: {
+    height: "100%",
+    backgroundColor: "rgba(255,255,255,0.45)",
+    borderRadius: 2,
+  },
   slider: { width: "100%", height: 20 },
+
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.65)",
+  },
+  sheetCard: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: 24,
+    borderRadius: 20,
+    padding: 18,
+    backgroundColor: "rgba(22,22,24,0.98)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 24,
+  },
+  sheetHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.08)",
+  },
+  sheetTitle: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  sheetOptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 6,
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  sheetOptionRowActive: {
+    backgroundColor: "rgba(255,85,0,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,85,0,0.35)",
+  },
+  sheetOptionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  sheetOptionText: {
+    color: "rgba(255,255,255,0.9)",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  sheetOptionTextActive: {
+    color: "#FF5500",
+    fontWeight: "900",
+  },
+  sheetOptionSubText: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 13,
+    fontWeight: "600",
+  },
 
   upNextOverlay: {
     position: "absolute",
