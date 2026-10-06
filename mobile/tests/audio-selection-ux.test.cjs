@@ -52,8 +52,9 @@ test('audio entry points never silently fall back to queue index zero', () => {
   const audio = read('apps/fan/src/screens/AudioScreen.tsx');
   const home = read('apps/fan/src/screens/HomeScreen.tsx');
   const artist = read('apps/fan/src/screens/ArtistScreen.tsx');
+  const album = read('apps/fan/src/screens/AlbumDetailScreen.tsx');
 
-  for (const source of [audio, home, artist]) {
+  for (const source of [audio, home, artist, album]) {
     assert.doesNotMatch(source, /Math\.max\(\s*0,\s*queue\.findIndex/);
     assert.doesNotMatch(source, /queueIndex:\s*idx\s*>=\s*0\s*\?\s*idx\s*:\s*0/);
   }
@@ -64,6 +65,8 @@ test('audio entry points never silently fall back to queue index zero', () => {
   assert.match(home, /if \(idx < 0\) return null;/);
   assert.match(artist, /const idx = findMediaQueueIndex\(queue, song\);/);
   assert.match(artist, /if \(idx < 0\) return null;/);
+  assert.match(album, /const queueIndex = findMediaQueueIndex\(queue, song\);/);
+  assert.match(album, /if \(queueIndex < 0\)/);
 });
 
 test('locked audio remains represented in queue but is blocked before wrong-song navigation', () => {
@@ -116,6 +119,10 @@ test('premium toast is globally available for playback feedback', () => {
   const app = read('../mobile/App.tsx');
   const toast = read('apps/fan/src/ui/ToastProvider.tsx');
   const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+  const audio = read('apps/fan/src/screens/AudioScreen.tsx');
+  const home = read('apps/fan/src/screens/HomeScreen.tsx');
+  const artist = read('apps/fan/src/screens/ArtistScreen.tsx');
+  const album = read('apps/fan/src/screens/AlbumDetailScreen.tsx');
 
   assert.match(app, /<ToastProvider>/);
   assert.match(app, /<MediaPlayerProvider>/);
@@ -126,4 +133,9 @@ test('premium toast is globally available for playback feedback', () => {
   assert.match(provider, /actionLabel: "View plan"/);
   assert.doesNotMatch(provider, /StatusModal/);
   assert.doesNotMatch(provider, /Alert\.alert/);
+
+  for (const source of [audio, home, artist, album]) {
+    assert.match(source, /useToast/);
+    assert.match(source, /showToast/);
+  }
 });
