@@ -83,6 +83,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
   const [toast, setToast] = useState<ToastState | null>(null);
   const sequenceRef = useRef(0);
+  const activeToastIdRef = useRef<number | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const translateY = useRef(new Animated.Value(-18)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -95,6 +96,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const dismissToast = useCallback(() => {
     clearHideTimer();
+    const dismissingId = activeToastIdRef.current;
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 0,
@@ -109,7 +111,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         useNativeDriver: true,
       }),
     ]).start(({ finished }) => {
-      if (finished) setToast(null);
+      if (finished && activeToastIdRef.current === dismissingId) {
+        activeToastIdRef.current = null;
+        setToast(null);
+      }
     });
   }, [clearHideTimer, opacity, translateY]);
 
@@ -117,6 +122,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (options: ToastOptions) => {
       clearHideTimer();
       const id = (sequenceRef.current += 1);
+      activeToastIdRef.current = id;
+      opacity.stopAnimation();
+      translateY.stopAnimation();
       const durationMs = Math.max(
         1800,
         options.durationMs ?? (options.actionLabel ? 6000 : 3600)
@@ -154,7 +162,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [clearHideTimer, dismissToast, opacity, translateY]
   );
 
-  useEffect(() => clearHideTimer, [clearHideTimer]);
+  useEffect(
+    () => () => {
+      activeToastIdRef.current = null;
+      clearHideTimer();
+      opacity.stopAnimation();
+      translateY.stopAnimation();
+    },
+    [clearHideTimer, opacity, translateY]
+  );
 
   const value = React.useMemo(
     () => ({ showToast, dismissToast }),
@@ -269,7 +285,6 @@ const styles = StyleSheet.create({
     right: 12,
     zIndex: 9999,
     alignItems: "center",
-    pointerEvents: "box-none",
   },
   card: {
     width: "100%",
