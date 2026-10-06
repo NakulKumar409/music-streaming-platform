@@ -2,9 +2,6 @@ import { Router } from "express";
 import { invalidateContentCache } from "../../common/cache";
 import {
   ContentGovernanceError,
-  approveContent,
-  listPendingContent,
-  rejectContent,
   takedownContent,
   type GovernanceRole,
 } from "../../modules/content/content-governance.service";
@@ -39,12 +36,12 @@ function sendError(res: any, error: unknown, correlationId: string) {
 
 router.get("/pending", async (req: any, res: any) => {
   const correlationId = req?.correlationId || "-";
-  try {
-    const items = await listPendingContent(req.query?.limit, req.query?.offset);
-    return res.json({ success: true, items, correlationId });
-  } catch (error) {
-    return sendError(res, error, correlationId);
-  }
+  return res.status(410).json({
+    success: false,
+    code: "CONTENT_APPROVAL_RETIRED",
+    message: "Artist uploads publish automatically when media processing is ready",
+    correlationId,
+  });
 });
 
 router.get("/reported", async (req: any, res: any) => {
@@ -57,31 +54,20 @@ router.get("/reported", async (req: any, res: any) => {
   }
 });
 
-const handleApprove = async (req: any, res: any) => {
+const retiredApprovalAction = (req: any, res: any) => {
   const correlationId = req?.correlationId || "-";
-  try {
-    const result = await approveContent(req.params.id, actor(req));
-    await invalidateContentCache();
-    return res.json({ success: true, content: result, correlationId });
-  } catch (error) {
-    return sendError(res, error, correlationId);
-  }
+  return res.status(410).json({
+    success: false,
+    code: "CONTENT_APPROVAL_RETIRED",
+    message: "Per-content approval is no longer part of the publishing workflow",
+    correlationId,
+  });
 };
-router.patch("/:id/approve", handleApprove);
-router.post("/:id/approve", handleApprove);
 
-const handleReject = async (req: any, res: any) => {
-  const correlationId = req?.correlationId || "-";
-  try {
-    const result = await rejectContent(req.params.id, req.body?.reason, actor(req));
-    await invalidateContentCache();
-    return res.json({ success: true, content: result, correlationId });
-  } catch (error) {
-    return sendError(res, error, correlationId);
-  }
-};
-router.patch("/:id/reject", handleReject);
-router.post("/:id/reject", handleReject);
+router.patch("/:id/approve", retiredApprovalAction);
+router.post("/:id/approve", retiredApprovalAction);
+router.patch("/:id/reject", retiredApprovalAction);
+router.post("/:id/reject", retiredApprovalAction);
 
 router.post("/:id/takedown", async (req: any, res: any) => {
   const correlationId = req?.correlationId || "-";

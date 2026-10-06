@@ -23,6 +23,7 @@ import mediaStreamRoutes from "./modules/media/media-stream.routes";
 import artistOnboardingRoutes from "./modules/artist/artist-onboarding.routes";
 import artistSecurityRoutes from "./modules/artist/artist-security.routes";
 import artistAnalyticsRoutes from "./modules/artist/artist-analytics.routes";
+import artistMediaUploadRoutes from "./routes/artist/media";
 import analyticsRoutes from "./modules/analytics/analytics.routes";
 import artistPricingRoutes from "./modules/artist/artist-pricing.routes";
 import { validateArtistPricingRequest } from "./modules/artist/artist-pricing.validation";
@@ -167,6 +168,7 @@ export function createApp(runtime: EnvValidationResult) {
   app.use("/api/v1/artist/onboard", artistOnboardingRoutes);
   app.use("/api/v1/artist/update-password", artistSecurityRoutes);
   app.use("/api/v1/artist/uploads", artistAssetUploadRouter);
+  app.use("/api/v1/artist/media", requireAuth, requireVerifiedArtist, artistMediaUploadRoutes);
   app.use("/api/v1/artist/assets", artistPublicAssetRouter);
 
   app.use(

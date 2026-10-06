@@ -88,7 +88,7 @@ export default function ArtistContentHistoryPage() {
             <div>
               <h1 className="text-2xl font-bold text-white">My Content</h1>
               <p className="mt-1 text-sm text-[#B8A6A1]">
-                Read-only Phase 1 view of content uploaded and governed by the platform team.
+                Your releases publish automatically after media processing is ready.
               </p>
             </div>
           </div>
@@ -149,11 +149,13 @@ export default function ArtistContentHistoryPage() {
                 : item.technicalStatus === "FAILED"
                 ? "danger"
                 : "warning";
-            const businessKind = item.isTakenDown
+            const publicationKind = item.isTakenDown
               ? "danger"
-              : item.lifecycleState === "EARLY_ACCESS" && item.isApproved
+              : item.technicalStatus === "READY"
               ? "success"
-              : "neutral";
+              : item.technicalStatus === "FAILED"
+              ? "danger"
+              : "warning";
 
             return (
               <div key={item.id} className="rounded-2xl border border-white/10 bg-surface p-5">
@@ -168,8 +170,14 @@ export default function ArtistContentHistoryPage() {
                       <span className={`rounded-full border px-2.5 py-1 ${badgeClass(technicalKind)}`}>
                         Technical: {item.technicalStatus}
                       </span>
-                      <span className={`rounded-full border px-2.5 py-1 ${badgeClass(businessKind)}`}>
-                        {item.isTakenDown ? "TAKEN DOWN" : `Business: ${item.lifecycleState}`}
+                      <span className={`rounded-full border px-2.5 py-1 ${badgeClass(publicationKind)}`}>
+                        {item.isTakenDown
+                          ? "Taken down"
+                          : item.technicalStatus === "READY"
+                          ? "Live"
+                          : item.technicalStatus === "FAILED"
+                          ? "Upload failed"
+                          : "Processing"}
                       </span>
                       {item.subscriptionRequired && (
                         <span className={`rounded-full border px-2.5 py-1 ${badgeClass("neutral")}`}>

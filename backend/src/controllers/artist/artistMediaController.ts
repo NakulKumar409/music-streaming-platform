@@ -1,6 +1,7 @@
 import fs from "fs";
 import type { Response } from "express";
 import { pool } from "../../common/db";
+import { invalidateContentCache } from "../../common/cache";
 import { getStorageConfig } from "../../config/storage.config";
 import { getMediaConfig } from "../../config/media.config";
 import { getStorageService } from "../../shared/storage/services/storage.service";
@@ -74,7 +75,7 @@ async function compensate(
   }
 }
 
-export async function uploadAdminMedia(req: any, res: Response) {
+export async function uploadArtistMedia(req: any, res: Response) {
   const correlationId = req?.correlationId || "-";
   const files = (req.files || {}) as Record<string, Express.Multer.File[]>;
   const thumbnail = files.thumbnail?.[0];
@@ -105,7 +106,7 @@ export async function uploadAdminMedia(req: any, res: Response) {
     }
 
     const metadata = validateUploadMetadata({
-      artistId: req.body?.artistId,
+      artistId: req.user?.id,
       title: req.body?.title,
       genre: req.body?.genre,
       contentType: req.body?.contentType,
@@ -159,7 +160,7 @@ export async function uploadAdminMedia(req: any, res: Response) {
          mime_type, file_size_bytes, original_file_name, uploaded_at
        ) VALUES (
          $1, $2, $3, $4,
-         'DRAFT', FALSE, FALSE, NULL,
+         'EARLY_ACCESS', TRUE, FALSE, NULL,
          'UPLOADING', $5, 'PROTECTED', $6,
          $7, $8, $9,
          $10, $11, $12, NULL
@@ -212,7 +213,7 @@ export async function uploadAdminMedia(req: any, res: Response) {
       await client.query("BEGIN");
       await client.query(
         `UPDATE content_items
-            SET status = $2,
+            SET status = $2::varchar,
                 provider_asset_id = $3,
                 audio_provider_asset_id = $4,
                 video_provider_asset_id = $5,
@@ -227,7 +228,8 @@ export async function uploadAdminMedia(req: any, res: Response) {
                 adaptive_qualities = $9::text[],
                 source_width = $10,
                 source_height = $11,
-                duration_ms = $12
+                duration_ms = $12,
+                published_at = CASE WHEN $2 = 'READY' THEN COALESCE(published_at, now()) ELSE published_at END
           WHERE id = $1`,
         [
           contentId,
@@ -255,6 +257,15 @@ export async function uploadAdminMedia(req: any, res: Response) {
           thumbnailProviderAssetId: thumbnailUpload.providerAssetId || null,
           metadata: releaseMetadata,
         });
+        if (technicalStatus === "READY") {
+          await client.query(
+            `UPDATE releases
+                SET release_phase = 'EARLY_ACCESS',
+                    updated_at = now()
+              WHERE id = $1`,
+            [releaseMapping.releaseId]
+          );
+        }
       }
 
       await client.query(
@@ -262,7 +273,7 @@ export async function uploadAdminMedia(req: any, res: Response) {
            id, action, entity, entity_id, actor_id, actor_role, status,
            correlation_id, metadata, created_at
          ) VALUES (
-           gen_random_uuid(), 'content.uploaded', 'content', $1, $2, 'ADMIN', 'success', $3, $4, now()
+           gen_random_uuid(), 'content.uploaded', 'content', $1, $2, 'ARTIST', 'success', $3, $4, now()
          )`,
         [
           String(contentId),
@@ -270,7 +281,7 @@ export async function uploadAdminMedia(req: any, res: Response) {
           correlationUuid(correlationId),
           {
             artist_id: metadata.artistId,
-            lifecycle_state: "DRAFT",
+            lifecycle_state: "EARLY_ACCESS",
             technical_status: technicalStatus,
             storage_provider: storageProvider,
             adaptive_status: adaptiveStatus,
@@ -296,6 +307,8 @@ export async function uploadAdminMedia(req: any, res: Response) {
       client.release();
     }
 
+    await invalidateContentCache().catch(() => undefined);
+
     return res.status(201).json({
       success: true,
       content: {
@@ -303,12 +316,12 @@ export async function uploadAdminMedia(req: any, res: Response) {
         artistId: metadata.artistId,
         title: metadata.title,
         type: metadata.contentType,
-        lifecycleState: "DRAFT",
+        lifecycleState: "EARLY_ACCESS",
         technicalStatus,
         adaptiveStatus,
         adaptiveQualities,
         durationMs: mediaUpload.durationMs || null,
-        isApproved: false,
+        isApproved: true,
         isTakenDown: false,
         ...(releaseMapping
           ? {

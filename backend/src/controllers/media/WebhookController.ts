@@ -1,5 +1,6 @@
 import type { Response } from "express";
 import { pool } from "../../common/db";
+import { invalidateContentCache } from "../../common/cache";
 import {
   hasSuccessfulAutoHlsResult,
   successfulHlsResultCount,
@@ -157,10 +158,24 @@ export const handleMediaWebhook = async (req: any, res: Response) => {
         await client.query(
           `UPDATE content_items
               SET status = $2,
-                  adaptive_status = $3
+                  adaptive_status = $3,
+                  published_at = CASE WHEN $2 = 'READY' THEN COALESCE(published_at, now()) ELSE published_at END
             WHERE id = $1`,
           [content.id, technicalOutcome, adaptiveOutcome]
         );
+        if (technicalOutcome === "READY") {
+          await client.query(
+            `UPDATE releases r
+                SET release_phase = 'EARLY_ACCESS',
+                    updated_at = now()
+               FROM release_tracks rt
+               JOIN content_items ci ON ci.release_track_id = rt.id
+              WHERE ci.id = $1
+                AND rt.release_id = r.id`,
+            [content.id]
+          );
+        }
+
         await client.query(
           `INSERT INTO audit_logs (
              id, action, entity, entity_id, actor_id, actor_role, status,
@@ -188,6 +203,7 @@ export const handleMediaWebhook = async (req: any, res: Response) => {
       }
 
       await client.query("COMMIT");
+      if (legal) await invalidateContentCache().catch(() => undefined);
       return res.status(200).json({
         received: true,
         contentId: Number(content.id),

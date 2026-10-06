@@ -16,7 +16,6 @@ import {
   X,
   FileSignature,
   RotateCcw,
-  UploadCloud,
 } from "lucide-react";
 import { useSidebar } from "./AdminLayout";
 import { http } from "../services/http";
@@ -69,7 +68,6 @@ export default function AdminNavbar() {
       { label: "Artist Applications", to: "/admin/artist-applications", matchPrefix: "/admin/artist-applications", icon: <UserPlus size={20} /> },
       { label: "Artists", to: "/admin/artists", matchPrefix: "/admin/artists", icon: <Users size={20} /> },
       { label: "Featured Artists", to: "/admin/featured-artists", icon: <Star size={20} /> },
-      { label: "Upload Content", to: "/admin/media-upload", icon: <UploadCloud size={20} /> },
       moderationItem,
       { label: "Agreement Settings", to: "/admin/agreement-settings", matchPrefix: "/admin/agreement-settings", icon: <FileSignature size={20} /> },
       { label: "Platform Plan", to: "/admin/subscription-settings", icon: <CreditCard size={20} /> },

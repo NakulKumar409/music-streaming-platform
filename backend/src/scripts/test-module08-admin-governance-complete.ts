@@ -8,7 +8,7 @@ import { validateEnv } from "../config/env.validation";
 import { pool } from "../common/db";
 import { SessionService } from "../common/auth/session.service";
 import { ArtistApprovalService } from "../modules/artist/artist-approval.service";
-import { approveContent, takedownContent } from "../modules/content/content-governance.service";
+import { takedownContent } from "../modules/content/content-governance.service";
 
 async function main() {
   console.log("================================================================================");
@@ -122,13 +122,13 @@ async function main() {
 
     // 2.3 Content moderation queues
     const pendingContentRes = await api("/api/v1/admin/content/pending", { token: tokenAdmin });
-    assert.equal(pendingContentRes.status, 200);
-    assert.ok(Array.isArray(pendingContentRes.data?.items));
+    assert.equal(pendingContentRes.status, 410);
+    assert.equal(pendingContentRes.data?.code, "CONTENT_APPROVAL_RETIRED");
 
     const reportedContentRes = await api("/api/v1/admin/content/reported", { token: tokenAdmin });
     assert.equal(reportedContentRes.status, 200);
     assert.ok(Array.isArray(reportedContentRes.data?.items));
-    console.log("✓ Content moderation queues retrieved: pending draft and reported content endpoints responsive.");
+    console.log("✓ Content moderation verified: approval queue retired and reported-content review remains available.");
 
     // 2.4 Revenue share / commission configurations
     const revConfigRes = await api("/api/v1/admin/artists/revenue-share-config", { token: tokenAdmin });
@@ -203,8 +203,8 @@ async function main() {
 
     // Verify Moderator can list pending content
     const modPending = await api("/api/v1/admin/content/pending", { token: tokenMod });
-    assert.equal(modPending.status, 200);
-    console.log("✓ Moderator Permission: Moderator can access content moderation queue.");
+    assert.equal(modPending.status, 410);
+    console.log("✓ Moderator Permission: legacy approval queue is retired; takedown moderation remains available.");
 
     // Moderator executes takedown
     const takedownRes = await api("/api/v1/admin/content/9/takedown", {
