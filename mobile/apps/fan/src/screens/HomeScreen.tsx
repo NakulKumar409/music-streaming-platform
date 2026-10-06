@@ -404,7 +404,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const onPressArtist = useCallback((artistId: string) => {
     navigation.navigate('Artist', { artistId });
-  }, [navigation, showToast]);
+  }, [navigation]);
 
   // Tapping an item in the AUDIO row — always play as audio
   const onPressAudioItem = useCallback(async (item: ContentCard) => {
@@ -466,7 +466,7 @@ export default function HomeScreen({ navigation }: any) {
         },
       },
     });
-  }, [navigation]);
+  }, [navigation, showToast]);
 
   const onPressSeeAllTrending = useCallback(() => {
     navigation.navigate('SeeAllTrending', {
