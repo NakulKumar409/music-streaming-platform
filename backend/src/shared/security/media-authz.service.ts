@@ -165,6 +165,7 @@ export interface ContentForAccess {
   type: string | null;
   file_key: string | null;
   thumbnail_url: string | null;
+  duration_ms?: number | null;
 }
 
 /**
@@ -202,7 +203,8 @@ export async function getContentForAccess(
             c.video_url,
             c.type,
             c.file_key,
-            c.thumbnail_url
+            c.thumbnail_url,
+            c.duration_ms
        FROM content_items c
        JOIN users a ON a.id = c.artist_id
       WHERE c.id = $1
