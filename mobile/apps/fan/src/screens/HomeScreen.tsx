@@ -34,6 +34,8 @@ import { getOptimizedImageUrl } from '../utils/cloudinary';
 import AppImage from '../components/AppImage';
 import { resolveAppImageUrl, FALLBACK_ARTWORK, FALLBACK_ARTIST_AVATAR, FALLBACK_BANNER } from '../utils/imageUtils';
 import type { MediaItem } from '../media.types';
+import { useToast } from '../ui/ToastProvider';
+import { findMediaQueueIndex } from '../utils/mediaQueue';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -262,7 +264,9 @@ export default function HomeScreen({ navigation }: any) {
         isLocked: x.isLocked,
         duration: x.durationMs,
       }));
-      const idx = Math.max(0, queue.findIndex((q) => q.id === item.id));
+      const idx = findMediaQueueIndex(queue, item);
+      if (idx < 0) return null;
+
       return {
         songId: item.id,
         title: item.title,
@@ -403,9 +407,36 @@ export default function HomeScreen({ navigation }: any) {
 
   // Tapping an item in the AUDIO row — always play as audio
   const onPressAudioItem = useCallback(async (item: ContentCard) => {
+    if (item.isLocked) {
+      showToast({
+        tone: 'warning',
+        title: 'Subscription required',
+        message: `Subscribe to ${item.artist || 'this artist'} to play "${item.title}".`,
+        actionLabel: 'View plan',
+        onAction: () => {
+          navigation.navigate('SubscriptionFlow', {
+            artistId: item.artistId,
+            artistName: item.artist,
+            contentId: item.contentId ?? item.id,
+            defaultPlan: 'ARTIST',
+          });
+        },
+      });
+      return;
+    }
+
     const params = buildFullPlayerParams(item);
+    if (!params) {
+      showToast({
+        tone: 'error',
+        title: "Couldn't open this song",
+        message: 'The song list changed. Please refresh and try again.',
+      });
+      return;
+    }
+
     navigation.navigate('FullPlayer', params);
-  }, [buildFullPlayerParams, navigation]);
+  }, [buildFullPlayerParams, navigation, showToast]);
 
   // Tapping an item in the VIDEO row — always open in VideoTab
   const onPressVideoItem = useCallback((item: ContentCard) => {
