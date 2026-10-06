@@ -1267,6 +1267,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       preferredQuality,
       unloadAudio,
       blockLockedPlayback,
+      showSubscriptionToast,
+      showToast,
     ]
   );
 
@@ -1339,10 +1341,22 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
   const playQueue = useCallback(
     async (queue: MediaItem[], index: number) => {
-      const safeIndex = Math.min(
-        Math.max(0, index),
-        Math.max(0, queue.length - 1)
-      );
+      if (
+        !Array.isArray(queue) ||
+        queue.length === 0 ||
+        !Number.isInteger(index) ||
+        index < 0 ||
+        index >= queue.length
+      ) {
+        showToast({
+          tone: "error",
+          title: "Couldn't open this song",
+          message: "The song list changed. Please refresh and try again.",
+        });
+        return;
+      }
+
+      const safeIndex = index;
       const nextState = stateRef.current.isShuffle
         ? shuffleQueueKeepCurrent(queue, safeIndex)
         : { queue, currentIndex: safeIndex };
@@ -1433,6 +1447,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       preferredQuality,
       cancelPendingAudioLoad,
       shuffleQueueKeepCurrent,
+      showToast,
     ]
   );
 
@@ -2034,6 +2049,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     beginPendingSeek,
     resetSeekCoordinator,
     handleDidJustFinish,
+    showToast,
   ]);
 
   // Canonical native audio progress synchronization.
