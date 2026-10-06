@@ -440,29 +440,32 @@ export default function ArtistScreen({ navigation, route }: any) {
     if (match.mediaType === "audio") setActiveTab("Audio");
     if (match.mediaType === "video") setActiveTab("Video");
 
-    const queue = songs
-      .filter((s) => Boolean(s.mediaUrl) || s.useStreamAccess)
-      .map((s) => ({
-        id: s.id,
-        contentId: s.contentId,
-        title: s.title,
-        artistName: s.artist,
-        artistId: artist.id,
-        mediaType: s.mediaType,
-        artworkUrl: s.thumbnail,
-        mediaUrl: s.mediaUrl || "",
-        isLocked: s.locked ?? false,
-        useStreamAccess: s.useStreamAccess,
-        duration: s.durationMs,
-      }));
-    const idx = queue.findIndex(
-      (q) => q.id === initialMediaId || q.contentId === initialMediaId
-    );
-    if (idx < 0) return;
+    const queue = songs.map((s) => ({
+      id: s.id,
+      contentId: s.contentId,
+      title: s.title,
+      artistName: s.artist,
+      artistId: artist.id,
+      mediaType: s.mediaType,
+      artworkUrl: s.thumbnail,
+      mediaUrl: s.mediaUrl || "",
+      isLocked: s.locked ?? false,
+      useStreamAccess: s.useStreamAccess,
+      duration: s.durationMs,
+    }));
+    const idx = findMediaQueueIndex(queue, match);
+    if (idx < 0) {
+      showToast({
+        tone: "error",
+        title: "Couldn't open this song",
+        message: "The song selection is no longer available. Please refresh and try again.",
+      });
+      return;
+    }
 
     playQueue(queue, idx).catch(() => undefined);
     setCurrentSong(match);
-  }, [artist, initialMediaId, playQueue, songs]);
+  }, [artist, initialMediaId, playQueue, showToast, songs]);
 
   useEffect(() => {
     const nextIsVideoPlaying = currentItem?.mediaType === "video";
