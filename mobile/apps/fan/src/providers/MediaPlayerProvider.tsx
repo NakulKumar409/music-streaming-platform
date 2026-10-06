@@ -1436,6 +1436,12 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     ) => {
       currentItemRef.current = item;
       if (!item) {
+        if (videoPlayer) {
+          try {
+            videoPlayer.pause();
+          } catch {}
+        }
+        setVideoSource(null);
         setState((s) => ({
           ...s,
           queue: [],
@@ -1445,6 +1451,32 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         }));
         return;
       }
+
+      if (item.mediaType === "video" && item.mediaUrl) {
+        if (videoSource !== item.mediaUrl) {
+          setVideoSource(item.mediaUrl);
+          if (videoPlayer) {
+            try {
+              videoPlayer.replace(item.mediaUrl);
+              if (positionMs !== undefined && positionMs > 0) {
+                videoPlayer.currentTime = positionMs / 1000;
+              }
+              if (isPlaying) {
+                videoPlayer.play();
+              }
+            } catch (err) {
+              logger.warn("[MediaPlayer] videoPlayer sync failed", err);
+            }
+          }
+        } else if (videoPlayer) {
+          if (isPlaying && !videoPlayer.playing) {
+            videoPlayer.play();
+          } else if (!isPlaying && videoPlayer.playing) {
+            videoPlayer.pause();
+          }
+        }
+      }
+
       setState((s) => ({
         ...s,
         queue: [item],
@@ -1458,7 +1490,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         isExpanded: false,
       }));
     },
-    []
+    [videoPlayer, videoSource]
   );
 
   const togglePlayPause = useCallback(async () => {

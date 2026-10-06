@@ -292,12 +292,22 @@ export default function MediaPlayerOverlay({
         >
           <Pressable style={styles.videoMiniPlayer} onPress={expandToVideo}>
             <View style={styles.videoMiniThumbWrap}>
-              <AppImage
-                uri={currentItem.artworkUrl}
-                fallbackType="video"
-                style={styles.videoMiniThumb}
-                resizeMode="cover"
-              />
+              {videoPlayer && currentItem.mediaUrl ? (
+                <VideoView
+                  player={videoPlayer}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                  nativeControls={false}
+                  allowsPictureInPicture={false}
+                />
+              ) : (
+                <AppImage
+                  uri={currentItem.artworkUrl}
+                  fallbackType="video"
+                  style={styles.videoMiniThumb}
+                  resizeMode="cover"
+                />
+              )}
               {state.durationMs > 0 ? (
                 <View style={styles.videoMiniDurationBadge}>
                   <Text style={styles.videoMiniDurationText}>

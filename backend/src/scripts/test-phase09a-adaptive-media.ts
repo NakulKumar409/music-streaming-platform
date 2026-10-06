@@ -144,7 +144,7 @@ function testAdaptiveHlsSecurityBoundary() {
 }
 
 function testUploadWebhookAndBackfillReadiness() {
-  const upload = readBackend("controllers/admin/adminMediaController.ts");
+  const upload = readBackend("controllers/artist/artistMediaController.ts");
   const webhook = readBackend("controllers/media/WebhookController.ts");
   const provider = readBackend("shared/storage/providers/cloudinary-storage.provider.ts");
   const backfill = readBackend("scripts/backfill-adaptive-video.ts");

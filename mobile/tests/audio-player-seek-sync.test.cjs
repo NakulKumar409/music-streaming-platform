@@ -139,7 +139,7 @@ test('canonical duration metadata is optional, persisted, exposed, and consumed 
   const migration = read('../backend/db/migrations/20260928_0015_media_duration_metadata.sql');
   const schema = read('../backend/prisma/schema.prisma');
   const contentRoutes = read('../backend/src/modules/content/content.routes.ts');
-  const upload = read('../backend/src/controllers/admin/adminMediaController.ts');
+  const upload = read('../backend/src/controllers/artist/artistMediaController.ts');
   const cloudinaryStorage = read('../backend/src/shared/storage/providers/cloudinary-storage.provider.ts');
   const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
   const audioScreen = read('apps/fan/src/screens/AudioScreen.tsx');
@@ -330,7 +330,7 @@ test('audio loading does not report playing before the engine accepts play', () 
 test('MIME is canonical at upload, local delivery, and signed-provider delivery', () => {
   const metadata = read('../backend/src/shared/storage/utils/file-metadata.util.ts');
   const validation = read('../backend/src/modules/content/media-upload-validation.ts');
-  const upload = read('../backend/src/controllers/admin/adminMediaController.ts');
+  const upload = read('../backend/src/controllers/artist/artistMediaController.ts');
   const progressive = read('../backend/src/modules/media/progressive-media-http.ts');
   const signed = read('../backend/src/shared/delivery/strategies/signed-url-delivery.strategy.ts');
 

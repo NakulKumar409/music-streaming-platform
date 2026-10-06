@@ -960,8 +960,28 @@ export default function VideoScreen() {
         setShowMoreOptionsSheet(false);
         return true;
       }
-      if (activePlaybackUrl) {
+      if (activePlaybackUrl && activeVideoMeta) {
         setInlineVideoHostActive(false);
+        const curMs = toFiniteDurationMs(videoPlayer.currentTime * 1000);
+        syncActiveMediaItem?.(
+          {
+            id: String(activeVideoMeta.id),
+            contentId: String(activeVideoMeta.id),
+            title: activeVideoMeta.title,
+            artistName: activeVideoMeta.artistName,
+            artistId: activeVideoMeta.artistId,
+            mediaType: "video",
+            artworkUrl: activeVideoMeta.artworkUrl,
+            mediaUrl: activePlaybackUrl,
+            useStreamAccess: activeVideoMeta.useStreamAccess,
+            duration: videoPlayer.duration
+              ? Math.round(videoPlayer.duration * 1000)
+              : undefined,
+          },
+          videoPlayer.playing,
+          curMs,
+          toFiniteDurationMs(videoPlayer.duration * 1000)
+        );
         if (navigation.canGoBack()) {
           navigation.goBack();
         } else {
@@ -981,6 +1001,9 @@ export default function VideoScreen() {
     showSpeedSheet,
     showMoreOptionsSheet,
     activePlaybackUrl,
+    activeVideoMeta,
+    videoPlayer,
+    syncActiveMediaItem,
     setInlineVideoHostActive,
     navigation,
   ]);
@@ -1533,11 +1556,71 @@ export default function VideoScreen() {
       setInlineVideoHostActive(true);
       refreshSubscriptionAndRetry();
       load().catch(() => undefined);
+
+      if (currentItem?.mediaType === "video" && currentItem.id === activeVideoId) {
+        if (
+          playerState.positionMs > 0 &&
+          Math.abs(videoPlayer.currentTime * 1000 - playerState.positionMs) > 600
+        ) {
+          try {
+            videoPlayer.currentTime = playerState.positionMs / 1000;
+          } catch {}
+        }
+        if (playerState.isPlaying && !videoPlayer.playing) {
+          safePlay(videoPlayer as any, "focus-sync");
+        } else if (!playerState.isPlaying && videoPlayer.playing) {
+          try {
+            videoPlayer.pause();
+          } catch {}
+        }
+      }
+
       return () => {
         setInlineVideoHostActive(false);
       };
-    }, [load, refreshSubscriptionAndRetry, setInlineVideoHostActive])
+    }, [
+      load,
+      refreshSubscriptionAndRetry,
+      setInlineVideoHostActive,
+      currentItem,
+      activeVideoId,
+      playerState.positionMs,
+      playerState.isPlaying,
+      videoPlayer,
+      safePlay,
+    ])
   );
+
+  useEffect(() => {
+    if (route.params?.resumeVideoId) {
+      const resumeId = String(route.params.resumeVideoId);
+      navigation.setParams({ resumeVideoId: undefined });
+      if (currentItem && String(currentItem.id) === resumeId) {
+        if (activeVideoId !== resumeId && currentItem.mediaUrl) {
+          setActiveVideoId(resumeId);
+          setActiveVideoMeta({
+            id: resumeId,
+            title: currentItem.title,
+            artistName: currentItem.artistName ?? "Artist",
+            artistId: currentItem.artistId ? String(currentItem.artistId) : undefined,
+            artworkUrl: currentItem.artworkUrl ?? FALLBACK_ARTWORK,
+            mediaUrl: currentItem.mediaUrl,
+            category: "Trending",
+          });
+          setActivePlaybackUrl(currentItem.mediaUrl);
+          if (playerState.positionMs > 0) {
+            qualityResumePositionRef.current = playerState.positionMs / 1000;
+          }
+        }
+      }
+    }
+  }, [
+    route.params?.resumeVideoId,
+    currentItem,
+    activeVideoId,
+    navigation,
+    playerState.positionMs,
+  ]);
 
   useEffect(() => {
     if (route.params?.autoplayVideo) {
@@ -2586,6 +2669,30 @@ export default function VideoScreen() {
                           } else {
                             // Minimize to floating mini player smoothly
                             setInlineVideoHostActive(false);
+                            if (activeVideoMeta && activePlaybackUrl) {
+                              const curMs = toFiniteDurationMs(
+                                videoPlayer.currentTime * 1000
+                              );
+                              syncActiveMediaItem?.(
+                                {
+                                  id: String(activeVideoMeta.id),
+                                  contentId: String(activeVideoMeta.id),
+                                  title: activeVideoMeta.title,
+                                  artistName: activeVideoMeta.artistName,
+                                  artistId: activeVideoMeta.artistId,
+                                  mediaType: "video",
+                                  artworkUrl: activeVideoMeta.artworkUrl,
+                                  mediaUrl: activePlaybackUrl,
+                                  useStreamAccess: activeVideoMeta.useStreamAccess,
+                                  duration: videoPlayer.duration
+                                    ? Math.round(videoPlayer.duration * 1000)
+                                    : undefined,
+                                },
+                                videoPlayer.playing,
+                                curMs,
+                                toFiniteDurationMs(videoPlayer.duration * 1000)
+                              );
+                            }
                             if (navigation.canGoBack()) {
                               navigation.goBack();
                             } else {
