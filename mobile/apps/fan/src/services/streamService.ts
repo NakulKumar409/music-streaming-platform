@@ -24,6 +24,7 @@ export type StreamAccessResponse = {
   defaultQuality?: CanonicalVideoQuality | 'ORIGINAL';
   contentType?: string;
   contentLength?: number;
+  durationMs?: number;
   message?: string;
   code?: string;
 };
@@ -40,6 +41,7 @@ export type PlaybackAccess = {
   defaultQuality: CanonicalVideoQuality | 'ORIGINAL';
   contentType?: string;
   contentLength?: number;
+  durationMs?: number;
 };
 
 export type ActivePlaybackLease = {
@@ -354,6 +356,7 @@ function parseDescriptor(
     defaultQuality: data.defaultQuality || 'ORIGINAL',
     contentType: data.contentType,
     contentLength: data.contentLength,
+    durationMs: positiveInteger(data.durationMs) ?? undefined,
   };
 }
 
