@@ -138,6 +138,22 @@ export class SessionService {
     return result.rowCount === 1;
   }
 
+  static async getSessionDeviceId(sessionId: number, userId: number): Promise<string | null> {
+    if (!Number.isInteger(sessionId) || sessionId <= 0) return null;
+
+    const result = await pool.query(
+      `SELECT device_id
+         FROM user_sessions
+        WHERE id = $1
+          AND user_id = $2
+          AND created_at > now() - ($3 * interval '1 hour')
+        LIMIT 1`,
+      [sessionId, userId, SESSION_TTL_HOURS]
+    );
+
+    return result.rows[0]?.device_id ? String(result.rows[0].device_id) : null;
+  }
+
   static async listSessions(userId: number, currentSessionId?: number) {
     const result = await pool.query(
       `SELECT id, device_id, device_name, last_active_at, created_at
