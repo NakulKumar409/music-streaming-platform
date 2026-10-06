@@ -792,11 +792,17 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         message: `Subscribe to ${artistName} to play "${item.title}".`,
         actionLabel: "View plan",
         onAction: () => {
-          navigate("SubscriptionFlow", {
-            artistId: item.artistId,
-            artistName,
-            contentId: item.contentId ?? item.id,
-            defaultPlan: "ARTIST",
+          navigate("MainTabs", {
+            screen: "AudioTab",
+            params: {
+              screen: "SubscriptionFlow",
+              params: {
+                artistId: item.artistId,
+                artistName,
+                contentId: item.contentId ?? item.id,
+                defaultPlan: "ARTIST",
+              },
+            },
           });
         },
       });
