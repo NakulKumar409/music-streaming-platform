@@ -648,3 +648,43 @@ test('newer video selection invalidates pending audio load without pre-emptively
     /cancelPendingAudioLoad\(\);[\s\S]{0,500}getPlaybackUrl\([\s\S]{0,260}\{ isStillRelevant: isCurrentSelection \}/s
   );
 });
+
+
+test('playback descriptor duration seeds UI without seek timeout workaround', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+  const stream = read('apps/fan/src/services/streamService.ts');
+  const progress = read('apps/fan/src/utils/audioProgressSync.ts');
+
+  assert.match(stream, /durationMs\?: number/);
+  assert.match(stream, /durationMs: positiveInteger\(data\.durationMs\) \?\? undefined/);
+  assert.match(provider, /descriptorDurationMs = descriptor\.durationMs \?\? 0/);
+  assert.match(provider, /descriptorDurationMs > 0[\s\S]{0,120}toFiniteDurationMs\(item\.duration\)/);
+  assert.doesNotMatch(progress, /2500|setTimeout|Date\.now\(\)/);
+});
+
+
+test('idle video engine cannot overwrite active audio playback state', () => {
+  const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
+
+  const videoListenerBlock = provider.slice(
+    provider.indexOf('const playingSub = videoPlayer.addListener'),
+    provider.indexOf('return () => {\n      playingSub.remove();')
+  );
+
+  assert.match(
+    videoListenerBlock,
+    /playingChange[\s\S]{0,260}currentItemRef\.current\?\.mediaType !== "video"/
+  );
+  assert.match(
+    videoListenerBlock,
+    /timeUpdate[\s\S]{0,180}currentItemRef\.current\?\.mediaType !== "video"/
+  );
+  assert.match(
+    videoListenerBlock,
+    /sourceLoad[\s\S]{0,180}currentItemRef\.current\?\.mediaType !== "video"/
+  );
+
+  // Audio position remains owned by the canonical TrackPlayer progress reader.
+  assert.match(provider, /const progress = await TrackPlayer\.getProgress\(\)/);
+  assert.match(provider, /applyAudioProgress\(pos, dur, generationAtRead\)/);
+});

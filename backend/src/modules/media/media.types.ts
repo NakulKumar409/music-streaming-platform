@@ -42,4 +42,5 @@ export interface PlaybackAccessResponse {
   defaultQuality: VideoQuality | "ORIGINAL";
   contentType?: string;
   contentLength?: number;
+  durationMs?: number;
 }

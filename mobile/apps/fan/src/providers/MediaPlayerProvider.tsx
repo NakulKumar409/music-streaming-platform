@@ -57,6 +57,7 @@ import {
   getPlaybackDescriptorForRecovery,
   getPlaybackErrorPresentation,
   getPlaybackUrl,
+  releaseActivePlaybackLease,
   normalizePlaybackUrl,
   validatePlaybackUrl,
   type VideoQuality,
@@ -239,10 +240,15 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     logger.log("[MediaPlayer] Attaching VideoPlayer event listeners");
 
     const playingSub = videoPlayer.addListener("playingChange", (event) => {
+      // The VideoPlayer exists for the lifetime of the provider and can still
+      // emit idle/stale events while an audio item is active. Never let the
+      // video engine overwrite audio-owned global playback state.
+      if (currentItemRef.current?.mediaType !== "video") return;
       setState((s) => ({ ...s, isPlaying: event.isPlaying }));
     });
 
     const timeSub = videoPlayer.addListener("timeUpdate", (event) => {
+      if (currentItemRef.current?.mediaType !== "video") return;
       const pos = Math.round(event.currentTime * 1000);
       setState((s) => {
         // Only update if difference is significant or it's a state change
@@ -253,6 +259,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     });
 
     const sourceSub = videoPlayer.addListener("sourceLoad", (event) => {
+      if (currentItemRef.current?.mediaType !== "video") return;
       if (event.duration > 0) {
         setState((s) => ({
           ...s,
@@ -838,6 +845,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         ? normalizePlaybackUrl(item.mediaUrl)
         : null;
       let playbackSessionId: number | null = null;
+      let descriptorDurationMs = 0;
 
       // Always fetch a fresh playback descriptor if stream access is required.
       // Do not reuse the `mediaUrl` populated by the initial list fetch because the JWT token might have expired.
@@ -855,6 +863,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           );
           playbackUrl = descriptor.playbackUrl;
           playbackSessionId = descriptor.sessionId;
+          descriptorDurationMs = descriptor.durationMs ?? 0;
         } catch (e) {
           const presentation = getPlaybackErrorPresentation(e);
           logger.warn("[MediaPlayer] getPlaybackUrl failed", e);
@@ -890,6 +899,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           if (descriptor.playbackUrl) {
             playbackUrl = normalizePlaybackUrl(descriptor.playbackUrl);
             playbackSessionId = descriptor.sessionId;
+            descriptorDurationMs = descriptor.durationMs ?? 0;
             logger.log(
               "[MediaPlayer] Used fallback stream URL for",
               item.title
@@ -1088,7 +1098,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           wa.src = playbackUrl;
           wa.load();
 
-          const seededDuration = toFiniteDurationMs(item.duration);
+          const seededDuration =
+            descriptorDurationMs > 0
+              ? descriptorDurationMs
+              : toFiniteDurationMs(item.duration);
           setState((s) => ({
             ...s,
             positionMs: resumePositionMs,
@@ -1182,7 +1195,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
         audioSourceRef.current = playbackUrl;
 
-        const seededDuration = toFiniteDurationMs(item.duration);
+        const seededDuration =
+            descriptorDurationMs > 0
+              ? descriptorDurationMs
+              : toFiniteDurationMs(item.duration);
         setState((s) => ({
           ...s,
           positionMs: resumePositionMs,
@@ -1683,6 +1699,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     currentItemRef.current = null;
     await stopVideo();
     await unloadAudio();
+    await releaseActivePlaybackLease().catch(() => false);
     setState(EMPTY_STATE);
   }, [
     cancelPendingMediaSelection,
@@ -1747,6 +1764,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         audioSourceRef.current = null;
         resetSeekCoordinator();
         setState((s) => ({ ...s, isPlaying: false, positionMs: 0 }));
+        void releaseActivePlaybackLease();
       }
     );
 

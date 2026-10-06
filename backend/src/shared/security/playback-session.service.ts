@@ -25,10 +25,12 @@ async function lockUserPlayback(client: PoolClient, userId: number): Promise<voi
 
 export async function createPlaybackSession(
   rawUserId: unknown,
-  rawContentId: unknown
+  rawContentId: unknown,
+  rawDeviceId?: unknown
 ): Promise<number> {
   const userId = positiveInteger(rawUserId);
   const contentId = positiveInteger(rawContentId);
+  const deviceId = String(rawDeviceId ?? "").trim() || null;
   if (!userId || !contentId) {
     throw new MediaAccessDeniedException(
       "Authenticated playback session required",
@@ -48,6 +50,20 @@ export async function createPlaybackSession(
       [userId]
     );
 
+    if (deviceId) {
+      // One authenticated device owns one active playback lifecycle. This
+      // safely reclaims a lease left behind by force-close/process death
+      // without touching playback running on another authenticated device.
+      await client.query(
+        `UPDATE playback_sessions
+            SET ended_at = now(), heartbeat_at = now()
+          WHERE user_id = $1
+            AND device_id = $2
+            AND ended_at IS NULL`,
+        [userId, deviceId]
+      );
+    }
+
     const active = await client.query<{ count: number }>(
       `SELECT COUNT(*)::int AS count
          FROM playback_sessions
@@ -66,10 +82,10 @@ export async function createPlaybackSession(
 
     const inserted = await client.query<{ id: number }>(
       `INSERT INTO playback_sessions
-         (user_id, content_id, started_at, heartbeat_at, current_position, duration, ended_at)
-       VALUES ($1, $2, now(), now(), 0, 0, NULL)
+         (user_id, content_id, device_id, started_at, heartbeat_at, current_position, duration, ended_at)
+       VALUES ($1, $2, $3, now(), now(), 0, 0, NULL)
        RETURNING id`,
-      [userId, contentId]
+      [userId, contentId, deviceId]
     );
 
     const sessionId = Number(inserted.rows[0]?.id);

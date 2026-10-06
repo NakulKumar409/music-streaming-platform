@@ -407,6 +407,7 @@ model playback_sessions {
   id               Int       @id @default(autoincrement())
   user_id          Int
   content_id       Int
+  device_id        String?
   heartbeat_at     DateTime  @default(now()) @db.Timestamptz(6)
   started_at       DateTime  @default(now()) @db.Timestamptz(6)
   current_position Int       @default(0)

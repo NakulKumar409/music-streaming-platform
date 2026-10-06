@@ -116,6 +116,7 @@ router.post("/access", requireAuth, requireFan, playbackAccessLimiter, async (re
       contentId,
       userId,
       sessionId,
+      deviceId: req.user?.deviceId ?? null,
       kind,
       quality,
       correlationId,
@@ -150,6 +151,7 @@ router.post("/access", requireAuth, requireFan, playbackAccessLimiter, async (re
       defaultQuality: result.defaultQuality,
       contentType: result.contentType,
       contentLength: result.contentLength,
+      durationMs: result.durationMs,
       correlationId,
     });
   } catch (error: any) {
