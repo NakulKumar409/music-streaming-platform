@@ -26,6 +26,8 @@ import {
   normalizePlaybackUrl,
 } from "../services/streamService";
 import { Colors } from "../theme";
+import { useToast } from "../ui/ToastProvider";
+import { findMediaQueueIndex } from "../utils/mediaQueue";
 
 // New Architecture Components
 import AlbumCard from "../ui/audio/AlbumCard";
@@ -74,6 +76,7 @@ const FALLBACK_ARTWORK =
 export default function AudioScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
   const { playQueue, currentItem, state: playerState } = useMediaPlayer();
+  const { showToast } = useToast();
 
   const lastContentItemsRef = useRef<ApiContentItem[]>([]);
   const playbackUrlCacheRef = useRef<Map<string, { url: string; ts: number }>>(
@@ -396,27 +399,25 @@ export default function AudioScreen({ navigation }: any) {
   const buildFullPlayerParams = useCallback(
     (song: AudioCard) => {
       const list = searchResults !== null ? searchResults : filtered;
-      const queue: MediaItem[] = list
-        .filter((x) => Boolean(x.mediaUrl) || x.useStreamAccess)
-        .map((x) => ({
-          id: x.id,
-          contentId: x.contentId,
-          title: x.title,
-          artistName: x.artistName,
-          artistId: x.artistId,
-          mediaType: "audio" as const,
-          artworkUrl: x.artworkUrl,
-          mediaUrl:
-            playbackUrlCacheRef.current.get(x.contentId ?? x.id)?.url ??
-            (x.mediaUrl ? normalizePlaybackUrl(x.mediaUrl) : ""),
-          isLocked: x.isLocked ?? false,
-          useStreamAccess: x.useStreamAccess,
-          duration: x.durationMs,
-        }));
-      const queueIndex = Math.max(
-        0,
-        queue.findIndex((q) => q.id === song.id || q.contentId === song.id)
-      );
+      const queue: MediaItem[] = list.map((x) => ({
+        id: x.id,
+        contentId: x.contentId,
+        title: x.title,
+        artistName: x.artistName,
+        artistId: x.artistId,
+        mediaType: "audio" as const,
+        artworkUrl: x.artworkUrl,
+        mediaUrl:
+          playbackUrlCacheRef.current.get(x.contentId ?? x.id)?.url ??
+          (x.mediaUrl ? normalizePlaybackUrl(x.mediaUrl) : ""),
+        isLocked: x.isLocked ?? false,
+        useStreamAccess: x.useStreamAccess,
+        duration: x.durationMs,
+      }));
+
+      const queueIndex = findMediaQueueIndex(queue, song);
+      if (queueIndex < 0) return null;
+
       return {
         songId: song.id,
         title: song.title,
@@ -503,6 +504,10 @@ export default function AudioScreen({ navigation }: any) {
               useStreamAccess: Boolean(it.useStreamAccess),
               isLocked: Boolean(it.isLocked),
               createdAt: (it.createdAt ?? null) as any,
+              durationMs:
+                Number.isFinite(Number(it.durationMs)) && Number(it.durationMs) > 0
+                  ? Math.round(Number(it.durationMs))
+                  : undefined,
             };
           });
 
@@ -527,10 +532,37 @@ export default function AudioScreen({ navigation }: any) {
 
   const onPressSong = useCallback(
     (song: AudioCard) => {
+      if (song.isLocked) {
+        showToast({
+          tone: "warning",
+          title: "Subscription required",
+          message: `Subscribe to ${song.artistName || "this artist"} to play "${song.title}".`,
+          actionLabel: "View plan",
+          onAction: () => {
+            navigation.navigate("SubscriptionFlow", {
+              artistId: song.artistId,
+              artistName: song.artistName,
+              contentId: song.contentId ?? song.id,
+              defaultPlan: "ARTIST",
+            });
+          },
+        });
+        return;
+      }
+
       const params = buildFullPlayerParams(song);
+      if (!params) {
+        showToast({
+          tone: "error",
+          title: "Couldn't open this song",
+          message: "The song list changed. Please refresh and try again.",
+        });
+        return;
+      }
+
       navigation.navigate("FullPlayer", params);
     },
-    [buildFullPlayerParams, navigation]
+    [buildFullPlayerParams, navigation, showToast]
   );
 
   const renderHeader = () => {

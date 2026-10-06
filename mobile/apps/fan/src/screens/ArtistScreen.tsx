@@ -52,6 +52,8 @@ import {
 import YouTubeVideoControlsOverlay from "../ui/YouTubeVideoControlsOverlay";
 import { getOptimizedImageUrl } from "../utils/cloudinary";
 import AppImage from "../components/AppImage";
+import { useToast } from "../ui/ToastProvider";
+import { findMediaQueueIndex } from "../utils/mediaQueue";
 
 function SpotifyIcon({ size = 18 }: { size?: number }) {
   return (
@@ -208,6 +210,7 @@ export default function ArtistScreen({ navigation, route }: any) {
     setExpanded,
     setInlineVideoHostActive,
   } = useMediaPlayer();
+  const { showToast } = useToast();
 
   useEffect(() => {
     const isInlineVideo =
@@ -437,29 +440,32 @@ export default function ArtistScreen({ navigation, route }: any) {
     if (match.mediaType === "audio") setActiveTab("Audio");
     if (match.mediaType === "video") setActiveTab("Video");
 
-    const queue = songs
-      .filter((s) => Boolean(s.mediaUrl) || s.useStreamAccess)
-      .map((s) => ({
-        id: s.id,
-        contentId: s.contentId,
-        title: s.title,
-        artistName: s.artist,
-        artistId: artist.id,
-        mediaType: s.mediaType,
-        artworkUrl: s.thumbnail,
-        mediaUrl: s.mediaUrl || "",
-        isLocked: s.locked ?? false,
-        useStreamAccess: s.useStreamAccess,
-        duration: s.durationMs,
-      }));
-    const idx = queue.findIndex(
-      (q) => q.id === initialMediaId || q.contentId === initialMediaId
-    );
-    if (idx < 0) return;
+    const queue = songs.map((s) => ({
+      id: s.id,
+      contentId: s.contentId,
+      title: s.title,
+      artistName: s.artist,
+      artistId: artist.id,
+      mediaType: s.mediaType,
+      artworkUrl: s.thumbnail,
+      mediaUrl: s.mediaUrl || "",
+      isLocked: s.locked ?? false,
+      useStreamAccess: s.useStreamAccess,
+      duration: s.durationMs,
+    }));
+    const idx = findMediaQueueIndex(queue, match);
+    if (idx < 0) {
+      showToast({
+        tone: "error",
+        title: "Couldn't open this song",
+        message: "The song selection is no longer available. Please refresh and try again.",
+      });
+      return;
+    }
 
     playQueue(queue, idx).catch(() => undefined);
     setCurrentSong(match);
-  }, [artist, initialMediaId, playQueue, songs]);
+  }, [artist, initialMediaId, playQueue, showToast, songs]);
 
   useEffect(() => {
     const nextIsVideoPlaying = currentItem?.mediaType === "video";
@@ -487,11 +493,7 @@ export default function ArtistScreen({ navigation, route }: any) {
     (song: Song) => {
       if (!artist) return null;
       const queue = filteredSongs
-        .filter(
-          (s) =>
-            s.mediaType === "audio" &&
-            (Boolean(s.mediaUrl) || s.useStreamAccess)
-        )
+        .filter((s) => s.mediaType === "audio")
         .map((s) => ({
           id: s.id,
           contentId: s.contentId,
@@ -505,14 +507,17 @@ export default function ArtistScreen({ navigation, route }: any) {
           useStreamAccess: s.useStreamAccess,
           duration: s.durationMs,
         }));
-      const idx = queue.findIndex((q) => q.id === song.id);
+
+      const idx = findMediaQueueIndex(queue, song);
+      if (idx < 0) return null;
+
       return {
         songId: song.id,
         title: song.title,
         artist: song.artist,
         imageUrl: song.thumbnail,
         audioUrl: song.mediaUrl || "",
-        queueIndex: idx >= 0 ? idx : 0,
+        queueIndex: idx,
         queue,
       };
     },
@@ -531,7 +536,14 @@ export default function ArtistScreen({ navigation, route }: any) {
     if (!artist) return;
     const isSongLocked = Boolean(song.locked && !isSubscribedToArtist);
     if (isSongLocked) {
-      // Tracking locked clicks for smart upsell
+      showToast({
+        tone: "warning",
+        title: "Subscription required",
+        message: `Subscribe to ${artist.name || "this artist"} to play "${song.title}".`,
+      });
+
+      // Keep the existing upsell journey intact; the toast provides immediate,
+      // non-blocking feedback while the established conversion UI remains.
       const newCount = lockedClicks + 1;
       setLockedClicks(newCount);
 
@@ -569,8 +581,15 @@ export default function ArtistScreen({ navigation, route }: any) {
     const params = buildFullPlayerParams(song);
     if (params) {
       navigation.navigate("FullPlayer", params);
+      setCurrentSong(song);
+      return;
     }
-    setCurrentSong(song);
+
+    showToast({
+      tone: "error",
+      title: "Couldn't open this song",
+      message: "The song list changed. Please refresh and try again.",
+    });
   };
 
   useEffect(() => {
