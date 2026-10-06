@@ -37,6 +37,7 @@ export type AudioStackParamList = {
     artistName?: string;
     contentId?: string;
     artwork?: string;
+    defaultPlan?: 'ARTIST' | 'PLATFORM';
   };
   FullPlayer: {
     songId: string;
