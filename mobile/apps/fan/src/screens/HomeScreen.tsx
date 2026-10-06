@@ -224,6 +224,7 @@ export default function HomeScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
   const { currentItem, togglePlayPause, playQueue } = useMediaPlayer();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const activeAudioMeta = currentItem?.mediaType === 'audio' ? currentItem : null;
   const hasActiveAudio = !!activeAudioMeta;
 
@@ -403,7 +404,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const onPressArtist = useCallback((artistId: string) => {
     navigation.navigate('Artist', { artistId });
-  }, [navigation]);
+  }, [navigation, showToast]);
 
   // Tapping an item in the AUDIO row — always play as audio
   const onPressAudioItem = useCallback(async (item: ContentCard) => {
@@ -441,6 +442,11 @@ export default function HomeScreen({ navigation }: any) {
   // Tapping an item in the VIDEO row — always open in VideoTab
   const onPressVideoItem = useCallback((item: ContentCard) => {
     if (item.isLocked) {
+      showToast({
+        tone: 'warning',
+        title: 'Subscription required',
+        message: `Subscribe to ${item.artist || 'this artist'} to watch "${item.title}".`,
+      });
       setShowArtistLockModal({ visible: true, item });
       return;
     }
