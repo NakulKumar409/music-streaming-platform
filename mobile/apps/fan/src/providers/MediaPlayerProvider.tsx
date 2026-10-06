@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Alert, AppState, Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 
 import { createVideoPlayer, VideoPlayer } from "expo-video";
 
@@ -66,10 +66,8 @@ import { evaluateAudioProgressSample } from "../utils/audioProgressSync";
 import { toFiniteDurationMs } from "../utils/mediaTime";
 
 import type { MediaItem, PlayerState } from "../media.types";
-import { Lock } from "lucide-react-native";
-import StatusModal from "../components/StatusModal";
 import { navigate } from "../navigation/rootNavigation";
-import { Colors } from "../theme";
+import { useToast } from "../ui/ToastProvider";
 
 // Removed SoundLike type as it is no longer needed with expo-audio
 
@@ -135,13 +133,7 @@ export function useMediaPlayer() {
 
 export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PlayerState>(EMPTY_STATE);
-  const [subscriptionRequiredModal, setSubscriptionRequiredModal] = useState<{
-    visible: boolean;
-    title: string;
-    artistName: string;
-    artistId?: string | number;
-    contentId?: string | number;
-  } | null>(null);
+  const { showToast } = useToast();
 
   const IOS_INTERRUPTION_DO_NOT_MIX = 1;
   const ANDROID_INTERRUPTION_DUCK_OTHERS = 1;
@@ -791,19 +783,34 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     videoPlayer?.pause();
   }, [videoPlayer]);
 
+  const showSubscriptionToast = useCallback(
+    (item: MediaItem) => {
+      const artistName = item.artistName || "this artist";
+      showToast({
+        tone: "warning",
+        title: "Subscription required",
+        message: `Subscribe to ${artistName} to play "${item.title}".`,
+        actionLabel: "View plan",
+        onAction: () => {
+          navigate("SubscriptionFlow", {
+            artistId: item.artistId,
+            artistName,
+            contentId: item.contentId ?? item.id,
+            defaultPlan: "ARTIST",
+          });
+        },
+      });
+    },
+    [showToast]
+  );
+
   const blockLockedPlayback = useCallback(async (item: MediaItem) => {
     if (item.isLocked) {
-      setSubscriptionRequiredModal({
-        visible: true,
-        title: item.title,
-        artistName: item.artistName || "this artist",
-        artistId: item.artistId,
-        contentId: item.contentId ?? item.id,
-      });
+      showSubscriptionToast(item);
       return true;
     }
     return false;
-  }, []);
+  }, [showSubscriptionToast]);
 
   const loadAndPlayAudio = useCallback(
     async (item: MediaItem, options: AudioLoadOptions = {}) => {
@@ -872,15 +879,13 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
               failCurrentInitialLoad();
             }
             if (presentation.title.toLowerCase().includes("subscription")) {
-              setSubscriptionRequiredModal({
-                visible: true,
-                title: item.title,
-                artistName: item.artistName || "this artist",
-                artistId: item.artistId,
-                contentId: item.contentId ?? item.id,
-              });
+              showSubscriptionToast(item);
             } else {
-              Alert.alert(presentation.title, presentation.message);
+              showToast({
+                tone: "error",
+                title: presentation.title || "Playback unavailable",
+                message: presentation.message || "Please try again.",
+              });
             }
           }
           return;
@@ -913,15 +918,13 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
               failCurrentInitialLoad();
             }
             if (presentation.title.toLowerCase().includes("subscription")) {
-              setSubscriptionRequiredModal({
-                visible: true,
-                title: item.title,
-                artistName: item.artistName || "this artist",
-                artistId: item.artistId,
-                contentId: item.contentId ?? item.id,
-              });
+              showSubscriptionToast(item);
             } else {
-              Alert.alert(presentation.title, presentation.message);
+              showToast({
+                tone: "error",
+                title: presentation.title || "Playback unavailable",
+                message: presentation.message || "Please try again.",
+              });
             }
           }
           return;
@@ -931,17 +934,22 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       if (!playbackUrl) {
         if (!options.recovery && isCurrentLoad()) {
           failCurrentInitialLoad();
-          Alert.alert(
-            "Playback Error",
-            "No playback URL available for this track."
-          );
+          showToast({
+            tone: "error",
+            title: "Playback unavailable",
+            message: "This track cannot be played right now. Please try again shortly.",
+          });
         }
         return;
       }
       if (!validatePlaybackUrl(playbackUrl, "audio")) {
         if (!options.recovery && isCurrentLoad()) {
           failCurrentInitialLoad();
-          Alert.alert("Playback Error", "Received an invalid audio source URL.");
+          showToast({
+            tone: "error",
+            title: "Playback unavailable",
+            message: "The audio source is temporarily unavailable. Please try again.",
+          });
         }
         return;
       }
@@ -1081,10 +1089,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
                   audioPlayIntentRef.current = false;
                   setState((s) => ({ ...s, isPlaying: false }));
                   if (AppState.currentState === "active") {
-                    Alert.alert(
-                      "Playback interrupted",
-                      "The audio stream could not be restored. Please try playing it again."
-                    );
+                    showToast({
+                      tone: "error",
+                      title: "Playback interrupted",
+                      message: "We couldn't restore the audio stream. Please tap Play to try again.",
+                    });
                   }
                 }
               })
@@ -1240,10 +1249,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         failCurrentInitialLoad();
         logger.warn("[MediaPlayer] Failed to create or play audio", err);
         if (!options.recovery && isCurrentLoad()) {
-          Alert.alert(
-            "Playback Error",
-            "Could not start audio playback. Please check the media URL and try again."
-          );
+          showToast({
+            tone: "error",
+            title: "Couldn't start playback",
+            message: "Please try again. If the problem continues, refresh the song list.",
+          });
         }
       }
     },
@@ -1366,10 +1376,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           );
           if (!isCurrentSelection()) return;
           if (!validatePlaybackUrl(url, "video")) {
-            Alert.alert(
-              "Playback Error",
-              "Received an invalid video source URL."
-            );
+            showToast({
+              tone: "error",
+              title: "Video unavailable",
+              message: "This video source is temporarily unavailable. Please try again.",
+            });
             return;
           }
           item = { ...item, mediaUrl: url };
@@ -1379,7 +1390,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           if (!isCurrentSelection()) return;
           const presentation = getPlaybackErrorPresentation(e);
           logger.warn("[MediaPlayer] getPlaybackUrl for video failed", e);
-          Alert.alert(presentation.title, presentation.message);
+          showToast({
+            tone: "error",
+            title: presentation.title || "Playback unavailable",
+            message: presentation.message || "Please try again.",
+          });
           return;
         }
       }
@@ -1982,10 +1997,11 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             audioPlayIntentRef.current = false;
             setState((s) => ({ ...s, isPlaying: false }));
             if (AppState.currentState === "active") {
-              Alert.alert(
-                "Playback interrupted",
-                "The audio stream could not be restored. Please try playing it again."
-              );
+              showToast({
+                tone: "error",
+                title: "Playback interrupted",
+                message: "We couldn't restore the audio stream. Please tap Play to try again.",
+              });
             }
           })
           .finally(() => {
@@ -2136,33 +2152,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   return (
     <MediaPlayerContext.Provider value={value}>
       {children}
-      {subscriptionRequiredModal ? (
-        <StatusModal
-          visible={subscriptionRequiredModal.visible}
-          onClose={() => setSubscriptionRequiredModal(null)}
-          icon={<Lock size={32} color="#4AA3FF" />}
-          iconBgColor="rgba(74, 163, 255, 0.15)"
-          iconBorderColor="rgba(74, 163, 255, 0.3)"
-          title="Subscription Required"
-          message={`Full access to "${subscriptionRequiredModal.title}" requires a subscription to ${subscriptionRequiredModal.artistName}.`}
-          buttonLayout="row"
-          secondaryButtonText="Dismiss"
-          onSecondaryPress={() => setSubscriptionRequiredModal(null)}
-          primaryButtonText="View Plan"
-          primaryButtonColor={Colors.accent}
-          primaryButtonTextColor="#000"
-          onPrimaryPress={() => {
-            const data = subscriptionRequiredModal;
-            setSubscriptionRequiredModal(null);
-            navigate("SubscriptionFlow", {
-              artistId: data.artistId,
-              artistName: data.artistName,
-              contentId: data.contentId,
-              defaultPlan: "ARTIST",
-            });
-          }}
-        />
-      ) : null}
+
     </MediaPlayerContext.Provider>
   );
 }
