@@ -52,6 +52,8 @@ import {
 import YouTubeVideoControlsOverlay from "../ui/YouTubeVideoControlsOverlay";
 import { getOptimizedImageUrl } from "../utils/cloudinary";
 import AppImage from "../components/AppImage";
+import { useToast } from "../ui/ToastProvider";
+import { findMediaQueueIndex } from "../utils/mediaQueue";
 
 function SpotifyIcon({ size = 18 }: { size?: number }) {
   return (
