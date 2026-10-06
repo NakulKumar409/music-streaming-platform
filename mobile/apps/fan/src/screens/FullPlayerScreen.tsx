@@ -28,6 +28,7 @@ import { formatDurationLabel, hasFiniteDuration } from '../utils/mediaTime';
 import type { MediaItem } from '../media.types';
 import { navigationRef } from '../navigation/rootNavigation';
 import { resolveAppImageUrl } from '../utils/imageUtils';
+import { useToast } from '../ui/ToastProvider';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const DISC_SIZE = Math.min(SCREEN_W - 72, 270);
@@ -102,6 +103,8 @@ type FullPlayerRouteParams = {
 
 export default function FullPlayerScreen({ navigation, route }: any) {
   const params = (route?.params ?? {}) as Partial<FullPlayerRouteParams>;
+
+  const { showToast } = useToast();
 
   const {
     currentItem,
@@ -197,13 +200,33 @@ export default function FullPlayerScreen({ navigation, route }: any) {
   useEffect(() => {
     if (hasAutoPlayed) return;
     const queue = params.queue;
-    const queueIndex = params.queueIndex ?? 0;
-    if (!queue || queue.length === 0) return;
+    const queueIndex = params.queueIndex;
+    if (!queue || queue.length === 0) {
+      setHasAutoPlayed(true);
+      showToast({
+        tone: 'error',
+        title: "Couldn't open this song",
+        message: 'The song list is unavailable. Please go back and try again.',
+      });
+      return;
+    }
 
-    const targetItem = queue[Math.min(
-      Math.max(0, queueIndex),
-      Math.max(0, queue.length - 1)
-    )];
+    if (
+      !Number.isInteger(queueIndex) ||
+      queueIndex === undefined ||
+      queueIndex < 0 ||
+      queueIndex >= queue.length
+    ) {
+      setHasAutoPlayed(true);
+      showToast({
+        tone: 'error',
+        title: "Couldn't open this song",
+        message: 'The song selection is no longer available. Please go back and try again.',
+      });
+      return;
+    }
+
+    const targetItem = queue[queueIndex];
     const sameTrack =
       currentItem?.mediaType === 'audio' &&
       targetItem?.mediaType === 'audio' &&
