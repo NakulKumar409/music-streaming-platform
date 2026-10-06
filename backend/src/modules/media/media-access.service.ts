@@ -184,17 +184,12 @@ export async function requestPlaybackAccess(
     } else if (availableAdaptiveQualities.includes(requested)) {
       selectedQuality = requested;
     } else {
-      throw new MediaInvalidQualityException(
-        `Quality ${requested} is not available for this content`
-      );
+      selectedQuality = availableAdaptiveQualities[0];
     }
     defaultQuality = availableAdaptiveQualities.length > 1 ? "Auto" : availableAdaptiveQualities[0];
-  } else if (resolvedKind === "video" && parsedQuality.quality !== "Auto") {
-    // Progressive providers have no server-proven rendition ladder. Do not let
-    // the client label arbitrary URLs as a requested quality.
-    throw new MediaInvalidQualityException(
-      "Manual quality selection is unavailable for progressive video"
-    );
+  } else if (resolvedKind === "video") {
+    selectedQuality = undefined;
+    defaultQuality = "ORIGINAL";
   }
 
   const config = getMediaConfig();

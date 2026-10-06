@@ -1270,13 +1270,10 @@ export default function VideoScreen() {
   const resolvePlaybackUrl = useCallback(
     async (video: VideoCard, sessionId: number) => {
       try {
-        // Use current selected quality or default to 240p for free users, Auto for paid
         const q: streamService.VideoQuality =
           selectedQuality && selectedQuality !== "Auto"
             ? selectedQuality
-            : isStreamingHdAllowed
-            ? "Auto"
-            : "240p";
+            : "Auto";
         const isStillRelevant = () =>
           sessionId === playbackSessionRef.current;
         return await streamService.getPlaybackUrl(
