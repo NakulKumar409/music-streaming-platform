@@ -960,33 +960,8 @@ export default function VideoScreen() {
         setShowMoreOptionsSheet(false);
         return true;
       }
-      if (activePlaybackUrl && activeVideoMeta) {
-        setInlineVideoHostActive(false);
-        const curMs = toFiniteDurationMs(videoPlayer.currentTime * 1000);
-        syncActiveMediaItem?.(
-          {
-            id: String(activeVideoMeta.id),
-            contentId: String(activeVideoMeta.id),
-            title: activeVideoMeta.title,
-            artistName: activeVideoMeta.artistName,
-            artistId: activeVideoMeta.artistId,
-            mediaType: "video",
-            artworkUrl: activeVideoMeta.artworkUrl,
-            mediaUrl: activePlaybackUrl,
-            useStreamAccess: activeVideoMeta.useStreamAccess,
-            duration: videoPlayer.duration
-              ? Math.round(videoPlayer.duration * 1000)
-              : undefined,
-          },
-          videoPlayer.playing,
-          curMs,
-          toFiniteDurationMs(videoPlayer.duration * 1000)
-        );
-        if (navigation.canGoBack()) {
-          navigation.goBack();
-        } else {
-          navigation.navigate("MainTabs", { screen: "HomeTab" });
-        }
+      if (activePlaybackUrl) {
+        stopAndReset();
         return true;
       }
       return false;
@@ -1001,11 +976,7 @@ export default function VideoScreen() {
     showSpeedSheet,
     showMoreOptionsSheet,
     activePlaybackUrl,
-    activeVideoMeta,
-    videoPlayer,
-    syncActiveMediaItem,
-    setInlineVideoHostActive,
-    navigation,
+    stopAndReset,
   ]);
 
   const onSeekStart = useCallback(() => {
@@ -2667,37 +2638,7 @@ export default function VideoScreen() {
                           if (isFullscreen) {
                             exitFullscreen();
                           } else {
-                            // Minimize to floating mini player smoothly
-                            setInlineVideoHostActive(false);
-                            if (activeVideoMeta && activePlaybackUrl) {
-                              const curMs = toFiniteDurationMs(
-                                videoPlayer.currentTime * 1000
-                              );
-                              syncActiveMediaItem?.(
-                                {
-                                  id: String(activeVideoMeta.id),
-                                  contentId: String(activeVideoMeta.id),
-                                  title: activeVideoMeta.title,
-                                  artistName: activeVideoMeta.artistName,
-                                  artistId: activeVideoMeta.artistId,
-                                  mediaType: "video",
-                                  artworkUrl: activeVideoMeta.artworkUrl,
-                                  mediaUrl: activePlaybackUrl,
-                                  useStreamAccess: activeVideoMeta.useStreamAccess,
-                                  duration: videoPlayer.duration
-                                    ? Math.round(videoPlayer.duration * 1000)
-                                    : undefined,
-                                },
-                                videoPlayer.playing,
-                                curMs,
-                                toFiniteDurationMs(videoPlayer.duration * 1000)
-                              );
-                            }
-                            if (navigation.canGoBack()) {
-                              navigation.goBack();
-                            } else {
-                              navigation.navigate("HomeTab" as any);
-                            }
+                            stopAndReset();
                           }
                         }}>
                         <ArrowLeft size={18} color="#fff" />
