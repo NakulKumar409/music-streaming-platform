@@ -72,7 +72,10 @@ export const createSubscriptionPurchase = async (req: any, res: Response) => {
     const runtime = paymentRuntime();
     const isMockKey =
       runtime.nodeEnv !== "production" &&
-      (runtime.razorpayKeyId.includes("mock") || runtime.razorpayKeySecret.includes("mock"));
+      (runtime.razorpayKeyId.includes("mock") ||
+        runtime.razorpayKeyId.includes("dummy") ||
+        runtime.razorpayKeySecret.includes("mock") ||
+        runtime.razorpayKeySecret.includes("dummy"));
 
     const razorpay = isMockKey ? null : getRazorpayClient();
     const purchase = await startArtistSubscriptionPurchase(
@@ -118,6 +121,28 @@ export const createSubscriptionPurchase = async (req: any, res: Response) => {
       }
     );
 
+    let subscriptionStatus = "PENDING";
+    if (isMockKey) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await finalizeCapturedPayment(client, {
+          orderId: purchase.orderId,
+          paymentId: `pay_mock_${userId}_${Date.now()}`,
+          providerAmountPaise: purchase.amountPaise,
+          providerCurrency: purchase.currency,
+          confirmedAt: new Date(),
+        });
+        await client.query("COMMIT");
+        subscriptionStatus = "ACTIVE";
+      } catch (mockFinalizeError) {
+        await client.query("ROLLBACK");
+        logger.warn({ error: mockFinalizeError }, "[PAYMENT] Mock auto-activation fallback to PENDING");
+      } finally {
+        client.release();
+      }
+    }
+
     logger.info(
       {
         userId,
@@ -125,6 +150,7 @@ export const createSubscriptionPurchase = async (req: any, res: Response) => {
         artistId: purchase.artistId,
         orderId: purchase.orderId,
         amountPaise: purchase.amountPaise,
+        status: subscriptionStatus,
         reused: purchase.reused,
       },
       "[PAYMENT] Artist subscription checkout prepared"
@@ -136,7 +162,7 @@ export const createSubscriptionPurchase = async (req: any, res: Response) => {
         id: purchase.subscriptionId,
         artistId: purchase.artistId,
         artistName: purchase.artistName,
-        status: "PENDING",
+        status: subscriptionStatus,
       },
       order: {
         id: purchase.orderId,

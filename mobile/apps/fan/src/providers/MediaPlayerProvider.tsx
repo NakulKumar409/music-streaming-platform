@@ -107,6 +107,12 @@ type MediaPlayerContextValue = {
   preferredQuality: VideoQuality;
   setPreferredQuality: (q: VideoQuality) => void;
   setExpanded: (expanded: boolean) => void;
+  syncActiveMediaItem: (
+    item: MediaItem | null,
+    isPlaying?: boolean,
+    positionMs?: number,
+    durationMs?: number
+  ) => void;
 };
 
 const MediaPlayerContext = createContext<MediaPlayerContextValue | undefined>(
@@ -1421,6 +1427,40 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     ]
   );
 
+  const syncActiveMediaItem = useCallback(
+    (
+      item: MediaItem | null,
+      isPlaying = true,
+      positionMs?: number,
+      durationMs?: number
+    ) => {
+      currentItemRef.current = item;
+      if (!item) {
+        setState((s) => ({
+          ...s,
+          queue: [],
+          currentIndex: 0,
+          isPlaying: false,
+          isExpanded: false,
+        }));
+        return;
+      }
+      setState((s) => ({
+        ...s,
+        queue: [item],
+        currentIndex: 0,
+        isPlaying,
+        positionMs: positionMs !== undefined ? positionMs : s.positionMs,
+        durationMs:
+          durationMs !== undefined
+            ? durationMs
+            : toFiniteDurationMs(item.duration),
+        isExpanded: false,
+      }));
+    },
+    []
+  );
+
   const togglePlayPause = useCallback(async () => {
     const item = currentItemRef.current;
     if (!item || stateRef.current.queue.length === 0) return;
@@ -2100,6 +2140,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       isPlayerReady,
       preferredQuality,
       setPreferredQuality,
+      syncActiveMediaItem,
     }),
     [
       close,
@@ -2121,6 +2162,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       state,
       setVolume,
       setInlineVideoHostActive,
+      syncActiveMediaItem,
       toggleShuffle,
       togglePlayPause,
       videoAudioOnlyMode,

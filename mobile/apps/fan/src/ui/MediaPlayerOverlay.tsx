@@ -13,7 +13,7 @@ import {
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { navigationRef } from '../navigation/rootNavigation';
-import { ArrowLeft, Pause, Play, SkipForward, X } from 'lucide-react-native';
+import { ArrowLeft, Maximize, Pause, Play, SkipForward, X } from 'lucide-react-native';
 import { VideoView, VideoPlayer } from 'expo-video';
 import { AudioPlayer } from 'expo-audio';
 
@@ -24,6 +24,7 @@ import type { MediaItem, PlayerState } from '../media.types';
 import YouTubeVideoControlsOverlay from './YouTubeVideoControlsOverlay';
 import { Colors } from '../theme';
 import AppImage from '../components/AppImage';
+import { formatDurationLabel } from '../utils/mediaTime';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -258,12 +259,108 @@ export default function MediaPlayerOverlay({
     );
   }
 
-  if (currentItem.mediaType === 'video' && inlineVideoHostActive) {
-    return null;
-  }
-
   if (currentItem.mediaType === 'video') {
-    return null;
+    if (currentRouteName === 'VideoIndex' && inlineVideoHostActive) {
+      return null;
+    }
+
+    const progressPct =
+      state.durationMs > 0
+        ? Math.min(100, Math.max(0, (state.positionMs / state.durationMs) * 100))
+        : 0;
+
+    const expandToVideo = () => {
+      if (!navigationRef.isReady()) return;
+      (navigationRef as any).navigate('MainTabs', {
+        screen: 'VideoTab',
+        params: {
+          screen: 'VideoIndex',
+          params: {
+            resumeVideoId: currentItem.id,
+          },
+        },
+      });
+    };
+
+    return (
+      <View pointerEvents="box-none" style={styles.root}>
+        <Animated.View
+          style={[
+            styles.miniWrap,
+            { bottom: bottomOffset, transform: pan.getTranslateTransform() },
+          ]}
+        >
+          <Pressable style={styles.videoMiniPlayer} onPress={expandToVideo}>
+            <View style={styles.videoMiniThumbWrap}>
+              <AppImage
+                uri={currentItem.artworkUrl}
+                fallbackType="video"
+                style={styles.videoMiniThumb}
+                resizeMode="cover"
+              />
+              {state.durationMs > 0 ? (
+                <View style={styles.videoMiniDurationBadge}>
+                  <Text style={styles.videoMiniDurationText}>
+                    {formatDurationLabel(state.durationMs, '0:00')}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.miniMeta}>
+              <Text style={styles.miniTitle} numberOfLines={1}>
+                {currentItem.title}
+              </Text>
+              <Text style={styles.videoMiniSub} numberOfLines={1}>
+                {currentItem.artistName ?? 'Artist'} •{' '}
+                {formatDurationLabel(state.positionMs, '0:00')} /{' '}
+                {formatDurationLabel(state.durationMs, '0:00')}
+              </Text>
+            </View>
+
+            <Pressable
+              style={styles.videoMiniActionBtn}
+              onPress={() => togglePlayPause().catch(() => undefined)}
+              hitSlop={8}
+            >
+              {state.isPlaying ? (
+                <View style={styles.miniPauseIcon}>
+                  <View style={styles.miniPauseBar} />
+                  <View style={styles.miniPauseBar} />
+                </View>
+              ) : (
+                <Play size={16} color="#fff" fill="#fff" />
+              )}
+            </Pressable>
+
+            <Pressable
+              style={styles.videoMiniActionBtn}
+              onPress={expandToVideo}
+              hitSlop={8}
+            >
+              <Maximize size={16} color="rgba(255,255,255,0.85)" />
+            </Pressable>
+
+            <Pressable
+              style={styles.videoMiniCloseBtn}
+              onPress={() => close().catch(() => undefined)}
+              hitSlop={8}
+            >
+              <X size={15} color="rgba(255,255,255,0.75)" />
+            </Pressable>
+
+            <View style={styles.videoMiniProgressTrack}>
+              <View
+                style={[
+                  styles.videoMiniProgressBar,
+                  { width: `${progressPct}%` },
+                ]}
+              />
+            </View>
+          </Pressable>
+        </Animated.View>
+      </View>
+    );
   }
 
   if (inlineAudioHostActive) {
@@ -486,5 +583,82 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 4,
+  },
+  videoMiniPlayer: {
+    height: 68,
+    borderRadius: 14,
+    backgroundColor: 'rgba(20,20,20,0.96)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    gap: 10,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  videoMiniThumbWrap: {
+    width: 60,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#111',
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+  },
+  videoMiniThumb: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  videoMiniDurationBadge: {
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+    margin: 3,
+  },
+  videoMiniDurationText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  videoMiniSub: {
+    marginTop: 3,
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  videoMiniActionBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoMiniCloseBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -2,
+  },
+  videoMiniProgressTrack: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2.5,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  videoMiniProgressBar: {
+    height: '100%',
+    backgroundColor: '#FF0000',
   },
 });

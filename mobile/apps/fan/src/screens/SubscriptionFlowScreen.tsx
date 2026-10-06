@@ -249,10 +249,20 @@ export default function SubscriptionFlowScreen({ navigation, route }: any) {
       setArtistName(purchase.subscription.artistName || artistName);
       setDisplayPrice(amount / 100);
 
+      const isMockOrActive =
+        String(purchase?.subscription?.status || "").toUpperCase() === "ACTIVE" ||
+        key.includes("mock") ||
+        key.includes("dummy");
+
+      if (isMockOrActive) {
+        setStep("SUCCESS");
+        return;
+      }
+
       if (Platform.OS === "web") {
         Alert.alert(
-          "Subscription Order Created (₹49)",
-          `Order ${orderId} has been successfully created on the backend! In web browser preview, native Razorpay popup is mobile-only. The server has registered this subscription intent.`,
+          "Subscription Order Created",
+          `Order ${orderId} has been successfully created on the backend! In web browser preview, native Razorpay popup is mobile-only.`,
           [
             {
               text: "OK",
