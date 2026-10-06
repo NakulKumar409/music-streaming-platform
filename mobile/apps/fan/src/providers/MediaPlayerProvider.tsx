@@ -240,10 +240,15 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     logger.log("[MediaPlayer] Attaching VideoPlayer event listeners");
 
     const playingSub = videoPlayer.addListener("playingChange", (event) => {
+      // The VideoPlayer exists for the lifetime of the provider and can still
+      // emit idle/stale events while an audio item is active. Never let the
+      // video engine overwrite audio-owned global playback state.
+      if (currentItemRef.current?.mediaType !== "video") return;
       setState((s) => ({ ...s, isPlaying: event.isPlaying }));
     });
 
     const timeSub = videoPlayer.addListener("timeUpdate", (event) => {
+      if (currentItemRef.current?.mediaType !== "video") return;
       const pos = Math.round(event.currentTime * 1000);
       setState((s) => {
         // Only update if difference is significant or it's a state change
@@ -254,6 +259,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     });
 
     const sourceSub = videoPlayer.addListener("sourceLoad", (event) => {
+      if (currentItemRef.current?.mediaType !== "video") return;
       if (event.duration > 0) {
         setState((s) => ({
           ...s,
