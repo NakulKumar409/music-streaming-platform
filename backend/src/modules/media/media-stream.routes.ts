@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { logger } from "../../common/logger";
 import { getMediaConfig } from "../../config/media.config";
 import { generatePlaybackAccess } from "../../shared/delivery/services/media-delivery.service";
 import { resolveMediaIdentity } from "../../shared/media/media-asset-locator";
@@ -153,6 +154,30 @@ router.get("/:mediaId", async (req: Request, res: Response) => {
     const storage = getStorageProviderByName("local");
     const metadata = await storage.getObjectMetadata(storageKey);
     if (!metadata) {
+      if (providerAssetId) {
+        try {
+          const fallbackAccess = await generatePlaybackAccess({
+            mediaId,
+            storageProvider: "cloudinary",
+            storageKey: storageKey || "",
+            providerAssetId,
+            kind,
+            contentType: content.mime_type || undefined,
+            contentLength: content.file_size_bytes || undefined,
+            visibility,
+            userId: payload.userId,
+            expiresInSeconds: providerTtlSeconds,
+            token,
+            quality: quality.quality,
+          });
+          if (fallbackAccess?.playbackUrl) {
+            res.setHeader("Cache-Control", "private, no-store");
+            return res.redirect(302, fallbackAccess.playbackUrl);
+          }
+        } catch (fallbackErr: any) {
+          logger.warn({ mediaId, error: fallbackErr?.message }, "[media-stream] Cloudinary fallback attempt failed");
+        }
+      }
       return res.status(404).json({ success: false, message: "Media file not found" });
     }
 
