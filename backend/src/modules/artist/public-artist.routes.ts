@@ -180,7 +180,7 @@ router.get("/:artistId/content", optionalAuth, async (req: any, res) => {
 
   try {
     const artist = await pool.query(
-      `SELECT u.id
+      `SELECT u.id, u.name, u.profile_image_url
          FROM users u
         WHERE u.id = $1 AND ${artistVisibilityWhere("u")}
         LIMIT 1`,
@@ -189,6 +189,9 @@ router.get("/:artistId/content", optionalAuth, async (req: any, res) => {
     if (!artist.rows.length) {
       return res.status(404).json({ success: false, message: "Artist not found" });
     }
+
+    const artistInfo = artist.rows[0];
+    const artistProfileImage = toAbsoluteUrl(req, artistInfo?.profile_image_url);
 
     const params: unknown[] = [fanId, artistId];
     let cursorClause = "";
@@ -244,6 +247,10 @@ router.get("/:artistId/content", optionalAuth, async (req: any, res) => {
         type,
         genre: row.genre ?? null,
         mediaType: type === "VIDEO" ? "video" : "audio",
+        artistId: Number(artistId),
+        artistName: artistInfo?.name ?? null,
+        artistProfileImage,
+        artistProfileImageUrl: artistProfileImage,
         artwork: art,
         thumbnailUrl: art,
         mediaUrl: null,
