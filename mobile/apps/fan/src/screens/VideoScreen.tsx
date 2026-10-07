@@ -698,8 +698,6 @@ export default function VideoScreen() {
         const mediaType = mediaTypeRaw.includes("video") ? "video" : "audio";
         if (mediaType !== "video") return null;
 
-        const artworkUrl =
-          (it.thumbnailUrl ?? it.artwork ?? "").toString() || FALLBACK_ARTWORK;
         const artistIdValue =
           it.artistId !== null && it.artistId !== undefined
             ? String(it.artistId)
@@ -717,6 +715,10 @@ export default function VideoScreen() {
           ? resolveAppImageUrl(rawArtistProfileImage, "artist")
           : undefined;
 
+        const rawArtwork = it.thumbnailUrl ?? it.artwork;
+        const artworkUrl = rawArtwork
+          ? resolveAppImageUrl(rawArtwork, "video")
+          : FALLBACK_ARTWORK;
         return {
           id: String(it.id),
           title: (it.title ?? "Untitled").toString(),
