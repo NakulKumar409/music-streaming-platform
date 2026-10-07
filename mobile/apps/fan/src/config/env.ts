@@ -124,7 +124,7 @@ function getEffectiveApiUrl(): string {
   if (typeof window !== 'undefined' && window.location && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     return 'http://localhost:8000';
   }
-  const defaultApi = 'https://music-streaming-platform-ecko.onrender.com';
+  const defaultApi = 'http://localhost:8000';
   return validateMobileHttpUrl(
     'EXPO_PUBLIC_API_URL',
     process.env.EXPO_PUBLIC_API_URL,

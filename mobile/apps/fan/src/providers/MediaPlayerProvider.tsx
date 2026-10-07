@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Alert, AppState, Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 
 import { createVideoPlayer, VideoPlayer } from "expo-video";
 
@@ -893,7 +893,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             if (presentation.title.toLowerCase().includes("subscription")) {
               showSubscriptionToast(item);
             } else {
-              Alert.alert(presentation.title, presentation.message);
               showToast({
                 tone: "error",
                 title: presentation.title || "Playback unavailable",
@@ -933,7 +932,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             if (presentation.title.toLowerCase().includes("subscription")) {
               showSubscriptionToast(item);
             } else {
-              Alert.alert(presentation.title, presentation.message);
               showToast({
                 tone: "error",
                 title: presentation.title || "Playback unavailable",
@@ -1075,8 +1073,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             if (!isCurrentWebAudio()) return;
             logger.warn('[MediaPlayer] HTMLAudioElement error', e);
 
+            if (options.recovery || foregroundRecoveryInFlightRef.current) return;
             const recovery = recoverAudioPlaybackRef.current;
-            if (foregroundRecoveryInFlightRef.current) return;
 
             const pendingTargetMs = pendingSeekRef.current?.targetMs;
             const resumeMs =

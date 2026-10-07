@@ -197,11 +197,11 @@ export function validateEnv(): EnvValidationResult {
   const configuredAppBase = envOptional("APP_BASE_URL");
   const renderExternal = envOptional("RENDER_EXTERNAL_URL");
   let appBaseRaw = configuredAppBase;
-  if (!appBaseRaw || (renderExternal && (appBaseRaw.includes("localhost") || appBaseRaw.includes("127.0.0.1")))) {
+  if (!appBaseRaw || (nodeEnv === "production" && renderExternal && (appBaseRaw.includes("localhost") || appBaseRaw.includes("127.0.0.1")))) {
     appBaseRaw = renderExternal || appBaseRaw;
   }
   if (!appBaseRaw) {
-    appBaseRaw = "https://music-streaming-platform-ecko.onrender.com";
+    appBaseRaw = nodeEnv === "production" ? (renderExternal || "") : "http://localhost:8000";
   }
   const appBaseParsed = parseUrl("APP_BASE_URL", appBaseRaw, ["http:", "https:"]);
   if (appBaseParsed.pathname !== "/" || appBaseParsed.search || appBaseParsed.hash) {

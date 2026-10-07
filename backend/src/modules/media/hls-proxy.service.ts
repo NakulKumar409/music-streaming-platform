@@ -6,9 +6,9 @@ import { createHlsResourceToken } from "../../shared/security/hls-resource-token
 const MANIFEST_MAX_BYTES = 2 * 1024 * 1024;
 const UPSTREAM_TIMEOUT_MS = 15_000;
 
-function protectedStreamBase(mediaId: number) {
+function protectedStreamBase(mediaId: number, origin?: string) {
   const config = getMediaConfig();
-  const baseUrl = config.appBaseUrl.replace(/\/$/, "");
+  const baseUrl = origin ? origin.replace(/\/$/, "") : config.appBaseUrl.replace(/\/$/, "");
   const route = config.localPrivateStreamRoute.replace(/^\/+|\/+$/g, "");
   return `${baseUrl}/${route}/${mediaId}/hls`;
 }
@@ -28,9 +28,10 @@ function protectedResourceUrl(input: {
   sessionId: number;
   expiresAtEpochSeconds: number;
   upstreamUrl: string;
+  origin?: string;
 }) {
   const token = createHlsResourceToken(input);
-  return `${protectedStreamBase(input.mediaId)}?resource=${encodeURIComponent(token)}`;
+  return `${protectedStreamBase(input.mediaId, input.origin)}?resource=${encodeURIComponent(token)}`;
 }
 
 export function rewriteHlsManifest(input: {
@@ -40,6 +41,7 @@ export function rewriteHlsManifest(input: {
   userId: number;
   sessionId: number;
   expiresAtEpochSeconds: number;
+  origin?: string;
 }): string {
   if (!input.manifest.trimStart().startsWith("#EXTM3U")) {
     throw new Error("Upstream adaptive response is not an HLS manifest");
@@ -56,6 +58,7 @@ export function rewriteHlsManifest(input: {
       sessionId: input.sessionId,
       expiresAtEpochSeconds: input.expiresAtEpochSeconds,
       upstreamUrl: upstream,
+      origin: input.origin,
     });
   };
 
@@ -123,6 +126,9 @@ export async function proxyHlsResource(input: {
     if (Buffer.byteLength(manifest, "utf8") > MANIFEST_MAX_BYTES) {
       throw new Error("Adaptive manifest is too large");
     }
+    const host = input.req.get("host");
+    const protocol = input.req.protocol || "http";
+    const origin = host ? `${protocol}://${host}` : undefined;
     const rewritten = rewriteHlsManifest({
       manifest,
       upstreamManifestUrl: input.upstreamUrl,
@@ -130,6 +136,7 @@ export async function proxyHlsResource(input: {
       userId: input.userId,
       sessionId: input.sessionId,
       expiresAtEpochSeconds: input.expiresAtEpochSeconds,
+      origin,
     });
     input.res.status(200);
     input.res.setHeader("Content-Type", "application/vnd.apple.mpegurl");

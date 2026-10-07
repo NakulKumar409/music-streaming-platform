@@ -4,6 +4,7 @@
  */
 
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 import { APP_ENV, isAllowedPlaybackUrl, API_HOST_BASE_URL } from '../config/env';
 import { apiV1, normalizeApiError } from './api';
 
@@ -204,7 +205,8 @@ export function normalizePlaybackUrl(url: string): string {
   let trimmed = String(url).trim();
   if (!trimmed) return trimmed;
 
-  // 1. Any localhost, 127.0.0.1, 10.0.2.2 or relative stream path MUST be resolved to the active API_HOST_BASE_URL
+  if (trimmed.startsWith('https://res.cloudinary.com')) return trimmed;
+
   const isLoopbackOrLocal =
     trimmed.startsWith('/') ||
     trimmed.includes('localhost') ||
@@ -212,16 +214,37 @@ export function normalizePlaybackUrl(url: string): string {
     trimmed.includes('10.0.2.2');
 
   if (isLoopbackOrLocal) {
+    const devHost = getDevHost();
+    const resolvedBase =
+      Platform.OS !== 'web' && devHost
+        ? `http://${devHost}:8000`
+        : API_HOST_BASE_URL.replace(/\/+$/, '');
+
     const streamIndex = trimmed.indexOf('/media/stream/');
     if (streamIndex !== -1) {
-      trimmed = `${API_HOST_BASE_URL.replace(/\/+$/, '')}${trimmed.substring(streamIndex)}`;
+      trimmed = `${resolvedBase}${trimmed.substring(streamIndex)}`;
     } else if (trimmed.startsWith('/')) {
-      trimmed = `${API_HOST_BASE_URL.replace(/\/+$/, '')}${trimmed}`;
+      trimmed = `${resolvedBase}${trimmed}`;
+    } else if (Platform.OS !== 'web' && devHost) {
+      trimmed = trimmed.replace(
+        /https?:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2)(:\d+)?\b/i,
+        (match) => {
+          const portMatch = match.match(/:(\d+)$/);
+          const port = portMatch ? `:${portMatch[1]}` : ':8000';
+          return `http://${devHost}${port}`;
+        }
+      );
     }
   }
 
   // 2. In release APK / production, upgrade any unencrypted http:// to https://
-  if (trimmed.startsWith('http://') && !trimmed.includes('localhost') && !trimmed.includes('127.0.0.1')) {
+  if (
+    trimmed.startsWith('http://') &&
+    !trimmed.includes('localhost') &&
+    !trimmed.includes('127.0.0.1') &&
+    !trimmed.includes('10.0.2.2') &&
+    !trimmed.includes('192.168.')
+  ) {
     trimmed = `https://${trimmed.slice(7)}`;
   }
 
