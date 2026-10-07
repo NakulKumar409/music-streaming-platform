@@ -445,9 +445,9 @@ export default function VideoScreen() {
   >({});
 
   const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState(
-    HEADER_HEIGHT + 92
+    HEADER_HEIGHT + 60
   );
-  const headerHeightRef = useRef<number>(HEADER_HEIGHT + 92);
+  const headerHeightRef = useRef<number>(HEADER_HEIGHT + 60);
   const hasMeasuredHeaderRef = useRef(false);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -2480,7 +2480,7 @@ export default function VideoScreen() {
           <View
             style={[
               styles.centerStateWrap,
-              { paddingTop: measuredHeaderHeight + 88 },
+              { paddingTop: measuredHeaderHeight + 8 },
             ]}>
             <ActivityIndicator size="large" color="#fff" style={{ marginBottom: 16 }} />
             <Text style={styles.centerStateTitle}>Loading videos...</Text>
@@ -2490,7 +2490,7 @@ export default function VideoScreen() {
           <ScrollView
             contentContainerStyle={[
               styles.centerStateWrap,
-              { paddingTop: measuredHeaderHeight + 88, flexGrow: 1 },
+              { paddingTop: measuredHeaderHeight + 8, flexGrow: 1 },
             ]}
             refreshControl={
               <RefreshControl
@@ -2530,7 +2530,7 @@ export default function VideoScreen() {
             onScroll={onListScroll}
             scrollEventThrottle={16}
             contentContainerStyle={{
-              paddingTop: measuredHeaderHeight + 88,
+              paddingTop: measuredHeaderHeight + 8,
               paddingBottom: tabBarHeight + 120,
               flexGrow: 1,
             }}
@@ -2544,7 +2544,7 @@ export default function VideoScreen() {
             ListEmptyComponent={listEmpty}
             ListHeaderComponent={listHeader}
             ListHeaderComponentStyle={
-              listHeader ? { marginTop: 36, marginBottom: 16 } : undefined
+              listHeader ? { marginTop: 24, marginBottom: 14 } : undefined
             }
           />
         )}
@@ -2557,7 +2557,16 @@ export default function VideoScreen() {
           pointerEvents="box-none">
           <View onLayout={onHeaderLayout}>
             {!isFullscreen ? (
-              <View style={styles.headerTopRow}>
+              <View
+                style={[
+                  styles.headerTopRow,
+                  {
+                    paddingTop: Math.max(
+                      insets.top,
+                      Platform.OS === "android" ? 10 : 6
+                    ),
+                  },
+                ]}>
                 <Text style={styles.title}>Video</Text>
               </View>
             ) : null}
@@ -2637,79 +2646,100 @@ export default function VideoScreen() {
                     </Animated.View>
                   ) : null}
 
-                  {/* Top Left Navigation / Minimize Control */}
+                  {/* Single Clean Responsive Player Controls Bar Overlay */}
                   {activePlaybackUrl && showControls ? (
                     <View
                       style={[
-                        styles.playerTopLeft,
-                        isFullscreen ? { top: insets.top + 12 } : null,
-                      ]}>
-                      <Pressable
-                        style={styles.iconBtn}
-                        onPress={() => {
-                          if (isFullscreen) {
-                            exitFullscreen();
-                          } else {
-                            stopAndReset();
-                          }
-                        }}>
-                        <ArrowLeft size={18} color="#fff" />
-                      </Pressable>
+                        styles.playerTopBar,
+                        isFullscreen && {
+                          paddingTop: Math.max(insets.top, 12),
+                          paddingLeft: Math.max(insets.left, 12),
+                          paddingRight: Math.max(insets.right, 12),
+                        },
+                      ]}
+                      pointerEvents="box-none">
+                      <LinearGradient
+                        colors={[
+                          "rgba(0,0,0,0.72)",
+                          "rgba(0,0,0,0.30)",
+                          "transparent",
+                        ]}
+                        style={StyleSheet.absoluteFill}
+                        pointerEvents="none"
+                      />
+                      <View
+                        style={styles.playerControlsRow}
+                        pointerEvents="box-none">
+                        {/* Left: Back / Minimize Button */}
+                        <Pressable
+                          style={styles.playerControlBtn}
+                          hitSlop={6}
+                          onPress={() => {
+                            if (isFullscreen) {
+                              exitFullscreen();
+                            } else {
+                              stopAndReset();
+                            }
+                          }}>
+                          <ArrowLeft size={18} color="#fff" />
+                        </Pressable>
+
+                        {/* Right: Mute, Speed, More Options, Fullscreen */}
+                        <View
+                          style={styles.playerRightControlsGroup}
+                          pointerEvents="box-none">
+                          <Pressable
+                            style={styles.playerControlBtn}
+                            hitSlop={6}
+                            onPress={toggleMute}>
+                            {isMuted ? (
+                              <VolumeX size={18} color="#FF5555" />
+                            ) : (
+                              <Volume2 size={18} color="#fff" />
+                            )}
+                          </Pressable>
+
+                          <Pressable
+                            style={[
+                              styles.playerControlBtn,
+                              styles.playerSpeedControlBtn,
+                            ]}
+                            hitSlop={6}
+                            onPress={() => setShowSpeedSheet(true)}>
+                            <Text style={styles.playerSpeedBtnText}>
+                              {selectedSpeed === 1
+                                ? "1.0x"
+                                : `${selectedSpeed}x`}
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            style={styles.playerControlBtn}
+                            hitSlop={6}
+                            onPress={() => setShowMoreOptionsSheet(true)}>
+                            <MoreVertical size={18} color="#fff" />
+                          </Pressable>
+
+                          <Pressable
+                            style={styles.playerControlBtn}
+                            hitSlop={6}
+                            onPress={() => {
+                              if (isFullscreen) {
+                                exitFullscreen();
+                              } else {
+                                enterFullscreen();
+                              }
+                            }}>
+                            {isFullscreen ? (
+                              <Minimize size={18} color="#fff" />
+                            ) : (
+                              <Maximize size={18} color="#fff" />
+                            )}
+                          </Pressable>
+                        </View>
+                      </View>
                     </View>
                   ) : null}
-
-                  {/* Top Right Controls: Mute, Speed, Settings / More Options, Fullscreen */}
-                  <View
-                    style={[
-                      styles.playerTopRight,
-                      isFullscreen ? { top: insets.top + 12 } : null,
-                    ]}>
-                    {activePlaybackUrl && showControls ? (
-                      <Pressable style={styles.iconBtn} onPress={toggleMute}>
-                        {isMuted ? (
-                          <VolumeX size={18} color="#FF5555" />
-                        ) : (
-                          <Volume2 size={18} color="#fff" />
-                        )}
-                      </Pressable>
-                    ) : null}
-
-                    {activePlaybackUrl && showControls ? (
-                      <Pressable
-                        style={styles.speedBtn}
-                        onPress={() => setShowSpeedSheet(true)}>
-                        <Text style={styles.speedBtnText}>
-                          {selectedSpeed === 1 ? "1.0x" : `${selectedSpeed}x`}
-                        </Text>
-                      </Pressable>
-                    ) : null}
-
-                    {activePlaybackUrl && showControls ? (
-                      <Pressable
-                        style={styles.iconBtn}
-                        onPress={() => setShowMoreOptionsSheet(true)}>
-                        <MoreVertical size={18} color="#fff" />
-                      </Pressable>
-                    ) : null}
-
-                    {activePlaybackUrl && showControls ? (
-                      <Pressable
-                        style={styles.iconBtn}
-                        onPress={() => {
-                          if (isFullscreen) {
-                            exitFullscreen();
-                          } else {
-                            enterFullscreen();
-                          }
-                        }}>
-                        {isFullscreen ? (
-                          <X size={18} color="#fff" />
-                        ) : (
-                          <Maximize size={18} color="#fff" />
-                        )}
-                      </Pressable>
-                    ) : null}
-                  </View>
 
                   {showQualitySheet && activePlaybackUrl && showControls ? (
                     <BlurView
@@ -3376,14 +3406,20 @@ export default function VideoScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#000" },
   safe: { flex: 1 },
-  title: { color: "#fff", fontSize: 28, fontWeight: "900" },
+  title: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "900",
+    letterSpacing: -0.3,
+    lineHeight: 28,
+  },
 
   stickyHeader: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    paddingBottom: 10,
+    paddingBottom: 4,
     backgroundColor: "#000",
     zIndex: 100,
     elevation: 20,
@@ -3396,9 +3432,8 @@ const styles = StyleSheet.create({
     elevation: 999,
   },
   headerTopRow: {
-    paddingTop: 18,
-    paddingBottom: 10,
-    paddingHorizontal: 20,
+    paddingBottom: 4,
+    paddingHorizontal: 16,
   },
 
   playerFrame: {
@@ -3461,33 +3496,50 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  playerTopRight: {
+  playerTopBar: {
     position: "absolute",
-    right: 12,
-    top: 12,
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingTop: 8,
+    paddingBottom: 16,
+    paddingHorizontal: 12,
     zIndex: 30,
     elevation: 30,
-    flexDirection: "row",
-    gap: 10,
   },
-  playerTopLeft: {
-    position: "absolute",
-    left: 12,
-    top: 12,
-    zIndex: 30,
-    elevation: 30,
+  playerControlsRow: {
     flexDirection: "row",
-    gap: 10,
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
   },
-  iconBtn: {
+  playerRightControlsGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  playerControlBtn: {
     width: 36,
     height: 36,
+    minWidth: 36,
+    minHeight: 36,
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: "rgba(0,0,0,0.55)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  playerSpeedControlBtn: {
+    width: undefined,
+    minWidth: 38,
+    paddingHorizontal: 8,
+  },
+  playerSpeedBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "center",
   },
 
   controlsOverlay: {
@@ -3746,9 +3798,9 @@ const styles = StyleSheet.create({
   },
 
   metaBlock: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 10,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 6,
     backgroundColor: "rgba(0,0,0,0.20)",
   },
   nowTitle: { color: "#fff", fontSize: 16, fontWeight: "900" },
@@ -3973,9 +4025,9 @@ const styles = StyleSheet.create({
   },
 
   searchWrap: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 12,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 6,
   },
   searchBlur: {
     flexDirection: "row",
