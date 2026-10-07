@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { AppState, Platform } from "react-native";
+import { Alert, AppState, Platform } from "react-native";
 
 import { createVideoPlayer, VideoPlayer } from "expo-video";
 
@@ -51,6 +51,7 @@ type AudioLoadOptions = {
 
 import { recordPlayback } from "../services/libraryService";
 import {
+  StreamAccessError,
   adoptActivePlaybackLease,
   getActivePlaybackLease,
   getPlaybackDescriptor,
@@ -883,13 +884,20 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           playbackUrl = normalizePlaybackUrl(descriptor.playbackUrl);
           playbackSessionId = descriptor.sessionId;
           descriptorDurationMs = descriptor.durationMs ?? 0;
-        } catch (e) {
+        } catch (e: any) {
+          if (
+            e instanceof StreamAccessError &&
+            e.code === "PLAYBACK_REQUEST_SUPERSEDED"
+          ) {
+            return;
+          }
           const presentation = getPlaybackErrorPresentation(e);
           logger.warn("[MediaPlayer] getPlaybackUrl failed", e);
           if (!options.recovery && isCurrentLoad()) {
             if (presentation.shouldStopPlayback) {
               failCurrentInitialLoad();
             }
+            Alert.alert(presentation.title, presentation.message);
             if (presentation.title.toLowerCase().includes("subscription")) {
               showSubscriptionToast(item);
             } else {
@@ -1255,7 +1263,13 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           resumePositionMs,
           shouldPlay: shouldPlayAtCommit,
         });
-      } catch (err) {
+      } catch (err: any) {
+        if (
+          err instanceof StreamAccessError &&
+          err.code === "PLAYBACK_REQUEST_SUPERSEDED"
+        ) {
+          return;
+        }
         if (audioSourceRef.current === playbackUrl) {
           audioSourceRef.current = null;
         }
@@ -1395,15 +1409,15 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       if (item.mediaType === "video" && item.useStreamAccess) {
         try {
-          const rawUrl = await getPlaybackUrl(
+          const url = await getPlaybackUrl(
             item.contentId ?? item.id,
             "video",
             preferredQuality,
             { isStillRelevant: isCurrentSelection }
           );
-          const url = normalizePlaybackUrl(rawUrl);
+          const normalizedUrl = normalizePlaybackUrl(url);
           if (!isCurrentSelection()) return;
-          if (!validatePlaybackUrl(url, "video")) {
+          if (!validatePlaybackUrl(normalizedUrl, "video")) {
             showToast({
               tone: "error",
               title: "Video unavailable",
@@ -1411,7 +1425,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             });
             return;
           }
-          item = { ...item, mediaUrl: url };
+          item = { ...item, mediaUrl: normalizedUrl };
           nextState.queue[nextState.currentIndex] = item;
           currentItemRef.current = item;
         } catch (e) {
@@ -1472,7 +1486,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       positionMs?: number,
       durationMs?: number
     ) => {
-      currentItemRef.current = item;
       if (!item) {
         if (videoPlayer) {
           try {
@@ -1480,18 +1493,19 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           } catch {}
         }
         setVideoSource(null);
-        setState((s) => ({
-          ...s,
-          queue: [],
-          currentIndex: 0,
-          isPlaying: false,
-          isExpanded: false,
-        }));
+        if (currentItemRef.current?.mediaType === "video") {
+          currentItemRef.current = null;
+          setState((s) => ({
+            ...s,
+            isPlaying: false,
+            isExpanded: false,
+          }));
+        }
         return;
       }
 
-      if (item.mediaType === "video" && item.mediaUrl) {
-        if (videoSource !== item.mediaUrl) {
+      if (item.mediaType === "video") {
+        if (item.mediaUrl && videoSource !== item.mediaUrl) {
           setVideoSource(item.mediaUrl);
           if (videoPlayer) {
             try {
@@ -1513,12 +1527,26 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             videoPlayer.pause();
           }
         }
+
+        currentItemRef.current = item;
+        setState((s) => ({
+          ...s,
+          isPlaying,
+          positionMs: positionMs !== undefined ? positionMs : s.positionMs,
+          durationMs:
+            durationMs !== undefined
+              ? durationMs
+              : toFiniteDurationMs(item.duration),
+          isExpanded: false,
+        }));
+        return;
       }
 
+      currentItemRef.current = item;
       setState((s) => ({
         ...s,
-        queue: [item],
-        currentIndex: 0,
+        queue: s.queue.length > 0 ? s.queue : [item],
+        currentIndex: s.queue.length > 0 ? s.currentIndex : 0,
         isPlaying,
         positionMs: positionMs !== undefined ? positionMs : s.positionMs,
         durationMs:

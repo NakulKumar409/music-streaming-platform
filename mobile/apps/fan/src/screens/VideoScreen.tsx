@@ -497,6 +497,8 @@ export default function VideoScreen() {
       console.log("[VideoScreen] Skipping auto-play - no URL or user paused");
     }
   });
+  const videoPlayerRef = useRef(videoPlayer);
+  videoPlayerRef.current = videoPlayer;
   const lastTapRef = useRef(0);
   const lastTapXRef = useRef(0);
   const playbackSessionRef = useRef(0);
@@ -1185,7 +1187,7 @@ export default function VideoScreen() {
       if (!isSeeking) {
         const curMs = toFiniteDurationMs(videoPlayer.currentTime * 1000);
         setPositionMs(curMs);
-        if (activeVideoMeta) {
+        if (activeVideoMeta && videoPlayer.playing) {
           syncActiveMediaItem?.(
             {
               id: String(activeVideoMeta.id),
@@ -1376,6 +1378,11 @@ export default function VideoScreen() {
           setActivePlaybackUrl(playbackUrl);
           setIsVideoReady(false);
           setIsVideoPlaying(true);
+          try {
+            if (typeof (videoPlayer as any)?.replace === "function") {
+              (videoPlayer as any).replace(playbackUrl);
+            }
+          } catch {}
 
           syncActiveMediaItem?.(
             {
@@ -1406,9 +1413,10 @@ export default function VideoScreen() {
 
           // Explicitly start playback after URL is set
           setTimeout(() => {
-            if (videoPlayer && sessionId === playbackSessionRef.current) {
+            const vp = videoPlayerRef.current || videoPlayer;
+            if (vp && sessionId === playbackSessionRef.current) {
               console.log("[VideoScreen] Calling safePlay after URL set");
-              safePlay(videoPlayer as any, "onPressVideo");
+              safePlay(vp as any, "onPressVideo");
             } else {
               console.log("[VideoScreen] safePlay skipped - session mismatch or no player");
             }
@@ -1541,37 +1549,19 @@ export default function VideoScreen() {
       refreshSubscriptionAndRetry();
       load().catch(() => undefined);
 
-      if (currentItem?.mediaType === "video" && currentItem.id === activeVideoId) {
-        if (
-          playerState.positionMs > 0 &&
-          Math.abs(videoPlayer.currentTime * 1000 - playerState.positionMs) > 600
-        ) {
-          try {
-            videoPlayer.currentTime = playerState.positionMs / 1000;
-          } catch {}
-        }
-        if (playerState.isPlaying && !videoPlayer.playing) {
-          safePlay(videoPlayer as any, "focus-sync");
-        } else if (!playerState.isPlaying && videoPlayer.playing) {
-          try {
-            videoPlayer.pause();
-          } catch {}
-        }
-      }
-
       return () => {
         setInlineVideoHostActive(false);
+        try {
+          if (videoPlayerRef.current?.playing) {
+            videoPlayerRef.current.pause();
+          }
+        } catch {}
+        stopHeartbeat();
       };
     }, [
       load,
       refreshSubscriptionAndRetry,
       setInlineVideoHostActive,
-      currentItem,
-      activeVideoId,
-      playerState.positionMs,
-      playerState.isPlaying,
-      videoPlayer,
-      safePlay,
     ])
   );
 

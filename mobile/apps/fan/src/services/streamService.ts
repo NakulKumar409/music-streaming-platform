@@ -705,10 +705,29 @@ export async function getPlaybackDescriptor(
       // killing otherwise healthy playback.
       access = await requestNewAccess();
     } catch (error) {
-      // With the product limit of two playback sessions, an old current stream
-      // plus another device can consume both slots. In that one explicit case,
-      // switching content is allowed to release the old current slot and retry.
       if (
+        existing &&
+        error instanceof StreamAccessError &&
+        (error.code === 'PLAYBACK_SESSION_EXPIRED' ||
+          error.code === 'PLAYBACK_SESSION_MISMATCH')
+      ) {
+        clearActivePlaybackLease(existing.sessionId);
+        if (options.isStillRelevant && !options.isStillRelevant()) {
+          throw new StreamAccessError(
+            'Playback request was superseded',
+            'PLAYBACK_REQUEST_SUPERSEDED',
+            null
+          );
+        }
+        // The cached lease expired or was terminated on the server.
+        // Acquire a fresh lease without passing the dead sessionId.
+        access = await getPlaybackAccess(
+          numericContentId,
+          kind,
+          quality,
+          undefined
+        );
+      } else if (
         previousDifferentContentLease &&
         error instanceof StreamAccessError &&
         error.code === 'PLAYBACK_SESSION_LIMIT'
@@ -733,7 +752,12 @@ export async function getPlaybackDescriptor(
             previousDifferentContentLease.contentId
           ).catch(() => false);
         }
-        access = await requestNewAccess();
+        access = await getPlaybackAccess(
+          numericContentId,
+          kind,
+          quality,
+          undefined
+        );
       } else {
         throw error;
       }
