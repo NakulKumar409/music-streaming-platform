@@ -260,6 +260,30 @@ publicRouter.get("/:artistId/:kind", async (req: any, res: any) => {
   }
 
   try {
+    const userRow = await pool.query(
+      `SELECT profile_image_url, banner_image_url
+         FROM users
+        WHERE id = $1
+          AND UPPER(role) = 'ARTIST'
+          AND is_deleted = FALSE
+          AND UPPER(status) = 'ACTIVE'
+          AND is_verified = TRUE
+          AND UPPER(artist_status::text) = 'APPROVED'
+        LIMIT 1`,
+      [artistId]
+    );
+    if (!userRow.rows.length) {
+      const fallback = kind === "BANNER"
+        ? "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1400&q=80"
+        : "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=800&q=80";
+      return res.redirect(302, fallback);
+    }
+    const directUrl = kind === "BANNER" ? userRow.rows[0].banner_image_url : userRow.rows[0].profile_image_url;
+    if (directUrl && /^https?:\/\//i.test(directUrl)) {
+      res.setHeader("Cache-Control", "public, max-age=300");
+      return res.redirect(302, directUrl);
+    }
+
     const result = await pool.query(
       `SELECT a.storage_provider, a.storage_key, a.provider_asset_id, a.mime_type, a.size_bytes
          FROM user_media_assets a

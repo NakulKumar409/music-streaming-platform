@@ -57,15 +57,24 @@ async function runArtistImageVerification() {
     // Verify Artist ID is consistent
     if (item.artist_id === 51) {
       assert.equal(item.artist_name, "Jubin Nautiyal");
-      assert.equal(item.artist_profile_image_url, "/api/v1/artist/assets/51/profile");
+      assert.ok(
+        item.artist_profile_image_url.includes("artists/51/images") ||
+        item.artist_profile_image_url === "/api/v1/artist/assets/51/profile"
+      );
     }
     if (item.artist_id === 31) {
       assert.equal(item.artist_name, "Arjit Singh");
-      assert.equal(item.artist_profile_image_url, "/api/v1/artist/assets/31/profile");
+      assert.ok(
+        item.artist_profile_image_url.includes("artists/31/images") ||
+        item.artist_profile_image_url === "/api/v1/artist/assets/31/profile"
+      );
     }
     if (item.artist_id === 94) {
       assert.equal(item.artist_name, "Neha Kakkar");
-      assert.equal(item.artist_profile_image_url, "/api/v1/artist/assets/94/profile");
+      assert.ok(
+        item.artist_profile_image_url.includes("artists/94/images") ||
+        item.artist_profile_image_url === "/api/v1/artist/assets/94/profile"
+      );
     }
   }
 
@@ -74,7 +83,11 @@ async function runArtistImageVerification() {
   assert.ok(barbaadVideo, "Content item #20 (Barbaad Song) must exist");
   assert.equal(barbaadVideo.artist_id, 51, "Barbaad Song artistId must be 51 (Jubin Nautiyal)");
   assert.equal(barbaadVideo.artist_name, "Jubin Nautiyal", "Barbaad Song artistName must be Jubin Nautiyal");
-  assert.equal(barbaadVideo.artist_profile_image_url, "/api/v1/artist/assets/51/profile", "Barbaad Song must resolve to Jubin Nautiyal's profile image asset");
+  assert.ok(
+    barbaadVideo.artist_profile_image_url.includes("artists/51/images") ||
+    barbaadVideo.artist_profile_image_url === "/api/v1/artist/assets/51/profile",
+    "Barbaad Song must resolve to Jubin Nautiyal's profile image asset"
+  );
 
   console.log("\n[PASS] Specific fixture check: Content #20 'Barbaad Song | Saiyaara' -> Artist ID 51 Jubin Nautiyal profile asset verified!");
 

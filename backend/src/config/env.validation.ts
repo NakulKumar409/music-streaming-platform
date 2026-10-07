@@ -194,9 +194,15 @@ export function validateEnv(): EnvValidationResult {
     throw new Error("[env] STORAGE_PROVIDER=local is development/test only and is forbidden in production");
   }
 
-  const appBaseRaw = nodeEnv === "production"
-    ? (envOptional("APP_BASE_URL") || envOptional("RENDER_EXTERNAL_URL"))
-    : (envOptional("APP_BASE_URL") || envOptional("RENDER_EXTERNAL_URL") || "http://localhost:8000");
+  const configuredAppBase = envOptional("APP_BASE_URL");
+  const renderExternal = envOptional("RENDER_EXTERNAL_URL");
+  let appBaseRaw = configuredAppBase;
+  if (!appBaseRaw || (renderExternal && (appBaseRaw.includes("localhost") || appBaseRaw.includes("127.0.0.1")))) {
+    appBaseRaw = renderExternal || appBaseRaw;
+  }
+  if (!appBaseRaw) {
+    appBaseRaw = nodeEnv === "production" ? "" : "http://localhost:8000";
+  }
   const appBaseParsed = parseUrl("APP_BASE_URL", appBaseRaw, ["http:", "https:"]);
   if (appBaseParsed.pathname !== "/" || appBaseParsed.search || appBaseParsed.hash) {
     throw new Error("[env] APP_BASE_URL must be an origin without path/query/hash");

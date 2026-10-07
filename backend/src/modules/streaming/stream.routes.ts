@@ -301,6 +301,11 @@ router.get("/thumbnail/:contentId", async (req: any, res: any) => {
       return res.status(404).json({ success: false, code: "THUMBNAIL_NOT_AVAILABLE", message: "Thumbnail not available", correlationId });
     }
 
+    if (row.thumbnail_url && /^https?:\/\//i.test(row.thumbnail_url)) {
+      res.setHeader("Cache-Control", "public, max-age=300");
+      return res.redirect(302, row.thumbnail_url);
+    }
+
     const storageProvider = String(row.storage_provider || "").trim().toLowerCase();
     if (!storageProvider) {
       return res.status(409).json({ success: false, code: "THUMBNAIL_STORAGE_MISSING", message: "Thumbnail storage is not configured", correlationId });

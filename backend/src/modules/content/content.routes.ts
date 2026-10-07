@@ -37,6 +37,7 @@ function mapContent(row: any) {
   const hasSubscription = Boolean(row.has_subscription);
   const isLocked = subscriptionRequired && !hasSubscription;
   const artistProfileImage = canonicalPublicUrl(row.artist_profile_image_url);
+  const thumbnail = canonicalPublicUrl(row.thumbnail_url) || thumbnailUrl(Number(row.id));
 
   return {
     id: Number(row.id),
@@ -48,8 +49,8 @@ function mapContent(row: any) {
     artistName: row.artist_name ? String(row.artist_name) : null,
     artistProfileImage,
     artistProfileImageUrl: artistProfileImage,
-    thumbnailUrl: thumbnailUrl(Number(row.id)),
-    artwork: thumbnailUrl(Number(row.id)),
+    thumbnailUrl: thumbnail,
+    artwork: thumbnail,
     mediaUrl: null,
     fileUrl: null,
     audioUrl: null,
@@ -135,6 +136,7 @@ router.get("/", optionalAuth, async (req: any, res: any) => {
     const result = await pool.query(
       `WITH page AS (
         SELECT c.id, c.title, c.type, c.genre, c.artist_id,
+               c.thumbnail_url,
                c.subscription_required, c.created_at, c.duration_ms,
                COALESCE(NULLIF(u.name, ''), split_part(u.email, '@', 1)) AS artist_name,
                u.profile_image_url AS artist_profile_image_url
@@ -216,6 +218,7 @@ router.get("/artist/:artistId", optionalAuth, async (req: any, res: any) => {
     const result = await pool.query(
       `WITH page AS (
         SELECT c.id, c.title, c.type, c.genre, c.artist_id,
+               c.thumbnail_url,
                c.subscription_required, c.created_at, c.duration_ms,
                COALESCE(NULLIF(u.name, ''), split_part(u.email, '@', 1)) AS artist_name,
                u.profile_image_url AS artist_profile_image_url
@@ -284,6 +287,7 @@ router.get("/:id", optionalAuth, async (req: any, res: any) => {
   try {
     const result = await pool.query(
       `SELECT c.id, c.title, c.type, c.genre, c.artist_id,
+              c.thumbnail_url,
               c.subscription_required, c.created_at, c.duration_ms,
               COALESCE(NULLIF(u.name, ''), split_part(u.email, '@', 1)) AS artist_name,
               u.profile_image_url AS artist_profile_image_url,
