@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { AppState, Platform } from "react-native";
+import { Alert, AppState, Platform } from "react-native";
 
 import { createVideoPlayer, VideoPlayer } from "expo-video";
 
@@ -880,7 +880,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             preferredQuality,
             { isStillRelevant: isCurrentLoad }
           );
-          playbackUrl = descriptor.playbackUrl;
+          playbackUrl = normalizePlaybackUrl(descriptor.playbackUrl);
           playbackSessionId = descriptor.sessionId;
           descriptorDurationMs = descriptor.durationMs ?? 0;
         } catch (e) {
@@ -893,6 +893,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             if (presentation.title.toLowerCase().includes("subscription")) {
               showSubscriptionToast(item);
             } else {
+              Alert.alert(presentation.title, presentation.message);
               showToast({
                 tone: "error",
                 title: presentation.title || "Playback unavailable",
@@ -932,6 +933,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             if (presentation.title.toLowerCase().includes("subscription")) {
               showSubscriptionToast(item);
             } else {
+              Alert.alert(presentation.title, presentation.message);
               showToast({
                 tone: "error",
                 title: presentation.title || "Playback unavailable",
@@ -954,6 +956,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         }
         return;
       }
+      playbackUrl = normalizePlaybackUrl(playbackUrl);
       if (!validatePlaybackUrl(playbackUrl, "audio")) {
         if (!options.recovery && isCurrentLoad()) {
           failCurrentInitialLoad();
@@ -1394,12 +1397,13 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
       if (item.mediaType === "video" && item.useStreamAccess) {
         try {
-          const url = await getPlaybackUrl(
+          const rawUrl = await getPlaybackUrl(
             item.contentId ?? item.id,
             "video",
             preferredQuality,
             { isStillRelevant: isCurrentSelection }
           );
+          const url = normalizePlaybackUrl(rawUrl);
           if (!isCurrentSelection()) return;
           if (!validatePlaybackUrl(url, "video")) {
             showToast({

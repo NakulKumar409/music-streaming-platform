@@ -1363,7 +1363,8 @@ export default function VideoScreen() {
             return;
           }
 
-          const playbackUrl = await resolvePlaybackUrl(video, sessionId);
+          const rawPlaybackUrl = await resolvePlaybackUrl(video, sessionId);
+          const playbackUrl = streamService.normalizePlaybackUrl(rawPlaybackUrl);
 
           if (sessionId !== playbackSessionRef.current) return;
           if (!streamService.validatePlaybackUrl(playbackUrl, "video")) {

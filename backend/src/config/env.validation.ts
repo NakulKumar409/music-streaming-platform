@@ -201,7 +201,7 @@ export function validateEnv(): EnvValidationResult {
     appBaseRaw = renderExternal || appBaseRaw;
   }
   if (!appBaseRaw) {
-    appBaseRaw = nodeEnv === "production" ? "" : "http://localhost:8000";
+    appBaseRaw = "https://music-streaming-platform-ecko.onrender.com";
   }
   const appBaseParsed = parseUrl("APP_BASE_URL", appBaseRaw, ["http:", "https:"]);
   if (appBaseParsed.pathname !== "/" || appBaseParsed.search || appBaseParsed.hash) {

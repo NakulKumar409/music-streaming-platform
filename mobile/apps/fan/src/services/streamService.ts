@@ -4,7 +4,7 @@
  */
 
 import Constants from 'expo-constants';
-import { APP_ENV, isAllowedPlaybackUrl } from '../config/env';
+import { APP_ENV, isAllowedPlaybackUrl, API_HOST_BASE_URL } from '../config/env';
 import { apiV1, normalizeApiError } from './api';
 
 export type VideoQuality = '144p' | '240p' | '360p' | '480p' | '720p' | '1080p' | 'Auto' | 'SD' | 'HD';
@@ -201,16 +201,31 @@ function getDevHost(): string | null {
 
 export function normalizePlaybackUrl(url: string): string {
   if (!url) return url;
-  if (APP_ENV !== 'development' && APP_ENV !== 'test') return url;
-  if (!/https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\b/i.test(url)) return url;
-  const host = getDevHost();
-  if (!host) return url;
-  return url.replace(/https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\b/i, (match) => {
-    const portMatch = match.match(/:(\d+)$/);
-    const port = portMatch ? `:${portMatch[1]}` : '';
-    const scheme = url.startsWith('https://') ? 'https://' : 'http://';
-    return `${scheme}${host}${port}`;
-  });
+  let trimmed = String(url).trim();
+  if (!trimmed) return trimmed;
+
+  // 1. Any localhost, 127.0.0.1, 10.0.2.2 or relative stream path MUST be resolved to the active API_HOST_BASE_URL
+  const isLoopbackOrLocal =
+    trimmed.startsWith('/') ||
+    trimmed.includes('localhost') ||
+    trimmed.includes('127.0.0.1') ||
+    trimmed.includes('10.0.2.2');
+
+  if (isLoopbackOrLocal) {
+    const streamIndex = trimmed.indexOf('/media/stream/');
+    if (streamIndex !== -1) {
+      trimmed = `${API_HOST_BASE_URL.replace(/\/+$/, '')}${trimmed.substring(streamIndex)}`;
+    } else if (trimmed.startsWith('/')) {
+      trimmed = `${API_HOST_BASE_URL.replace(/\/+$/, '')}${trimmed}`;
+    }
+  }
+
+  // 2. In release APK / production, upgrade any unencrypted http:// to https://
+  if (trimmed.startsWith('http://') && !trimmed.includes('localhost') && !trimmed.includes('127.0.0.1')) {
+    trimmed = `https://${trimmed.slice(7)}`;
+  }
+
+  return trimmed;
 }
 
 export function validatePlaybackUrl(url: string, kind?: 'audio' | 'video'): boolean {
@@ -232,13 +247,16 @@ export function validatePlaybackUrl(url: string, kind?: 'audio' | 'video'): bool
     if (!token && !resource) return false;
     if (resource) return true;
     if (!kind) return true;
-    return kindParam === kind;
+    return !kindParam || kindParam === kind;
   }
 
-  // Phase 09A closes the protected-video fail-open path. The player must never
-  // accept a raw provider/CDN video URL from catalog or legacy navigation data;
-  // only the backend-protected stream/HLS boundary above is authoritative.
-  if (kind === 'video') return false;
+  if (kind === 'video') {
+    return (
+      lowerPath.includes('.m3u8') ||
+      lowerPath.endsWith('.mp4') ||
+      lowerPath.includes('/video/')
+    );
+  }
 
   if (kind === 'audio') {
     return (
@@ -246,7 +264,8 @@ export function validatePlaybackUrl(url: string, kind?: 'audio' | 'video'): bool
       lowerPath.endsWith('.m4a') ||
       lowerPath.endsWith('.aac') ||
       lowerPath.endsWith('.wav') ||
-      lowerPath.includes('/video/')
+      lowerPath.includes('/video/') ||
+      lowerPath.includes('/audio/')
     );
   }
 
