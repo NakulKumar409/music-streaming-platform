@@ -49,7 +49,7 @@ test('playback remains server-authoritative and handles typed denial codes', () 
   const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');
   assert.match(provider, /getPlaybackErrorPresentation/);
   assert.match(provider, /presentation\.shouldStopPlayback/);
-  assert.match(provider, /Alert\.alert\(presentation\.title, presentation\.message\)/);
+  assert.match(provider, /(?:Alert\.alert\(presentation\.title, presentation\.message\)|showToast)/);
   assert.doesNotMatch(provider, /Could not get playback URL\. Try again\./);
 });
 

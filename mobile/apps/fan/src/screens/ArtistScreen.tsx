@@ -494,6 +494,7 @@ export default function ArtistScreen({ navigation, route }: any) {
       if (!artist) return null;
       const queue = filteredSongs
         .filter((s) => s.mediaType === "audio")
+        .filter((s) => Boolean(s.mediaUrl) || s.useStreamAccess)
         .map((s) => ({
           id: s.id,
           contentId: s.contentId,
@@ -541,9 +542,6 @@ export default function ArtistScreen({ navigation, route }: any) {
         title: "Subscription required",
         message: `Subscribe to ${artist.name || "this artist"} to play "${song.title}".`,
       });
-
-      // Keep the existing upsell journey intact; the toast provides immediate,
-      // non-blocking feedback while the established conversion UI remains.
       const newCount = lockedClicks + 1;
       setLockedClicks(newCount);
 
@@ -552,8 +550,7 @@ export default function ArtistScreen({ navigation, route }: any) {
       } else {
         setShowArtistLockModal({ visible: true, song });
       }
-
-      return; // Block playback when locked
+      return;
     }
 
     if (song.mediaType === "video") {

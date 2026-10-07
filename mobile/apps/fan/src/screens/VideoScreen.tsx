@@ -1239,12 +1239,12 @@ export default function VideoScreen() {
   // ─── Heartbeat for listening time tracking ─────────────────
   useEffect(() => {
     if (!activeVideoMeta?.id) return;
+    const contentId = String(activeVideoMeta.id);
     if (!isVideoPlaying) {
-      stopHeartbeat();
+      stopHeartbeat(contentId);
       return;
     }
 
-    const contentId = String(activeVideoMeta.id);
     startHeartbeat(
       contentId,
       () => (videoPlayer ? videoPlayer.currentTime * 1000 : 0),
@@ -1252,7 +1252,7 @@ export default function VideoScreen() {
     );
 
     return () => {
-      stopHeartbeat();
+      stopHeartbeat(contentId);
     };
   }, [activeVideoMeta?.id, isVideoPlaying]);
 

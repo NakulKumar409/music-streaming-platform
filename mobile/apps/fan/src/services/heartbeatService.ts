@@ -121,10 +121,15 @@ export function startHeartbeat(
         throw error;
       }
     } catch (error: any) {
+      const code = error?.code || error?.response?.data?.code || '';
+      if (code === 'PLAYBACK_REQUEST_SUPERSEDED') {
+        stopHeartbeat(contentId);
+        return;
+      }
       if (shouldStopHeartbeatForAuthorization(error)) {
         // Do not keep retrying a lease after current authorization has been
         // revoked. Playback source TTL remains the final media-delivery bound.
-        stopHeartbeat();
+        stopHeartbeat(contentId);
       }
       logger.error(
         '[Heartbeat] Error sending heartbeat:',
@@ -151,7 +156,10 @@ export function startHeartbeat(
  * therefore the per-session sequence is intentionally retained until a
  * different server playback session is observed.
  */
-export function stopHeartbeat() {
+export function stopHeartbeat(forContentId?: string) {
+  if (forContentId && currentContentId !== forContentId) {
+    return;
+  }
   if (heartbeatInterval) {
     clearInterval(heartbeatInterval);
     heartbeatInterval = null;

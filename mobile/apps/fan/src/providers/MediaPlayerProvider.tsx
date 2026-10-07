@@ -897,7 +897,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             if (presentation.shouldStopPlayback) {
               failCurrentInitialLoad();
             }
-            Alert.alert(presentation.title, presentation.message);
             if (presentation.title.toLowerCase().includes("subscription")) {
               showSubscriptionToast(item);
             } else {
@@ -1415,8 +1414,8 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             preferredQuality,
             { isStillRelevant: isCurrentSelection }
           );
-          const normalizedUrl = normalizePlaybackUrl(url);
           if (!isCurrentSelection()) return;
+          const normalizedUrl = normalizePlaybackUrl(url);
           if (!validatePlaybackUrl(normalizedUrl, "video")) {
             showToast({
               tone: "error",
@@ -1505,6 +1504,18 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       }
 
       if (item.mediaType === "video") {
+        if (!TrackPlayerAvailable && webAudioRef.current) {
+          try {
+            webAudioRef.current.pause();
+          } catch {}
+        }
+        if (TrackPlayerAvailable) {
+          try {
+            TrackPlayer.pause();
+          } catch {}
+        }
+        audioPlayIntentRef.current = false;
+
         if (item.mediaUrl && videoSource !== item.mediaUrl) {
           setVideoSource(item.mediaUrl);
           if (videoPlayer) {
