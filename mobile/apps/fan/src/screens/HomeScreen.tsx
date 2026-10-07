@@ -287,7 +287,10 @@ export default function HomeScreen({ navigation }: any) {
     return {
       id: a.id,
       name: a.name,
-      image: resolveAppImageUrl(a.image, 'artist'),
+      image: resolveAppImageUrl(
+        a.image || (a.id ? `/api/v1/artist/assets/${a.id}/profile` : ''),
+        'artist'
+      ),
       isVerified: Boolean(a.isVerified),
       isSubscriptionBased,
       subText: '',

@@ -78,8 +78,14 @@ export async function fetchArtistById(artistId: string): Promise<ArtistDetail | 
   if (!a) return null;
 
   const subscriptionPrice = Number(a.subscriptionPrice ?? 0);
-  const imageUrl =
-    resolveImageUrl((a.coverImageUrl || a.profileImageUrl || '').toString()) || FALLBACK_ARTIST_IMAGE;
+  const rawProfileImage =
+    a.profileImageUrl || (a.id ? `/api/v1/artist/assets/${a.id}/profile` : '');
+  const profileImageUrl =
+    resolveImageUrl(rawProfileImage.toString()) || FALLBACK_ARTIST_IMAGE;
+  const rawCoverImage =
+    a.coverImageUrl || (a.id ? `/api/v1/artist/assets/${a.id}/banner` : '');
+  const coverImageUrl =
+    (rawCoverImage ? resolveImageUrl(rawCoverImage.toString(), 'banner') : '') || profileImageUrl;
 
   const socials = (a.socialLinks ?? null) as any;
   const spotifyUrl = ((a.spotifyUrl ?? socials?.spotify) || null) ? String((a.spotifyUrl ?? socials?.spotify) as any) : null;
@@ -92,8 +98,8 @@ export async function fetchArtistById(artistId: string): Promise<ArtistDetail | 
     id: String(a.id),
     name: (a.name ?? 'Artist').toString(),
     isVerified: Boolean(a.isVerified ?? a.verified ?? false),
-    profileImageUrl: resolveImageUrl((a.profileImageUrl || '').toString()) || imageUrl,
-    coverImageUrl: imageUrl,
+    profileImageUrl,
+    coverImageUrl,
     bio: (a.bio ?? '').toString(),
     spotifyUrl,
     youtubeUrl,
@@ -288,11 +294,15 @@ export async function fetchVerifiedArtists(limit = 10, offset = 0): Promise<Arti
 
   return raw.map((a) => {
     const subscriptionPrice = Number(a.subscriptionPrice ?? 0);
+    const profileImageRaw =
+      a.profileImageUrl ||
+      (a as any).avatar ||
+      (a.id ? `/api/v1/artist/assets/${a.id}/profile` : '');
 
     return {
       id: String(a.id),
       name: (a.name ?? 'Artist').toString(),
-      image: resolveImageUrl((a.profileImageUrl || '').toString()) || FALLBACK_ARTIST_IMAGE,
+      image: resolveImageUrl(profileImageRaw.toString()) || FALLBACK_ARTIST_IMAGE,
       isVerified: Boolean(a.isVerified ?? a.verified ?? false),
       subscriptionPrice: Number.isFinite(subscriptionPrice) ? subscriptionPrice : 0,
       status: (a.status ?? 'ACTIVE').toString(),
@@ -313,9 +323,16 @@ export async function fetchFeaturedArtists(): Promise<FeaturedArtist[]> {
       ? res.data.artists
       : [];
 
-  return raw.map((a) => ({
-    id: String(a.id),
-    name: (a.name ?? 'Artist').toString(),
-    avatar: resolveImageUrl((a.avatar || '').toString()) || FALLBACK_ARTIST_IMAGE,
-  }));
+  return raw.map((a) => {
+    const avatarRaw =
+      a.avatar ||
+      (a as any).profileImageUrl ||
+      (a.id ? `/api/v1/artist/assets/${a.id}/profile` : '');
+
+    return {
+      id: String(a.id),
+      name: (a.name ?? 'Artist').toString(),
+      avatar: resolveImageUrl(avatarRaw.toString()) || FALLBACK_ARTIST_IMAGE,
+    };
+  });
 }

@@ -657,7 +657,7 @@ export default function ArtistScreen({ navigation, route }: any) {
                     {!isVideoPlaying ? (
                       <ProfileHeaderSection
                         bannerUrl={artist.coverImage}
-                        avatarUrl={artist.profileImage || artist.coverImage}
+                        avatarUrl={artist.profileImage}
                         name={artist.name}
                         verified={artist.verified}
                         subscribersLabel={artist.subscribers}
@@ -686,7 +686,7 @@ export default function ArtistScreen({ navigation, route }: any) {
                       />
                     ) : (
                       <InlineArtistMetaSection
-                        avatarUrl={artist.profileImage || artist.coverImage}
+                        avatarUrl={artist.profileImage}
                         name={artist.name}
                         verified={artist.verified}
                         subscribersLabel={artist.subscribers}

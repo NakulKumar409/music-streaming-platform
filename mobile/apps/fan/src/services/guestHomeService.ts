@@ -67,10 +67,14 @@ function uniqueDerivedArtists(items: any[]): GuestArtist[] {
     const id = String(item?.artistId ?? '').trim();
     if (!id || seen.has(id)) continue;
     seen.add(id);
+    const artistImage =
+      item?.artistProfileImage ||
+      item?.artistProfileImageUrl ||
+      (id ? `/api/v1/artist/assets/${id}/profile` : '');
     artists.push({
       id,
       name: String(item?.artistName || 'Artist'),
-      image: imageSource(item?.thumbnailUrl || item?.artwork, 'artist'),
+      image: imageSource(artistImage, 'artist'),
       subscriberCount: 'Artist on MusicWave',
       isVerified: true,
     });

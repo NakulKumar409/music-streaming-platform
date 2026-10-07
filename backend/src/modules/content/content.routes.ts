@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { pool } from "../../common/db";
 import { optionalAuth } from "../../common/auth/requireAuth";
-import { publicAppUrl } from "../../common/http/public-url";
+import { publicAppUrl, canonicalPublicUrl } from "../../common/http/public-url";
 
 const router = Router();
 
@@ -36,6 +36,8 @@ function mapContent(row: any) {
   const subscriptionRequired = Boolean(row.subscription_required);
   const hasSubscription = Boolean(row.has_subscription);
   const isLocked = subscriptionRequired && !hasSubscription;
+  const artistProfileImage = canonicalPublicUrl(row.artist_profile_image_url);
+  const thumbnail = canonicalPublicUrl(row.thumbnail_url) || thumbnailUrl(Number(row.id));
 
   return {
     id: Number(row.id),
@@ -45,8 +47,10 @@ function mapContent(row: any) {
     genre: row.genre ? String(row.genre) : null,
     artistId: Number(row.artist_id),
     artistName: row.artist_name ? String(row.artist_name) : null,
-    thumbnailUrl: thumbnailUrl(Number(row.id)),
-    artwork: thumbnailUrl(Number(row.id)),
+    artistProfileImage,
+    artistProfileImageUrl: artistProfileImage,
+    thumbnailUrl: thumbnail,
+    artwork: thumbnail,
     mediaUrl: null,
     fileUrl: null,
     audioUrl: null,
@@ -132,8 +136,10 @@ router.get("/", optionalAuth, async (req: any, res: any) => {
     const result = await pool.query(
       `WITH page AS (
         SELECT c.id, c.title, c.type, c.genre, c.artist_id,
+               c.thumbnail_url,
                c.subscription_required, c.created_at, c.duration_ms,
-               COALESCE(NULLIF(u.name, ''), split_part(u.email, '@', 1)) AS artist_name
+               COALESCE(NULLIF(u.name, ''), split_part(u.email, '@', 1)) AS artist_name,
+               u.profile_image_url AS artist_profile_image_url
           FROM content_items c
           JOIN users u ON u.id = c.artist_id
          WHERE ${GOVERNED_CONTENT_WHERE}
@@ -212,8 +218,10 @@ router.get("/artist/:artistId", optionalAuth, async (req: any, res: any) => {
     const result = await pool.query(
       `WITH page AS (
         SELECT c.id, c.title, c.type, c.genre, c.artist_id,
+               c.thumbnail_url,
                c.subscription_required, c.created_at, c.duration_ms,
-               COALESCE(NULLIF(u.name, ''), split_part(u.email, '@', 1)) AS artist_name
+               COALESCE(NULLIF(u.name, ''), split_part(u.email, '@', 1)) AS artist_name,
+               u.profile_image_url AS artist_profile_image_url
           FROM content_items c
           JOIN users u ON u.id = c.artist_id
          WHERE c.artist_id = $1
@@ -279,8 +287,10 @@ router.get("/:id", optionalAuth, async (req: any, res: any) => {
   try {
     const result = await pool.query(
       `SELECT c.id, c.title, c.type, c.genre, c.artist_id,
+              c.thumbnail_url,
               c.subscription_required, c.created_at, c.duration_ms,
               COALESCE(NULLIF(u.name, ''), split_part(u.email, '@', 1)) AS artist_name,
+              u.profile_image_url AS artist_profile_image_url,
               (SELECT COUNT(*)::int FROM content_plays p WHERE p.content_id = c.id) AS view_count,
               (SELECT COUNT(*)::int FROM content_reactions r WHERE r.content_id = c.id AND r.reaction = 'like') AS like_count,
               (SELECT COUNT(*)::int FROM content_reactions r WHERE r.content_id = c.id AND r.reaction = 'dislike') AS dislike_count,

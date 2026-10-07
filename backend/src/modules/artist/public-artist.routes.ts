@@ -180,7 +180,7 @@ router.get("/:artistId/content", optionalAuth, async (req: any, res) => {
 
   try {
     const artist = await pool.query(
-      `SELECT u.id
+      `SELECT u.id, u.name, u.profile_image_url
          FROM users u
         WHERE u.id = $1 AND ${artistVisibilityWhere("u")}
         LIMIT 1`,
@@ -189,6 +189,9 @@ router.get("/:artistId/content", optionalAuth, async (req: any, res) => {
     if (!artist.rows.length) {
       return res.status(404).json({ success: false, message: "Artist not found" });
     }
+
+    const artistInfo = artist.rows[0];
+    const artistProfileImage = toAbsoluteUrl(req, artistInfo?.profile_image_url);
 
     const params: unknown[] = [fanId, artistId];
     let cursorClause = "";
@@ -202,7 +205,7 @@ router.get("/:artistId/content", optionalAuth, async (req: any, res) => {
     }
 
     const result = await pool.query(
-      `SELECT c.id, c.title, c.type, c.genre, c.created_at,
+      `SELECT c.id, c.title, c.type, c.genre, c.thumbnail_url, c.created_at,
               c.duration_ms,
               c.subscription_required,
               (SELECT COUNT(*)::int FROM content_plays p WHERE p.content_id = c.id) AS view_count,
@@ -237,13 +240,17 @@ router.get("/:artistId/content", optionalAuth, async (req: any, res) => {
       const subscriptionRequired = row.subscription_required === true;
       const isLocked = subscriptionRequired && row.has_subscription !== true;
       const type = String(row.type || "AUDIO").toUpperCase();
-      const art = artworkUrl(req, Number(row.id));
+      const art = toAbsoluteUrl(req, row.thumbnail_url) || artworkUrl(req, Number(row.id));
       return {
         id: Number(row.id),
         title: row.title ?? "Untitled",
         type,
         genre: row.genre ?? null,
         mediaType: type === "VIDEO" ? "video" : "audio",
+        artistId: Number(artistId),
+        artistName: artistInfo?.name ?? null,
+        artistProfileImage,
+        artistProfileImageUrl: artistProfileImage,
         artwork: art,
         thumbnailUrl: art,
         mediaUrl: null,

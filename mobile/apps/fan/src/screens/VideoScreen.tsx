@@ -75,6 +75,7 @@ import * as streamService from "../services/streamService";
 import { userService } from "../services/userService";
 import { Colors } from "../theme";
 import { getOptimizedImageUrl } from "../utils/cloudinary";
+import { resolveAppImageUrl } from "../utils/imageUtils";
 import AppImage from "../components/AppImage";
 import {
   formatDurationLabel,
@@ -697,20 +698,34 @@ export default function VideoScreen() {
         const mediaType = mediaTypeRaw.includes("video") ? "video" : "audio";
         if (mediaType !== "video") return null;
 
-        const artworkUrl =
-          (it.thumbnailUrl ?? it.artwork ?? "").toString() || FALLBACK_ARTWORK;
         const artistIdValue =
           it.artistId !== null && it.artistId !== undefined
             ? String(it.artistId)
             : undefined;
+
+        const rawArtistProfileImage =
+          it.artistProfileImage ??
+          (it as any).artistProfileImageUrl ??
+          (it as any).artist?.profileImageUrl ??
+          (it as any).artist?.avatar ??
+          (it as any).artist_profile_image_url ??
+          (artistIdValue ? `/api/v1/artist/assets/${artistIdValue}/profile` : "");
+
+        const artistProfileImage = rawArtistProfileImage
+          ? resolveAppImageUrl(rawArtistProfileImage, "artist")
+          : undefined;
+
+        const rawArtwork = it.thumbnailUrl ?? it.artwork;
+        const artworkUrl = rawArtwork
+          ? resolveAppImageUrl(rawArtwork, "video")
+          : FALLBACK_ARTWORK;
 
         return {
           id: String(it.id),
           title: (it.title ?? "Untitled").toString(),
           artistName: (it.artistName ?? "Artist").toString(),
           artistId: artistIdValue,
-          artistProfileImage:
-            (it.artistProfileImage ?? "").toString() || undefined,
+          artistProfileImage,
           artworkUrl,
           mediaUrl: (it.mediaUrl ?? it.fileUrl ?? "").toString(),
           useStreamAccess: Boolean(
