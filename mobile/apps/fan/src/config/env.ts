@@ -114,8 +114,14 @@ export function isAllowedPlaybackUrl(rawValue: string): boolean {
   if (parsed.protocol === 'https:') return true;
   if (parsed.protocol !== 'http:') return false;
 
+  const isLocalOrDev =
+    (typeof __DEV__ !== 'undefined' && Boolean(__DEV__)) ||
+    APP_ENV === 'development' ||
+    APP_ENV === 'test' ||
+    (typeof window !== 'undefined' && Boolean(window.location) && isPrivateOrLocalHost(window.location.hostname));
+
   return (
-    (APP_ENV === 'development' || APP_ENV === 'test') &&
+    (APP_ENV === 'development' || APP_ENV === 'test' || isLocalOrDev) &&
     isPrivateOrLocalHost(parsed.hostname)
   );
 }
