@@ -41,7 +41,7 @@ function resolveInternalStorageKey(
 ): string | null {
   if (kind === "thumbnail") return row.thumbnail_storage_key ?? null;
   if (kind === "video") return row.video_storage_key ?? row.storage_key ?? null;
-  return row.storage_key ?? null;
+  return row.storage_key ?? row.video_storage_key ?? null;
 }
 
 function resolveCloudinaryProviderAssetId(
@@ -62,7 +62,9 @@ function resolveCloudinaryProviderAssetId(
   }
   return (
     normalizeExplicitCloudinaryId(row.audio_provider_asset_id) ||
-    (!isVideoContent ? normalizeExplicitCloudinaryId(row.provider_asset_id) : null)
+    (!isVideoContent ? normalizeExplicitCloudinaryId(row.provider_asset_id) : null) ||
+    normalizeExplicitCloudinaryId(row.video_provider_asset_id) ||
+    normalizeExplicitCloudinaryId(row.provider_asset_id)
   );
 }
 

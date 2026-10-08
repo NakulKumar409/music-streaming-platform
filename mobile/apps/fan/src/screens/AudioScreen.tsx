@@ -153,6 +153,10 @@ export default function AudioScreen({ navigation }: any) {
           raw.length > 0 ? raw : isRefresh ? lastContentItemsRef.current : [];
 
         const mapped: AudioCard[] = effectiveRaw
+          .filter((it: any) => {
+            const rawType = String(it.type || it.mediaType || "AUDIO").toUpperCase();
+            return rawType !== "VIDEO";
+          })
           .map((it) => {
             const baseUrl = API_HOST_BASE_URL;
             const thumbStorageKey = (it.thumbnail_storage_key ??

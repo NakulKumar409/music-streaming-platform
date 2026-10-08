@@ -158,6 +158,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   // only to reject duplicate recovery for the same failed signed URL.
   const audioSourceRef = useRef<string | null>(null);
   const lastRecoveredAudioSourceRef = useRef<string | null>(null);
+  const recoveryAttemptsByContentRef = useRef<{ contentId: string; count: number }>({
+    contentId: "",
+    count: 0,
+  });
   // User playback intent is separate from transient engine state. A source
   // reset during recovery may emit pause/stopped events, but must not override
   // a newer user pause/play action.
@@ -348,6 +352,9 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       if (decision.confirmsSeek && pending) {
         clearPendingSeek(pending.generation);
       }
+      if (safePosition > 2000 && recoveryAttemptsByContentRef.current.count > 0) {
+        recoveryAttemptsByContentRef.current.count = 0;
+      }
 
       setState((s) => {
         const nextDuration = safeDuration > 0 ? safeDuration : s.durationMs;
@@ -368,6 +375,72 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     [clearPendingSeek]
   );
 
+let trackPlayerReadyPromise: Promise<boolean> | null = null;
+
+async function ensureTrackPlayerReady(): Promise<boolean> {
+  if (!TrackPlayerAvailable) return false;
+  try {
+    await TrackPlayer.getActiveTrackIndex();
+    return true;
+  } catch {
+    // not initialized yet
+  }
+
+  if (trackPlayerReadyPromise) {
+    return trackPlayerReadyPromise;
+  }
+
+  trackPlayerReadyPromise = (async () => {
+    try {
+      await TrackPlayer.setupPlayer({
+        autoHandleInterruptions: true,
+        autoUpdateMetadata: true,
+      });
+      await TrackPlayer.updateOptions({
+        android: {
+          appKilledPlaybackBehavior:
+            AppKilledPlaybackBehavior?.StopPlaybackAndRemoveNotification,
+          alwaysPauseOnInterruption: false,
+          // Keep notification visible when paused
+          stopForegroundGracePeriod: 0,
+        },
+        // Main capabilities shown in notification/lock screen
+        // Keep this identical to playbackService.ts. The React queue is not
+        // mirrored into TrackPlayer's native queue, so advertising native
+        // next/previous would be unreliable once the app is backgrounded.
+        capabilities: [
+          Capability?.Play,
+          Capability?.Pause,
+          Capability?.SeekTo,
+          Capability?.JumpForward,
+          Capability?.JumpBackward,
+          Capability?.Stop,
+        ],
+        compactCapabilities: [
+          Capability?.Play,
+          Capability?.Pause,
+        ],
+        notificationCapabilities: [
+          Capability?.Play,
+          Capability?.Pause,
+          Capability?.SeekTo,
+          Capability?.Stop,
+        ],
+      });
+      logger.log(
+        "[MediaPlayer] TrackPlayer setup complete with background capabilities"
+      );
+      return true;
+    } catch (e) {
+      logger.error("[MediaPlayer] TrackPlayer setup failed", e);
+      trackPlayerReadyPromise = null;
+      return false;
+    }
+  })();
+
+  return trackPlayerReadyPromise;
+}
+
   useEffect(() => {
     // Skip TrackPlayer setup if not available (Expo Go compatibility)
     if (!TrackPlayerAvailable) {
@@ -379,58 +452,12 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     }
 
     let unmounted = false;
-    const setup = async () => {
-      let isSetup = false;
-      try {
-        await TrackPlayer.getActiveTrackIndex();
-        isSetup = true;
-      } catch {
-        await TrackPlayer.setupPlayer({
-          autoHandleInterruptions: true,
-          autoUpdateMetadata: true,
-        });
-        isSetup = true;
+    void ensureTrackPlayerReady().then((ready) => {
+      if (!unmounted && ready) {
+        setIsPlayerReady(true);
       }
+    });
 
-      if (isSetup) {
-        await TrackPlayer.updateOptions({
-          android: {
-            appKilledPlaybackBehavior:
-              AppKilledPlaybackBehavior?.StopPlaybackAndRemoveNotification,
-            alwaysPauseOnInterruption: false,
-            // Keep notification visible when paused
-            stopForegroundGracePeriod: 0,
-          },
-          // Main capabilities shown in notification/lock screen
-          // Keep this identical to playbackService.ts. The React queue is not
-          // mirrored into TrackPlayer's native queue, so advertising native
-          // next/previous would be unreliable once the app is backgrounded.
-          capabilities: [
-            Capability?.Play,
-            Capability?.Pause,
-            Capability?.SeekTo,
-            Capability?.JumpForward,
-            Capability?.JumpBackward,
-            Capability?.Stop,
-          ],
-          compactCapabilities: [
-            Capability?.Play,
-            Capability?.Pause,
-          ],
-          notificationCapabilities: [
-            Capability?.Play,
-            Capability?.Pause,
-            Capability?.SeekTo,
-            Capability?.Stop,
-          ],
-        });
-        if (!unmounted) setIsPlayerReady(true);
-        logger.log(
-          "[MediaPlayer] TrackPlayer setup complete with background capabilities"
-        );
-      }
-    };
-    setup();
     return () => {
       unmounted = true;
     };
@@ -933,7 +960,6 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
             if (presentation.title.toLowerCase().includes("subscription")) {
               showSubscriptionToast(item);
             } else {
-              Alert.alert(presentation.title, presentation.message);
               showToast({
                 tone: "error",
                 title: presentation.title || "Playback unavailable",
@@ -1211,7 +1237,20 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           hasArtwork: !!track.artwork,
         });
 
-        await TrackPlayer.reset();
+        await ensureTrackPlayerReady();
+        if (!isCurrentLoad()) return;
+
+        try {
+          await TrackPlayer.reset();
+        } catch (resetErr: any) {
+          if (String(resetErr?.message || "").includes("not initialized")) {
+            trackPlayerReadyPromise = null;
+            await ensureTrackPlayerReady();
+            await TrackPlayer.reset();
+          } else {
+            throw resetErr;
+          }
+        }
         if (!isCurrentLoad()) return;
 
         await TrackPlayer.add([track]);
@@ -1310,6 +1349,19 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         return false;
       }
       lastRecoveredAudioSourceRef.current = input.failedUrl;
+
+      const currentContentKey = String(item.contentId ?? item.id);
+      if (recoveryAttemptsByContentRef.current.contentId === currentContentKey) {
+        if (recoveryAttemptsByContentRef.current.count >= 1) {
+          logger.warn("[MediaPlayer] Exceeded max recovery attempts for content", {
+            contentId: currentContentKey,
+          });
+          return false;
+        }
+        recoveryAttemptsByContentRef.current.count += 1;
+      } else {
+        recoveryAttemptsByContentRef.current = { contentId: currentContentKey, count: 1 };
+      }
 
       logger.warn("[MediaPlayer] Recovering failed protected audio source", {
         contentId: item.contentId ?? item.id,

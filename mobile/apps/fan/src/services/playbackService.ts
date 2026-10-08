@@ -14,6 +14,8 @@ let resumeAfterTemporaryDuck = false;
 let servicePlayIntent = false;
 let recoveryInFlight = false;
 let lastRecoveredSourceUrl: string | null = null;
+let lastRecoveredContentId: number | null = null;
+let contentRecoveryCount = 0;
 
 /**
  * Background Playback Service
@@ -183,6 +185,8 @@ export default async function playbackService() {
   });
 
   TrackPlayer.addEventListener(Event.PlaybackTrackChanged, async (event) => {
+    lastRecoveredContentId = null;
+    contentRecoveryCount = 0;
     logger.log('[PlaybackService] PlaybackTrackChanged:', {
       track: event.track,
       position: event.position,
@@ -220,7 +224,8 @@ export default async function playbackService() {
         contentId <= 0 ||
         !Number.isSafeInteger(sessionId) ||
         sessionId <= 0 ||
-        lastRecoveredSourceUrl === failedUrl
+        lastRecoveredSourceUrl === failedUrl ||
+        (lastRecoveredContentId === contentId && contentRecoveryCount >= 1)
       ) {
         servicePlayIntent = false;
         await TrackPlayer.pause().catch(() => undefined);
@@ -228,6 +233,12 @@ export default async function playbackService() {
       }
 
       lastRecoveredSourceUrl = failedUrl;
+      if (lastRecoveredContentId === contentId) {
+        contentRecoveryCount += 1;
+      } else {
+        lastRecoveredContentId = contentId;
+        contentRecoveryCount = 1;
+      }
       const progress = await TrackPlayer.getProgress().catch(() => ({
         position: 0,
         duration: 0,
