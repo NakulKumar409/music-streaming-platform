@@ -613,7 +613,7 @@ export default function ArtistScreen({ navigation, route }: any) {
       <StatusBar barStyle="light-content" />
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
         <View style={styles.container}>
-          {isVideoPlaying && currentItem?.mediaType === "video" ? (
+          {isVideoPlaying && currentItem?.mediaType === "video" && videoPlayer ? (
             <View style={styles.stickyVideoHost}>
               <InlineVideoPlayer
                 mediaUrl={currentItem.mediaUrl}
@@ -851,6 +851,8 @@ function InlineVideoPlayer({
 }) {
   const [controlsVisible, setControlsVisible] = useState(true);
   const toggleControls = useCallback(() => setControlsVisible((v) => !v), []);
+
+  if (!videoPlayer) return null;
 
   return (
     <View style={[styles.youtubeVideoWrap, { aspectRatio }]}>

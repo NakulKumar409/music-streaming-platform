@@ -56,6 +56,20 @@ if (Platform.OS === 'web') {
   }
 }
 
+if (typeof (global as any).ErrorUtils !== 'undefined') {
+  const originalErrorHandler = (global as any).ErrorUtils.getGlobalHandler?.();
+  (global as any).ErrorUtils.setGlobalHandler?.((error: any, isFatal: boolean) => {
+    console.error(
+      `[GLOBAL_UNHANDLED_ERROR] isFatal=${isFatal}\n` +
+      `  Name: ${error?.name || 'Error'}\n` +
+      `  Message: ${error?.message || String(error)}\n` +
+      `  Cause: ${error?.cause ? (typeof error.cause === 'object' ? JSON.stringify(error.cause) : String(error.cause)) : 'none'}\n` +
+      `  Stack:\n${error?.stack || 'no stack'}`
+    );
+    originalErrorHandler?.(error, isFatal);
+  });
+}
+
 if (SENTRY_DSN) {
   Sentry.init({
     dsn: SENTRY_DSN,

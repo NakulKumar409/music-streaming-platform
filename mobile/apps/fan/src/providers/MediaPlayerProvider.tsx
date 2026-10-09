@@ -10,7 +10,7 @@ import {
 } from "react";
 import { Alert, AppState, Platform } from "react-native";
 
-import { createVideoPlayer, VideoPlayer } from "expo-video";
+import { createVideoPlayer, VideoPlayer, type VideoSource } from "expo-video";
 
 import logger from "../utils/logger";
 
@@ -149,6 +149,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   const videoRestorePositionMsRef = useRef(0);
 
   const [inlineVideoHostActive, setInlineVideoHostActive] = useState(false);
+  const inlineVideoHostActiveRef = useRef(false);
+  useEffect(() => {
+    inlineVideoHostActiveRef.current = inlineVideoHostActive;
+  }, [inlineVideoHostActive]);
   const [inlineAudioHostActive, setInlineAudioHostActive] = useState(false);
 
   const [isPlayerReady, setIsPlayerReady] = useState(false);
@@ -189,51 +193,87 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
   const [videoSource, setVideoSource] = useState<string | null>(null);
   const [videoPlayer, setVideoPlayer] = useState<VideoPlayer | null>(null);
 
-  // Lazy initialization of VideoPlayer to avoid "Activity not available" crash at startup
+  // Initialize or replace VideoPlayer ONLY when videoSource is valid, app is active, and inline host is not managing its own player
   useEffect(() => {
-    let isMounted = true;
+    if (!videoSource || inlineVideoHostActive) {
+      if (videoPlayer) {
+        try {
+          videoPlayer.pause();
+        } catch {}
+      }
+      return;
+    }
 
-    // Defer creation to the first effect run (after initial render/mount)
-    // this ensures the Android Activity is ready for the native module.
+    if (AppState.currentState !== "active") return;
+
     try {
-      logger.log("[MediaPlayer] Initializing VideoPlayer lazily...");
-      const player = createVideoPlayer(videoSource);
+      const isHls =
+        videoSource.includes("kind=video") ||
+        videoSource.includes("/media/stream/") ||
+        videoSource.includes(".m3u8");
+      const sourceObj: VideoSource = {
+        uri: videoSource,
+        contentType: isHls ? "hls" : "auto",
+      };
+      if (!videoPlayer) {
+        logger.log("[MediaPlayer] Initializing VideoPlayer lazily for active source...");
+        const player = createVideoPlayer(sourceObj);
 
-      // Configure background playback capabilities
-      player.showNowPlayingNotification = true;
-      player.staysActiveInBackground = true;
-      player.timeUpdateEventInterval = 0.1; // 100ms updates for smooth seekbar
+        // Configure background playback capabilities
+        player.showNowPlayingNotification = true;
+        player.staysActiveInBackground = true;
+        player.timeUpdateEventInterval = 0.5;
 
-      if (isMounted) {
         setVideoPlayer(player);
         logger.log("[MediaPlayer] VideoPlayer initialized successfully");
+      } else {
+        videoPlayer.replace(sourceObj);
+        setState((s) => ({ ...s, positionMs: 0, durationMs: 0 }));
       }
     } catch (e) {
       logger.error(
-        "[MediaPlayer] Failed to create VideoPlayer in useEffect",
+        "[MediaPlayer] Failed to create or replace VideoPlayer in useEffect",
         e
       );
     }
+  }, [videoSource]);
 
-    return () => {
-      isMounted = false;
-      // Note: VideoPlayer will be cleaned up by native garbage collection
-      // or we could explicitly null it if needed in future versions.
-    };
-  }, []); // Run only once on mount
-
-  // Keep player in sync with source changes
   useEffect(() => {
-    if (videoPlayer && videoSource) {
-      try {
-        videoPlayer.replace(videoSource);
-        // Reset state for new source
-        setState((s) => ({ ...s, positionMs: 0, durationMs: 0 }));
-      } catch (e) {
-        logger.warn("[MediaPlayer] Failed to replace video source", e);
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active" && videoSource && !videoPlayer && !inlineVideoHostActiveRef.current) {
+        try {
+          logger.log("[MediaPlayer] Initializing VideoPlayer on app resume...");
+          const isHls =
+            videoSource.includes("kind=video") ||
+            videoSource.includes("/media/stream/") ||
+            videoSource.includes(".m3u8");
+          const sourceObj: VideoSource = {
+            uri: videoSource,
+            contentType: isHls ? "hls" : "auto",
+          };
+          const player = createVideoPlayer(sourceObj);
+          player.showNowPlayingNotification = true;
+          player.staysActiveInBackground = true;
+          player.timeUpdateEventInterval = 0.5;
+          setVideoPlayer(player);
+          logger.log("[MediaPlayer] VideoPlayer initialized successfully on resume");
+        } catch (e) {
+          logger.error("[MediaPlayer] Failed to create VideoPlayer on resume", e);
+        }
       }
-    }
+    });
+    return () => sub.remove();
   }, [videoSource, videoPlayer]);
+
+  useEffect(() => {
+    return () => {
+      if (videoPlayer) {
+        try {
+          videoPlayer.release();
+        } catch {}
+      }
+    };
+  }, [videoPlayer]);
 
   // Sync video player native events to context state
   useEffect(() => {
@@ -246,6 +286,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
       // emit idle/stale events while an audio item is active. Never let the
       // video engine overwrite audio-owned global playback state.
       if (currentItemRef.current?.mediaType !== "video") return;
+      if (inlineVideoHostActiveRef.current) return;
       setState((s) => ({ ...s, isPlaying: event.isPlaying }));
     });
 
@@ -1545,26 +1586,28 @@ async function ensureTrackPlayerReady(): Promise<boolean> {
       }
 
       if (item.mediaType === "video" && item.mediaUrl) {
-        if (videoSource !== item.mediaUrl) {
-          setVideoSource(item.mediaUrl);
-          if (videoPlayer) {
-            try {
-              videoPlayer.replace(item.mediaUrl);
-              if (positionMs !== undefined && positionMs > 0) {
-                videoPlayer.currentTime = positionMs / 1000;
+        if (!inlineVideoHostActiveRef.current) {
+          if (videoSource !== item.mediaUrl) {
+            setVideoSource(item.mediaUrl);
+            if (videoPlayer) {
+              try {
+                videoPlayer.replace(item.mediaUrl);
+                if (positionMs !== undefined && positionMs > 0) {
+                  videoPlayer.currentTime = positionMs / 1000;
+                }
+                if (isPlaying) {
+                  videoPlayer.play();
+                }
+              } catch (err) {
+                logger.warn("[MediaPlayer] videoPlayer sync failed", err);
               }
-              if (isPlaying) {
-                videoPlayer.play();
-              }
-            } catch (err) {
-              logger.warn("[MediaPlayer] videoPlayer sync failed", err);
             }
-          }
-        } else if (videoPlayer) {
-          if (isPlaying && !videoPlayer.playing) {
-            videoPlayer.play();
-          } else if (!isPlaying && videoPlayer.playing) {
-            videoPlayer.pause();
+          } else if (videoPlayer) {
+            if (isPlaying && !videoPlayer.playing) {
+              videoPlayer.play();
+            } else if (!isPlaying && videoPlayer.playing) {
+              videoPlayer.pause();
+            }
           }
         }
       }

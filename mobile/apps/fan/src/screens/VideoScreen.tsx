@@ -24,7 +24,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { useVideoPlayer, VideoView } from "expo-video";
+import { createVideoPlayer, VideoPlayer, VideoView, type VideoSource } from "expo-video";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Slider from "@react-native-community/slider";
@@ -459,44 +459,120 @@ export default function VideoScreen() {
   const listRef = useRef<FlatList<VideoCard> | null>(null);
   const userPausedRef = useRef<boolean>(false); // Track if user explicitly paused
 
-  const safePlay = useCallback((target: { play: () => any }, tag: string) => {
+  const safePlay = useCallback((target: { play?: () => any; playing?: boolean } | null | undefined, tag: string) => {
+    console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) called, target exists:`, Boolean(target), "playing:", target?.playing);
+    if (!target || typeof target.play !== "function") return;
+    if (target.playing) {
+      console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) skipped - already playing`);
+      return;
+    }
     try {
+      console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) calling target.play()...`);
       const maybePromise = target.play();
       if (maybePromise && typeof maybePromise.then === "function") {
-        maybePromise.catch((err: any) => {
-          const name = (err?.name || "").toString();
-          const msg = (err?.message || "").toString();
-          if (
-            name === "AbortError" ||
-            /interrupted by a call to pause\(\)/i.test(msg)
-          )
-            return;
-          console.warn(`[VideoPlayer] ${tag} play() failed`, err);
-        });
+        maybePromise
+          .then((res: any) => {
+            console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) target.play() Promise resolved, res:`, res);
+          })
+          .catch((err: any) => {
+            const name = (err?.name || "").toString();
+            const msg = (err?.message || "").toString();
+            if (
+              name === "AbortError" ||
+              /interrupted by a call to pause\(\)/i.test(msg)
+            )
+              return;
+            console.error(`[VideoPlayer:NATIVE] safePlay(${tag}) target.play() rejected:`, {
+              name: err?.name,
+              message: err?.message,
+              stack: err?.stack,
+              cause: err?.cause,
+            });
+          });
+      } else {
+        console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) target.play() synchronous result:`, maybePromise);
       }
     } catch (err: any) {
-      const name = (err?.name || "").toString();
-      const msg = (err?.message || "").toString();
-      if (
-        name === "AbortError" ||
-        /interrupted by a call to pause\(\)/i.test(msg)
-      )
-        return;
-      console.warn(`[VideoPlayer] ${tag} play() failed`, err);
+      console.error(`[VideoPlayer:NATIVE] safePlay(${tag}) synchronous throw:`, {
+        name: err?.name,
+        message: err?.message,
+        stack: err?.stack,
+        cause: err?.cause,
+      });
     }
   }, []);
 
-  const videoPlayer = useVideoPlayer(activePlaybackUrl, (player) => {
-    player.loop = false;
-    player.staysActiveInBackground = true;
-    console.log("[VideoScreen] VideoPlayer initialized with URL:", activePlaybackUrl ? `${new URL(activePlaybackUrl).origin}${new URL(activePlaybackUrl).pathname}?[token-redacted]` : "null");
-    if (activePlaybackUrl && !userPausedRef.current) {
-      console.log("[VideoScreen] Auto-playing on init with valid URL");
-      safePlay(player as any, "init");
-    } else {
-      console.log("[VideoScreen] Skipping auto-play - no URL or user paused");
+  const [videoPlayer, setVideoPlayer] = useState<VideoPlayer | null>(null);
+  const playerRef = useRef<VideoPlayer | null>(null);
+
+  const initializeOrUpdatePlayer = useCallback(
+    (url: string) => {
+      if (!url) return;
+      if (AppState.currentState !== "active") {
+        console.log("[VideoScreen] App state is not active, deferring VideoPlayer creation");
+        return;
+      }
+      try {
+        const isHls =
+          url.includes("kind=video") ||
+          url.includes("/media/stream/") ||
+          url.includes(".m3u8");
+        const videoSource: VideoSource = {
+          uri: url,
+          contentType: isHls ? "hls" : "auto",
+        };
+        if (!playerRef.current) {
+          const sanitizedUrl = url.includes("?")
+            ? `${new URL(url).origin}${new URL(url).pathname}?[token-redacted]`
+            : url;
+          console.log("[VideoScreen] Creating VideoPlayer with URL:", sanitizedUrl, "contentType:", videoSource.contentType);
+          const player = createVideoPlayer(videoSource);
+          player.loop = false;
+          player.timeUpdateEventInterval = 0.5;
+          player.staysActiveInBackground = true;
+          playerRef.current = player;
+          setVideoPlayer(player);
+          if (!userPausedRef.current) {
+            console.log("[VideoScreen] Auto-playing on init with valid URL");
+            safePlay(player as any, "init");
+          }
+        } else {
+          const sanitizedUrl = url.includes("?")
+            ? `${new URL(url).origin}${new URL(url).pathname}?[token-redacted]`
+            : url;
+          console.log("[VideoScreen] Updating VideoPlayer source:", sanitizedUrl, "contentType:", videoSource.contentType);
+          playerRef.current.replace(videoSource);
+          if (!userPausedRef.current) {
+            safePlay(playerRef.current as any, "replace");
+          }
+        }
+      } catch (err) {
+        console.error("[VideoScreen] Error creating or updating VideoPlayer", err);
+      }
+    },
+    [safePlay]
+  );
+
+  useEffect(() => {
+    if (activePlaybackUrl) {
+      initializeOrUpdatePlayer(activePlaybackUrl);
+    } else if (playerRef.current) {
+      try {
+        playerRef.current.pause();
+      } catch {}
     }
-  });
+  }, [activePlaybackUrl, initializeOrUpdatePlayer]);
+
+  useEffect(() => {
+    return () => {
+      if (playerRef.current) {
+        try {
+          playerRef.current.pause();
+        } catch {}
+        playerRef.current = null;
+      }
+    };
+  }, []);
   const lastTapRef = useRef(0);
   const lastTapXRef = useRef(0);
   const playbackSessionRef = useRef(0);
@@ -564,7 +640,7 @@ export default function VideoScreen() {
         if (bgAudioOnlyMode) return;
 
         (async () => {
-          const wasPlaying = videoPlayer.playing;
+          const wasPlaying = playerRef.current?.playing ?? false;
           bgWasPlayingRef.current = wasPlaying;
           setBgAudioOnlyMode(true);
 
@@ -576,31 +652,36 @@ export default function VideoScreen() {
 
           // Keep volume at 1.0 and force resume during the transition.
           try {
-            videoPlayer.volume = 1.0;
+            if (playerRef.current) playerRef.current.volume = 1.0;
           } catch {
             // ignore
           }
-          if (wasPlaying) {
-            safePlay(videoPlayer as any, "appstate-background");
+          if (wasPlaying && playerRef.current) {
+            safePlay(playerRef.current as any, "appstate-background");
           }
         })().catch(() => undefined);
 
         return;
       }
 
-      if (next === "active" && bgAudioOnlyMode) {
-        setBgAudioOnlyMode(false);
-        const shouldPlay = bgWasPlayingRef.current;
-        (async () => {
-          try {
-            videoPlayer.volume = 1.0;
-          } catch {
-            // ignore
-          }
-          if (shouldPlay) {
-            safePlay(videoPlayer as any, "appstate-active");
-          }
-        })().catch(() => undefined);
+      if (next === "active") {
+        if (!playerRef.current) {
+          initializeOrUpdatePlayer(activePlaybackUrl);
+        }
+        if (bgAudioOnlyMode) {
+          setBgAudioOnlyMode(false);
+          const shouldPlay = bgWasPlayingRef.current;
+          (async () => {
+            try {
+              if (playerRef.current) playerRef.current.volume = 1.0;
+            } catch {
+              // ignore
+            }
+            if (shouldPlay && playerRef.current) {
+              safePlay(playerRef.current as any, "appstate-active");
+            }
+          })().catch(() => undefined);
+        }
       }
     });
 
@@ -612,7 +693,7 @@ export default function VideoScreen() {
     activeVideoMeta?.id,
     bgAudioOnlyMode,
     safePlay,
-    videoPlayer,
+    initializeOrUpdatePlayer,
   ]);
 
   const scheduleTokenRefresh = useCallback(
@@ -637,7 +718,7 @@ export default function VideoScreen() {
       tokenRefreshTimerRef.current = setTimeout(() => {
         (async () => {
           if (!activeVideoMeta?.id) return;
-          const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
+          const pos = Math.max(0, Math.round((playerRef.current?.currentTime ?? videoPlayer?.currentTime ?? 0) * 1000));
 
           console.log("[VideoScreen] Background refreshing video URL...");
           try {
@@ -666,7 +747,7 @@ export default function VideoScreen() {
         })().catch(() => undefined);
       }, delay);
     },
-    [activeVideoMeta?.id, isStreamingHdAllowed, selectedQuality, videoPlayer]
+    [activeVideoMeta?.id, isStreamingHdAllowed, selectedQuality]
   );
 
   useEffect(() => {
@@ -847,8 +928,10 @@ export default function VideoScreen() {
     playbackSessionRef.current += 1;
     qualityAccessGenerationRef.current += 1;
     try {
-      videoPlayer.pause();
-      videoPlayer.seekBy(-videoPlayer.currentTime);
+      videoPlayer?.pause();
+      if (videoPlayer) {
+        videoPlayer.seekBy(-videoPlayer.currentTime);
+      }
     } finally {
       setActiveVideoId(null);
       setActiveVideoMeta(null);
@@ -1008,14 +1091,14 @@ export default function VideoScreen() {
       setIsSeeking(false);
       try {
         const targetSeconds = value / 1000;
-        const currentSeconds = videoPlayer.currentTime;
+        const currentSeconds = videoPlayer?.currentTime ?? 0;
         const deltaSeconds = targetSeconds - currentSeconds;
 
         // Use seekBy for better Android compatibility
-        videoPlayer.seekBy(deltaSeconds);
+        videoPlayer?.seekBy(deltaSeconds);
 
         // Resume playback after seek on Android with a small delay
-        if (isVideoPlaying) {
+        if (isVideoPlaying && videoPlayer) {
           if (Platform.OS === "android") {
             setTimeout(() => {
               safePlay(videoPlayer as any, "slider-seek");
@@ -1110,7 +1193,7 @@ export default function VideoScreen() {
 
   const pauseInlineVideoIfNeeded = useCallback(async () => {
     try {
-      if (videoPlayer.playing) {
+      if (videoPlayer?.playing) {
         videoPlayer.pause();
       }
     } catch {
@@ -1121,68 +1204,90 @@ export default function VideoScreen() {
   // ─── Native event: status change ───────────────────────────────────────────
   // This fires as soon as the player's native layer transitions state.
   // We use it for the quality-switch seek so it is truly atomic — no setTimeout.
-  useEventListener(
-    videoPlayer,
-    "statusChange",
-    ({ status }: { status: string }) => {
-      const isReady = status === "readyToPlay";
-      const isFailed = status === "failed";
-      setIsVideoReady(isReady);
-      setIsBuffering(status === "loading");
+  useEffect(() => {
+    if (!videoPlayer) return;
 
-      if (
-        isFailed ||
-        (videoPlayer.status === "idle" &&
-          isStreamingUrlExpiringSoon(activePlaybackUrl))
-      ) {
+    const statusSub = videoPlayer.addListener(
+      "statusChange",
+      (event: any) => {
+        const status = event.status;
+        const error = event.error;
         console.log(
-          "[VideoScreen] Player status failed or URL expired, attempting refresh..."
+          `[VideoPlayer:NATIVE] statusChange: status=${status}, playing=${videoPlayer.playing}, currentTime=${videoPlayer.currentTime}, duration=${videoPlayer.duration}`,
+          error ? `error=${JSON.stringify(error)}` : ""
         );
-        (async () => {
-          if (!activeVideoMeta?.id) return;
-          const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
-          try {
-            // Use current selected quality for refresh, respecting subscription
-            const refreshQuality: streamService.VideoQuality =
-              isStreamingHdAllowed
-                ? (selectedQuality as streamService.VideoQuality)
-                : "240p";
-            const sessionId = playbackSessionRef.current;
-            const qualityGeneration = qualityAccessGenerationRef.current;
-            const isStillRelevant = () =>
-              sessionId === playbackSessionRef.current &&
-              qualityGeneration === qualityAccessGenerationRef.current;
-            const nextUrl = await streamService.getPlaybackUrl(
-              activeVideoMeta.id,
-              "video",
-              refreshQuality,
-              { isStillRelevant }
-            );
-            if (!isStillRelevant()) return;
-            resumeAfterUrlChangeRef.current = pos;
-            setActivePlaybackUrl(nextUrl);
-          } catch {
-            // ignore
-          }
-        })().catch(() => undefined);
-        return;
-      }
+        setIsVideoReady(status === "readyToPlay");
+        setIsBuffering(status === "loading");
 
-      if (isReady && qualityResumePositionRef.current !== null) {
-        const targetSeconds = qualityResumePositionRef.current;
-        qualityResumePositionRef.current = null;
-        try {
-          videoPlayer.currentTime = targetSeconds;
-          safePlay(videoPlayer as any, "status-ready");
-        } catch {
-          // Player may have been released — safe to ignore
+        if (status === "readyToPlay") {
+          console.log("[VideoPlayer:NATIVE] Status is readyToPlay, checking auto-play intent. userPaused:", userPausedRef.current, "playing:", videoPlayer.playing);
+          if (qualityResumePositionRef.current !== null) {
+            const targetSeconds = qualityResumePositionRef.current;
+            qualityResumePositionRef.current = null;
+            try {
+              videoPlayer.currentTime = targetSeconds;
+              console.log("[VideoPlayer:NATIVE] Quality resume seek to", targetSeconds);
+              safePlay(videoPlayer as any, "status-ready-quality");
+            } catch (e) {
+              console.error("[VideoPlayer:NATIVE] Quality resume seek failed", e);
+            }
+          } else if (!userPausedRef.current && !videoPlayer.playing) {
+            console.log("[VideoPlayer:NATIVE] Calling safePlay for readyToPlay");
+            safePlay(videoPlayer as any, "status-readyToPlay");
+          }
+        } else if (status === "error" || status === "failed") {
+          console.error("[VideoPlayer:NATIVE] Playback failed with error:", error);
+          setPlaybackError(error?.message || "Playback failed");
         }
       }
-    }
-  );
+    );
 
-  // ─── 500ms polling for position / duration / playing state ─────────────────
+    const playingSub = videoPlayer.addListener(
+      "playingChange",
+      (event: any) => {
+        const isPlaying = Boolean(event.isPlaying);
+        console.log(`[VideoPlayer:NATIVE] playingChange: isPlaying=${isPlaying}, currentTime=${videoPlayer.currentTime}`);
+        setIsVideoPlaying(isPlaying);
+      }
+    );
+
+    const timeSub = videoPlayer.addListener(
+      "timeUpdate",
+      (event: any) => {
+        const curMs = Math.round(Number(event.currentTime || 0) * 1000);
+        console.log(`[VideoPlayer:NATIVE] timeUpdate: currentTime=${event.currentTime}s, duration=${videoPlayer.duration}s`);
+        if (!isSeeking) {
+          setPositionMs(curMs);
+        }
+        if (videoPlayer.duration && videoPlayer.duration > 0) {
+          setDurationMs(Math.round(videoPlayer.duration * 1000));
+        }
+      }
+    );
+
+    return () => {
+      statusSub.remove();
+      playingSub.remove();
+      timeSub.remove();
+    };
+  }, [
+    videoPlayer,
+    activePlaybackUrl,
+    activeVideoMeta?.id,
+    isStreamingHdAllowed,
+    selectedQuality,
+    safePlay,
+    isSeeking,
+  ]);
+
+  // ─── 500ms polling for position / duration / sync ───────────────────────────
   useEffect(() => {
+    if (!videoPlayer) {
+      setIsVideoPlaying(false);
+      setIsBuffering(false);
+      setIsVideoReady(false);
+      return;
+    }
     const interval = setInterval(() => {
       if (!isSeeking) {
         const curMs = toFiniteDurationMs(videoPlayer.currentTime * 1000);
@@ -1210,7 +1315,6 @@ export default function VideoScreen() {
         }
       }
       setDurationMs(toFiniteDurationMs(videoPlayer.duration * 1000));
-      setIsVideoPlaying(videoPlayer.playing);
       setIsBuffering(videoPlayer.status === "loading");
       setIsVideoReady(videoPlayer.status === "readyToPlay");
 
@@ -1229,32 +1333,12 @@ export default function VideoScreen() {
   }, [
     videoPlayer,
     isSeeking,
-    isVideoPlaying,
     isAutoplayEnabled,
     activeVideoMeta,
     activePlaybackUrl,
     syncActiveMediaItem,
+    isVideoPlaying,
   ]);
-
-  // ─── Heartbeat for listening time tracking ─────────────────
-  useEffect(() => {
-    if (!activeVideoMeta?.id) return;
-    if (!isVideoPlaying) {
-      stopHeartbeat();
-      return;
-    }
-
-    const contentId = String(activeVideoMeta.id);
-    startHeartbeat(
-      contentId,
-      () => (videoPlayer ? videoPlayer.currentTime * 1000 : 0),
-      () => (videoPlayer ? videoPlayer.duration * 1000 : 0)
-    );
-
-    return () => {
-      stopHeartbeat();
-    };
-  }, [activeVideoMeta?.id, isVideoPlaying]);
 
   useEffect(() => {
     // Pause inline video if global audio starts playing.
@@ -1346,7 +1430,11 @@ export default function VideoScreen() {
 
         // Stop/unload any previous inline video
         await pauseGlobalPlaybackIfNeeded();
-        videoPlayer.pause();
+        if (playerRef.current) {
+          try {
+            playerRef.current.pause();
+          } catch {}
+        }
 
         setLoadingPlaybackUrl(true);
         try {
@@ -1408,9 +1496,10 @@ export default function VideoScreen() {
 
           // Explicitly start playback after URL is set
           setTimeout(() => {
-            if (videoPlayer && sessionId === playbackSessionRef.current) {
+            const targetPlayer = playerRef.current || videoPlayer;
+            if (targetPlayer && sessionId === playbackSessionRef.current) {
               console.log("[VideoScreen] Calling safePlay after URL set");
-              safePlay(videoPlayer as any, "onPressVideo");
+              safePlay(targetPlayer as any, "onPressVideo");
             } else {
               console.log("[VideoScreen] safePlay skipped - session mismatch or no player");
             }
@@ -1543,38 +1632,10 @@ export default function VideoScreen() {
       refreshSubscriptionAndRetry();
       load().catch(() => undefined);
 
-      if (currentItem?.mediaType === "video" && currentItem.id === activeVideoId) {
-        if (
-          playerState.positionMs > 0 &&
-          Math.abs(videoPlayer.currentTime * 1000 - playerState.positionMs) > 600
-        ) {
-          try {
-            videoPlayer.currentTime = playerState.positionMs / 1000;
-          } catch {}
-        }
-        if (playerState.isPlaying && !videoPlayer.playing) {
-          safePlay(videoPlayer as any, "focus-sync");
-        } else if (!playerState.isPlaying && videoPlayer.playing) {
-          try {
-            videoPlayer.pause();
-          } catch {}
-        }
-      }
-
       return () => {
         setInlineVideoHostActive(false);
       };
-    }, [
-      load,
-      refreshSubscriptionAndRetry,
-      setInlineVideoHostActive,
-      currentItem,
-      activeVideoId,
-      playerState.positionMs,
-      playerState.isPlaying,
-      videoPlayer,
-      safePlay,
-    ])
+    }, [load, refreshSubscriptionAndRetry, setInlineVideoHostActive])
   );
 
   useEffect(() => {
@@ -1840,13 +1901,14 @@ export default function VideoScreen() {
 
       // ── Step 1: Pause immediately & capture exact position ──────────────────
       try {
-        videoPlayer.pause();
+        if (playerRef.current) playerRef.current.pause();
+        else if (videoPlayer) videoPlayer.pause();
       } catch {
         /* ignore */
       }
       let savedPositionSeconds = 0;
       try {
-        const t = videoPlayer.currentTime;
+        const t = playerRef.current?.currentTime ?? videoPlayer?.currentTime ?? 0;
         if (Number.isFinite(t) && t > 0) savedPositionSeconds = t;
       } catch {
         /* player not ready — resume from 0 */
@@ -1985,28 +2047,39 @@ export default function VideoScreen() {
   );
 
   const toggleInlinePlayPause = useCallback(async () => {
+    console.log("[VideoScreen] toggleInlinePlayPause entered");
     try {
-      const v = videoPlayer;
+      const v = playerRef.current || videoPlayer;
+      console.log("[VideoScreen] toggleInlinePlayPause: player exists:", Boolean(v));
       if (!v) {
         console.log("[VideoScreen] toggleInlinePlayPause: No video player");
         return;
       }
-      console.log("[VideoScreen] toggleInlinePlayPause: Current playing state:", v.playing);
+      console.log(
+        `[VideoScreen] toggleInlinePlayPause: Current playing state: ${v.playing}, status: ${v.status}, currentTime: ${v.currentTime}`
+      );
       if (v.playing) {
-        userPausedRef.current = true; // Mark as user-initiated pause
-        await v.pause();
+        userPausedRef.current = true;
+        console.log("[VideoScreen] Calling player.pause()...");
+        v.pause();
         setIsVideoPlaying(false);
-        console.log("[VideoScreen] Paused video");
+        console.log("[VideoScreen] isPlaying updated to false");
       } else {
-        userPausedRef.current = false; // Reset when user plays
-        await v.play();
+        userPausedRef.current = false;
+        console.log("[VideoScreen] Calling safePlay from toggleInlinePlayPause...");
+        safePlay(v as any, "toggleInlinePlayPause");
         setIsVideoPlaying(true);
-        console.log("[VideoScreen] Started video playback");
+        console.log("[VideoScreen] isPlaying updated to true");
       }
-    } catch (e) {
-      console.log("[VideoScreen] toggleInlinePlayPause error:", e);
+    } catch (e: any) {
+      console.error("[VideoScreen] toggleInlinePlayPause error:", {
+        name: e?.name,
+        message: e?.message,
+        stack: e?.stack,
+        cause: e?.cause,
+      });
     }
-  }, [videoPlayer]);
+  }, [videoPlayer, safePlay]);
 
   const showThankYou = useCallback(() => {
     const message = "Thank you for reporting.";
@@ -2245,7 +2318,7 @@ export default function VideoScreen() {
             <View style={styles.rowThumbOverlay}>
               <View style={styles.rowPlayBadge}>
                 <Image
-                  source={PauseButtonImg}
+                  source={PlayButtonImg}
                   style={styles.rowPlayImg}
                   resizeMode="contain"
                 />
@@ -2587,7 +2660,7 @@ export default function VideoScreen() {
                   style={styles.playerInner}
                   pointerEvents="box-none"
                   {...panResponder.panHandlers}>
-                  {activePlaybackUrl ? (
+                  {activePlaybackUrl && videoPlayer ? (
                     <Pressable
                       style={[
                         StyleSheet.absoluteFill,
@@ -2812,16 +2885,18 @@ export default function VideoScreen() {
                         ]}
                         onPress={async () => {
                           try {
-                            const wasPlaying = videoPlayer.playing;
+                            const p = playerRef.current || videoPlayer;
+                            if (!p) return;
+                            const wasPlaying = p.playing;
                             triggerSeekFeedback("back");
-                            videoPlayer.seekBy(-10);
+                            p.seekBy(-10);
                             if (wasPlaying) {
                               if (Platform.OS === "android") {
                                 setTimeout(() => {
-                                  safePlay(videoPlayer as any, "backward-seek");
+                                  safePlay(p as any, "backward-seek");
                                 }, 50);
                               } else {
-                                safePlay(videoPlayer as any, "backward-seek");
+                                safePlay(p as any, "backward-seek");
                               }
                             }
                           } catch (e) {
@@ -2840,7 +2915,7 @@ export default function VideoScreen() {
                         onPress={toggleInlinePlayPause}>
                         <Image
                           source={
-                            isVideoPlaying ? PlayButtonImg : PauseButtonImg
+                            isVideoPlaying ? PauseButtonImg : PlayButtonImg
                           }
                           style={styles.playPauseImg}
                           resizeMode="contain"
@@ -2855,20 +2930,22 @@ export default function VideoScreen() {
                         ]}
                         onPress={async () => {
                           try {
-                            const wasPlaying = videoPlayer.playing;
-                            const dur = videoPlayer.duration;
-                            const currentTime = videoPlayer.currentTime;
+                            const p = playerRef.current || videoPlayer;
+                            if (!p) return;
+                            const wasPlaying = p.playing;
+                            const dur = p.duration;
+                            const currentTime = p.currentTime;
                             const remaining = dur - currentTime;
                             const seekAmount = Math.min(10, remaining);
                             triggerSeekFeedback("forward");
-                            videoPlayer.seekBy(seekAmount);
+                            p.seekBy(seekAmount);
                             if (wasPlaying) {
                               if (Platform.OS === "android") {
                                 setTimeout(() => {
-                                  safePlay(videoPlayer as any, "forward-seek");
+                                  safePlay(p as any, "forward-seek");
                                 }, 50);
                               } else {
-                                safePlay(videoPlayer as any, "forward-seek");
+                                safePlay(p as any, "forward-seek");
                               }
                             }
                           } catch (e) {
