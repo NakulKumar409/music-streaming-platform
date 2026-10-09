@@ -17,6 +17,116 @@ let lastRecoveredSourceUrl: string | null = null;
 let lastRecoveredContentId: number | null = null;
 let contentRecoveryCount = 0;
 
+let isTrackPlayerInitialized = false;
+let trackPlayerReadyPromise: Promise<boolean> | null = null;
+let isServiceInitialized = false;
+let serviceInitializingPromise: Promise<void> | null = null;
+
+export function resetTrackPlayerReadyPromise(): void {
+  trackPlayerReadyPromise = null;
+  isTrackPlayerInitialized = false;
+}
+
+export async function ensureTrackPlayerReady(): Promise<boolean> {
+  if (isTrackPlayerInitialized) {
+    return true;
+  }
+
+  try {
+    await TrackPlayer.getActiveTrackIndex();
+    isTrackPlayerInitialized = true;
+    return true;
+  } catch {
+    // TrackPlayer not initialized yet
+  }
+
+  if (trackPlayerReadyPromise) {
+    return trackPlayerReadyPromise;
+  }
+
+  trackPlayerReadyPromise = (async () => {
+    try {
+      if (Platform.OS === 'android' && AppState.currentState !== 'active') {
+        await new Promise<void>((resolve) => {
+          const sub = AppState.addEventListener('change', (nextState) => {
+            if (nextState === 'active') {
+              sub.remove();
+              resolve();
+            }
+          });
+          setTimeout(() => {
+            sub.remove();
+            resolve();
+          }, 3000);
+        });
+      }
+
+      logger.log('[TrackPlayer] Starting TrackPlayer setup');
+      await TrackPlayer.setupPlayer({
+        autoHandleInterruptions: true,
+        autoUpdateMetadata: true,
+      });
+      logger.log('[TrackPlayer] TrackPlayer setup complete');
+      isTrackPlayerInitialized = true;
+      return true;
+    } catch (e: any) {
+      const msg = String(e?.message || '');
+      if (
+        e?.code === 'player_already_initialized' ||
+        msg.includes('already been initialized')
+      ) {
+        logger.log('[TrackPlayer] TrackPlayer setup complete');
+        isTrackPlayerInitialized = true;
+        return true;
+      }
+
+      if (
+        e?.code === 'android_cannot_setup_player_in_background' ||
+        msg.includes('must be in the foreground')
+      ) {
+        await new Promise<void>((resolve) => {
+          const sub = AppState.addEventListener('change', (nextState) => {
+            if (nextState === 'active') {
+              sub.remove();
+              resolve();
+            }
+          });
+          setTimeout(() => {
+            sub.remove();
+            resolve();
+          }, 3000);
+        });
+
+        try {
+          await TrackPlayer.setupPlayer({
+            autoHandleInterruptions: true,
+            autoUpdateMetadata: true,
+          });
+          logger.log('[TrackPlayer] TrackPlayer setup complete');
+          isTrackPlayerInitialized = true;
+          return true;
+        } catch (retryErr: any) {
+          if (
+            retryErr?.code === 'player_already_initialized' ||
+            String(retryErr?.message || '').includes('already been initialized')
+          ) {
+            logger.log('[TrackPlayer] TrackPlayer setup complete');
+            isTrackPlayerInitialized = true;
+            return true;
+          }
+          logger.error('[TrackPlayer] TrackPlayer setup retry failed', retryErr);
+        }
+      }
+
+      logger.error('[TrackPlayer] TrackPlayer setup failed', e);
+      trackPlayerReadyPromise = null;
+      return false;
+    }
+  })();
+
+  return trackPlayerReadyPromise;
+}
+
 /**
  * Background Playback Service
  *
@@ -29,39 +139,52 @@ let contentRecoveryCount = 0;
  * misleading and unreliable.
  */
 export default async function playbackService() {
-  logger.log('[PlaybackService] Starting background playback service');
-
-  // Re-assert the production-safe system capability contract when the native
-  // service starts. The foreground provider may be initialized first, but no
-  // notification/lock-screen action should advertise a queue operation that
-  // the native player cannot execute independently while React is suspended.
-  try {
-    await TrackPlayer.updateOptions({
-      android: {
-        appKilledPlaybackBehavior:
-          AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
-        alwaysPauseOnInterruption: false,
-        stopForegroundGracePeriod: 0,
-      },
-      capabilities: [
-        Capability.Play,
-        Capability.Pause,
-        Capability.SeekTo,
-        Capability.JumpForward,
-        Capability.JumpBackward,
-        Capability.Stop,
-      ],
-      compactCapabilities: [Capability.Play, Capability.Pause],
-      notificationCapabilities: [
-        Capability.Play,
-        Capability.Pause,
-        Capability.SeekTo,
-        Capability.Stop,
-      ],
-    });
-  } catch (error) {
-    logger.error('[PlaybackService] Failed to enforce remote capabilities:', error);
+  if (isServiceInitialized) {
+    return;
   }
+  if (serviceInitializingPromise) {
+    return serviceInitializingPromise;
+  }
+
+  serviceInitializingPromise = (async () => {
+    try {
+      const isReady = await ensureTrackPlayerReady();
+      if (!isReady) {
+        return;
+      }
+
+      // Re-assert the production-safe system capability contract when the native
+      // service starts. The foreground provider may be initialized first, but no
+      // notification/lock-screen action should advertise a queue operation that
+      // the native player cannot execute independently while React is suspended.
+      try {
+        await TrackPlayer.updateOptions({
+          android: {
+            appKilledPlaybackBehavior:
+              AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
+            alwaysPauseOnInterruption: false,
+            stopForegroundGracePeriod: 0,
+          },
+          capabilities: [
+            Capability.Play,
+            Capability.Pause,
+            Capability.SeekTo,
+            Capability.JumpForward,
+            Capability.JumpBackward,
+            Capability.Stop,
+          ],
+          compactCapabilities: [Capability.Play, Capability.Pause],
+          notificationCapabilities: [
+            Capability.Play,
+            Capability.Pause,
+            Capability.SeekTo,
+            Capability.Stop,
+          ],
+        });
+        logger.log('[PlaybackService] Remote capabilities configured');
+      } catch (error) {
+        logger.error('[PlaybackService] Failed to enforce remote capabilities:', error);
+      }
 
   try {
     servicePlayIntent = (await TrackPlayer.getState()) === State.Playing;
@@ -287,5 +410,12 @@ export default async function playbackService() {
     });
   }
 
-  logger.log('[PlaybackService] Background playback service initialized');
+      logger.log('[PlaybackService] Background playback service initialized');
+      isServiceInitialized = true;
+    } finally {
+      serviceInitializingPromise = null;
+    }
+  })();
+
+  return serviceInitializingPromise;
 }

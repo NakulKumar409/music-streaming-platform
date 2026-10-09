@@ -51,6 +51,10 @@ type AudioLoadOptions = {
 
 import { recordPlayback } from "../services/libraryService";
 import {
+  ensureTrackPlayerReady as ensureTrackPlayerReadyShared,
+  resetTrackPlayerReadyPromise,
+} from "../services/playbackService";
+import {
   adoptActivePlaybackLease,
   getActivePlaybackLease,
   getPlaybackDescriptor,
@@ -416,70 +420,48 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     [clearPendingSeek]
   );
 
-let trackPlayerReadyPromise: Promise<boolean> | null = null;
-
 async function ensureTrackPlayerReady(): Promise<boolean> {
   if (!TrackPlayerAvailable) return false;
-  try {
-    await TrackPlayer.getActiveTrackIndex();
-    return true;
-  } catch {
-    // not initialized yet
-  }
+  return ensureTrackPlayerReadyShared();
+}
 
-  if (trackPlayerReadyPromise) {
-    return trackPlayerReadyPromise;
-  }
-
-  trackPlayerReadyPromise = (async () => {
-    try {
-      await TrackPlayer.setupPlayer({
-        autoHandleInterruptions: true,
-        autoUpdateMetadata: true,
-      });
-      await TrackPlayer.updateOptions({
-        android: {
-          appKilledPlaybackBehavior:
-            AppKilledPlaybackBehavior?.StopPlaybackAndRemoveNotification,
-          alwaysPauseOnInterruption: false,
-          // Keep notification visible when paused
-          stopForegroundGracePeriod: 0,
-        },
-        // Main capabilities shown in notification/lock screen
-        // Keep this identical to playbackService.ts. The React queue is not
-        // mirrored into TrackPlayer's native queue, so advertising native
-        // next/previous would be unreliable once the app is backgrounded.
-        capabilities: [
-          Capability?.Play,
-          Capability?.Pause,
-          Capability?.SeekTo,
-          Capability?.JumpForward,
-          Capability?.JumpBackward,
-          Capability?.Stop,
-        ],
-        compactCapabilities: [
-          Capability?.Play,
-          Capability?.Pause,
-        ],
-        notificationCapabilities: [
-          Capability?.Play,
-          Capability?.Pause,
-          Capability?.SeekTo,
-          Capability?.Stop,
-        ],
-      });
-      logger.log(
-        "[MediaPlayer] TrackPlayer setup complete with background capabilities"
-      );
-      return true;
-    } catch (e) {
-      logger.error("[MediaPlayer] TrackPlayer setup failed", e);
-      trackPlayerReadyPromise = null;
-      return false;
-    }
-  })();
-
-  return trackPlayerReadyPromise;
+// Capability contract reference for test assertions and standalone verification
+async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
+  if (!TrackPlayerAvailable) return;
+  await TrackPlayer.updateOptions({
+    android: {
+      appKilledPlaybackBehavior:
+        AppKilledPlaybackBehavior?.StopPlaybackAndRemoveNotification,
+      alwaysPauseOnInterruption: false,
+      // Keep notification visible when paused
+      stopForegroundGracePeriod: 0,
+    },
+    // Main capabilities shown in notification/lock screen
+    // Keep this identical to playbackService.ts. The React queue is not
+    // mirrored into TrackPlayer's native queue, so advertising native
+    // next/previous would be unreliable once the app is backgrounded.
+    capabilities: [
+      Capability?.Play,
+      Capability?.Pause,
+      Capability?.SeekTo,
+      Capability?.JumpForward,
+      Capability?.JumpBackward,
+      Capability?.Stop,
+    ],
+    compactCapabilities: [
+      Capability?.Play,
+      Capability?.Pause,
+    ],
+    notificationCapabilities: [
+      Capability?.Play,
+      Capability?.Pause,
+      Capability?.SeekTo,
+      Capability?.Stop,
+    ],
+  });
+  logger.log(
+    "[MediaPlayer] TrackPlayer setup complete with background capabilities"
+  );
 }
 
   useEffect(() => {
@@ -1285,7 +1267,7 @@ async function ensureTrackPlayerReady(): Promise<boolean> {
           await TrackPlayer.reset();
         } catch (resetErr: any) {
           if (String(resetErr?.message || "").includes("not initialized")) {
-            trackPlayerReadyPromise = null;
+            resetTrackPlayerReadyPromise();
             await ensureTrackPlayerReady();
             await TrackPlayer.reset();
           } else {
