@@ -1,6 +1,5 @@
-import React, { useMemo } from 'react';
-import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
-import { BlurView } from 'expo-blur';
+import React from 'react';
+import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Search as SearchIcon } from 'lucide-react-native';
 
 interface AudioHeaderProps {
@@ -9,39 +8,29 @@ interface AudioHeaderProps {
 }
 
 export default function AudioHeader({ query, setQuery }: AudioHeaderProps) {
-  const greeting = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 18) return 'Good Afternoon';
-    return 'Good Evening';
-  }, []);
-
   return (
     <View style={styles.container}>
-      <View style={styles.headerTop}>
-        <Image 
-          source={require('../../assets/logo.png')} 
-          style={styles.headerLogo}
-          resizeMode="cover"
-        />
-        <Text style={styles.greeting}>{greeting}</Text>
+      {/* Page title row */}
+      <View style={styles.titleRow}>
+        <Text style={styles.pageTitle}>Music</Text>
       </View>
-      <Text style={styles.subtitle}>What do you want to hear today?</Text>
+      <Text style={styles.subtitle}>Explore millions of songs</Text>
 
+      {/* Search box */}
       <View style={styles.searchWrap}>
-        <BlurView intensity={24} tint="dark" style={styles.searchBlur}>
-          <SearchIcon color="rgba(255,255,255,0.7)" size={18} />
+        <View style={styles.searchBox}>
+          <SearchIcon color="rgba(255,255,255,0.5)" size={17} />
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search songs"
-            placeholderTextColor="rgba(255,255,255,0.35)"
+            placeholder="Search songs, artists, albums..."
+            placeholderTextColor="rgba(255,255,255,0.32)"
             style={styles.searchInput}
             returnKeyType="search"
             autoCapitalize="none"
             autoCorrect={false}
           />
-        </BlurView>
+        </View>
       </View>
     </View>
   );
@@ -50,55 +39,50 @@ export default function AudioHeader({ query, setQuery }: AudioHeaderProps) {
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 8,
+    // Extra top padding so content never touches safe-area edge
+    paddingTop: Platform.OS === 'android' ? 14 : 8,
+    paddingBottom: 4,
   },
-  headerTop: {
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
+    marginBottom: 4,
   },
-  headerLogo: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  headerTextWrap: {
-    marginBottom: 16,
-  },
-  greeting: {
+  pageTitle: {
     color: '#fff',
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '900',
-    letterSpacing: 0.2,
+    letterSpacing: -0.3,
+    lineHeight: 32,
   },
   subtitle: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 6,
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: 18,
+    lineHeight: 18,
   },
   searchWrap: {
     width: '100%',
+    marginBottom: 4,
   },
-  searchBlur: {
+  searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    height: 48,
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 16,
-    overflow: 'hidden',
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.10)',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   searchInput: {
     flex: 1,
     color: '#fff',
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '500',
     padding: 0,
+    height: 48,
   },
 });

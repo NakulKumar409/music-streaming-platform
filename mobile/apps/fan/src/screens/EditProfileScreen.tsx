@@ -18,7 +18,9 @@ import { ArrowLeft, Camera, Lock } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../store/authStore';
 import { userService, UserProfile } from '../services/userService';
+import { normalizeApiError } from '../services/api';
 import { getOptimizedImageUrl } from '../utils/cloudinary';
+import AppImage from '../components/AppImage';
 
 export default function EditProfileScreen() {
   const navigation = useNavigation<any>();
@@ -99,6 +101,7 @@ export default function EditProfileScreen() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -135,23 +138,38 @@ export default function EditProfileScreen() {
 
     try {
       // Create a readable filename and mimeType
-      const uriParts = asset.uri.split(".");
-      const fileType = uriParts[uriParts.length - 1];
-      const mimeType =
-        asset.mimeType || (fileType === "png" ? "image/png" : "image/jpeg");
-      const fileName = asset.fileName || `profile-${Date.now()}.${fileType}`;
+      let mimeType = asset.mimeType || "image/jpeg";
+      let fileExt = "jpg";
+      if (asset.uri.startsWith("data:image/png") || mimeType.includes("png")) {
+        fileExt = "png";
+        mimeType = "image/png";
+      } else if (asset.uri.startsWith("data:image/webp") || mimeType.includes("webp")) {
+        fileExt = "webp";
+        mimeType = "image/webp";
+      } else if (asset.uri.startsWith("data:image/jpeg") || mimeType.includes("jpeg") || mimeType.includes("jpg")) {
+        fileExt = "jpg";
+        mimeType = "image/jpeg";
+      } else {
+        const uriParts = asset.uri.split(".");
+        const lastPart = uriParts[uriParts.length - 1]?.split(/[?#]/)[0]?.toLowerCase();
+        if (["png", "jpg", "jpeg", "webp"].includes(lastPart)) {
+          fileExt = lastPart === "jpeg" ? "jpg" : lastPart;
+          mimeType = fileExt === "png" ? "image/png" : (fileExt === "webp" ? "image/webp" : "image/jpeg");
+        }
+      }
+      const fileName = asset.fileName || `profile-${Date.now()}.${fileExt}`;
 
       const newImageUrl = await userService.uploadProfileImage(
         asset.uri,
         mimeType,
-        fileName
+        fileName,
+        asset.base64
       );
-      setProfileImageUri(newImageUrl);
-      setSuccessMsg("Cover photo uploaded! Tap save to apply changes.");
+      const freshUri = newImageUrl ? `${newImageUrl.split('?')[0]}?t=${Date.now()}` : '';
+      setProfileImageUri(freshUri);
+      setSuccessMsg("Profile photo uploaded successfully!");
     } catch (err: any) {
-      setErrorMsg(
-        err.response?.data?.message || err.message || "Image upload failed"
-      );
+      setErrorMsg(normalizeApiError(err).message);
     } finally {
       setIsUploadingImage(false);
     }
@@ -191,7 +209,7 @@ export default function EditProfileScreen() {
       }, 1500);
       
     } catch (err: any) {
-      setErrorMsg(err.response?.data?.message || err.message || 'Failed to update profile');
+      setErrorMsg(normalizeApiError(err).message);
     } finally {
       setIsSaving(false);
     }
@@ -248,7 +266,7 @@ export default function EditProfileScreen() {
           <View style={styles.avatarSection}>
             <View style={styles.avatarWrapper}>
               {profileImageUri ? (
-                <Image source={{ uri: getOptimizedImageUrl(profileImageUri) || profileImageUri }} style={styles.avatar} />
+                <AppImage uri={profileImageUri} fallbackType="artist" style={styles.avatar} />
               ) : (
                 <View style={styles.avatarPlaceholder}>
                   <Text style={styles.avatarLetter}>{fullName ? fullName.charAt(0).toUpperCase() : 'U'}</Text>

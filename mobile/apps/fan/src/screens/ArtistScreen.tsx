@@ -51,6 +51,9 @@ import {
 } from "../ui/SubscriptionUI";
 import YouTubeVideoControlsOverlay from "../ui/YouTubeVideoControlsOverlay";
 import { getOptimizedImageUrl } from "../utils/cloudinary";
+import AppImage from "../components/AppImage";
+import { useToast } from "../ui/ToastProvider";
+import { findMediaQueueIndex } from "../utils/mediaQueue";
 
 function SpotifyIcon({ size = 18 }: { size?: number }) {
   return (
@@ -147,6 +150,7 @@ type Song = {
   title: string;
   artist: string;
   duration: string;
+  durationMs?: number;
   thumbnail: string;
   locked: boolean;
   mediaType: "audio" | "video";
@@ -206,6 +210,7 @@ export default function ArtistScreen({ navigation, route }: any) {
     setExpanded,
     setInlineVideoHostActive,
   } = useMediaPlayer();
+  const { showToast } = useToast();
 
   useEffect(() => {
     const isInlineVideo =
@@ -255,7 +260,11 @@ export default function ArtistScreen({ navigation, route }: any) {
   const [showDebugToggle, setShowDebugToggle] = useState(__DEV__);
 
   const handleRenewSubscription = () => {
-    navigation.navigate("SubscriptionFlow");
+    navigation.navigate("SubscriptionFlow", {
+      artistId: artist?.id || artistId,
+      artistName: artist?.name,
+      amount: artist?.subscriptionPrice,
+    });
     setIsSubscriptionActive(true); // Reset after navigation
   };
 
@@ -368,6 +377,7 @@ export default function ArtistScreen({ navigation, route }: any) {
           title: it.title,
           artist: a.name,
           duration: it.mediaType === "video" ? "Video" : "Audio",
+          durationMs: it.durationMs,
           thumbnail: it.artworkUrl,
           locked: it.locked,
           mediaType: it.mediaType,
@@ -430,28 +440,32 @@ export default function ArtistScreen({ navigation, route }: any) {
     if (match.mediaType === "audio") setActiveTab("Audio");
     if (match.mediaType === "video") setActiveTab("Video");
 
-    const queue = songs
-      .filter((s) => Boolean(s.mediaUrl) || s.useStreamAccess)
-      .map((s) => ({
-        id: s.id,
-        contentId: s.contentId,
-        title: s.title,
-        artistName: s.artist,
-        artistId: artist.id,
-        mediaType: s.mediaType,
-        artworkUrl: s.thumbnail,
-        mediaUrl: s.mediaUrl || "",
-        isLocked: s.locked ?? false,
-        useStreamAccess: s.useStreamAccess,
-      }));
-    const idx = queue.findIndex(
-      (q) => q.id === initialMediaId || q.contentId === initialMediaId
-    );
-    if (idx < 0) return;
+    const queue = songs.map((s) => ({
+      id: s.id,
+      contentId: s.contentId,
+      title: s.title,
+      artistName: s.artist,
+      artistId: artist.id,
+      mediaType: s.mediaType,
+      artworkUrl: s.thumbnail,
+      mediaUrl: s.mediaUrl || "",
+      isLocked: s.locked ?? false,
+      useStreamAccess: s.useStreamAccess,
+      duration: s.durationMs,
+    }));
+    const idx = findMediaQueueIndex(queue, match);
+    if (idx < 0) {
+      showToast({
+        tone: "error",
+        title: "Couldn't open this song",
+        message: "The song selection is no longer available. Please refresh and try again.",
+      });
+      return;
+    }
 
     playQueue(queue, idx).catch(() => undefined);
     setCurrentSong(match);
-  }, [artist, initialMediaId, playQueue, songs]);
+  }, [artist, initialMediaId, playQueue, showToast, songs]);
 
   useEffect(() => {
     const nextIsVideoPlaying = currentItem?.mediaType === "video";
@@ -465,21 +479,21 @@ export default function ArtistScreen({ navigation, route }: any) {
   const isTemporarilyUnlocked = isUnlocked;
 
   const filteredSongs = useMemo(() => {
-    const baseSongs = isTemporarilyUnlocked
+    const baseSongs = isTemporarilyUnlocked || isSubscribedToArtist
       ? songs.map((s) => ({ ...s, locked: false }))
       : songs;
     if (activeTab === "All") return baseSongs;
     if (activeTab === "Audio")
       return baseSongs.filter((s) => s.mediaType === "audio");
     return baseSongs.filter((s) => s.mediaType === "video");
-  }, [activeTab, isTemporarilyUnlocked, songs]);
+  }, [activeTab, isSubscribedToArtist, isTemporarilyUnlocked, songs]);
 
   // Build navigation params for FullPlayerScreen — Move after filteredSongs
   const buildFullPlayerParams = useCallback(
     (song: Song) => {
       if (!artist) return null;
       const queue = filteredSongs
-        .filter((s) => Boolean(s.mediaUrl) || s.useStreamAccess)
+        .filter((s) => s.mediaType === "audio")
         .map((s) => ({
           id: s.id,
           contentId: s.contentId,
@@ -489,21 +503,25 @@ export default function ArtistScreen({ navigation, route }: any) {
           mediaType: s.mediaType,
           artworkUrl: s.thumbnail,
           mediaUrl: s.mediaUrl || "",
-          isLocked: s.locked ?? false,
+          isLocked: isSubscribedToArtist ? false : (s.locked ?? false),
           useStreamAccess: s.useStreamAccess,
+          duration: s.durationMs,
         }));
-      const idx = queue.findIndex((q) => q.id === song.id);
+
+      const idx = findMediaQueueIndex(queue, song);
+      if (idx < 0) return null;
+
       return {
         songId: song.id,
         title: song.title,
         artist: song.artist,
         imageUrl: song.thumbnail,
         audioUrl: song.mediaUrl || "",
-        queueIndex: idx >= 0 ? idx : 0,
+        queueIndex: idx,
         queue,
       };
     },
-    [artist, filteredSongs]
+    [artist, filteredSongs, isSubscribedToArtist]
   );
 
   const channelContent = useMemo(() => {
@@ -516,17 +534,22 @@ export default function ArtistScreen({ navigation, route }: any) {
 
   const handleSongPress = (song: Song) => {
     if (!artist) return;
-    if (song.locked) {
-      // Tracking locked clicks for smart upsell
+    const isSongLocked = Boolean(song.locked && !isSubscribedToArtist);
+    if (isSongLocked) {
+      showToast({
+        tone: "warning",
+        title: "Subscription required",
+        message: `Subscribe to ${artist.name || "this artist"} to play "${song.title}".`,
+      });
+
+      // Keep the existing upsell journey intact; the toast provides immediate,
+      // non-blocking feedback while the established conversion UI remains.
       const newCount = lockedClicks + 1;
       setLockedClicks(newCount);
 
       if (newCount >= 3) {
         setShowStrongUpsell(true);
-      }
-
-      // If song is locked, show the artist lock modal for specific upsell
-      if (song.locked) {
+      } else {
         setShowArtistLockModal({ visible: true, song });
       }
 
@@ -558,8 +581,15 @@ export default function ArtistScreen({ navigation, route }: any) {
     const params = buildFullPlayerParams(song);
     if (params) {
       navigation.navigate("FullPlayer", params);
+      setCurrentSong(song);
+      return;
     }
-    setCurrentSong(song);
+
+    showToast({
+      tone: "error",
+      title: "Couldn't open this song",
+      message: "The song list changed. Please refresh and try again.",
+    });
   };
 
   useEffect(() => {
@@ -583,7 +613,7 @@ export default function ArtistScreen({ navigation, route }: any) {
       <StatusBar barStyle="light-content" />
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
         <View style={styles.container}>
-          {isVideoPlaying && currentItem?.mediaType === "video" ? (
+          {isVideoPlaying && currentItem?.mediaType === "video" && videoPlayer ? (
             <View style={styles.stickyVideoHost}>
               <InlineVideoPlayer
                 mediaUrl={currentItem.mediaUrl}
@@ -627,7 +657,7 @@ export default function ArtistScreen({ navigation, route }: any) {
                     {!isVideoPlaying ? (
                       <ProfileHeaderSection
                         bannerUrl={artist.coverImage}
-                        avatarUrl={artist.profileImage || artist.coverImage}
+                        avatarUrl={artist.profileImage}
                         name={artist.name}
                         verified={artist.verified}
                         subscribersLabel={artist.subscribers}
@@ -656,7 +686,7 @@ export default function ArtistScreen({ navigation, route }: any) {
                       />
                     ) : (
                       <InlineArtistMetaSection
-                        avatarUrl={artist.profileImage || artist.coverImage}
+                        avatarUrl={artist.profileImage}
                         name={artist.name}
                         verified={artist.verified}
                         subscribersLabel={artist.subscribers}
@@ -822,6 +852,8 @@ function InlineVideoPlayer({
   const [controlsVisible, setControlsVisible] = useState(true);
   const toggleControls = useCallback(() => setControlsVisible((v) => !v), []);
 
+  if (!videoPlayer) return null;
+
   return (
     <View style={[styles.youtubeVideoWrap, { aspectRatio }]}>
       <VideoView
@@ -913,9 +945,11 @@ function ProfileHeaderSection({
   return (
     <View style={styles.profileWrap}>
       <View style={styles.bannerWrap}>
-        <Image
-          source={{ uri: getOptimizedImageUrl(bannerUrl) }}
+        <AppImage
+          uri={bannerUrl}
+          fallbackType="banner"
           style={styles.bannerImg}
+          resizeMode="cover"
         />
         <LinearGradient
           colors={["rgba(0,0,0,0.08)", "rgba(0,0,0,0.75)"]}
@@ -930,9 +964,11 @@ function ProfileHeaderSection({
 
       <View style={styles.avatarRow}>
         <View style={styles.avatarWrap}>
-          <Image
-            source={{ uri: getOptimizedImageUrl(avatarUrl) }}
+          <AppImage
+            uri={avatarUrl}
+            fallbackType="artist"
             style={styles.avatarImg}
+            resizeMode="cover"
           />
         </View>
       </View>
@@ -1048,9 +1084,11 @@ function InlineArtistMetaSection({
 
       <View style={styles.inlineMetaRow}>
         <View style={styles.inlineAvatarWrap}>
-          <Image
-            source={{ uri: getOptimizedImageUrl(avatarUrl) }}
+          <AppImage
+            uri={avatarUrl}
+            fallbackType="artist"
             style={styles.inlineAvatarImg}
+            resizeMode="cover"
           />
         </View>
 
@@ -1210,9 +1248,11 @@ function MediaCard({
       style={[styles.cardPressable, styles.cardPressableList]}>
       <View style={styles.card}>
         <View style={styles.cardThumbWrap}>
-          <Image
-            source={{ uri: getOptimizedImageUrl(item.thumbnail) }}
+          <AppImage
+            uri={item.thumbnail}
+            fallbackType={item.mediaType === "video" ? "video" : "song"}
             style={styles.cardThumb}
+            resizeMode="cover"
           />
           {item.locked && (
             <View style={styles.lockOverlay}>

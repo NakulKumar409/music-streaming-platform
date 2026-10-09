@@ -1,232 +1,281 @@
 /**
- * Centralized media access service. Section 18.
- * Validates: Auth, Media Status (READY), Visibility, Entitlement; then issues playback URL via delivery strategy.
+ * Canonical fan playback-access service.
+ *
+ * Authorization is evaluated before a playback session is allocated. Every
+ * successful response points to the backend protected stream boundary; storage
+ * provider URLs are never returned directly from this command.
  */
 
-import { pool } from "../../common/db";
 import { logger } from "../../common/logger";
-import { 
-  getContentForAccess, 
-  checkMediaEntitlement, 
-  validateQualityAccess, 
-  type VisibilityType 
-} from "../../shared/security/media-authz.service";
-import { createPlaybackToken } from "../../shared/security/signed-media-token.service";
-import { generatePlaybackAccess } from "../../shared/delivery/services/media-delivery.service";
-import { isContentEligibleForPlayback, normalizeVisibilityForPlayback } from "./media-policy.service";
 import { getMediaConfig } from "../../config/media.config";
-import { resolveMediaIdentity } from "../../shared/media/media-asset-locator";
+import { generatePlaybackAccess } from "../../shared/delivery/services/media-delivery.service";
 import { DeliveryFailedException } from "../../shared/exceptions/delivery.exception";
-import { ensureValidPlaybackUrl } from "./playback-url.guard";
 import {
+  MediaAccessDeniedException,
+  MediaInvalidQualityException,
   MediaNotFoundException,
   MediaNotReadyException,
-  MediaAccessDeniedException
 } from "../../shared/exceptions/media.exception";
-import type { PlaybackAccessResponse } from "./media.types";
+import { resolveMediaIdentity } from "../../shared/media/media-asset-locator";
+import {
+  checkMediaEntitlement,
+  getContentForAccess,
+  validateQualityAccess,
+  type VideoQuality,
+  type VisibilityType,
+} from "../../shared/security/media-authz.service";
+import {
+  createPlaybackSession,
+  discardPlaybackSession,
+  refreshPlaybackSessionLease,
+} from "../../shared/security/playback-session.service";
+import { createPlaybackToken } from "../../shared/security/signed-media-token.service";
+import {
+  isContentEligibleForPlayback,
+  normalizeVisibilityForPlayback,
+} from "./media-policy.service";
+import type { PlaybackAccessResponse, PlaybackMode } from "./media.types";
 
 export interface RequestPlaybackInput {
   contentId: number;
-  userId: number | null;
+  userId: number;
+  /**
+   * Present only when refreshing the short-lived playback token for an already
+   * active playback. A supplied lease must belong to this user/content and must
+   * still be active; the service never silently allocates a replacement lease.
+   */
+  sessionId?: number;
+  deviceId?: string | null;
   kind?: "audio" | "video";
-  quality?: "SD" | "HD";
-  allowPreview?: boolean;
+  quality?: string;
+  correlationId?: string;
 }
 
-/**
- * Main entry: validate everything then return playback URL (or throw).
- * No controller should issue playback URLs without this service.
- */
-export async function requestPlaybackAccess(input: RequestPlaybackInput): Promise<PlaybackAccessResponse> {
-  const { contentId, userId } = input;
-  const correlationId = (input as any).correlationId || "-";
+const SUPPORTED_PROVIDERS = new Set(["local", "cloudinary", "s3", "firebase"]);
+const QUALITY_ORDER: Exclude<VideoQuality, "Auto">[] = [
+  "144p",
+  "240p",
+  "360p",
+  "480p",
+  "720p",
+  "1080p",
+];
 
-  if (userId) {
-    // 1. Prune dead sessions (no heartbeat in 2 mins)
-    await pool.query(`DELETE FROM playback_sessions WHERE heartbeat_at < now() - interval '2 minutes'`);
+function positiveInteger(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
 
-    // 2. Count active sessions
-    const activeCountRes = await pool.query(
-      `SELECT count(*) FROM playback_sessions WHERE user_id = $1`,
-      [userId]
+function actualAdaptiveQualities(raw: unknown): Exclude<VideoQuality, "Auto">[] {
+  if (!Array.isArray(raw)) return [];
+  const set = new Set(raw.map((value) => String(value)));
+  return QUALITY_ORDER.filter((quality) => set.has(quality));
+}
+
+export async function requestPlaybackAccess(
+  input: RequestPlaybackInput
+): Promise<PlaybackAccessResponse> {
+  const contentId = positiveInteger(input.contentId);
+  const userId = positiveInteger(input.userId);
+  const requestedSessionId =
+    input.sessionId === undefined ? null : positiveInteger(input.sessionId);
+  const correlationId = input.correlationId || "-";
+  if (!contentId) throw new MediaNotFoundException(String(input.contentId));
+  if (!userId) {
+    throw new MediaAccessDeniedException(
+      "Authentication required",
+      "AUTHENTICATION_REQUIRED"
     );
-    const activeCount = parseInt(activeCountRes.rows[0].count, 10);
-
-    // 3. Admin bypass or limit block
-    const userRoleResult = await pool.query(`SELECT role FROM users WHERE id = $1`, [userId]);
-    const role = (userRoleResult.rows[0]?.role || "").toUpperCase();
-    
-    if (role !== "ADMIN" && activeCount >= 2) {
-       logger.warn({ userId, activeCount, correlationId }, "[ABUSE] Concurrency limit reached");
-       throw new MediaAccessDeniedException("Too many concurrent streams. Please close another session to continue.");
-    }
-
-    // 4. Register this session
-    await pool.query(
-      `INSERT INTO playback_sessions (user_id, content_id) VALUES ($1, $2)`,
-      [userId, contentId]
+  }
+  if (input.sessionId !== undefined && !requestedSessionId) {
+    throw new MediaAccessDeniedException(
+      "Playback session is invalid or expired",
+      "PLAYBACK_SESSION_EXPIRED"
     );
   }
 
   const content = await getContentForAccess(contentId);
-  if (!content) {
-    throw new MediaNotFoundException(contentId);
+  if (!content) throw new MediaNotFoundException(contentId);
+
+  const technicalStatus = String(content.status || "").toUpperCase();
+  const lifecycleState = String(content.lifecycle_state || "").toUpperCase();
+  if (
+    !isContentEligibleForPlayback({
+      technicalStatus,
+      lifecycleState,
+      isApproved: Boolean(content.is_approved),
+      isTakenDown: Boolean(content.is_taken_down),
+    })
+  ) {
+    const reason = content.is_taken_down
+      ? "TAKEN_DOWN"
+      : `${lifecycleState || "UNKNOWN"}/${technicalStatus || "UNKNOWN"}`;
+    throw new MediaNotReadyException(contentId, reason);
   }
 
-  const status = (content.status || "DRAFT").toString().toUpperCase();
-  const isApproved = Boolean(content.is_approved);
-
-  const isEligibleForPlayback = isContentEligibleForPlayback(status, isApproved);
-  if (!isEligibleForPlayback) {
-    throw new MediaNotReadyException(contentId, status);
+  const visibility = normalizeVisibilityForPlayback(content.visibility || "PROTECTED");
+  if (!visibility) {
+    throw new MediaAccessDeniedException(
+      "Content visibility is invalid",
+      "INVALID_VISIBILITY"
+    );
   }
-
-  const visibility = normalizeVisibilityForPlayback(content.visibility || "PROTECTED") as VisibilityType;
-  const subscriptionRequired = Boolean(content.subscription_required);
 
   const entitlement = await checkMediaEntitlement(
-    userId ?? null,
-    content.artist_id,
-    visibility,
-    subscriptionRequired,
-    input.allowPreview ?? false
+    userId,
+    Number(content.artist_id),
+    visibility as VisibilityType,
+    Boolean(content.subscription_required)
   );
-
   if (!entitlement.allowed) {
-    throw new MediaAccessDeniedException(`Access denied to media ${contentId}: ${entitlement.reason || "No active subscription"}`);
+    throw new MediaAccessDeniedException(
+      entitlement.reason || "Playback access denied",
+      entitlement.code || "ACCESS_DENIED"
+    );
   }
 
-  const kind = (input.kind || "").toString().toLowerCase();
-  const requestedKind: "audio" | "video" | null = kind === "video" ? "video" : kind === "audio" ? "audio" : null;
-  
-  const hasExplicitProvider = Boolean(content.storage_provider);
-  const storageProvider = (content.storage_provider || "local").toString().toLowerCase();
+  const requestedKind =
+    input.kind === "video" ? "video" : input.kind === "audio" ? "audio" : null;
   const resolvedKind: "audio" | "video" =
-    requestedKind || ((content.type || "").toString().toLowerCase().includes("video") ? "video" : "audio");
-  const identity = resolveMediaIdentity(content as any, resolvedKind);
-  let storageKey = identity.internalStorageKey;
+    requestedKind ||
+    (String(content.type || "").toLowerCase().includes("video") ? "video" : "audio");
+
+  const storageProvider = String(content.storage_provider || "").trim().toLowerCase();
+  if (!SUPPORTED_PROVIDERS.has(storageProvider)) {
+    throw new MediaNotReadyException(contentId, "storage provider is not configured");
+  }
+
+  const identity = resolveMediaIdentity(content, resolvedKind);
+  const storageKey = identity.internalStorageKey;
   const providerAssetId = identity.providerAssetId;
 
-  // DEBUG: Log audio playback resolution details
-  console.log(`[media-access] contentId=${contentId}, kind=${resolvedKind}, provider=${storageProvider}, storageKey=${storageKey}, providerAssetId=${providerAssetId}`);
-  console.log(`[media-access] content fields:`, {
-    type: content.type,
-    storage_provider: content.storage_provider,
-    storage_key: content.storage_key,
-    audio_url: content.audio_url,
-    media_url: content.media_url,
-    provider_asset_id: content.provider_asset_id,
-    audio_provider_asset_id: content.audio_provider_asset_id
-  });
-
-  const type = (content.type || "").toString().toLowerCase();
-  const isVideo = requestedKind === "video" || type === "video" || !!content.video_storage_key || !!content.video_url;
-
-  const legacyUrl =
-    (requestedKind === "video"
-      ? (content.video_url ?? null)
-      : requestedKind === "audio"
-        ? (content.audio_url ?? null)
-        : ((isVideo ? content.video_url : content.audio_url) ?? null)
-    ) ??
-    content.media_url ??
-    null;
-
-  // Legacy rows: if storage_provider is NULL, prefer legacy URL fields even if keys exist.
-  if (!hasExplicitProvider && legacyUrl) {
-    storageKey = null;
+  if (storageProvider === "cloudinary") {
+    if (!providerAssetId) {
+      throw new MediaNotReadyException(contentId, "provider asset identity missing");
+    }
+  } else if (!storageKey) {
+    throw new MediaNotReadyException(contentId, "storage key missing");
   }
 
-  if (!storageKey && legacyUrl) {
-    const config = getMediaConfig();
-    const base = config.appBaseUrl.replace(/\/$/, "");
-    const raw = String(legacyUrl);
-    const playbackUrl = raw.startsWith("http://") || raw.startsWith("https://")
-      ? raw
-      : raw.startsWith("/")
-        ? `${base}${raw}`
-        : `${base}/${raw}`;
-    return {
-      mediaId: contentId,
-      playbackUrl,
-      expiresIn: config.mediaUrlTtlSeconds
-    };
+  const parsedQuality = await validateQualityAccess(userId, input.quality);
+  const availableAdaptiveQualities = actualAdaptiveQualities(content.adaptive_qualities);
+  const adaptiveVideo = resolvedKind === "video" && storageProvider === "cloudinary";
+  let playbackMode: PlaybackMode = "PROGRESSIVE";
+  let selectedQuality: VideoQuality | undefined;
+  let qualities: VideoQuality[] = [];
+  let defaultQuality: VideoQuality | "ORIGINAL" = "ORIGINAL";
+
+  if (adaptiveVideo) {
+    const adaptiveStatus = String(content.adaptive_status || "").toUpperCase();
+    if (adaptiveStatus !== "READY") {
+      throw new MediaNotReadyException(contentId, `ADAPTIVE_${adaptiveStatus || "PENDING"}`);
+    }
+    if (!availableAdaptiveQualities.length) {
+      throw new MediaNotReadyException(contentId, "ADAPTIVE_RENDITIONS_MISSING");
+    }
+
+    playbackMode = "HLS";
+    qualities = [...availableAdaptiveQualities];
+    const requested = parsedQuality.quality;
+    if (requested === "Auto") {
+      selectedQuality = availableAdaptiveQualities.length > 1
+        ? "Auto"
+        : availableAdaptiveQualities[0];
+    } else if (availableAdaptiveQualities.includes(requested)) {
+      selectedQuality = requested;
+    } else {
+      selectedQuality = availableAdaptiveQualities[0];
+    }
+    defaultQuality = availableAdaptiveQualities.length > 1 ? "Auto" : availableAdaptiveQualities[0];
+  } else if (resolvedKind === "video") {
+    selectedQuality = undefined;
+    defaultQuality = "ORIGINAL";
   }
-
-  if (!storageKey && isVideo && content.video_storage_key) {
-    storageKey = content.video_storage_key;
-  }
-
-  // Legacy content: no storage_key, use media_url as direct URL (backend serves /uploads via static)
-  if (!storageKey && content.media_url) {
-    const config = getMediaConfig();
-    const base = config.appBaseUrl.replace(/\/$/, "");
-    const path = (content.media_url as string).startsWith("/") ? content.media_url : `/${content.media_url}`;
-    return {
-      mediaId: contentId,
-      playbackUrl: `${base}${path}`,
-      expiresIn: config.mediaUrlTtlSeconds
-    };
-  }
-
-  // For development without Redis, allow Cloudinary content without providerAssetId
-  // if (storageProvider === "cloudinary" && !providerAssetId) {
-  //   console.error(`[media-access] MISSING providerAssetId for Cloudinary content: contentId=${contentId}, kind=${resolvedKind}`);
-  //   throw new MediaNotReadyException(
-  //     contentId,
-  //     `missing ${resolvedKind} provider asset identity (cloudinary). Repair mapping for this row`
-  //   );
-  // }
-
-  // For development without Redis, allow content without storage key
-  // if (!storageKey && storageProvider !== "cloudinary") {
-  //   throw new MediaNotReadyException(contentId, "no storage key");
-  // }
 
   const config = getMediaConfig();
-  // FORCE 5 MINUTE TTL FOR PRODUCTION SECURITY
-  const expiresInSeconds = 300; 
+  const expiresInSeconds = config.mediaUrlTtlSeconds;
+  const expiresAtEpochSeconds = Math.floor(Date.now() / 1000) + expiresInSeconds;
 
-  const token = createPlaybackToken(contentId, userId ?? 0, expiresInSeconds);
-
-  // QUALITY GATE: Downgrade to SD if unauthorized HD is requested.
-  const qCheck = await validateQualityAccess(userId, input.quality);
-  if (input.quality === "HD" && !qCheck.authorized) {
-    logger.info({ userId, contentId, requestedQuality: input.quality, correlationId }, "[AUTHZ] Unauthorized HD request - downgrading to SD");
+  // Playback authorization must never record listen time or play counts directly.
+  // Audited consumption is exclusively owned by the trusted heartbeat path.
+  let sessionId: number;
+  let createdNewSession = false;
+  if (requestedSessionId) {
+    const refreshed = await refreshPlaybackSessionLease({
+      sessionId: requestedSessionId,
+      userId,
+      contentId,
+    });
+    if (!refreshed) {
+      throw new MediaAccessDeniedException(
+        "Playback session is no longer active. Start playback again.",
+        "PLAYBACK_SESSION_EXPIRED"
+      );
+    }
+    sessionId = requestedSessionId;
+  } else {
+    sessionId = await createPlaybackSession(userId, contentId, input.deviceId);
+    createdNewSession = true;
   }
 
-  const result = await generatePlaybackAccess({
-    mediaId: contentId,
-    storageProvider,
-    storageKey: storageKey ?? "",
-    providerAssetId: providerAssetId ?? undefined,
-    contentType: content.mime_type ?? undefined,
-    contentLength: content.file_size_bytes ?? undefined,
-    visibility,
-    userId: userId ?? 0,
-    expiresInSeconds,
-    token,
-    kind: resolvedKind,
-    quality: qCheck.quality
-  });
+  try {
+    const token = createPlaybackToken(
+      contentId,
+      userId,
+      sessionId,
+      expiresInSeconds
+    );
 
-  if (!result?.playbackUrl) {
-    throw new DeliveryFailedException("Playback URL was not generated");
+    const access = await generatePlaybackAccess({
+      mediaId: contentId,
+      storageProvider: "local",
+      storageKey: storageKey || "protected-provider-object",
+      providerAssetId: undefined,
+      contentType: content.mime_type || undefined,
+      contentLength: content.file_size_bytes || undefined,
+      visibility,
+      userId,
+      expiresInSeconds,
+      token,
+      kind: resolvedKind,
+      quality: selectedQuality || parsedQuality.quality,
+    });
+
+    if (!access?.playbackUrl) {
+      throw new DeliveryFailedException("Protected playback URL was not generated");
+    }
+
+    logger.info(
+      {
+        userId,
+        contentId,
+        sessionId,
+        sessionReused: !createdNewSession,
+        storageProvider,
+        playbackMode,
+        correlationId,
+      },
+      "[Playback] Access granted"
+    );
+
+    return {
+      mediaId: contentId,
+      sessionId,
+      playbackUrl: access.playbackUrl,
+      playbackMode,
+      expiresIn: expiresInSeconds,
+      expiresAt: new Date(expiresAtEpochSeconds * 1000).toISOString(),
+      qualities,
+      selectedQuality,
+      defaultQuality,
+      contentType: access.contentType,
+      contentLength: access.contentLength,
+      durationMs: content.duration_ms ? Number(content.duration_ms) : undefined,
+    };
+  } catch (error) {
+    if (createdNewSession) {
+      await discardPlaybackSession(sessionId, userId, contentId).catch(() => undefined);
+    }
+    throw error;
   }
-
-  ensureValidPlaybackUrl({
-    playbackUrl: result.playbackUrl,
-    storageProvider,
-    providerAssetId
-  });
-
-  console.log(`[media-access] contentId=${contentId}, provider=${storageProvider}, urlGenerated=true`);
-
-  return {
-    mediaId: contentId,
-    playbackUrl: result.playbackUrl,
-    expiresIn: result.expiresIn,
-    contentType: result.contentType,
-    contentLength: result.contentLength
-  };
 }

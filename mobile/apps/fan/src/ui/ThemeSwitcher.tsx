@@ -37,9 +37,9 @@ export default function ThemeSwitcher() {
         onPress={() => setIsOpen(!isOpen)}
         style={styles.triggerButton}
         activeOpacity={0.7}
+        accessibilityLabel="Theme Selector"
       >
-        <Palette size={20} color="var(--color-primary)" />
-        <Text style={styles.triggerText}>Theme</Text>
+        <Palette size={18} color="var(--color-primary)" />
       </TouchableOpacity>
 
       {isOpen && (
@@ -101,22 +101,14 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
   triggerButton: {
-    flexDirection: 'row',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderColor: 'rgba(255, 255, 255, 0.1)',
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    gap: 8,
-  },
-  triggerText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   modalOverlay: {
     flex: 1,

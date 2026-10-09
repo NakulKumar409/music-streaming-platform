@@ -21,7 +21,7 @@ import * as Sharing from 'expo-sharing';
 import ErrorBoundary from '../ui/ErrorBoundary';
 import { userService, SubscriptionRecord, Transaction } from '../services/userService';
 import { TransactionRow, AutoRenewToggle, CancellationFlow } from '../ui/SubscriptionUI';
-import { JWT_STORAGE_KEY } from '../services/api';
+import { JWT_STORAGE_KEY, normalizeApiError } from '../services/api';
 
 type SubData = {
   type: 'ARTIST' | 'PLATFORM';
@@ -136,18 +136,19 @@ export default function SubscriptionDetail({ navigation, route }: any) {
   };
 
   const handleToggleAutoRenew = async (enable: boolean) => {
-    if (!sub?.artistId) return;
+    if (!sub?.id) return;
     setToggling(true);
     try {
-      const success = await userService.toggleAutoRenew(sub.artistId, enable);
+      const success = await userService.toggleAutoRenew(sub.id, enable);
       if (success) {
         setSub(prev => prev ? { ...prev, autoRenew: enable } : null);
         Alert.alert('Success', `Auto-renew turned ${enable ? 'ON' : 'OFF'}.`);
       } else {
-        Alert.alert('Error', 'Failed to update auto-renew settings.');
+        Alert.alert('Subscription Policy', 'Phase-1 artist subscriptions are fixed-term monthly access and do not auto-renew.');
       }
-    } catch {
-      Alert.alert('Error', 'An unexpected error occurred.');
+    } catch (err: any) {
+      const normalized = normalizeApiError(err);
+      Alert.alert('Subscription Policy', normalized.message);
     } finally {
       setToggling(false);
     }
@@ -160,16 +161,19 @@ export default function SubscriptionDetail({ navigation, route }: any) {
         reason,
         accepted_retention_offer: acceptedOffer
       });
-      if (res.success) {
+      if (res?.success) {
         if (acceptedOffer) {
           Alert.alert('Offer Applied 🎁', 'Your 20% discount has been applied to your next cycle! Thank you for staying.');
         } else {
-          Alert.alert('Cancelled', 'Your subscription will not renew.');
+          Alert.alert('Subscription Update', 'Your fixed-term access remains active until the end of your billing cycle and will not renew.');
         }
         fetchSub();
+      } else {
+        Alert.alert('Subscription Update', res?.message || 'Unable to update subscription. Please try again.');
       }
-    } catch {
-      Alert.alert('Error', 'Failed to process request.');
+    } catch (err: any) {
+      const normalized = normalizeApiError(err);
+      Alert.alert('Subscription Update', normalized.message);
     }
   };
 

@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { Play } from 'lucide-react-native';
 import ImageFallback from './ImageFallback';
+import { resolveAppImageUrl, FALLBACK_ARTWORK } from '../utils/imageUtils';
 import { colors } from '../theme-guest/colors';
 import { spacing } from '../theme-guest/spacing';
 import { radius } from '../theme-guest/radius';
@@ -12,7 +13,7 @@ interface MusicCardProps {
     title: string;
     artistName: string;
     artwork: any;
-    duration: string;
+    duration?: string;
     badge?: 'EARLY_ACCESS' | 'PREMIUM' | 'NEW';
   };
   onAction: () => void;
@@ -72,7 +73,14 @@ export default function MusicCard({ track, onAction }: MusicCardProps) {
       <Animated.View style={[styles.container, { transform: [{ scale }] }]}>
         <View style={styles.imageContainer}>
           <ImageFallback
-            source={track.artwork}
+            source={
+              typeof track.artwork === 'string'
+                ? { uri: resolveAppImageUrl(track.artwork, 'song') }
+                : (track.artwork?.uri
+                ? { uri: resolveAppImageUrl(track.artwork.uri, 'song') }
+                : (track.artwork || { uri: FALLBACK_ARTWORK }))
+            }
+            fallbackSource={{ uri: FALLBACK_ARTWORK }}
             style={styles.artwork}
             resizeMode="cover"
           />
@@ -96,7 +104,7 @@ export default function MusicCard({ track, onAction }: MusicCardProps) {
           <Text style={styles.artist} numberOfLines={1}>
             {track.artistName}
           </Text>
-          <Text style={styles.duration}>{track.duration}</Text>
+          {track.duration ? <Text style={styles.duration}>{track.duration}</Text> : null}
         </View>
       </Animated.View>
     </Pressable>

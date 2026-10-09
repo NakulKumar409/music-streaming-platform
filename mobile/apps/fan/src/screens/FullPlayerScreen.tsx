@@ -27,6 +27,8 @@ import { Colors } from '../theme';
 import { formatDurationLabel, hasFiniteDuration } from '../utils/mediaTime';
 import type { MediaItem } from '../media.types';
 import { navigationRef } from '../navigation/rootNavigation';
+import { resolveAppImageUrl } from '../utils/imageUtils';
+import { useToast } from '../ui/ToastProvider';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const DISC_SIZE = Math.min(SCREEN_W - 72, 270);
@@ -102,6 +104,8 @@ type FullPlayerRouteParams = {
 export default function FullPlayerScreen({ navigation, route }: any) {
   const params = (route?.params ?? {}) as Partial<FullPlayerRouteParams>;
 
+  const { showToast } = useToast();
+
   const {
     currentItem,
     state: playerState,
@@ -110,13 +114,13 @@ export default function FullPlayerScreen({ navigation, route }: any) {
     skipNext,
     skipPrev,
     seekTo,
+    pendingSeekPositionMs,
     setVolume,
     close,
   } = useMediaPlayer();
 
   // ── Local UI state ─────────────────────────────────────────────────────────
-  const [isSeeking, setIsSeeking] = useState(false);
-  const seekValueRef = useRef(0);
+  const [scrubPosition, setScrubPosition] = useState<number | null>(null);
   const [isHearted, setIsHearted] = useState(false);
   const [hasAutoPlayed, setHasAutoPlayed] = useState(false);
 
@@ -196,17 +200,45 @@ export default function FullPlayerScreen({ navigation, route }: any) {
   useEffect(() => {
     if (hasAutoPlayed) return;
     const queue = params.queue;
-    const queueIndex = params.queueIndex ?? 0;
-    if (!queue || queue.length === 0) return;
+    const queueIndex = params.queueIndex;
+    if (!queue || queue.length === 0) {
+      setHasAutoPlayed(true);
+      showToast({
+        tone: 'error',
+        title: "Couldn't open this song",
+        message: 'The song list is unavailable. Please go back and try again.',
+      });
+      return;
+    }
 
-    const currentKey =
-      currentItem?.mediaType === 'audio'
-        ? String(currentItem.contentId ?? currentItem.id ?? '')
-        : '';
-    const targetKey = params.songId ?? '';
+    if (
+      !Number.isInteger(queueIndex) ||
+      queueIndex === undefined ||
+      queueIndex < 0 ||
+      queueIndex >= queue.length
+    ) {
+      setHasAutoPlayed(true);
+      showToast({
+        tone: 'error',
+        title: "Couldn't open this song",
+        message: 'The song selection is no longer available. Please go back and try again.',
+      });
+      return;
+    }
 
-    // Already playing the right song — don't restart
-    if (currentKey && targetKey && currentKey === targetKey && playerState.isPlaying) {
+    const targetItem = queue[queueIndex];
+    const sameTrack =
+      currentItem?.mediaType === 'audio' &&
+      targetItem?.mediaType === 'audio' &&
+      (
+        String(currentItem.id ?? '') === String(targetItem.id ?? '') ||
+        String(currentItem.contentId ?? currentItem.id ?? '') ===
+          String(targetItem.contentId ?? targetItem.id ?? '')
+      );
+
+    // Opening the full player for the already-active logical audio item must
+    // not reset playback to 0 (notably for ids such as "123:audio").
+    if (sameTrack) {
       setHasAutoPlayed(true);
       return;
     }
@@ -219,24 +251,48 @@ export default function FullPlayerScreen({ navigation, route }: any) {
   // ── Derived display values ─────────────────────────────────────────────────
   const displayTitle = currentItem?.title ?? params.title ?? 'Unknown';
   const displayArtist = currentItem?.artistName ?? params.artist ?? 'Unknown';
-  const displayImage = currentItem?.artworkUrl ?? params.imageUrl ?? FALLBACK_ARTWORK;
+  const rawImage = currentItem?.artworkUrl ?? params.imageUrl;
+  const resolvedImage = React.useMemo(
+    () => (rawImage ? resolveAppImageUrl(rawImage, 'song') : FALLBACK_ARTWORK),
+    [rawImage]
+  );
+  const [imageError, setImageError] = useState(false);
+  const displayImage = imageError ? FALLBACK_ARTWORK : resolvedImage;
 
-  const positionForUi = isSeeking ? seekValueRef.current : playerState.positionMs;
+  useEffect(() => {
+    setImageError(false);
+  }, [resolvedImage]);
+
+  const durationKnown = hasFiniteDuration(playerState.durationMs);
+  const enginePositionForUi =
+    pendingSeekPositionMs !== null
+      ? pendingSeekPositionMs
+      : playerState.positionMs;
+  const positionForUi =
+    scrubPosition !== null ? scrubPosition : enginePositionForUi;
+  const sliderValue = durationKnown
+    ? Math.min(Math.max(positionForUi, 0), playerState.durationMs)
+    : 0;
 
   // ── Seek ───────────────────────────────────────────────────────────────────
   const onSeekStart = useCallback(() => {
-    setIsSeeking(true);
-    seekValueRef.current = playerState.positionMs;
-  }, [playerState.positionMs]);
+    setScrubPosition(enginePositionForUi);
+  }, [enginePositionForUi]);
 
   const onSeekChange = useCallback((v: number) => {
-    seekValueRef.current = v;
+    setScrubPosition(v);
   }, []);
 
   const onSeekComplete = useCallback(
     (v: number) => {
-      setIsSeeking(false);
-      seekTo(v).catch(() => undefined);
+      // Keep the user's scrub value visible until the provider has registered
+      // the pending seek target. No fixed timing window is involved.
+      setScrubPosition(v);
+      seekTo(v)
+        .catch(() => undefined)
+        .finally(() => {
+          setScrubPosition(null);
+        });
     },
     [seekTo]
   );
@@ -263,9 +319,10 @@ export default function FullPlayerScreen({ navigation, route }: any) {
     <View style={styles.root}>
       {/* Blurred background */}
       <ImageBackground
-        source={{ uri: displayImage || FALLBACK_ARTWORK }}
+        source={{ uri: displayImage }}
         style={StyleSheet.absoluteFill}
         resizeMode="cover"
+        onError={() => setImageError(true)}
       >
         <BlurView intensity={85} tint="dark" style={StyleSheet.absoluteFill} />
         <LinearGradient
@@ -325,9 +382,10 @@ export default function FullPlayerScreen({ navigation, route }: any) {
           />
           {/* Spinning disc */}
           <Animated.Image
-            source={{ uri: displayImage || FALLBACK_ARTWORK }}
+            source={{ uri: displayImage }}
             style={[styles.disc, { transform: [{ rotate: spin }] }]}
             resizeMode="cover"
+            onError={() => setImageError(true)}
           />
           {/* Center hole */}
           <View style={styles.discHole} />
@@ -344,14 +402,16 @@ export default function FullPlayerScreen({ navigation, route }: any) {
         <View style={styles.seekSection}>
           <View style={styles.timesRow}>
             <Text style={styles.timeText}>{formatDurationLabel(positionForUi, '00:00')}</Text>
-            <Text style={styles.timeText}>{formatDurationLabel(playerState.durationMs, '--:--')}</Text>
+            <Text style={styles.timeText}>
+              {durationKnown ? formatDurationLabel(playerState.durationMs, '--:--') : '--:--'}
+            </Text>
           </View>
           <Slider
             style={styles.seekSlider}
             minimumValue={0}
-            maximumValue={Math.max(1, playerState.durationMs || 1)}
-            value={Math.min(positionForUi, playerState.durationMs || 1)}
-            disabled={!hasFiniteDuration(playerState.durationMs)}
+            maximumValue={durationKnown ? playerState.durationMs : 1}
+            value={sliderValue}
+            disabled={!durationKnown}
             minimumTrackTintColor={Colors.accent}
             maximumTrackTintColor="rgba(255,255,255,0.20)"
             thumbTintColor={Colors.accent}

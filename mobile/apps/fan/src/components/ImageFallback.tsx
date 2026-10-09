@@ -2,24 +2,46 @@ import React, { useState } from 'react';
 import { Image, ImageProps, View, StyleSheet, ActivityIndicator } from 'react-native';
 import { Image as ImageIcon } from 'lucide-react-native';
 import { colors } from '../theme-guest/colors';
+import { resolveAppImageUrl, FALLBACK_ARTWORK } from '../utils/imageUtils';
 
 interface ImageFallbackProps extends Omit<ImageProps, 'onError' | 'onLoad'> {
   fallbackIconSize?: number;
+  fallbackSource?: any;
 }
 
-export default function ImageFallback({ source, style, fallbackIconSize = 24, ...props }: ImageFallbackProps) {
+export default function ImageFallback({
+  source,
+  style,
+  fallbackIconSize = 24,
+  fallbackSource = { uri: FALLBACK_ARTWORK },
+  ...props
+}: ImageFallbackProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+
+  const resolvedSource = React.useMemo(() => {
+    if (source && typeof source === 'object' && 'uri' in source && typeof (source as any).uri === 'string') {
+      return { ...source, uri: resolveAppImageUrl((source as any).uri, 'song') };
+    }
+    return source;
+  }, [source]);
+
+  React.useEffect(() => {
+    setError(false);
+    setLoading(true);
+  }, [source]);
 
   return (
     <View style={[styles.container, style]}>
       {error ? (
-        <View style={[StyleSheet.absoluteFill, styles.fallbackContainer]}>
-          <ImageIcon color={colors.textMuted} size={fallbackIconSize} />
-        </View>
+        <Image
+          source={fallbackSource}
+          style={StyleSheet.absoluteFill}
+          resizeMode={props.resizeMode || 'cover'}
+        />
       ) : (
         <Image
-          source={source}
+          source={resolvedSource}
           style={StyleSheet.absoluteFill}
           onLoad={() => setLoading(false)}
           onError={() => {

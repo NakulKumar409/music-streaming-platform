@@ -62,12 +62,32 @@ declare module 'lucide-react-native' {
 
   export const X: LucideIcon;
   export const Check: LucideIcon;
+  export const CheckCircle2: LucideIcon;
+  export const Info: LucideIcon;
+  export const XCircle: LucideIcon;
 
   export const Heart: LucideIcon;
   export const Share2: LucideIcon;
   export const Volume2: LucideIcon;
   export const VolumeX: LucideIcon;
   export const Camera: LucideIcon;
+
+  export const Bell: LucideIcon;
+  export const Clock3: LucideIcon;
+  export const DollarSign: LucideIcon;
+  export const ExternalLink: LucideIcon;
+  export const Image: LucideIcon;
+  export const Palette: LucideIcon;
+
+  export const ChevronRight: LucideIcon;
+  export const Disc3: LucideIcon;
+  export const MoreVertical: LucideIcon;
+  export const Smartphone: LucideIcon;
+  export const FileText: LucideIcon;
+  export const AlertCircle: LucideIcon;
+  export const Wifi: LucideIcon;
+  export const Video: LucideIcon;
+  export const Monitor: LucideIcon;
 }
 
 declare module '*.png' {

@@ -27,7 +27,9 @@ class MainApplication : Application(), ReactApplication {
               // add(MyReactNativePackage())
             }
 
-          override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
+          override fun getJSMainModuleName(): String = "index"
+
+          override fun getBundleAssetName(): String = "index.android.bundle"
 
           override fun getUseDeveloperSupport(): Boolean = BuildConfig.DEBUG
 

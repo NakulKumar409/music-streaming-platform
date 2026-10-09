@@ -21,7 +21,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { BadgeCheck, Lock, Play, Search, X, Bell, Settings } from 'lucide-react-native';
+import { BadgeCheck, Lock, Play, Search, X, Bell, Settings, ChevronRight, Disc3 } from 'lucide-react-native';
 import ThemeSwitcher from '../ui/ThemeSwitcher';
 import { LockedContentOverlay } from '../ui/SubscriptionUI';
 import { apiV1 } from '../services/api';
@@ -31,9 +31,33 @@ import { useAuth } from '../store/authStore';
 import { Colors } from '../theme';
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import { getOptimizedImageUrl } from '../utils/cloudinary';
+import AppImage from '../components/AppImage';
+import { resolveAppImageUrl, FALLBACK_ARTWORK, FALLBACK_ARTIST_AVATAR, FALLBACK_BANNER } from '../utils/imageUtils';
 import type { MediaItem } from '../media.types';
+import { useToast } from '../ui/ToastProvider';
+import { findMediaQueueIndex } from '../utils/mediaQueue';
 
-const { width } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Consistent horizontal padding used throughout the page
+const H_PAD = 20;
+
+// Artist circle: fixed consistent size for ALL trending artists
+const ARTIST_CIRCLE = 84;
+
+// Audio card: ~2.3 visible cards on screen at once
+const AUDIO_CARD_WIDTH = Math.round(SCREEN_WIDTH * 0.42);
+
+// Video card: 16:9 landscape
+const VIDEO_CARD_WIDTH = Math.round(SCREEN_WIDTH * 0.56);
+const VIDEO_CARD_HEIGHT = Math.round(VIDEO_CARD_WIDTH * (9 / 16));
+
+// Featured artist card
+const FEATURED_CARD_WIDTH = Math.round(SCREEN_WIDTH * 0.62);
+const FEATURED_CARD_HEIGHT = 176;
+
+// Keep `width` alias for any legacy use
+const width = SCREEN_WIDTH;
 
 type FeaturedArtistCard = {
   id: string;
@@ -66,6 +90,7 @@ type ContentCard = {
   mediaType?: 'audio' | 'video' | 'audio_video';
   mediaUrl?: string | null;
   useStreamAccess?: boolean;
+  durationMs?: number;
 };
 
 type ApiContentItem = {
@@ -91,6 +116,7 @@ type ApiContentItem = {
   likeCount?: number;
   dislikeCount?: number;
   userReaction?: 'LIKE' | 'DISLIKE' | null;
+  durationMs?: number | null;
   artist?: {
     id?: string | number | null;
     name?: string | null;
@@ -99,10 +125,106 @@ type ApiContentItem = {
   } | null;
 };
 
+/* ─────────────────────── Helpers ─────────────────────── */
+
+function formatDuration(ms?: number): string {
+  if (!ms || ms <= 0) return '';
+  const totalSec = Math.round(ms / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${min}:${sec.toString().padStart(2, '0')}`;
+}
+
+/* ─────────────────────── Section Header Row ─────────────────────── */
+function SectionHeader({ title, onSeeAll }: { title: string; onSeeAll?: () => void }) {
+  return (
+    <View style={shStyles.row}>
+      <Text style={shStyles.title}>{title}</Text>
+      {onSeeAll && (
+        <TouchableOpacity
+          onPress={onSeeAll}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={shStyles.seeAllBtn}
+        >
+          <Text style={shStyles.seeAllText}>See All</Text>
+          <ChevronRight color="rgba(255,255,255,0.4)" size={14} />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+const shStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: H_PAD,
+    marginTop: 28,
+    marginBottom: 14,
+  },
+  title: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  seeAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  seeAllText: { color: 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: '600' },
+});
+
+/* ─────────────────────── Section State Wrappers ─────────────────── */
+function SectionLoading() {
+  return (
+    <View style={ssStyles.loadingRow}>
+      <ActivityIndicator color={Colors.accent} size="small" />
+    </View>
+  );
+}
+function SectionError({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  return (
+    <View style={ssStyles.errorWrap}>
+      <Text style={ssStyles.errorText}>{message}</Text>
+      {onRetry && (
+        <TouchableOpacity onPress={onRetry} style={ssStyles.retryBtn} activeOpacity={0.75}>
+          <Text style={ssStyles.retryText}>Try again</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+function SectionEmpty({ message }: { message: string }) {
+  return (
+    <View style={ssStyles.emptyWrap}>
+      <Text style={ssStyles.emptyText}>{message}</Text>
+    </View>
+  );
+}
+const ssStyles = StyleSheet.create({
+  loadingRow: { paddingHorizontal: H_PAD, paddingVertical: 20, alignItems: 'flex-start' },
+  errorWrap: { paddingHorizontal: H_PAD, paddingVertical: 14 },
+  errorText: { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '500', marginBottom: 12 },
+  retryBtn: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,182,8,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,182,8,0.35)',
+  },
+  retryText: { color: Colors.accent, fontSize: 12, fontWeight: '700' },
+  emptyWrap: { paddingHorizontal: H_PAD, paddingVertical: 14 },
+  emptyText: { color: 'rgba(255,255,255,0.38)', fontSize: 13, fontWeight: '500' },
+});
+
+/* ═══════════════════════ HOME SCREEN ═══════════════════════ */
+
 export default function HomeScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
-  const { currentItem, state: playerState, togglePlayPause, playQueue } = useMediaPlayer();
+  const { currentItem, togglePlayPause, playQueue } = useMediaPlayer();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const activeAudioMeta = currentItem?.mediaType === 'audio' ? currentItem : null;
   const hasActiveAudio = !!activeAudioMeta;
 
@@ -141,8 +263,11 @@ export default function HomeScreen({ navigation }: any) {
         mediaUrl: x.mediaUrl ?? null,
         useStreamAccess: Boolean(x.useStreamAccess),
         isLocked: x.isLocked,
+        duration: x.durationMs,
       }));
-      const idx = Math.max(0, queue.findIndex((q) => q.id === item.id));
+      const idx = findMediaQueueIndex(queue, item);
+      if (idx < 0) return null;
+
       return {
         songId: item.id,
         title: item.title,
@@ -162,7 +287,10 @@ export default function HomeScreen({ navigation }: any) {
     return {
       id: a.id,
       name: a.name,
-      image: a.image,
+      image: resolveAppImageUrl(
+        a.image || (a.id ? `/api/v1/artist/assets/${a.id}/profile` : ''),
+        'artist'
+      ),
       isVerified: Boolean(a.isVerified),
       isSubscriptionBased,
       subText: '',
@@ -220,7 +348,7 @@ export default function HomeScreen({ navigation }: any) {
             const thumbFallbackFromStorageKey = it.thumbnail_storage_key
               ? `${baseUrl}/api/v1/fan/stream/thumbnail/${encodeURIComponent(String(it.id))}`
               : '';
-            const artistId = (it.artistId ?? it.artist?.id ?? '') as any;
+            const artistId = (it.artistId ?? it.artist?.id ?? (it as any).artist_id ?? '') as any;
             return {
               id: String(it.id),
               contentId: String(it.id),
@@ -228,7 +356,7 @@ export default function HomeScreen({ navigation }: any) {
               artist: String(it.artistName ?? it.artist?.name ?? 'Artist'),
               artistId: artistId ? String(artistId) : undefined,
               description: (it.type || '').toString(),
-              thumbnail: thumb || thumbFallbackFromStorageKey || FALLBACK_THUMBNAIL,
+              thumbnail: resolveAppImageUrl(thumb || thumbFallbackFromStorageKey, 'song'),
               isLocked: Boolean(it.isLocked || it.locked),
               createdAt: (it.createdAt ?? null) as any,
               mediaType,
@@ -238,6 +366,10 @@ export default function HomeScreen({ navigation }: any) {
               likeCount: (it.likeCount ?? 0) as any,
               dislikeCount: (it.dislikeCount ?? 0) as any,
               userReaction: (it.userReaction ?? null) as any,
+              durationMs:
+                Number.isFinite(Number(it.durationMs)) && Number(it.durationMs) > 0
+                  ? Math.round(Number(it.durationMs))
+                  : undefined,
             };
           })
           .sort((a, b) => {
@@ -273,19 +405,51 @@ export default function HomeScreen({ navigation }: any) {
     return () => { mountedRef.current = false; };
   }, [fetchContent]);
 
-  const onPressArtist = (artistId: string) => {
+  const onPressArtist = useCallback((artistId: string) => {
     navigation.navigate('Artist', { artistId });
-  };
+  }, [navigation]);
 
   // Tapping an item in the AUDIO row — always play as audio
-  const onPressAudioItem = async (item: ContentCard) => {
+  const onPressAudioItem = useCallback(async (item: ContentCard) => {
+    if (item.isLocked) {
+      showToast({
+        tone: 'warning',
+        title: 'Subscription required',
+        message: `Subscribe to ${item.artist || 'this artist'} to play "${item.title}".`,
+        actionLabel: 'View plan',
+        onAction: () => {
+          navigation.navigate('SubscriptionFlow', {
+            artistId: item.artistId,
+            artistName: item.artist,
+            contentId: item.contentId ?? item.id,
+            defaultPlan: 'ARTIST',
+          });
+        },
+      });
+      return;
+    }
+
     const params = buildFullPlayerParams(item);
+    if (!params) {
+      showToast({
+        tone: 'error',
+        title: "Couldn't open this song",
+        message: 'The song list changed. Please refresh and try again.',
+      });
+      return;
+    }
+
     navigation.navigate('FullPlayer', params);
-  };
+  }, [buildFullPlayerParams, navigation, showToast]);
 
   // Tapping an item in the VIDEO row — always open in VideoTab
-  const onPressVideoItem = (item: ContentCard) => {
+  const onPressVideoItem = useCallback((item: ContentCard) => {
     if (item.isLocked) {
+      showToast({
+        tone: 'warning',
+        title: 'Subscription required',
+        message: `Subscribe to ${item.artist || 'this artist'} to watch "${item.title}".`,
+      });
       setShowArtistLockModal({ visible: true, item });
       return;
     }
@@ -305,13 +469,13 @@ export default function HomeScreen({ navigation }: any) {
         },
       },
     });
-  };
+  }, [navigation, showToast]);
 
-  const onPressSeeAllTrending = () => {
+  const onPressSeeAllTrending = useCallback(() => {
     navigation.navigate('SeeAllTrending', {
       artists: trendingArtists,
     });
-  };
+  }, [navigation, trendingArtists]);
 
   const onPressBecomeArtist = async () => {
     if (user?.role === 'ARTIST') {
@@ -340,15 +504,24 @@ export default function HomeScreen({ navigation }: any) {
     }
   };
 
-  const renderFeaturedArtist = ({ item }: { item: FeaturedArtistCard }) => (
-    <Pressable style={styles.featuredCard} onPress={() => {
-      console.log('[HomeScreen] Featured artist clicked:', { name: item.name, id: item.id });
-      onPressArtist(item.id);
-    }}>
-      <Image source={{ uri: getOptimizedImageUrl(item.avatar) }} style={styles.featuredImg} resizeMode="cover" />
+  /* ── Render: Featured Artist card ── */
+  const renderFeaturedArtist = useCallback(({ item }: { item: FeaturedArtistCard }) => (
+    <Pressable
+      style={styles.featuredCard}
+      onPress={() => {
+        console.log('[HomeScreen] Featured artist clicked:', { name: item.name, id: item.id });
+        onPressArtist(item.id);
+      }}
+    >
+      <AppImage
+        uri={item.avatar}
+        fallbackType="artist"
+        style={styles.featuredImg}
+        resizeMode="cover"
+      />
       <LinearGradient
-        colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.85)']}
-        style={styles.featuredOverlay}
+        colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.88)']}
+        style={StyleSheet.absoluteFill}
       />
       <View style={styles.featuredTextWrap}>
         <Text style={styles.featuredArtistName} numberOfLines={1}>
@@ -356,112 +529,195 @@ export default function HomeScreen({ navigation }: any) {
         </Text>
       </View>
     </Pressable>
-  );
+  ), [onPressArtist]);
 
-  const renderTrendingArtist = ({ item }: { item: ArtistCard }) => (
+  /* ── Render: Trending Artist — perfect circle ── */
+  const renderTrendingArtist = useCallback(({ item }: { item: ArtistCard }) => (
     <Pressable style={styles.trendingCard} onPress={() => onPressArtist(item.id)}>
-      <Image source={{ uri: getOptimizedImageUrl(item.image) }} style={styles.trendingImg} resizeMode="contain" />
-      <View style={styles.trendingNameRow}>
-        <Text style={styles.trendingName} numberOfLines={1}>
-          {item.name}
-        </Text>
-      </View>
-
-    </Pressable>
-  );
-
-  // Square thumbnail for audio — tapping plays as audio
-  const renderRecentAudio = ({ item }: { item: ContentCard }) => (
-    <Pressable style={styles.audioCard} onPress={() => onPressAudioItem(item)}>
-      <View>
-        <Image source={{ uri: getOptimizedImageUrl(item.thumbnail || FALLBACK_THUMBNAIL) }} style={styles.audioImg} />
-        {item.isLocked && (
-          <View style={styles.lockOverlay}>
-            <Lock color="#fff" size={14} fill="rgba(255,255,255,0.2)" />
-          </View>
-        )}
-        <View style={styles.audioBadge}>
-          <View style={styles.audioDot} />
+      {/* Outer ring border */}
+      <View style={styles.trendingCircleOuter}>
+        {/* Inner clip: enforces perfect circle crop */}
+        <View style={styles.trendingCircleInner}>
+          <AppImage
+            uri={item.image}
+            fallbackType="artist"
+            style={styles.trendingImg}
+            resizeMode="cover"
+          />
         </View>
       </View>
-      <View style={styles.cardTextWrap}>
-        <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.cardArtist} numberOfLines={1}>{item.artist}</Text>
+      <View style={styles.trendingNameWrap}>
+        <Text style={styles.trendingName} numberOfLines={1} ellipsizeMode="tail">
+          {item.name}
+        </Text>
+        {item.isVerified && (
+          <BadgeCheck size={11} color={Colors.accent} />
+        )}
       </View>
     </Pressable>
-  );
+  ), [onPressArtist]);
 
-  // 16:9 landscape thumbnail for video — tapping opens VideoTab
-  const renderRecentVideo = ({ item }: { item: ContentCard }) => (
+  /* ── Render: Recently Added Audio — premium card ── */
+  const renderRecentAudio = useCallback(({ item }: { item: ContentCard }) => {
+    const duration = formatDuration(item.durationMs);
+    return (
+      <Pressable
+        style={styles.audioCard}
+        onPress={() => onPressAudioItem(item)}
+        android_ripple={{ color: 'rgba(255,255,255,0.06)', borderless: false }}
+      >
+        {/* Album art container — square, clipped */}
+        <View style={styles.audioImgContainer}>
+          <AppImage
+            uri={item.thumbnail}
+            fallbackType="song"
+            style={styles.audioImg}
+            resizeMode="cover"
+          />
+          {/* Bottom fade for depth */}
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.42)']}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+          {/* Lock badge (top-left) */}
+          {item.isLocked && (
+            <View style={styles.audioBadgeLock}>
+              <Lock color="#fff" size={11} />
+            </View>
+          )}
+          {/* Duration badge (bottom-right) */}
+          {!!duration && (
+            <View style={styles.audioDurationBadge}>
+              <Text style={styles.audioDurationText}>{duration}</Text>
+            </View>
+          )}
+          {/* Centered play button */}
+          <View style={styles.audioPlayOverlay} pointerEvents="none">
+            <View style={styles.audioPlayBtn}>
+              <Play color="#fff" size={14} fill="#fff" />
+            </View>
+          </View>
+        </View>
+        {/* Text below art */}
+        <View style={styles.audioCardText}>
+          <Text style={styles.audioCardTitle} numberOfLines={1} ellipsizeMode="tail">
+            {item.title}
+          </Text>
+          <Text style={styles.audioCardArtist} numberOfLines={1} ellipsizeMode="tail">
+            {item.artist}
+          </Text>
+        </View>
+      </Pressable>
+    );
+  }, [onPressAudioItem]);
+
+  /* ── Render: Recently Added Video card ── */
+  const renderRecentVideo = useCallback(({ item }: { item: ContentCard }) => (
     <Pressable style={styles.videoCard} onPress={() => onPressVideoItem(item)}>
-      <View>
-        <Image source={{ uri: getOptimizedImageUrl(item.thumbnail || FALLBACK_THUMBNAIL) }} style={styles.videoImg} />
+      <View style={styles.videoImgContainer}>
+        <AppImage
+          uri={item.thumbnail}
+          fallbackType="video"
+          style={styles.videoImg}
+          resizeMode="cover"
+        />
         {item.isLocked && (
-          <View style={styles.lockOverlay}>
-            <Lock color="#fff" size={14} fill="rgba(255,255,255,0.2)" />
+          <View style={styles.videoBadgeLock}>
+            <Lock color="#fff" size={11} />
           </View>
         )}
         <View style={styles.videoPlayOverlay}>
-          <Play color="#fff" size={22} fill="rgba(255,255,255,0.85)" />
+          <View style={styles.videoPlayBtn}>
+            <Play color="#fff" size={18} fill="#fff" />
+          </View>
         </View>
       </View>
-      <View style={styles.cardTextWrap}>
-        <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.cardArtist} numberOfLines={1}>{item.artist}</Text>
+      <View style={styles.videoCardText}>
+        <Text style={styles.videoCardTitle} numberOfLines={1} ellipsizeMode="tail">
+          {item.title}
+        </Text>
+        <Text style={styles.videoCardArtist} numberOfLines={1} ellipsizeMode="tail">
+          {item.artist}
+        </Text>
       </View>
     </Pressable>
-  );
+  ), [onPressVideoItem]);
 
-  if (loading)
+
+  /* ── Full-page loading state ── */
+  if (loading) {
     return (
       <LinearGradient
         colors={Platform.OS === 'web' ? ['var(--color-bg)', 'var(--color-bg)'] : ['#000000', '#000000']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
         style={styles.gradientBackground}
       >
         <StatusBar barStyle="light-content" />
-        <View style={styles.loading}>
-          <ActivityIndicator color={Colors.accent} />
+        <View style={styles.fullLoading}>
+          <ActivityIndicator color={Colors.accent} size="large" />
+          <Text style={styles.fullLoadingText}>Loading your music…</Text>
         </View>
       </LinearGradient>
     );
+  }
 
+  /* ── Main render ── */
   return (
     <LinearGradient
       colors={Platform.OS === 'web' ? ['var(--color-bg)', 'var(--color-bg)'] : ['#000000', '#000000']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
       style={styles.gradientBackground}
     >
       <StatusBar barStyle="light-content" />
-      <SafeAreaView style={styles.safeArea}>
+
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <View style={styles.pageWrap}>
-          {/* STATIC HEADER - outside ScrollView */}
+
+          {/* ══ STATIC HEADER ══ */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <Image 
-                source={require('../../assets/logo.png')} 
+              <Image
+                source={require('../../assets/logo.png')}
                 style={styles.headerLogo}
                 resizeMode="cover"
               />
-              <Text style={styles.headerTitle}>Discover</Text>
+              <View>
+                <Text style={styles.headerTitle}>Discover</Text>
+                <Text style={styles.headerSubtitle}>Music you'll love</Text>
+              </View>
             </View>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-              <Pressable onPress={() => navigation.getParent()?.navigate('SearchTab')}>
-                <Search color="#fff" size={22} />
-              </Pressable>
+            <View style={styles.headerRight}>
+              <TouchableOpacity
+                style={styles.headerIconButton}
+                onPress={() => navigation.getParent()?.navigate('SearchTab')}
+                activeOpacity={0.7}
+                accessibilityLabel="Search"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Search color="#fff" size={18} />
+              </TouchableOpacity>
 
               {Platform.OS === 'web' && (
                 <>
-                  <Pressable onPress={() => { /* Notifications click placeholder */ }} style={{ padding: 4 }}>
-                    <Bell color="#fff" size={22} />
-                  </Pressable>
+                  <TouchableOpacity
+                    style={styles.headerIconButton}
+                    onPress={() => { /* Notifications placeholder */ }}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Notifications"
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Bell color="#fff" size={18} />
+                  </TouchableOpacity>
 
-                  <Pressable onPress={() => navigation.getParent()?.navigate('AccountTab')} style={{ padding: 4 }}>
-                    <Settings color="#fff" size={22} />
-                  </Pressable>
+                  <TouchableOpacity
+                    style={styles.headerIconButton}
+                    onPress={() => navigation.getParent()?.navigate('AccountTab')}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Settings"
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Settings color="#fff" size={18} />
+                  </TouchableOpacity>
 
                   <ThemeSwitcher />
                 </>
@@ -469,160 +725,145 @@ export default function HomeScreen({ navigation }: any) {
             </View>
           </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-        contentContainerStyle={{ paddingBottom: tabBarHeight + (hasActiveAudio ? 180 : 120) }}
-        refreshControl={
-          <RefreshControl
-            tintColor={Colors.accent}
-            refreshing={refreshing}
-            onRefresh={() => { fetchContent({ isRefresh: true }); }}
-          />
-        }
-      >
-
-        {/* BECOME AN ARTIST BANNER */}
-        <Pressable onPress={onPressBecomeArtist} style={styles.artistBannerContainer}>
-          <LinearGradient
-            colors={['rgba(255,106,0,0.15)', 'rgba(255,106,0,0.02)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.artistBannerGradient}
+          {/* ══ SCROLLABLE CONTENT ══ */}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            bounces={Platform.OS !== 'web'}
+            contentContainerStyle={{
+              paddingBottom: tabBarHeight + (hasActiveAudio ? 180 : 120),
+            }}
+            refreshControl={
+              <RefreshControl
+                tintColor={Colors.accent}
+                colors={[Colors.accent]}
+                refreshing={refreshing}
+                onRefresh={() => { fetchContent({ isRefresh: true }); }}
+              />
+            }
           >
-            <View style={styles.artistBannerContent}>
-              <View style={{ flex: 1, paddingRight: 12 }}>
-                <Text style={styles.artistBannerTitle}>
-                  {user?.role === 'ARTIST' ? 'Artist Dashboard' : 'Become an Artist'}
-                </Text>
-                <Text style={styles.artistBannerSub}>
-                  {user?.role === 'ARTIST' ? 'Manage your music & analytics' : 'Upload your music & grow your audience'}
-                </Text>
-              </View>
-              <View style={styles.artistBannerBtn}>
-                <Text style={styles.artistBannerBtnText}>
-                  {user?.role === 'ARTIST' ? 'Open' : 'Get Started'}
-                </Text>
-              </View>
-            </View>
-          </LinearGradient>
-        </Pressable>
 
-        {/* FEATURED ARTISTS */}
-        <Text style={styles.sectionTitleTop}>Featured Artists</Text>
-        {loading ? (
-          <View style={styles.sectionLoadingRow}>
-            <ActivityIndicator color={Colors.accent} />
-          </View>
-        ) : artistsError ? (
-          <View style={styles.sectionErrorWrap}>
-            <Text style={styles.sectionErrorText}>{artistsError}</Text>
-            <Pressable
-              onPress={() => { fetchContent(); }}
-              style={styles.retryBtn}
-            >
-              <Text style={styles.retryBtnText}>Retry</Text>
+            {/* ── BECOME AN ARTIST BANNER ── */}
+            <Pressable onPress={onPressBecomeArtist} style={styles.artistBannerContainer}>
+              <LinearGradient
+                colors={['rgba(255,106,0,0.14)', 'rgba(255,106,0,0.03)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.artistBannerGradient}
+              >
+                <View style={styles.artistBannerContent}>
+                  <View style={styles.artistBannerIconWrap}>
+                    <Disc3 color={Colors.accent} size={22} />
+                  </View>
+                  <View style={styles.artistBannerTextBlock}>
+                    <Text style={styles.artistBannerTitle}>
+                      {user?.role === 'ARTIST' ? 'Artist Dashboard' : 'Become an Artist'}
+                    </Text>
+                    <Text style={styles.artistBannerSub} numberOfLines={1}>
+                      {user?.role === 'ARTIST'
+                        ? 'Manage your music & analytics'
+                        : 'Upload your music & grow your audience'}
+                    </Text>
+                  </View>
+                  <View style={styles.artistBannerBtn}>
+                    <Text style={styles.artistBannerBtnText}>
+                      {user?.role === 'ARTIST' ? 'Open' : 'Start'}
+                    </Text>
+                  </View>
+                </View>
+              </LinearGradient>
             </Pressable>
-          </View>
-        ) : featuredArtists.length ? (
-          <FlatList
-            data={featuredArtists}
-            horizontal
-            initialNumToRender={5}
-            windowSize={5}
-            removeClippedSubviews={true}
-            renderItem={renderFeaturedArtist}
-            keyExtractor={(item) => item.id}
-            showsHorizontalScrollIndicator={false}
-            nestedScrollEnabled
-            contentContainerStyle={{ paddingLeft: 18, paddingRight: 8 }}
-          />
-        ) : (
-          <View style={styles.sectionEmptyWrap}>
-            <Text style={styles.sectionEmptyText}>No featured artists yet.</Text>
-          </View>
-        )}
 
-        {/* TRENDING ARTISTS */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Trending Artists</Text>
-          <TouchableOpacity onPress={onPressSeeAllTrending} activeOpacity={0.7}>
-            <Text style={styles.seeAll}>See All  &gt;</Text>
-          </TouchableOpacity>
-        </View>
-        {loading ? (
-          <View style={styles.sectionLoadingRow}>
-            <ActivityIndicator color={Colors.accent} />
-          </View>
-        ) : artistsError ? (
-          <View style={styles.sectionEmptyWrap}>
-            <Text style={styles.sectionEmptyText}>Trending artists unavailable.</Text>
-          </View>
-        ) : trendingArtists.length ? (
-          <FlatList
-            data={trendingArtists}
-            horizontal
-            initialNumToRender={5}
-            windowSize={5}
-            removeClippedSubviews={true}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingLeft: 18, paddingRight: 8 }}
-            renderItem={renderTrendingArtist}
-            keyExtractor={(item) => item.id}
-            nestedScrollEnabled
-          />
-        ) : (
-          <View style={styles.sectionEmptyWrap}>
-            <Text style={styles.sectionEmptyText}>No trending artists yet.</Text>
-          </View>
-        )}
+            {/* ══ FEATURED ARTISTS ══ */}
+            <SectionHeader title="Featured Artists" />
+            {artistsError ? (
+              <SectionError
+                message="Couldn't load featured artists."
+                onRetry={() => fetchContent()}
+              />
+            ) : featuredArtists.length > 0 ? (
+              <FlatList
+                data={featuredArtists}
+                horizontal
+                initialNumToRender={5}
+                windowSize={5}
+                removeClippedSubviews={true}
+                renderItem={renderFeaturedArtist}
+                keyExtractor={(item) => item.id}
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled
+                contentContainerStyle={styles.hListPad}
+              />
+            ) : (
+              <SectionEmpty message="No featured artists yet." />
+            )}
 
-        {/* RECENTLY ADDED AUDIO */}
-        <Text style={styles.sectionTitleTop}>Recently Added Audio</Text>
-        {recentAudios.length > 0 ? (
-          <FlatList
-            data={recentAudios}
-            horizontal
-            initialNumToRender={5}
-            windowSize={5}
-            removeClippedSubviews={true}
-            showsHorizontalScrollIndicator={false}
-            nestedScrollEnabled
-            contentContainerStyle={{ paddingLeft: 18, paddingRight: 8 }}
-            renderItem={renderRecentAudio}
-            keyExtractor={(item) => `audio-${item.id}`}
-          />
-        ) : (
-          <View style={styles.sectionEmptyWrap}>
-            <Text style={styles.sectionEmptyText}>No audio content yet.</Text>
-          </View>
-        )}
+            {/* ══ TRENDING ARTISTS ══ */}
+            <SectionHeader title="Trending Artists" onSeeAll={onPressSeeAllTrending} />
+            {artistsError ? (
+              <SectionError
+                message="Couldn't load trending artists."
+                onRetry={() => fetchContent()}
+              />
+            ) : trendingArtists.length > 0 ? (
+              <FlatList
+                data={trendingArtists}
+                horizontal
+                initialNumToRender={6}
+                windowSize={5}
+                removeClippedSubviews={true}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.hListPad}
+                renderItem={renderTrendingArtist}
+                keyExtractor={(item) => item.id}
+                nestedScrollEnabled
+              />
+            ) : (
+              <SectionEmpty message="No trending artists yet." />
+            )}
 
-        {/* RECENTLY ADDED VIDEOS */}
-        <Text style={[styles.sectionTitleTop, { marginBottom: 14 }]}>Recently Added Videos</Text>
-        {recentVideos.length > 0 ? (
-          <FlatList
-            data={recentVideos}
-            horizontal
-            initialNumToRender={5}
-            windowSize={5}
-            removeClippedSubviews={true}
-            showsHorizontalScrollIndicator={false}
-            nestedScrollEnabled
-            contentContainerStyle={{ paddingLeft: 18, paddingRight: 8, paddingBottom: 50 }}
-            renderItem={renderRecentVideo}
-            keyExtractor={(item) => `video-${item.id}`}
-          />
-        ) : (
-          <View style={styles.sectionEmptyWrap}>
-            <Text style={styles.sectionEmptyText}>No video content yet.</Text>
-          </View>
-        )}
-        <View style={{ height: 30 }} />
-      </ScrollView>
+            {/* ══ RECENTLY ADDED AUDIO ══ */}
+            <SectionHeader title="Recently Added Audio" />
+            {recentAudios.length > 0 ? (
+              <FlatList
+                data={recentAudios}
+                horizontal
+                initialNumToRender={5}
+                windowSize={5}
+                removeClippedSubviews={true}
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled
+                contentContainerStyle={styles.hListPad}
+                renderItem={renderRecentAudio}
+                keyExtractor={(item) => `audio-${item.id}`}
+              />
+            ) : (
+              <SectionEmpty message="No audio tracks added yet." />
+            )}
 
+            {/* ══ RECENTLY ADDED VIDEOS ══ */}
+            <SectionHeader title="Recently Added Videos" />
+            {recentVideos.length > 0 ? (
+              <FlatList
+                data={recentVideos}
+                horizontal
+                initialNumToRender={5}
+                windowSize={5}
+                removeClippedSubviews={true}
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled
+                contentContainerStyle={[styles.hListPad, { paddingBottom: 8 }]}
+                renderItem={renderRecentVideo}
+                keyExtractor={(item) => `video-${item.id}`}
+              />
+            ) : (
+              <SectionEmpty message="No videos added yet." />
+            )}
+
+            <View style={{ height: 16 }} />
+          </ScrollView>
         </View>
 
+        {/* ══ LOCK MODAL (unchanged logic) ══ */}
         {showArtistLockModal.visible && (
           <Modal
             transparent
@@ -641,30 +882,23 @@ export default function HomeScreen({ navigation }: any) {
               }}
             />
             <Pressable
-              style={{
-                position: 'absolute',
-                top: 50,
-                right: 20,
-                zIndex: 100,
-                padding: 10,
-              }}
+              style={styles.modalCloseBtn}
               onPress={() => setShowArtistLockModal({ visible: false, item: null })}
             >
-              <X color="#fff" size={28} />
+              <X color="#fff" size={26} />
             </Pressable>
           </Modal>
         )}
-
       </SafeAreaView>
     </LinearGradient>
   );
 }
 
-/* ================================= */
-/* STYLES */
-/* ================================= */
+/* ═══════════════════════ STYLES ═══════════════════════ */
 
 const styles = StyleSheet.create({
+
+  /* ── Layout shells ── */
   gradientBackground: {
     flex: 1,
   },
@@ -674,95 +908,114 @@ const styles = StyleSheet.create({
   },
   pageWrap: {
     flex: 1,
-    minHeight: '100%',
   },
-
-
-  loading: {
+  fullLoading: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'transparent',
+    gap: 14,
+  },
+  fullLoadingText: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 13,
+    fontWeight: '500',
   },
 
+  /* ── Header ── */
   header: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingTop: 12,
-    paddingBottom: 10,
+    paddingHorizontal: H_PAD,
+    paddingTop: Platform.OS === 'android' ? 10 : 4,
+    paddingBottom: 12,
   },
-
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flex: 1,
+    marginRight: 8,
   },
-
   headerLogo: {
     width: 36,
     height: 36,
     borderRadius: 18,
+    flexShrink: 0,
   },
-
   headerTitle: {
     color: '#fff',
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '800',
-    letterSpacing: 0.2,
+    letterSpacing: -0.4,
+    lineHeight: 26,
   },
-
-  sectionTitleTop: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 10,
-    marginBottom: 10,
-    paddingHorizontal: 18,
+  headerSubtitle: {
+    color: 'rgba(255,255,255,0.38)',
+    fontSize: 11,
+    fontWeight: '500',
+    lineHeight: 14,
+    marginTop: 1,
   },
-
-  sectionHeaderRow: {
+  headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    marginTop: 22,
-    marginBottom: 10,
+    gap: 8,
+    flexShrink: 0,
+  },
+  headerIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
 
-  seeAll: {
-    color: 'rgba(255,255,255,0.45)',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-
+  /* ── Artist become banner ── */
   artistBannerContainer: {
-    marginHorizontal: 18,
-    marginTop: 10,
+    marginHorizontal: H_PAD,
+    marginTop: 6,
     marginBottom: 4,
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,106,0,0.15)',
+    borderColor: 'rgba(255,106,0,0.18)',
   },
   artistBannerGradient: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   artistBannerContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
+  },
+  artistBannerIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,106,0,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  artistBannerTextBlock: {
+    flex: 1,
+    gap: 3,
   },
   artistBannerTitle: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '800',
+    letterSpacing: -0.2,
   },
   artistBannerSub: {
-    color: 'rgba(255,255,255,0.65)',
-    fontSize: 13,
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 12,
     fontWeight: '500',
-    marginTop: 4,
   },
   artistBannerBtn: {
     backgroundColor: 'rgba(255,106,0,0.2)',
@@ -771,6 +1024,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(255,106,0,0.4)',
+    flexShrink: 0,
   },
   artistBannerBtnText: {
     color: Colors.accent,
@@ -778,234 +1032,113 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  /* ── Shared horizontal list padding ── */
+  hListPad: {
+    paddingLeft: H_PAD,
+    paddingRight: H_PAD / 2,
+  },
+
+  /* ── Featured artist card ── */
   featuredCard: {
-    width: width * 0.62,
-    height: 178,
+    width: FEATURED_CARD_WIDTH,
+    height: FEATURED_CARD_HEIGHT,
     borderRadius: 18,
     overflow: 'hidden',
     marginRight: 12,
     backgroundColor: 'rgba(255,255,255,0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.07)',
   },
-
-  featuredImg: { width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.15)' },
-
-  featuredOverlay: {
-    ...StyleSheet.absoluteFillObject,
+  featuredImg: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
-
   featuredTextWrap: {
     position: 'absolute',
     left: 14,
     right: 14,
-    bottom: 12,
+    bottom: 14,
   },
-
-  featuredNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
   featuredArtistName: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
+    letterSpacing: -0.2,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
 
-  verifiedWrap: {
-    marginLeft: 8,
-    marginTop: 2,
-  },
-
-  subscriptionTag: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,181,8,0.20)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,181,8,0.45)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-
-  subscriptionTagText: {
-    color: Colors.accent,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-
-  featuredSubText: {
-    marginTop: 6,
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-
-  sectionTitle: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-
+  /* ── Trending artist card (perfect circle) ── */
   trendingCard: {
-    width: 96,
-    marginRight: 12,
+    width: ARTIST_CIRCLE + 8,
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  // Outer ring — subtle glow border
+  trendingCircleOuter: {
+    width: ARTIST_CIRCLE + 4,
+    height: ARTIST_CIRCLE + 4,
+    borderRadius: (ARTIST_CIRCLE + 4) / 2,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.12)',
+    padding: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Inner clip container — enforces perfect circle crop for any image ratio
+  trendingCircleInner: {
+    width: ARTIST_CIRCLE,
+    height: ARTIST_CIRCLE,
+    borderRadius: ARTIST_CIRCLE / 2,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   trendingImg: {
-    width: 96,
-    height: 96,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    width: ARTIST_CIRCLE,
+    height: ARTIST_CIRCLE,
   },
-  trendingNameRow: {
+  trendingNameWrap: {
     marginTop: 8,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    width: ARTIST_CIRCLE + 8,
   },
   trendingName: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  trendingVerified: {
-    marginLeft: 6,
-    marginTop: 1,
-  },
-  trendingSubText: {
-    color: 'rgba(255,255,255,0.45)',
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 3,
-  },
-
-  sectionLoadingRow: {
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    alignItems: 'flex-start',
-  },
-
-  sectionErrorWrap: {
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    alignItems: 'flex-start',
-  },
-
-  sectionErrorText: {
-    color: 'rgba(255,255,255,0.65)',
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 10,
-  },
-
-  retryBtn: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,181,8,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,181,8,0.45)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-
-  retryBtnText: {
-    color: Colors.accent,
+    color: 'rgba(255,255,255,0.88)',
     fontSize: 12,
-    fontWeight: '800',
-  },
-
-  sectionEmptyWrap: {
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-  },
-
-  sectionEmptyText: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 13,
     fontWeight: '600',
+    textAlign: 'center',
+    flexShrink: 1,
   },
 
-  // ── Audio card (square album art) ──
+  /* ── Recently Added Audio card (premium) ── */
   audioCard: {
-    width: width * 0.38,
+    width: AUDIO_CARD_WIDTH,
     marginRight: 14,
-    marginBottom: 20,
+    marginBottom: 4,
+  },
+  audioImgContainer: {
+    width: AUDIO_CARD_WIDTH,
+    height: AUDIO_CARD_WIDTH, // 1:1 square
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   audioImg: {
-    width: width * 0.38,
-    height: width * 0.38,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    width: '100%',
+    height: '100%',
   },
-  audioBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-  },
-  audioDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: '#fff',
-    opacity: 0.9,
-  },
-
-  // ── Video card (16:9 landscape) ──
-  videoCard: {
-    width: width * 0.58,
-    marginRight: 14,
-    marginBottom: 20,
-  },
-  videoImg: {
-    width: width * 0.58,
-    height: Math.round((width * 0.58) * (9 / 16)),
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  videoPlayOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: width * 0.58,
-    height: Math.round((width * 0.58) * (9 / 16)),
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.22)',
-    borderRadius: 12,
-  },
-
-  // ── Shared card text ──
-  cardTextWrap: {
-    marginTop: 7,
-    paddingHorizontal: 2,
-  },
-  cardTitle: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.1,
-  },
-  cardArtist: {
-    color: 'rgba(255,255,255,0.48)',
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  lockOverlay: {
+  audioBadgeLock: {
     position: 'absolute',
     top: 8,
     left: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.65)',
@@ -1013,4 +1146,131 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.2)',
     zIndex: 10,
   },
+  audioDurationBadge: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.62)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    zIndex: 10,
+  },
+  audioDurationText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  audioPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  audioPlayBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(0,0,0,0.48)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  audioCardText: {
+    marginTop: 10,
+    paddingHorizontal: 2,
+  },
+  audioCardTitle: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.05,
+    lineHeight: 17,
+  },
+  audioCardArtist: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 3,
+    lineHeight: 14,
+  },
+
+  /* ── Recently Added Video card ── */
+  videoCard: {
+    width: VIDEO_CARD_WIDTH,
+    marginRight: 14,
+    marginBottom: 4,
+  },
+  videoImgContainer: {
+    width: VIDEO_CARD_WIDTH,
+    height: VIDEO_CARD_HEIGHT,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  videoImg: {
+    width: '100%',
+    height: '100%',
+  },
+  videoBadgeLock: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    zIndex: 10,
+  },
+  videoPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.20)',
+  },
+  videoPlayBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.52)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoCardText: {
+    marginTop: 10,
+    paddingHorizontal: 2,
+  },
+  videoCardTitle: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.05,
+    lineHeight: 17,
+  },
+  videoCardArtist: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 3,
+    lineHeight: 14,
+  },
+
+  /* ── Modal close button ── */
+  modalCloseBtn: {
+    position: 'absolute',
+    top: 52,
+    right: 20,
+    zIndex: 100,
+    padding: 10,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderRadius: 20,
+  },
 });
+

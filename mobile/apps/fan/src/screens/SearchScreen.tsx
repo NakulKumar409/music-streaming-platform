@@ -22,6 +22,7 @@ import { useMediaPlayer } from "../providers/MediaPlayerProvider";
 import { api } from "../services/api";
 import { Colors } from "../theme";
 import { getOptimizedImageUrl } from "../utils/cloudinary";
+import AppImage from "../components/AppImage";
 
 type Artist = {
   id: number;
@@ -45,16 +46,12 @@ const ArtistItem = React.memo(
   ({ item, onPress }: { item: Artist; onPress: (item: Artist) => void }) => (
     <Pressable style={styles.artistRow} onPress={() => onPress(item)}>
       <View style={styles.artistThumbWrap}>
-        {item.profileImageUrl ? (
-          <Image
-            source={{ uri: getOptimizedImageUrl(item.profileImageUrl) }}
-            style={styles.artistThumb}
-          />
-        ) : (
-          <View style={styles.artistThumbPlaceholder}>
-            <User color="rgba(255,255,255,0.5)" size={24} />
-          </View>
-        )}
+        <AppImage
+          uri={item.profileImageUrl}
+          fallbackType="artist"
+          style={styles.artistThumb}
+          resizeMode="cover"
+        />
       </View>
       <View style={styles.artistInfo}>
         <Text style={styles.artistName} numberOfLines={1}>

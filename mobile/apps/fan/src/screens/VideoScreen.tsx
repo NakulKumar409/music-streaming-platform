@@ -4,6 +4,7 @@ import {
   Alert,
   Animated,
   AppState,
+  BackHandler,
   Dimensions,
   FlatList,
   Image,
@@ -16,13 +17,14 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
-import { useVideoPlayer, VideoView } from "expo-video";
+import { createVideoPlayer, VideoPlayer, VideoView, type VideoSource } from "expo-video";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Slider from "@react-native-community/slider";
@@ -41,13 +43,24 @@ import {
   AlertTriangle,
   ArrowLeft,
   BadgeCheck,
+  Check,
+  ChevronRight,
   Crown,
   Lock,
   Maximize,
+  Minimize,
+  MoreVertical,
+  Pause,
+  Play,
   Search,
   Settings,
   ShieldCheck,
+  Video,
+  Volume2,
+  VolumeX,
+  Wifi,
   X,
+  Zap,
 } from "lucide-react-native";
 import {
   SafeAreaView,
@@ -58,12 +71,14 @@ import Svg, { Path } from "react-native-svg";
 import PauseButtonImg from "../pausebuttton.png";
 import PlayButtonImg from "../playbutton.png";
 import { useMediaPlayer } from "../providers/MediaPlayerProvider";
-import { apiV1, contentApi } from "../services/api";
+import { apiV1, contentApi, normalizeApiError } from "../services/api";
 import { startHeartbeat, stopHeartbeat } from "../services/heartbeatService";
 import * as streamService from "../services/streamService";
 import { userService } from "../services/userService";
 import { Colors } from "../theme";
 import { getOptimizedImageUrl } from "../utils/cloudinary";
+import { resolveAppImageUrl } from "../utils/imageUtils";
+import AppImage from "../components/AppImage";
 import {
   formatDurationLabel,
   hasFiniteDuration,
@@ -197,6 +212,60 @@ function EngagementIcon({
   );
 }
 
+function SeekBack10Icon({
+  size = 18,
+  color = "#fff",
+}: {
+  size?: number;
+  color?: string;
+}) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+        stroke={color}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M3 3v5h5"
+        stroke={color}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function SeekForward10Icon({
+  size = 18,
+  color = "#fff",
+}: {
+  size?: number;
+  color?: string;
+}) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+        stroke={color}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M21 3v5h-5"
+        stroke={color}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 const FALLBACK_ARTWORK =
   "https://images.unsplash.com/photo-1526948128573-703ee1aeb6fa?auto=format&fit=crop&w=1400&q=80";
 
@@ -268,7 +337,13 @@ export default function VideoScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const tabBarHeight = useBottomTabBarHeight();
-  const { currentItem, state: playerState, togglePlayPause } = useMediaPlayer();
+  const {
+    currentItem,
+    state: playerState,
+    togglePlayPause,
+    syncActiveMediaItem,
+    setInlineVideoHostActive,
+  } = useMediaPlayer();
 
   const insets = useSafeAreaInsets();
 
@@ -278,6 +353,7 @@ export default function VideoScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [items, setItems] = useState<VideoCard[]>([]);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
   const [lastAttemptedHdQuality, setLastAttemptedHdQuality] =
@@ -340,6 +416,33 @@ export default function VideoScreen() {
     useState<streamService.VideoQuality>("240p");
   const [isStreamingHdAllowed, setIsStreamingHdAllowed] = useState(false);
 
+  // Playback speed
+  const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0] as const;
+  const [selectedSpeed, setSelectedSpeed] = useState<number>(1.0);
+  const [showSpeedSheet, setShowSpeedSheet] = useState(false);
+  const [isHolding2x, setIsHolding2x] = useState(false);
+  const holding2xTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedSpeedRef = useRef<number>(1.0);
+
+  // Mute / Volume
+  const [isMuted, setIsMuted] = useState(false);
+
+  // Autoplay
+  const [isAutoplayEnabled, setIsAutoplayEnabled] = useState(true);
+
+  // More Options sheet
+  const [showMoreOptionsSheet, setShowMoreOptionsSheet] = useState(false);
+
+  // Double-tap seek visual feedback
+  const [seekFeedback, setSeekFeedback] = useState<{
+    dir: "back" | "forward";
+    id: number;
+  } | null>(null);
+  const seekFeedbackAnim = useRef(new Animated.Value(0)).current;
+  const seekFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+
   const [showHdLockModal, setShowHdLockModal] = useState(false);
   const [showArtistLockModal, setShowArtistLockModal] = useState<{
     visible: boolean;
@@ -398,9 +501,9 @@ export default function VideoScreen() {
   >({});
 
   const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState(
-    HEADER_HEIGHT + 92
+    HEADER_HEIGHT + 60
   );
-  const headerHeightRef = useRef<number>(HEADER_HEIGHT + 92);
+  const headerHeightRef = useRef<number>(HEADER_HEIGHT + 60);
   const hasMeasuredHeaderRef = useRef(false);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -412,47 +515,124 @@ export default function VideoScreen() {
   const listRef = useRef<FlatList<VideoCard> | null>(null);
   const userPausedRef = useRef<boolean>(false); // Track if user explicitly paused
 
-  const safePlay = useCallback((target: { play: () => any }, tag: string) => {
+  const safePlay = useCallback((target: { play?: () => any; playing?: boolean } | null | undefined, tag: string) => {
+    console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) called, target exists:`, Boolean(target), "playing:", target?.playing);
+    if (!target || typeof target.play !== "function") return;
+    if (target.playing) {
+      console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) skipped - already playing`);
+      return;
+    }
     try {
+      console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) calling target.play()...`);
       const maybePromise = target.play();
       if (maybePromise && typeof maybePromise.then === "function") {
-        maybePromise.catch((err: any) => {
-          const name = (err?.name || "").toString();
-          const msg = (err?.message || "").toString();
-          if (
-            name === "AbortError" ||
-            /interrupted by a call to pause\(\)/i.test(msg)
-          )
-            return;
-          console.warn(`[VideoPlayer] ${tag} play() failed`, err);
-        });
+        maybePromise
+          .then((res: any) => {
+            console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) target.play() Promise resolved, res:`, res);
+          })
+          .catch((err: any) => {
+            const name = (err?.name || "").toString();
+            const msg = (err?.message || "").toString();
+            if (
+              name === "AbortError" ||
+              /interrupted by a call to pause\(\)/i.test(msg)
+            )
+              return;
+            console.error(`[VideoPlayer:NATIVE] safePlay(${tag}) target.play() rejected:`, {
+              name: err?.name,
+              message: err?.message,
+              stack: err?.stack,
+              cause: err?.cause,
+            });
+          });
+      } else {
+        console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) target.play() synchronous result:`, maybePromise);
       }
     } catch (err: any) {
-      const name = (err?.name || "").toString();
-      const msg = (err?.message || "").toString();
-      if (
-        name === "AbortError" ||
-        /interrupted by a call to pause\(\)/i.test(msg)
-      )
-        return;
-      console.warn(`[VideoPlayer] ${tag} play() failed`, err);
+      console.error(`[VideoPlayer:NATIVE] safePlay(${tag}) synchronous throw:`, {
+        name: err?.name,
+        message: err?.message,
+        stack: err?.stack,
+        cause: err?.cause,
+      });
     }
   }, []);
 
-  const videoPlayer = useVideoPlayer(activePlaybackUrl, (player) => {
-    player.loop = false;
-    player.staysActiveInBackground = true;
-    console.log("[VideoScreen] VideoPlayer initialized with URL:", activePlaybackUrl);
-    if (activePlaybackUrl && !userPausedRef.current) {
-      console.log("[VideoScreen] Auto-playing on init with valid URL");
-      safePlay(player as any, "init");
-    } else {
-      console.log("[VideoScreen] Skipping auto-play - no URL or user paused");
+  const [videoPlayer, setVideoPlayer] = useState<VideoPlayer | null>(null);
+  const playerRef = useRef<VideoPlayer | null>(null);
+
+  const initializeOrUpdatePlayer = useCallback(
+    (url: string) => {
+      if (!url) return;
+      if (AppState.currentState !== "active") {
+        console.log("[VideoScreen] App state is not active, deferring VideoPlayer creation");
+        return;
+      }
+      try {
+        const isHls =
+          url.includes("kind=video") ||
+          url.includes("/media/stream/") ||
+          url.includes(".m3u8");
+        const videoSource: VideoSource = {
+          uri: url,
+          contentType: isHls ? "hls" : "auto",
+        };
+        if (!playerRef.current) {
+          const sanitizedUrl = url.includes("?")
+            ? `${new URL(url).origin}${new URL(url).pathname}?[token-redacted]`
+            : url;
+          console.log("[VideoScreen] Creating VideoPlayer with URL:", sanitizedUrl, "contentType:", videoSource.contentType);
+          const player = createVideoPlayer(videoSource);
+          player.loop = false;
+          player.timeUpdateEventInterval = 0.5;
+          player.staysActiveInBackground = true;
+          playerRef.current = player;
+          setVideoPlayer(player);
+          if (!userPausedRef.current) {
+            console.log("[VideoScreen] Auto-playing on init with valid URL");
+            safePlay(player as any, "init");
+          }
+        } else {
+          const sanitizedUrl = url.includes("?")
+            ? `${new URL(url).origin}${new URL(url).pathname}?[token-redacted]`
+            : url;
+          console.log("[VideoScreen] Updating VideoPlayer source:", sanitizedUrl, "contentType:", videoSource.contentType);
+          playerRef.current.replace(videoSource);
+          if (!userPausedRef.current) {
+            safePlay(playerRef.current as any, "replace");
+          }
+        }
+      } catch (err) {
+        console.error("[VideoScreen] Error creating or updating VideoPlayer", err);
+      }
+    },
+    [safePlay]
+  );
+
+  useEffect(() => {
+    if (activePlaybackUrl) {
+      initializeOrUpdatePlayer(activePlaybackUrl);
+    } else if (playerRef.current) {
+      try {
+        playerRef.current.pause();
+      } catch {}
     }
-  });
+  }, [activePlaybackUrl, initializeOrUpdatePlayer]);
+
+  useEffect(() => {
+    return () => {
+      if (playerRef.current) {
+        try {
+          playerRef.current.pause();
+        } catch {}
+        playerRef.current = null;
+      }
+    };
+  }, []);
   const lastTapRef = useRef(0);
   const lastTapXRef = useRef(0);
   const playbackSessionRef = useRef(0);
+  const qualityAccessGenerationRef = useRef(0);
 
   const [bgAudioOnlyMode, setBgAudioOnlyMode] = useState(false);
   const bgWasPlayingRef = useRef(false);
@@ -516,7 +696,7 @@ export default function VideoScreen() {
         if (bgAudioOnlyMode) return;
 
         (async () => {
-          const wasPlaying = videoPlayer.playing;
+          const wasPlaying = playerRef.current?.playing ?? false;
           bgWasPlayingRef.current = wasPlaying;
           setBgAudioOnlyMode(true);
 
@@ -528,31 +708,36 @@ export default function VideoScreen() {
 
           // Keep volume at 1.0 and force resume during the transition.
           try {
-            videoPlayer.volume = 1.0;
+            if (playerRef.current) playerRef.current.volume = 1.0;
           } catch {
             // ignore
           }
-          if (wasPlaying) {
-            safePlay(videoPlayer as any, "appstate-background");
+          if (wasPlaying && playerRef.current) {
+            safePlay(playerRef.current as any, "appstate-background");
           }
         })().catch(() => undefined);
 
         return;
       }
 
-      if (next === "active" && bgAudioOnlyMode) {
-        setBgAudioOnlyMode(false);
-        const shouldPlay = bgWasPlayingRef.current;
-        (async () => {
-          try {
-            videoPlayer.volume = 1.0;
-          } catch {
-            // ignore
-          }
-          if (shouldPlay) {
-            safePlay(videoPlayer as any, "appstate-active");
-          }
-        })().catch(() => undefined);
+      if (next === "active") {
+        if (!playerRef.current) {
+          initializeOrUpdatePlayer(activePlaybackUrl);
+        }
+        if (bgAudioOnlyMode) {
+          setBgAudioOnlyMode(false);
+          const shouldPlay = bgWasPlayingRef.current;
+          (async () => {
+            try {
+              if (playerRef.current) playerRef.current.volume = 1.0;
+            } catch {
+              // ignore
+            }
+            if (shouldPlay && playerRef.current) {
+              safePlay(playerRef.current as any, "appstate-active");
+            }
+          })().catch(() => undefined);
+        }
       }
     });
 
@@ -564,7 +749,7 @@ export default function VideoScreen() {
     activeVideoMeta?.id,
     bgAudioOnlyMode,
     safePlay,
-    videoPlayer,
+    initializeOrUpdatePlayer,
   ]);
 
   const scheduleTokenRefresh = useCallback(
@@ -589,7 +774,7 @@ export default function VideoScreen() {
       tokenRefreshTimerRef.current = setTimeout(() => {
         (async () => {
           if (!activeVideoMeta?.id) return;
-          const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
+          const pos = Math.max(0, Math.round((playerRef.current?.currentTime ?? videoPlayer?.currentTime ?? 0) * 1000));
 
           console.log("[VideoScreen] Background refreshing video URL...");
           try {
@@ -598,11 +783,18 @@ export default function VideoScreen() {
               isStreamingHdAllowed
                 ? (selectedQuality as streamService.VideoQuality)
                 : "240p";
+            const sessionId = playbackSessionRef.current;
+            const qualityGeneration = qualityAccessGenerationRef.current;
+            const isStillRelevant = () =>
+              sessionId === playbackSessionRef.current &&
+              qualityGeneration === qualityAccessGenerationRef.current;
             const nextUrl = await streamService.getPlaybackUrl(
               activeVideoMeta.id,
               "video",
-              refreshQuality
+              refreshQuality,
+              { isStillRelevant }
             );
+            if (!isStillRelevant()) return;
             resumeAfterUrlChangeRef.current = pos;
             setActivePlaybackUrl(nextUrl);
           } catch {
@@ -611,7 +803,7 @@ export default function VideoScreen() {
         })().catch(() => undefined);
       }, delay);
     },
-    [activeVideoMeta?.id, isStreamingHdAllowed, videoPlayer]
+    [activeVideoMeta?.id, isStreamingHdAllowed, selectedQuality]
   );
 
   useEffect(() => {
@@ -643,20 +835,33 @@ export default function VideoScreen() {
         const mediaType = mediaTypeRaw.includes("video") ? "video" : "audio";
         if (mediaType !== "video") return null;
 
-        const artworkUrl =
-          (it.thumbnailUrl ?? it.artwork ?? "").toString() || FALLBACK_ARTWORK;
         const artistIdValue =
           it.artistId !== null && it.artistId !== undefined
             ? String(it.artistId)
             : undefined;
 
+        const rawArtistProfileImage =
+          it.artistProfileImage ??
+          (it as any).artistProfileImageUrl ??
+          (it as any).artist?.profileImageUrl ??
+          (it as any).artist?.avatar ??
+          (it as any).artist_profile_image_url ??
+          (artistIdValue ? `/api/v1/artist/assets/${artistIdValue}/profile` : "");
+
+        const artistProfileImage = rawArtistProfileImage
+          ? resolveAppImageUrl(rawArtistProfileImage, "artist")
+          : undefined;
+
+        const rawArtwork = it.thumbnailUrl ?? it.artwork;
+        const artworkUrl = rawArtwork
+          ? resolveAppImageUrl(rawArtwork, "video")
+          : FALLBACK_ARTWORK;
         return {
           id: String(it.id),
           title: (it.title ?? "Untitled").toString(),
           artistName: (it.artistName ?? "Artist").toString(),
           artistId: artistIdValue,
-          artistProfileImage:
-            (it.artistProfileImage ?? "").toString() || undefined,
+          artistProfileImage,
           artworkUrl,
           mediaUrl: (it.mediaUrl ?? it.fileUrl ?? "").toString(),
           useStreamAccess: Boolean(
@@ -751,8 +956,65 @@ export default function VideoScreen() {
     };
   }, [fetchAll, matchesQuery, normalizedQuery]);
 
+  const AUTO_HIDE_DELAY_MS = 3200;
+
+  const hideControls = useCallback(() => {
+    if (controlsHideTimerRef.current) {
+      clearTimeout(controlsHideTimerRef.current);
+      controlsHideTimerRef.current = null;
+    }
+    setShowControls(false);
+    setShowQualitySheet(false);
+  }, []);
+
+  const resetControlsTimeout = useCallback(() => {
+    if (controlsHideTimerRef.current) {
+      clearTimeout(controlsHideTimerRef.current);
+      controlsHideTimerRef.current = null;
+    }
+    if (isVideoPlaying) {
+      controlsHideTimerRef.current = setTimeout(() => {
+        setShowControls(false);
+        setShowQualitySheet(false);
+      }, AUTO_HIDE_DELAY_MS);
+    }
+  }, [isVideoPlaying]);
+
+  const toggleControls = useCallback(() => {
+    setShowControls((prev) => {
+      const next = !prev;
+      if (controlsHideTimerRef.current) {
+        clearTimeout(controlsHideTimerRef.current);
+        controlsHideTimerRef.current = null;
+      }
+      if (next) {
+        if (isVideoPlaying) {
+          controlsHideTimerRef.current = setTimeout(() => {
+            setShowControls(false);
+            setShowQualitySheet(false);
+          }, AUTO_HIDE_DELAY_MS);
+        }
+      } else {
+        setShowQualitySheet(false);
+      }
+      return next;
+    });
+  }, [isVideoPlaying]);
+
+  useEffect(() => {
+    if (isVideoPlaying && showControls) {
+      resetControlsTimeout();
+    } else if (!isVideoPlaying) {
+      if (controlsHideTimerRef.current) {
+        clearTimeout(controlsHideTimerRef.current);
+        controlsHideTimerRef.current = null;
+      }
+    }
+  }, [isVideoPlaying, showControls, resetControlsTimeout]);
+
   const enterFullscreen = useCallback(async () => {
     setIsFullscreen(true);
+    resetControlsTimeout();
     // Lock to landscape when entering fullscreen
     if (Platform.OS !== "web") {
       try {
@@ -761,10 +1023,11 @@ export default function VideoScreen() {
         );
       } catch (err) {}
     }
-  }, []);
+  }, [resetControlsTimeout]);
 
   const exitFullscreen = useCallback(async () => {
     setIsFullscreen(false);
+    resetControlsTimeout();
     // Lock back to portrait when exiting fullscreen
     if (Platform.OS !== "web") {
       try {
@@ -773,12 +1036,16 @@ export default function VideoScreen() {
         );
       } catch (err) {}
     }
-  }, []);
+  }, [resetControlsTimeout]);
 
   const stopAndReset = useCallback(async () => {
+    playbackSessionRef.current += 1;
+    qualityAccessGenerationRef.current += 1;
     try {
-      videoPlayer.pause();
-      videoPlayer.seekBy(-videoPlayer.currentTime);
+      videoPlayer?.pause();
+      if (videoPlayer) {
+        videoPlayer.seekBy(-videoPlayer.currentTime);
+      }
     } finally {
       setActiveVideoId(null);
       setActiveVideoMeta(null);
@@ -792,12 +1059,144 @@ export default function VideoScreen() {
       setShowControls(true);
       playedOnceRef.current = false;
       setShowQualitySheet(false);
+      setShowSpeedSheet(false);
+      setShowMoreOptionsSheet(false);
+      syncActiveMediaItem?.(null, false);
+      setInlineVideoHostActive(false);
     }
+  }, [videoPlayer, syncActiveMediaItem, setInlineVideoHostActive]);
+
+  const applyPlaybackSpeed = useCallback(
+    (speed: number) => {
+      setSelectedSpeed(speed);
+      selectedSpeedRef.current = speed;
+      setShowSpeedSheet(false);
+      setShowMoreOptionsSheet(false);
+      try {
+        if (videoPlayer) {
+          videoPlayer.playbackRate = speed;
+        }
+      } catch (e) {
+        console.warn("[VideoScreen] Failed to set playback rate", e);
+      }
+    },
+    [videoPlayer]
+  );
+
+  const toggleMute = useCallback(() => {
+    setIsMuted((prev) => {
+      const next = !prev;
+      try {
+        if (videoPlayer) {
+          videoPlayer.muted = next;
+        }
+      } catch (e) {
+        console.warn("[VideoScreen] Failed to toggle mute", e);
+      }
+      return next;
+    });
   }, [videoPlayer]);
+
+  const triggerSeekFeedback = useCallback(
+    (dir: "back" | "forward") => {
+      if (seekFeedbackTimerRef.current) {
+        clearTimeout(seekFeedbackTimerRef.current);
+      }
+      setSeekFeedback({ dir, id: Date.now() });
+      seekFeedbackAnim.setValue(0);
+      Animated.timing(seekFeedbackAnim, {
+        toValue: 1,
+        duration: 650,
+        useNativeDriver: true,
+      }).start(() => {
+        setSeekFeedback(null);
+      });
+    },
+    [seekFeedbackAnim]
+  );
+
+  const startLongPress2x = useCallback(() => {
+    if (!isVideoPlaying || !videoPlayer) return;
+    setIsHolding2x(true);
+    try {
+      videoPlayer.playbackRate = 2.0;
+    } catch {}
+  }, [isVideoPlaying, videoPlayer]);
+
+  const endLongPress2x = useCallback(() => {
+    if (holding2xTimerRef.current) {
+      clearTimeout(holding2xTimerRef.current);
+      holding2xTimerRef.current = null;
+    }
+    if (isHolding2x) {
+      setIsHolding2x(false);
+      try {
+        if (videoPlayer) {
+          videoPlayer.playbackRate = selectedSpeedRef.current;
+        }
+      } catch {}
+    }
+  }, [isHolding2x, videoPlayer]);
+
+  const handlePlayerPressIn = useCallback(() => {
+    if (holding2xTimerRef.current) clearTimeout(holding2xTimerRef.current);
+    holding2xTimerRef.current = setTimeout(() => {
+      startLongPress2x();
+    }, 280);
+  }, [startLongPress2x]);
+
+  const handlePlayerPressOut = useCallback(() => {
+    if (holding2xTimerRef.current) {
+      clearTimeout(holding2xTimerRef.current);
+      holding2xTimerRef.current = null;
+    }
+    endLongPress2x();
+  }, [endLongPress2x]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (isFullscreen) {
+        exitFullscreen();
+        return true;
+      }
+      if (showQualitySheet) {
+        setShowQualitySheet(false);
+        return true;
+      }
+      if (showSpeedSheet) {
+        setShowSpeedSheet(false);
+        return true;
+      }
+      if (showMoreOptionsSheet) {
+        setShowMoreOptionsSheet(false);
+        return true;
+      }
+      if (activePlaybackUrl) {
+        stopAndReset();
+        return true;
+      }
+      return false;
+    };
+
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => sub.remove();
+  }, [
+    isFullscreen,
+    exitFullscreen,
+    showQualitySheet,
+    showSpeedSheet,
+    showMoreOptionsSheet,
+    activePlaybackUrl,
+    stopAndReset,
+  ]);
 
   const onSeekStart = useCallback(() => {
     setIsSeeking(true);
     seekValueRef.current = positionMs;
+    if (controlsHideTimerRef.current) {
+      clearTimeout(controlsHideTimerRef.current);
+      controlsHideTimerRef.current = null;
+    }
   }, [positionMs]);
 
   const onSeekChange = useCallback((value: number) => {
@@ -808,16 +1207,17 @@ export default function VideoScreen() {
   const onSeekComplete = useCallback(
     async (value: number) => {
       setIsSeeking(false);
+      resetControlsTimeout();
       try {
         const targetSeconds = value / 1000;
-        const currentSeconds = videoPlayer.currentTime;
+        const currentSeconds = videoPlayer?.currentTime ?? 0;
         const deltaSeconds = targetSeconds - currentSeconds;
 
         // Use seekBy for better Android compatibility
-        videoPlayer.seekBy(deltaSeconds);
+        videoPlayer?.seekBy(deltaSeconds);
 
         // Resume playback after seek on Android with a small delay
-        if (isVideoPlaying) {
+        if (isVideoPlaying && videoPlayer) {
           if (Platform.OS === "android") {
             setTimeout(() => {
               safePlay(videoPlayer as any, "slider-seek");
@@ -830,7 +1230,7 @@ export default function VideoScreen() {
         console.log("SLIDER SEEK ERROR", e);
       }
     },
-    [videoPlayer, isVideoPlaying, safePlay]
+    [videoPlayer, isVideoPlaying, safePlay, resetControlsTimeout]
   );
 
   const load = useCallback(
@@ -839,11 +1239,14 @@ export default function VideoScreen() {
       try {
         if (isRefresh) setRefreshing(true);
         else setLoading(true);
+        setFetchError(null);
 
         const next = await fetchAll();
         setItems(next);
-      } catch {
+      } catch (err: any) {
         setItems([]);
+        const normalized = normalizeApiError(err);
+        setFetchError(normalized.message || "Couldn't load videos");
       } finally {
         setRefreshing(false);
         setLoading(false);
@@ -909,7 +1312,7 @@ export default function VideoScreen() {
 
   const pauseInlineVideoIfNeeded = useCallback(async () => {
     try {
-      if (videoPlayer.playing) {
+      if (videoPlayer?.playing) {
         videoPlayer.pause();
       }
     } catch {
@@ -920,102 +1323,141 @@ export default function VideoScreen() {
   // ─── Native event: status change ───────────────────────────────────────────
   // This fires as soon as the player's native layer transitions state.
   // We use it for the quality-switch seek so it is truly atomic — no setTimeout.
-  useEventListener(
-    videoPlayer,
-    "statusChange",
-    ({ status }: { status: string }) => {
-      const isReady = status === "readyToPlay";
-      const isFailed = status === "failed";
-      setIsVideoReady(isReady);
-      setIsBuffering(status === "loading");
+  useEffect(() => {
+    if (!videoPlayer) return;
 
-      if (
-        isFailed ||
-        (videoPlayer.status === "idle" &&
-          isStreamingUrlExpiringSoon(activePlaybackUrl))
-      ) {
+    const statusSub = videoPlayer.addListener(
+      "statusChange",
+      (event: any) => {
+        const status = event.status;
+        const error = event.error;
         console.log(
-          "[VideoScreen] Player status failed or URL expired, attempting refresh..."
+          `[VideoPlayer:NATIVE] statusChange: status=${status}, playing=${videoPlayer.playing}, currentTime=${videoPlayer.currentTime}, duration=${videoPlayer.duration}`,
+          error ? `error=${JSON.stringify(error)}` : ""
         );
-        (async () => {
-          if (!activeVideoMeta?.id) return;
-          const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
-          try {
-            // Use current selected quality for refresh, respecting subscription
-            const refreshQuality: streamService.VideoQuality =
-              isStreamingHdAllowed
-                ? (selectedQuality as streamService.VideoQuality)
-                : "240p";
-            const nextUrl = await streamService.getPlaybackUrl(
-              activeVideoMeta.id,
-              "video",
-              refreshQuality
-            );
-            resumeAfterUrlChangeRef.current = pos;
-            setActivePlaybackUrl(nextUrl);
-          } catch {
-            // ignore
-          }
-        })().catch(() => undefined);
-        return;
-      }
+        setIsVideoReady(status === "readyToPlay");
+        setIsBuffering(status === "loading");
 
-      if (isReady && qualityResumePositionRef.current !== null) {
-        const targetSeconds = qualityResumePositionRef.current;
-        qualityResumePositionRef.current = null;
-        try {
-          videoPlayer.currentTime = targetSeconds;
-          safePlay(videoPlayer as any, "status-ready");
-        } catch {
-          // Player may have been released — safe to ignore
+        if (status === "readyToPlay") {
+          console.log("[VideoPlayer:NATIVE] Status is readyToPlay, checking auto-play intent. userPaused:", userPausedRef.current, "playing:", videoPlayer.playing);
+          if (qualityResumePositionRef.current !== null) {
+            const targetSeconds = qualityResumePositionRef.current;
+            qualityResumePositionRef.current = null;
+            try {
+              videoPlayer.currentTime = targetSeconds;
+              console.log("[VideoPlayer:NATIVE] Quality resume seek to", targetSeconds);
+              safePlay(videoPlayer as any, "status-ready-quality");
+            } catch (e) {
+              console.error("[VideoPlayer:NATIVE] Quality resume seek failed", e);
+            }
+          } else if (!userPausedRef.current && !videoPlayer.playing) {
+            console.log("[VideoPlayer:NATIVE] Calling safePlay for readyToPlay");
+            safePlay(videoPlayer as any, "status-readyToPlay");
+          }
+        } else if (status === "error" || status === "failed") {
+          console.error("[VideoPlayer:NATIVE] Playback failed with error:", error);
+          setPlaybackError(error?.message || "Playback failed");
         }
       }
-    }
-  );
+    );
 
-  // ─── 500ms polling for position / duration / playing state ─────────────────
+    const playingSub = videoPlayer.addListener(
+      "playingChange",
+      (event: any) => {
+        const isPlaying = Boolean(event.isPlaying);
+        console.log(`[VideoPlayer:NATIVE] playingChange: isPlaying=${isPlaying}, currentTime=${videoPlayer.currentTime}`);
+        setIsVideoPlaying(isPlaying);
+      }
+    );
+
+    const timeSub = videoPlayer.addListener(
+      "timeUpdate",
+      (event: any) => {
+        const curMs = Math.round(Number(event.currentTime || 0) * 1000);
+        console.log(`[VideoPlayer:NATIVE] timeUpdate: currentTime=${event.currentTime}s, duration=${videoPlayer.duration}s`);
+        if (!isSeeking) {
+          setPositionMs(curMs);
+        }
+        if (videoPlayer.duration && videoPlayer.duration > 0) {
+          setDurationMs(Math.round(videoPlayer.duration * 1000));
+        }
+      }
+    );
+
+    return () => {
+      statusSub.remove();
+      playingSub.remove();
+      timeSub.remove();
+    };
+  }, [
+    videoPlayer,
+    activePlaybackUrl,
+    activeVideoMeta?.id,
+    isStreamingHdAllowed,
+    selectedQuality,
+    safePlay,
+    isSeeking,
+  ]);
+
+  // ─── 500ms polling for position / duration / sync ───────────────────────────
   useEffect(() => {
+    if (!videoPlayer) {
+      setIsVideoPlaying(false);
+      setIsBuffering(false);
+      setIsVideoReady(false);
+      return;
+    }
     const interval = setInterval(() => {
       if (!isSeeking) {
-        setPositionMs(toFiniteDurationMs(videoPlayer.currentTime * 1000));
+        const curMs = toFiniteDurationMs(videoPlayer.currentTime * 1000);
+        setPositionMs(curMs);
+        if (activeVideoMeta) {
+          syncActiveMediaItem?.(
+            {
+              id: String(activeVideoMeta.id),
+              contentId: String(activeVideoMeta.id),
+              title: activeVideoMeta.title,
+              artistName: activeVideoMeta.artistName,
+              artistId: activeVideoMeta.artistId,
+              mediaType: "video",
+              artworkUrl: activeVideoMeta.artworkUrl,
+              mediaUrl: activePlaybackUrl,
+              useStreamAccess: activeVideoMeta.useStreamAccess,
+              duration: videoPlayer.duration
+                ? Math.round(videoPlayer.duration * 1000)
+                : undefined,
+            },
+            videoPlayer.playing,
+            curMs,
+            toFiniteDurationMs(videoPlayer.duration * 1000)
+          );
+        }
       }
       setDurationMs(toFiniteDurationMs(videoPlayer.duration * 1000));
-      setIsVideoPlaying(videoPlayer.playing);
       setIsBuffering(videoPlayer.status === "loading");
       setIsVideoReady(videoPlayer.status === "readyToPlay");
 
-      // Handle finished
+      // Handle finished with autoplay check
       if (
+        isAutoplayEnabled &&
         videoPlayer.duration > 0 &&
         videoPlayer.currentTime >= videoPlayer.duration - 0.2 &&
         videoPlayer.playing === false &&
         isVideoPlaying
       ) {
-        // did finish logic can go here if needed
+        setShowUpNext(true);
       }
     }, 500);
     return () => clearInterval(interval);
-  }, [videoPlayer, isSeeking, isVideoPlaying]);
-
-  // ─── Heartbeat for listening time tracking ─────────────────
-  useEffect(() => {
-    if (!activeVideoMeta?.id) return;
-    if (!isVideoPlaying) {
-      stopHeartbeat();
-      return;
-    }
-
-    const contentId = String(activeVideoMeta.id);
-    startHeartbeat(
-      contentId,
-      () => (videoPlayer ? videoPlayer.currentTime * 1000 : 0),
-      () => (videoPlayer ? videoPlayer.duration * 1000 : 0)
-    );
-
-    return () => {
-      stopHeartbeat();
-    };
-  }, [activeVideoMeta?.id, isVideoPlaying]);
+  }, [
+    videoPlayer,
+    isSeeking,
+    isAutoplayEnabled,
+    activeVideoMeta,
+    activePlaybackUrl,
+    syncActiveMediaItem,
+    isVideoPlaying,
+  ]);
 
   useEffect(() => {
     // Pause inline video if global audio starts playing.
@@ -1037,17 +1479,24 @@ export default function VideoScreen() {
   }, [activePlaybackUrl, pauseInlineVideoIfNeeded]);
 
   const resolvePlaybackUrl = useCallback(
-    async (video: VideoCard) => {
+    async (video: VideoCard, sessionId: number) => {
       try {
-        // Use current selected quality or default to 240p for free users, Auto for paid
         const q: streamService.VideoQuality =
           selectedQuality && selectedQuality !== "Auto"
             ? selectedQuality
-            : isStreamingHdAllowed
-            ? "Auto"
-            : "240p";
-        return await streamService.getPlaybackUrl(video.id, "video", q);
+            : "Auto";
+        const isStillRelevant = () =>
+          sessionId === playbackSessionRef.current;
+        return await streamService.getPlaybackUrl(
+          video.id,
+          "video",
+          q,
+          { isStillRelevant }
+        );
       } catch (err: any) {
+        if (err?.code === "PLAYBACK_REQUEST_SUPERSEDED") {
+          throw err;
+        }
         if (
           err?.message &&
           (err.message.toLowerCase().includes("subscription") ||
@@ -1100,7 +1549,11 @@ export default function VideoScreen() {
 
         // Stop/unload any previous inline video
         await pauseGlobalPlaybackIfNeeded();
-        videoPlayer.pause();
+        if (playerRef.current) {
+          try {
+            playerRef.current.pause();
+          } catch {}
+        }
 
         setLoadingPlaybackUrl(true);
         try {
@@ -1119,7 +1572,8 @@ export default function VideoScreen() {
             return;
           }
 
-          const playbackUrl = await resolvePlaybackUrl(video);
+          const rawPlaybackUrl = await resolvePlaybackUrl(video, sessionId);
+          const playbackUrl = streamService.normalizePlaybackUrl(rawPlaybackUrl);
 
           if (sessionId !== playbackSessionRef.current) return;
           if (!streamService.validatePlaybackUrl(playbackUrl, "video")) {
@@ -1132,24 +1586,50 @@ export default function VideoScreen() {
           setIsVideoReady(false);
           setIsVideoPlaying(true);
 
+          syncActiveMediaItem?.(
+            {
+              id: String(video.id),
+              contentId: String(video.id),
+              title: video.title,
+              artistName: video.artistName,
+              artistId: video.artistId,
+              mediaType: "video",
+              artworkUrl: video.artworkUrl,
+              mediaUrl: playbackUrl,
+              useStreamAccess: video.useStreamAccess,
+              duration: durationMs || undefined,
+            },
+            true,
+            0,
+            durationMs
+          );
+          setInlineVideoHostActive(true);
+
           await setAudioModeAsync({
             playsInSilentMode: true,
             shouldPlayInBackground: true,
             interruptionMode: "doNotMix",
           });
 
-          console.log("[VideoScreen] Playback URL set, attempting to play:", playbackUrl);
+          console.log("[VideoScreen] Playback URL set, attempting to play (token redacted):", playbackUrl ? `${new URL(playbackUrl).origin}${new URL(playbackUrl).pathname}?kind=...&quality=...` : "null");
 
           // Explicitly start playback after URL is set
           setTimeout(() => {
-            if (videoPlayer && sessionId === playbackSessionRef.current) {
+            const targetPlayer = playerRef.current || videoPlayer;
+            if (targetPlayer && sessionId === playbackSessionRef.current) {
               console.log("[VideoScreen] Calling safePlay after URL set");
-              safePlay(videoPlayer as any, "onPressVideo");
+              safePlay(targetPlayer as any, "onPressVideo");
             } else {
               console.log("[VideoScreen] safePlay skipped - session mismatch or no player");
             }
           }, 100);
         } catch (err: any) {
+          if (
+            sessionId !== playbackSessionRef.current ||
+            err?.code === "PLAYBACK_REQUEST_SUPERSEDED"
+          ) {
+            return;
+          }
           const msg = (err?.message || "").toLowerCase();
           if (msg.includes("subscription") || msg.includes("access denied")) {
             setLastAttemptedVideo(video);
@@ -1162,11 +1642,21 @@ export default function VideoScreen() {
           setPlaybackError("Could not load playback URL");
           setActivePlaybackUrl(null);
         } finally {
-          setLoadingPlaybackUrl(false);
+          if (sessionId === playbackSessionRef.current) {
+            setLoadingPlaybackUrl(false);
+          }
         }
       })().catch(() => undefined);
     },
-    [pauseGlobalPlaybackIfNeeded, resolvePlaybackUrl, videoPlayer]
+    [
+      durationMs,
+      pauseGlobalPlaybackIfNeeded,
+      resolvePlaybackUrl,
+      safePlay,
+      setInlineVideoHostActive,
+      syncActiveMediaItem,
+      videoPlayer,
+    ]
   );
 
   const refreshSubscriptionAndRetry = useCallback(async () => {
@@ -1197,6 +1687,14 @@ export default function VideoScreen() {
           setSelectedQuality(q as streamService.VideoQuality);
           const pos = Math.max(0, Math.round(videoPlayer.currentTime * 1000));
           if (activeVideoMeta?.id) {
+            const sessionId = playbackSessionRef.current;
+            const qualityGeneration =
+              qualityAccessGenerationRef.current + 1;
+            qualityAccessGenerationRef.current = qualityGeneration;
+            const isStillRelevant = () =>
+              sessionId === playbackSessionRef.current &&
+              qualityGeneration === qualityAccessGenerationRef.current;
+
             setLoadingPlaybackUrl(true);
             try {
               // Use the pending quality directly - backend will enforce subscription
@@ -1205,15 +1703,24 @@ export default function VideoScreen() {
               const nextUrl = await streamService.getPlaybackUrl(
                 activeVideoMeta.id,
                 "video",
-                qParam
+                qParam,
+                { isStillRelevant }
               );
+              if (!isStillRelevant()) return;
               isQualitySwitchRef.current = true;
               qualityResumePositionRef.current = pos / 1000;
               setActivePlaybackUrl(nextUrl);
-            } catch (e) {
-              console.warn("[VideoScreen] Auto-retry quality switch failed", e);
+            } catch (e: any) {
+              if (
+                isStillRelevant() &&
+                e?.code !== "PLAYBACK_REQUEST_SUPERSEDED"
+              ) {
+                console.warn("[VideoScreen] Auto-retry quality switch failed", e);
+              }
             } finally {
-              setLoadingPlaybackUrl(false);
+              if (isStillRelevant()) {
+                setLoadingPlaybackUrl(false);
+              }
             }
           }
         }
@@ -1240,16 +1747,46 @@ export default function VideoScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      // Refresh sub status on focus (essential for instant unlock)
+      setInlineVideoHostActive(true);
       refreshSubscriptionAndRetry();
-
-      // Reload video list every time screen gains focus so new uploads appear.
       load().catch(() => undefined);
+
       return () => {
-        pauseInlineVideoIfNeeded().catch(() => undefined);
+        setInlineVideoHostActive(false);
       };
-    }, [load, pauseInlineVideoIfNeeded, refreshSubscriptionAndRetry])
+    }, [load, refreshSubscriptionAndRetry, setInlineVideoHostActive])
   );
+
+  useEffect(() => {
+    if (route.params?.resumeVideoId) {
+      const resumeId = String(route.params.resumeVideoId);
+      navigation.setParams({ resumeVideoId: undefined });
+      if (currentItem && String(currentItem.id) === resumeId) {
+        if (activeVideoId !== resumeId && currentItem.mediaUrl) {
+          setActiveVideoId(resumeId);
+          setActiveVideoMeta({
+            id: resumeId,
+            title: currentItem.title,
+            artistName: currentItem.artistName ?? "Artist",
+            artistId: currentItem.artistId ? String(currentItem.artistId) : undefined,
+            artworkUrl: currentItem.artworkUrl ?? FALLBACK_ARTWORK,
+            mediaUrl: currentItem.mediaUrl,
+            category: "Trending",
+          });
+          setActivePlaybackUrl(currentItem.mediaUrl);
+          if (playerState.positionMs > 0) {
+            qualityResumePositionRef.current = playerState.positionMs / 1000;
+          }
+        }
+      }
+    }
+  }, [
+    route.params?.resumeVideoId,
+    currentItem,
+    activeVideoId,
+    navigation,
+    playerState.positionMs,
+  ]);
 
   useEffect(() => {
     if (route.params?.autoplayVideo) {
@@ -1483,13 +2020,14 @@ export default function VideoScreen() {
 
       // ── Step 1: Pause immediately & capture exact position ──────────────────
       try {
-        videoPlayer.pause();
+        if (playerRef.current) playerRef.current.pause();
+        else if (videoPlayer) videoPlayer.pause();
       } catch {
         /* ignore */
       }
       let savedPositionSeconds = 0;
       try {
-        const t = videoPlayer.currentTime;
+        const t = playerRef.current?.currentTime ?? videoPlayer?.currentTime ?? 0;
         if (Number.isFinite(t) && t > 0) savedPositionSeconds = t;
       } catch {
         /* player not ready — resume from 0 */
@@ -1507,25 +2045,42 @@ export default function VideoScreen() {
       setIsVideoReady(false);
       setIsBuffering(true);
 
+      const sessionId = playbackSessionRef.current;
+      const qualityGeneration =
+        qualityAccessGenerationRef.current + 1;
+      qualityAccessGenerationRef.current = qualityGeneration;
+      const isStillRelevant = () =>
+        sessionId === playbackSessionRef.current &&
+        qualityGeneration === qualityAccessGenerationRef.current;
+
       try {
         const qualityParam = getStreamQualityParam(q);
         console.log(`[VideoScreen] Quality selection: ${q} => ${qualityParam}`);
         const url = await streamService.getPlaybackUrl(
           activeVideoMeta.id,
           "video",
-          qualityParam
+          qualityParam,
+          { isStillRelevant }
         );
+        if (!isStillRelevant()) return;
         // Setting the URL causes useVideoPlayer to reload the source.
         // useEventListener('statusChange') above will fire seek+play atomically
         // as soon as status === 'readyToPlay' — no setTimeout needed.
         setActivePlaybackUrl(url);
         setIsVideoPlaying(true);
-      } catch {
-        // Clear the pending seek on error so we don't seek into a stale state.
-        qualityResumePositionRef.current = null;
-        isQualitySwitchRef.current = false;
+      } catch (error: any) {
+        if (
+          isStillRelevant() &&
+          error?.code !== "PLAYBACK_REQUEST_SUPERSEDED"
+        ) {
+          // Clear the pending seek only for the request that actually failed.
+          qualityResumePositionRef.current = null;
+          isQualitySwitchRef.current = false;
+        }
       } finally {
-        setLoadingPlaybackUrl(false);
+        if (isStillRelevant()) {
+          setLoadingPlaybackUrl(false);
+        }
       }
     },
     [
@@ -1537,38 +2092,89 @@ export default function VideoScreen() {
     ]
   );
 
-  const onDoubleTap = useCallback(async (dir: "back" | "forward") => {
+  const onDoubleTap = useCallback(
+    async (dir: "back" | "forward") => {
+      try {
+        const v = videoPlayer;
+        if (!v) return;
+
+        triggerSeekFeedback(dir);
+
+        const wasPlaying = v.playing;
+        const current = toFiniteDurationMs(v.currentTime * 1000);
+        const dur = toFiniteDurationMs(v.duration * 1000);
+
+        const next =
+          dir === "back" ? current - SEEK_DELTA_MS : current + SEEK_DELTA_MS;
+
+        const target = clamp(next, 0, dur > 0 ? dur : Number.MAX_SAFE_INTEGER);
+
+        // Use seekBy for better Android compatibility
+        const deltaSeconds = target / 1000 - v.currentTime;
+        v.seekBy(deltaSeconds);
+
+        // Resume playback after a small delay on Android to ensure seek completes
+        if (wasPlaying) {
+          if (Platform.OS === "android") {
+            setTimeout(() => {
+              safePlay(v as any, "double-tap-seek");
+            }, 50);
+          } else {
+            safePlay(v as any, "double-tap-seek");
+          }
+        }
+      } catch (e) {
+        console.log("SEEK ERROR", e);
+      }
+    },
+    [safePlay, triggerSeekFeedback]
+  );
+
+  const handleSeekBackward10 = useCallback(() => {
+    resetControlsTimeout();
     try {
-      const v = videoPlayer;
-      if (!v) return;
-
-      const wasPlaying = v.playing;
-      const current = toFiniteDurationMs(v.currentTime * 1000);
-      const dur = toFiniteDurationMs(v.duration * 1000);
-
-      const next =
-        dir === "back" ? current - SEEK_DELTA_MS : current + SEEK_DELTA_MS;
-
-      const target = clamp(next, 0, dur > 0 ? dur : Number.MAX_SAFE_INTEGER);
-
-      // Use seekBy for better Android compatibility
-      const deltaSeconds = (target / 1000) - v.currentTime;
-      v.seekBy(deltaSeconds);
-
-      // Resume playback after a small delay on Android to ensure seek completes
-      if (wasPlaying) {
+      const p = playerRef.current || videoPlayer;
+      if (!p) return;
+      triggerSeekFeedback("back");
+      p.seekBy(-10);
+      if (p.playing) {
         if (Platform.OS === "android") {
           setTimeout(() => {
-            safePlay(v as any, "double-tap-seek");
+            safePlay(p as any, "backward-seek");
           }, 50);
         } else {
-          safePlay(v as any, "double-tap-seek");
+          safePlay(p as any, "backward-seek");
         }
       }
     } catch (e) {
-      console.log("SEEK ERROR", e);
+      console.log("BACKWARD SEEK ERROR", e);
     }
-  }, [safePlay]);
+  }, [videoPlayer, safePlay, triggerSeekFeedback, resetControlsTimeout]);
+
+  const handleSeekForward10 = useCallback(() => {
+    resetControlsTimeout();
+    try {
+      const p = playerRef.current || videoPlayer;
+      if (!p) return;
+      const dur = p.duration;
+      const currentTime = p.currentTime;
+      const remaining = dur > 0 ? dur - currentTime : 10;
+      const delta = Math.min(10, Math.max(0, remaining));
+      triggerSeekFeedback("forward");
+      p.seekBy(delta);
+      if (p.playing) {
+        if (Platform.OS === "android") {
+          setTimeout(() => {
+            safePlay(p as any, "forward-seek");
+          }, 50);
+        } else {
+          safePlay(p as any, "forward-seek");
+        }
+      }
+    } catch (e) {
+      console.log("FORWARD SEEK ERROR", e);
+    }
+  }, [videoPlayer, safePlay, triggerSeekFeedback, resetControlsTimeout]);
 
   const onPressPlayerSurface = useCallback(
     async (evt: any) => {
@@ -1583,51 +2189,55 @@ export default function VideoScreen() {
         const dir = x < SCREEN_WIDTH / 2 ? "back" : "forward";
         await onDoubleTap(dir);
         setShowControls(true);
-        if (controlsHideTimerRef.current) {
-          clearTimeout(controlsHideTimerRef.current);
-          controlsHideTimerRef.current = null;
-        }
+        resetControlsTimeout();
         return;
       }
 
-      setShowControls((s) => {
-        const next = !s;
-        if (controlsHideTimerRef.current) {
-          clearTimeout(controlsHideTimerRef.current);
-          controlsHideTimerRef.current = null;
-        }
-        if (!next) {
-          setShowQualitySheet(false);
-        }
-        return next;
-      });
+      toggleControls();
     },
-    [onDoubleTap]
+    [onDoubleTap, toggleControls, resetControlsTimeout]
   );
 
   const toggleInlinePlayPause = useCallback(async () => {
+    console.log("[VideoScreen] toggleInlinePlayPause entered");
     try {
-      const v = videoPlayer;
+      const v = playerRef.current || videoPlayer;
+      console.log("[VideoScreen] toggleInlinePlayPause: player exists:", Boolean(v));
       if (!v) {
         console.log("[VideoScreen] toggleInlinePlayPause: No video player");
         return;
       }
-      console.log("[VideoScreen] toggleInlinePlayPause: Current playing state:", v.playing);
+      console.log(
+        `[VideoScreen] toggleInlinePlayPause: Current playing state: ${v.playing}, status: ${v.status}, currentTime: ${v.currentTime}`
+      );
       if (v.playing) {
-        userPausedRef.current = true; // Mark as user-initiated pause
-        await v.pause();
+        userPausedRef.current = true;
+        console.log("[VideoScreen] Calling player.pause()...");
+        v.pause();
         setIsVideoPlaying(false);
-        console.log("[VideoScreen] Paused video");
+        console.log("[VideoScreen] isPlaying updated to false");
+        if (controlsHideTimerRef.current) {
+          clearTimeout(controlsHideTimerRef.current);
+          controlsHideTimerRef.current = null;
+        }
+        setShowControls(true);
       } else {
-        userPausedRef.current = false; // Reset when user plays
-        await v.play();
+        userPausedRef.current = false;
+        console.log("[VideoScreen] Calling safePlay from toggleInlinePlayPause...");
+        safePlay(v as any, "toggleInlinePlayPause");
         setIsVideoPlaying(true);
-        console.log("[VideoScreen] Started video playback");
+        console.log("[VideoScreen] isPlaying updated to true");
+        resetControlsTimeout();
       }
-    } catch (e) {
-      console.log("[VideoScreen] toggleInlinePlayPause error:", e);
+    } catch (e: any) {
+      console.error("[VideoScreen] toggleInlinePlayPause error:", {
+        name: e?.name,
+        message: e?.message,
+        stack: e?.stack,
+        cause: e?.cause,
+      });
     }
-  }, [videoPlayer]);
+  }, [videoPlayer, safePlay, resetControlsTimeout]);
 
   const showThankYou = useCallback(() => {
     const message = "Thank you for reporting.";
@@ -1852,11 +2462,11 @@ export default function VideoScreen() {
               styles.rowThumbWrap,
               isActive ? styles.rowThumbWrapActive : null,
             ]}>
-            <Image
-              source={{
-                uri: getOptimizedImageUrl(item.artworkUrl || FALLBACK_ARTWORK),
-              }}
+            <AppImage
+              uri={item.artworkUrl}
+              fallbackType="video"
               style={styles.rowThumb}
+              resizeMode="cover"
             />
             {item.isLocked && (
               <View style={styles.lockBadgeMini}>
@@ -1866,7 +2476,7 @@ export default function VideoScreen() {
             <View style={styles.rowThumbOverlay}>
               <View style={styles.rowPlayBadge}>
                 <Image
-                  source={PauseButtonImg}
+                  source={PlayButtonImg}
                   style={styles.rowPlayImg}
                   resizeMode="contain"
                 />
@@ -1932,11 +2542,11 @@ export default function VideoScreen() {
             style={styles.relatedRow}
             onPress={() => onPressVideo(v)}>
             <View>
-              <Image
-                source={{
-                  uri: getOptimizedImageUrl(v.artworkUrl || FALLBACK_ARTWORK),
-                }}
+              <AppImage
+                uri={v.artworkUrl}
+                fallbackType="video"
                 style={styles.relatedThumb}
+                resizeMode="cover"
               />
               {v.isLocked && (
                 <View style={[styles.lockBadgeMini, { top: 4, right: 4 }]}>
@@ -1966,9 +2576,27 @@ export default function VideoScreen() {
 
   const listEmpty = useMemo(() => {
     if (normalizedQuery && searchLoading) {
-      return <Text style={styles.emptyText}>Searching…</Text>;
+      return (
+        <View style={styles.centerStateWrap}>
+          <ActivityIndicator size="large" color="#fff" style={{ marginBottom: 16 }} />
+          <Text style={styles.centerStateTitle}>Searching videos...</Text>
+          <Text style={styles.centerStateSub}>Please wait</Text>
+        </View>
+      );
     }
-    return <Text style={styles.emptyText}>No videos found.</Text>;
+    return (
+      <View style={styles.centerStateWrap}>
+        <View style={styles.emptyVideoWrap}>
+          <Video size={36} color="#888" />
+        </View>
+        <Text style={styles.centerStateTitle}>No videos available</Text>
+        <Text style={styles.centerStateSub}>
+          {normalizedQuery
+            ? "No videos found matching your search"
+            : "Tap a video below to start playing"}
+        </Text>
+      </View>
+    );
   }, [normalizedQuery, searchLoading]);
 
   // Refined Lock Modal for Artist Subscriptions
@@ -2082,29 +2710,45 @@ export default function VideoScreen() {
       />
 
       <SafeAreaView style={styles.safe} edges={["bottom"]}>
-        {loading ? (
-          <FlatList
-            data={Array.from({ length: 6 })}
-            keyExtractor={(_, idx) => `sk-${idx}`}
-            initialNumToRender={5}
-            windowSize={5}
-            removeClippedSubviews={true}
-            renderItem={({ item, index }) => renderSkeletonRow(item, index)}
-            showsVerticalScrollIndicator={false}
-            onScroll={onListScroll}
-            scrollEventThrottle={16}
-            contentContainerStyle={{
-              paddingTop: measuredHeaderHeight + 88,
-              paddingBottom: tabBarHeight + 120,
-            }}
+        {loading && items.length === 0 ? (
+          <View
+            style={[
+              styles.centerStateWrap,
+              { paddingTop: measuredHeaderHeight + 8 },
+            ]}>
+            <ActivityIndicator size="large" color="#fff" style={{ marginBottom: 16 }} />
+            <Text style={styles.centerStateTitle}>Loading videos...</Text>
+            <Text style={styles.centerStateSub}>Please wait</Text>
+          </View>
+        ) : fetchError && visibleItems.length === 0 ? (
+          <ScrollView
+            contentContainerStyle={[
+              styles.centerStateWrap,
+              { paddingTop: measuredHeaderHeight + 8, flexGrow: 1 },
+            ]}
             refreshControl={
               <RefreshControl
                 tintColor="#fff"
                 refreshing={refreshing}
                 onRefresh={() => load({ refresh: true })}
               />
-            }
-          />
+            }>
+            <View style={styles.errorWifiWrap}>
+              <Wifi size={40} color="#FF3366" />
+            </View>
+            <Text style={styles.centerStateTitle}>Couldn't load videos</Text>
+            <Text style={styles.centerStateSub}>
+              Please check{" "}
+              <Text style={{ color: "#FF3366" }}>your internet connection</Text>
+              {"\n"}and try again.
+            </Text>
+            <TouchableOpacity
+              style={styles.errorRetryBtn}
+              onPress={() => load({ refresh: true })}
+              activeOpacity={0.85}>
+              <Text style={styles.errorRetryBtnText}>Retry</Text>
+            </TouchableOpacity>
+          </ScrollView>
         ) : (
           <FlatList<VideoCard>
             ref={(r) => {
@@ -2120,8 +2764,9 @@ export default function VideoScreen() {
             onScroll={onListScroll}
             scrollEventThrottle={16}
             contentContainerStyle={{
-              paddingTop: measuredHeaderHeight + 88,
+              paddingTop: measuredHeaderHeight + 8,
               paddingBottom: tabBarHeight + 120,
+              flexGrow: 1,
             }}
             refreshControl={
               <RefreshControl
@@ -2133,7 +2778,7 @@ export default function VideoScreen() {
             ListEmptyComponent={listEmpty}
             ListHeaderComponent={listHeader}
             ListHeaderComponentStyle={
-              listHeader ? { marginTop: 36, marginBottom: 16 } : undefined
+              listHeader ? { marginTop: 24, marginBottom: 14 } : undefined
             }
           />
         )}
@@ -2146,7 +2791,16 @@ export default function VideoScreen() {
           pointerEvents="box-none">
           <View onLayout={onHeaderLayout}>
             {!isFullscreen ? (
-              <View style={styles.headerTopRow}>
+              <View
+                style={[
+                  styles.headerTopRow,
+                  {
+                    paddingTop: Math.max(
+                      insets.top,
+                      Platform.OS === "android" ? 10 : 6
+                    ),
+                  },
+                ]}>
                 <Text style={styles.title}>Video</Text>
               </View>
             ) : null}
@@ -2162,16 +2816,17 @@ export default function VideoScreen() {
                 pointerEvents="box-none">
                 <View
                   style={styles.playerInner}
-                  pointerEvents="box-none"
-                  {...panResponder.panHandlers}>
-                  {activePlaybackUrl ? (
+                  pointerEvents="box-none">
+                  {activePlaybackUrl && videoPlayer ? (
                     <Pressable
                       style={[
                         StyleSheet.absoluteFill,
                         styles.playerSurfacePressable,
                       ]}
                       pointerEvents="auto"
-                      onPress={onPressPlayerSurface}>
+                      onPress={onPressPlayerSurface}
+                      onPressIn={handlePlayerPressIn}
+                      onPressOut={handlePlayerPressOut}>
                       <VideoView
                         player={videoPlayer}
                         style={[
@@ -2200,63 +2855,135 @@ export default function VideoScreen() {
                     </View>
                   )}
 
-                  {activePlaybackUrl && showControls ? (
-                    <View
-                      style={[
-                        styles.playerTopLeft,
-                        isFullscreen ? { top: insets.top + 12 } : null,
-                      ]}>
-                      <Pressable
-                        style={styles.iconBtn}
-                        onPress={() => {
-                          if (isFullscreen) {
-                            exitFullscreen();
-                          } else {
-                            stopAndReset().catch(() => undefined);
-                          }
-                        }}>
-                        <ArrowLeft size={18} color="#fff" />
-                      </Pressable>
+                  {/* 2X Long-Press Speed Badge Overlay */}
+                  {isHolding2x ? (
+                    <View style={styles.holding2xBadge} pointerEvents="none">
+                      <Zap size={14} color="#FFF" />
+                      <Text style={styles.holding2xText}>2X Speed</Text>
                     </View>
                   ) : null}
 
-                  <View
-                    style={[
-                      styles.playerTopRight,
-                      isFullscreen ? { top: insets.top + 12 } : null,
-                    ]}>
-                    {activePlaybackUrl && showControls ? (
-                      <Pressable
-                        style={styles.iconBtn}
-                        onPress={() => setShowQualitySheet((s) => !s)}>
-                        <View style={styles.qualityIconWrap}>
-                          <Settings size={18} color="#fff" />
-                          {isHD ? (
-                            <View style={styles.hdBadge}>
-                              <Text style={styles.hdBadgeText}>HD</Text>
-                            </View>
-                          ) : null}
+                  {/* Double-Tap Seek Visual Feedback Animations */}
+                  {seekFeedback ? (
+                    <Animated.View
+                      style={[
+                        seekFeedback.dir === "back"
+                          ? styles.seekRippleLeft
+                          : styles.seekRippleRight,
+                        { opacity: seekFeedbackAnim },
+                      ]}
+                      pointerEvents="none">
+                      <Text style={styles.seekRippleText}>
+                        {seekFeedback.dir === "back" ? "⏪ -10s" : "+10s ⏩"}
+                      </Text>
+                    </Animated.View>
+                  ) : null}
+
+                  {/* Single Clean Responsive Player Controls Bar Overlay */}
+                  {activePlaybackUrl && showControls ? (
+                    <View
+                      style={[
+                        styles.playerTopBar,
+                        isFullscreen && {
+                          paddingTop: Math.max(insets.top, 12),
+                          paddingLeft: Math.max(insets.left, 12),
+                          paddingRight: Math.max(insets.right, 12),
+                        },
+                      ]}
+                      pointerEvents="box-none">
+                      <LinearGradient
+                        colors={[
+                          "rgba(0,0,0,0.72)",
+                          "rgba(0,0,0,0.30)",
+                          "transparent",
+                        ]}
+                        style={StyleSheet.absoluteFill}
+                        pointerEvents="none"
+                      />
+                      <View
+                        style={styles.playerControlsRow}
+                        pointerEvents="box-none">
+                        {/* Left: Back / Minimize Button */}
+                        <Pressable
+                          style={styles.playerControlBtn}
+                          hitSlop={10}
+                          onPress={() => {
+                            resetControlsTimeout();
+                            if (isFullscreen) {
+                              exitFullscreen();
+                            } else {
+                              stopAndReset();
+                            }
+                          }}>
+                          <ArrowLeft size={18} color="#fff" />
+                        </Pressable>
+
+                        {/* Right: Mute, Speed, More Options, Fullscreen */}
+                        <View
+                          style={styles.playerRightControlsGroup}
+                          pointerEvents="box-none">
+                          <Pressable
+                            style={styles.playerControlBtn}
+                            hitSlop={10}
+                            onPress={() => {
+                              resetControlsTimeout();
+                              toggleMute();
+                            }}>
+                            {isMuted ? (
+                              <VolumeX size={18} color="#FF5555" />
+                            ) : (
+                              <Volume2 size={18} color="#fff" />
+                            )}
+                          </Pressable>
+
+                          <Pressable
+                            style={[
+                              styles.playerControlBtn,
+                              styles.playerSpeedControlBtn,
+                            ]}
+                            hitSlop={10}
+                            onPress={() => {
+                              resetControlsTimeout();
+                              setShowSpeedSheet(true);
+                            }}>
+                            <Text style={styles.playerSpeedBtnText}>
+                              {selectedSpeed === 1
+                                ? "1.0x"
+                                : `${selectedSpeed}x`}
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            style={styles.playerControlBtn}
+                            hitSlop={10}
+                            onPress={() => {
+                              resetControlsTimeout();
+                              setShowMoreOptionsSheet(true);
+                            }}>
+                            <MoreVertical size={18} color="#fff" />
+                          </Pressable>
+
+                          <Pressable
+                            style={styles.playerControlBtn}
+                            hitSlop={10}
+                            onPress={() => {
+                              resetControlsTimeout();
+                              if (isFullscreen) {
+                                exitFullscreen();
+                              } else {
+                                enterFullscreen();
+                              }
+                            }}>
+                            {isFullscreen ? (
+                              <Minimize size={18} color="#fff" />
+                            ) : (
+                              <Maximize size={18} color="#fff" />
+                            )}
+                          </Pressable>
                         </View>
-                      </Pressable>
-                    ) : null}
-                    {activePlaybackUrl && showControls ? (
-                      <Pressable
-                        style={styles.iconBtn}
-                        onPress={() => {
-                          if (isFullscreen) {
-                            exitFullscreen();
-                          } else {
-                            enterFullscreen();
-                          }
-                        }}>
-                        {isFullscreen ? (
-                          <X size={18} color="#fff" />
-                        ) : (
-                          <Maximize size={18} color="#fff" />
-                        )}
-                      </Pressable>
-                    ) : null}
-                  </View>
+                      </View>
+                    </View>
+                  ) : null}
 
                   {showQualitySheet && activePlaybackUrl && showControls ? (
                     <BlurView
@@ -2313,84 +3040,57 @@ export default function VideoScreen() {
 
                   {activePlaybackUrl && showControls ? (
                     <View
-                      style={[
-                        styles.controlsOverlay,
-                        { flexDirection: "row", gap: 20 },
-                      ]}
+                      style={styles.centerControlsOverlay}
                       pointerEvents="box-none">
                       {/* BACKWARD 10 SEC BUTTON */}
                       <Pressable
                         style={({ pressed }) => [
-                          styles.seekBtn,
-                          pressed ? styles.seekBtnPressed : null,
+                          styles.compactSeekBtn,
+                          pressed ? styles.compactSeekBtnPressed : null,
                         ]}
-                        onPress={async () => {
-                          try {
-                            const wasPlaying = videoPlayer.playing;
-                            // Use seekBy for better Android compatibility
-                            videoPlayer.seekBy(-10);
-                            if (wasPlaying) {
-                              if (Platform.OS === "android") {
-                                setTimeout(() => {
-                                  safePlay(videoPlayer as any, "backward-seek");
-                                }, 50);
-                              } else {
-                                safePlay(videoPlayer as any, "backward-seek");
-                              }
-                            }
-                          } catch (e) {
-                            console.log("BACKWARD SEEK ERROR", e);
-                          }
-                        }}>
-                        <Text style={styles.seekBtnText}>⏪ 10</Text>
+                        hitSlop={10}
+                        onPress={handleSeekBackward10}>
+                        <View style={styles.compactSeekContent}>
+                          <SeekBack10Icon size={16} color="#fff" />
+                          <Text style={styles.compactSeekNumber}>10</Text>
+                        </View>
                       </Pressable>
 
                       {/* PLAY/PAUSE BUTTON */}
                       <Pressable
                         style={({ pressed }) => [
-                          styles.playPauseBtn,
-                          pressed ? styles.playPauseBtnPressed : null,
+                          styles.compactPlayPauseBtn,
+                          pressed ? styles.compactPlayPauseBtnPressed : null,
                         ]}
-                        onPress={toggleInlinePlayPause}>
-                        <Image
-                          source={
-                            isVideoPlaying ? PlayButtonImg : PauseButtonImg
-                          }
-                          style={styles.playPauseImg}
-                          resizeMode="contain"
-                        />
+                        hitSlop={10}
+                        onPress={() => {
+                          resetControlsTimeout();
+                          toggleInlinePlayPause();
+                        }}>
+                        {isVideoPlaying ? (
+                          <Pause size={24} color="#FFF" fill="#FFF" />
+                        ) : (
+                          <Play
+                            size={24}
+                            color="#FFF"
+                            fill="#FFF"
+                            style={{ marginLeft: 3 }}
+                          />
+                        )}
                       </Pressable>
 
                       {/* FORWARD 10 SEC BUTTON */}
                       <Pressable
                         style={({ pressed }) => [
-                          styles.seekBtn,
-                          pressed ? styles.seekBtnPressed : null,
+                          styles.compactSeekBtn,
+                          pressed ? styles.compactSeekBtnPressed : null,
                         ]}
-                        onPress={async () => {
-                          try {
-                            const wasPlaying = videoPlayer.playing;
-                            const dur = videoPlayer.duration;
-                            const currentTime = videoPlayer.currentTime;
-                            // Calculate remaining time to avoid seeking beyond duration
-                            const remaining = dur - currentTime;
-                            const seekAmount = Math.min(10, remaining);
-                            // Use seekBy for better Android compatibility
-                            videoPlayer.seekBy(seekAmount);
-                            if (wasPlaying) {
-                              if (Platform.OS === "android") {
-                                setTimeout(() => {
-                                  safePlay(videoPlayer as any, "forward-seek");
-                                }, 50);
-                              } else {
-                                safePlay(videoPlayer as any, "forward-seek");
-                              }
-                            }
-                          } catch (e) {
-                            console.log("FORWARD SEEK ERROR", e);
-                          }
-                        }}>
-                        <Text style={styles.seekBtnText}>10 ⏩</Text>
+                        hitSlop={10}
+                        onPress={handleSeekForward10}>
+                        <View style={styles.compactSeekContent}>
+                          <SeekForward10Icon size={16} color="#fff" />
+                          <Text style={styles.compactSeekNumber}>10</Text>
+                        </View>
                       </Pressable>
                     </View>
                   ) : null}
@@ -2404,7 +3104,16 @@ export default function VideoScreen() {
                   ) : null}
 
                   {activePlaybackUrl && showControls ? (
-                    <View style={styles.seekWrap} pointerEvents="box-none">
+                    <View
+                      style={[
+                        styles.seekWrap,
+                        isFullscreen && {
+                          left: Math.max(insets.left, 16),
+                          right: Math.max(insets.right, 16),
+                          bottom: Math.max(insets.bottom, 12),
+                        },
+                      ]}
+                      pointerEvents="box-none">
                       <View style={styles.seekTimesRow}>
                         <Text style={styles.seekTime}>
                           {formatDurationLabel(positionMs, "00:00")}
@@ -2413,19 +3122,43 @@ export default function VideoScreen() {
                           {formatDurationLabel(durationMs, "--:--")}
                         </Text>
                       </View>
-                      <Slider
-                        style={styles.slider}
-                        minimumValue={0}
-                        maximumValue={Math.max(1, durationMs || 1)}
-                        value={Math.min(positionMs, durationMs || 1)}
-                        disabled={!hasFiniteDuration(durationMs)}
-                        minimumTrackTintColor="#FFFFFF"
-                        maximumTrackTintColor="rgba(255,255,255,0.22)"
-                        thumbTintColor="#FFFFFF"
-                        onSlidingStart={onSeekStart}
-                        onValueChange={onSeekChange}
-                        onSlidingComplete={onSeekComplete}
-                      />
+                      <View style={styles.sliderContainer}>
+                        {/* Buffered Progress Bar Track */}
+                        <View style={styles.bufferedTrackWrap} pointerEvents="none">
+                          <View
+                            style={[
+                              styles.bufferedTrack,
+                              {
+                                width: `${Math.min(
+                                  100,
+                                  Math.max(
+                                    0,
+                                    durationMs > 0
+                                      ? (((videoPlayer?.bufferedPosition || 0) *
+                                          1000) /
+                                          durationMs) *
+                                          100
+                                      : 0
+                                  )
+                                )}%`,
+                              },
+                            ]}
+                          />
+                        </View>
+                        <Slider
+                          style={styles.slider}
+                          minimumValue={0}
+                          maximumValue={Math.max(1, durationMs || 1)}
+                          value={Math.min(positionMs, durationMs || 1)}
+                          disabled={!hasFiniteDuration(durationMs)}
+                          minimumTrackTintColor="#FF0033"
+                          maximumTrackTintColor="rgba(255,255,255,0.22)"
+                          thumbTintColor="#FF0033"
+                          onSlidingStart={onSeekStart}
+                          onValueChange={onSeekChange}
+                          onSlidingComplete={onSeekComplete}
+                        />
+                      </View>
                     </View>
                   ) : null}
 
@@ -2456,18 +3189,11 @@ export default function VideoScreen() {
                       <Pressable
                         style={styles.artistRow}
                         onPress={onPressArtist}>
-                        <Image
-                          source={{
-                            uri: getOptimizedImageUrl(
-                              activeVideoMeta.artistProfileImage ||
-                                FALLBACK_ARTWORK
-                            ),
-                          }}
+                        <AppImage
+                          uri={activeVideoMeta.artistProfileImage}
+                          fallbackType="artist"
                           style={styles.artistAvatar}
-                          onError={(e) => {
-                            // Agar image load nahi hoti toh default image dikhao
-                            e.currentTarget.source = { uri: FALLBACK_ARTWORK };
-                          }}
+                          resizeMode="cover"
                         />
                         <View style={styles.artistNameCol}>
                           <Text style={styles.artistRowName} numberOfLines={1}>
@@ -2744,6 +3470,160 @@ export default function VideoScreen() {
         </View>
       </Modal>
 
+      {/* ── Playback Speed Modal ──────────────────────────────────────── */}
+      <Modal
+        visible={showSpeedSheet}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSpeedSheet(false)}>
+        <Pressable
+          style={styles.sheetBackdrop}
+          onPress={() => setShowSpeedSheet(false)}
+        />
+        <View style={styles.sheetCard}>
+          <View style={styles.sheetHeaderRow}>
+            <Text style={styles.sheetTitle}>Playback speed</Text>
+            <Pressable onPress={() => setShowSpeedSheet(false)} hitSlop={10}>
+              <X size={20} color="rgba(255,255,255,0.7)" />
+            </Pressable>
+          </View>
+          <ScrollView
+            bounces={false}
+            style={{ maxHeight: 320 }}
+            showsVerticalScrollIndicator={false}>
+            {PLAYBACK_SPEEDS.map((spd) => {
+              const active = selectedSpeed === spd;
+              return (
+                <Pressable
+                  key={spd}
+                  style={[
+                    styles.sheetOptionRow,
+                    active ? styles.sheetOptionRowActive : null,
+                  ]}
+                  onPress={() => {
+                    applyPlaybackSpeed(spd);
+                    setShowSpeedSheet(false);
+                  }}>
+                  <Text
+                    style={[
+                      styles.sheetOptionText,
+                      active ? styles.sheetOptionTextActive : null,
+                    ]}>
+                    {spd === 1 ? "Normal (1x)" : `${spd}x`}
+                  </Text>
+                  {active ? <Check size={18} color="#FF5500" /> : null}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* ── More Options Modal ────────────────────────────────────────── */}
+      <Modal
+        visible={showMoreOptionsSheet}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMoreOptionsSheet(false)}>
+        <Pressable
+          style={styles.sheetBackdrop}
+          onPress={() => setShowMoreOptionsSheet(false)}
+        />
+        <View style={styles.sheetCard}>
+          <View style={styles.sheetHeaderRow}>
+            <Text style={styles.sheetTitle}>More options</Text>
+            <Pressable
+              onPress={() => setShowMoreOptionsSheet(false)}
+              hitSlop={10}>
+              <X size={20} color="rgba(255,255,255,0.7)" />
+            </Pressable>
+          </View>
+
+          {/* Quality Item */}
+          <Pressable
+            style={styles.sheetOptionRow}
+            onPress={() => {
+              setShowMoreOptionsSheet(false);
+              setShowQualitySheet(true);
+            }}>
+            <View style={styles.sheetOptionLeft}>
+              <Settings size={18} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.sheetOptionText}>Quality</Text>
+            </View>
+            <Text style={styles.sheetOptionSubText}>
+              {selectedQuality || "Auto"}
+            </Text>
+          </Pressable>
+
+          {/* Playback Speed Item */}
+          <Pressable
+            style={styles.sheetOptionRow}
+            onPress={() => {
+              setShowMoreOptionsSheet(false);
+              setShowSpeedSheet(true);
+            }}>
+            <View style={styles.sheetOptionLeft}>
+              <Settings size={18} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.sheetOptionText}>Playback speed</Text>
+            </View>
+            <Text style={styles.sheetOptionSubText}>
+              {selectedSpeed === 1 ? "Normal" : `${selectedSpeed}x`}
+            </Text>
+          </Pressable>
+
+          {/* Autoplay Next Switch */}
+          <View style={styles.sheetOptionRow}>
+            <View style={styles.sheetOptionLeft}>
+              <ChevronRight size={18} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.sheetOptionText}>Autoplay next video</Text>
+            </View>
+            <Switch
+              value={isAutoplayEnabled}
+              onValueChange={(val) => setIsAutoplayEnabled(val)}
+              thumbColor={isAutoplayEnabled ? "#FF5500" : "#888"}
+              trackColor={{ false: "#333", true: "rgba(255,85,0,0.4)" }}
+            />
+          </View>
+
+          {/* Picture in Picture / Minimize */}
+          <Pressable
+            style={styles.sheetOptionRow}
+            onPress={() => {
+              setShowMoreOptionsSheet(false);
+              if (isFullscreen) {
+                exitFullscreen();
+              }
+              setInlineVideoHostActive(false);
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.navigate("HomeTab" as any);
+              }
+            }}>
+            <View style={styles.sheetOptionLeft}>
+              <Minimize size={18} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.sheetOptionText}>
+                Picture-in-Picture / Mini Player
+              </Text>
+            </View>
+            <Text style={styles.sheetOptionSubText}>Floating</Text>
+          </Pressable>
+
+          {/* Report Content */}
+          <Pressable
+            style={styles.sheetOptionRow}
+            onPress={() => {
+              setShowMoreOptionsSheet(false);
+              setReportModalOpen(true);
+            }}>
+            <View style={styles.sheetOptionLeft}>
+              <AlertTriangle size={18} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.sheetOptionText}>Report content</Text>
+            </View>
+          </Pressable>
+        </View>
+      </Modal>
+
       {/* ── Artist Lock Modal ─────────────────────────────────────────── */}
       {renderArtistLockModal()}
     </View>
@@ -2753,14 +3633,20 @@ export default function VideoScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#000" },
   safe: { flex: 1 },
-  title: { color: "#fff", fontSize: 28, fontWeight: "900" },
+  title: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "900",
+    letterSpacing: -0.3,
+    lineHeight: 28,
+  },
 
   stickyHeader: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    paddingBottom: 10,
+    paddingBottom: 4,
     backgroundColor: "#000",
     zIndex: 100,
     elevation: 20,
@@ -2773,9 +3659,8 @@ const styles = StyleSheet.create({
     elevation: 999,
   },
   headerTopRow: {
-    paddingTop: 18,
-    paddingBottom: 10,
-    paddingHorizontal: 20,
+    paddingBottom: 4,
+    paddingHorizontal: 16,
   },
 
   playerFrame: {
@@ -2838,33 +3723,50 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  playerTopRight: {
+  playerTopBar: {
     position: "absolute",
-    right: 12,
-    top: 12,
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingTop: 8,
+    paddingBottom: 16,
+    paddingHorizontal: 12,
     zIndex: 30,
     elevation: 30,
-    flexDirection: "row",
-    gap: 10,
   },
-  playerTopLeft: {
-    position: "absolute",
-    left: 12,
-    top: 12,
-    zIndex: 30,
-    elevation: 30,
+  playerControlsRow: {
     flexDirection: "row",
-    gap: 10,
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
   },
-  iconBtn: {
+  playerRightControlsGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  playerControlBtn: {
     width: 36,
     height: 36,
+    minWidth: 36,
+    minHeight: 36,
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: "rgba(0,0,0,0.55)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  playerSpeedControlBtn: {
+    width: undefined,
+    minWidth: 38,
+    paddingHorizontal: 8,
+  },
+  playerSpeedBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "center",
   },
 
   controlsOverlay: {
@@ -2875,48 +3777,125 @@ const styles = StyleSheet.create({
     elevation: 10,
     backgroundColor: "rgba(0,0,0,0.10)",
   },
-
+  centerControlsOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 32,
+    zIndex: 20,
+    elevation: 20,
+  },
   playerSurfacePressable: {
-    zIndex: -1,
-    elevation: -1,
+    zIndex: 1,
+    elevation: 0,
   },
-  playPauseBtn: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
+  compactSeekBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "transparent",
-    borderWidth: 0,
-    borderColor: "transparent",
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
   },
-  playPauseBtnPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.95 }],
+  compactSeekBtnPressed: {
+    transform: [{ scale: 0.92 }],
+    backgroundColor: "rgba(255,255,255,0.20)",
   },
-  playPauseImg: {
-    width: 60,
-    height: 60,
-  },
-  // ✅ YAHAN SE NEEECHE YEH ADD KARO
-  seekBtn: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  compactSeekContent: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  compactSeekNumber: {
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: "900",
+    marginTop: -2,
+  },
+  compactPlayPauseBtn: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.65)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.35)",
+  },
+  compactPlayPauseBtnPressed: {
+    transform: [{ scale: 0.92 }],
+    backgroundColor: "rgba(255,255,255,0.25)",
+  },
+
+  speedBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.55)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  seekBtnPressed: {
-    transform: [{ scale: 0.95 }],
-    opacity: 0.8,
-  },
-  seekBtnText: {
+  speedBtnText: {
     color: "#fff",
-    fontSize: 14,
-    fontWeight: "bold",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  holding2xBadge: {
+    position: "absolute",
+    top: 14,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    zIndex: 40,
+    elevation: 40,
+  },
+  holding2xText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  seekRippleLeft: {
+    position: "absolute",
+    left: 20,
+    top: "38%",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    zIndex: 35,
+    elevation: 35,
+  },
+  seekRippleRight: {
+    position: "absolute",
+    right: 20,
+    top: "38%",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    zIndex: 35,
+    elevation: 35,
+  },
+  seekRippleText: {
+    color: "#FFF",
+    fontSize: 13,
+    fontWeight: "900",
   },
 
   seekWrap: {
@@ -2944,7 +3923,95 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
   },
+  sliderContainer: {
+    width: "100%",
+    position: "relative",
+    justifyContent: "center",
+  },
+  bufferedTrackWrap: {
+    position: "absolute",
+    left: 2,
+    right: 2,
+    height: 4,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  bufferedTrack: {
+    height: "100%",
+    backgroundColor: "rgba(255,255,255,0.45)",
+    borderRadius: 2,
+  },
   slider: { width: "100%", height: 20 },
+
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.65)",
+  },
+  sheetCard: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: 24,
+    borderRadius: 20,
+    padding: 18,
+    backgroundColor: "rgba(22,22,24,0.98)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 24,
+  },
+  sheetHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.08)",
+  },
+  sheetTitle: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  sheetOptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 6,
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  sheetOptionRowActive: {
+    backgroundColor: "rgba(255,85,0,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,85,0,0.35)",
+  },
+  sheetOptionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  sheetOptionText: {
+    color: "rgba(255,255,255,0.9)",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  sheetOptionTextActive: {
+    color: "#FF5500",
+    fontWeight: "900",
+  },
+  sheetOptionSubText: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 13,
+    fontWeight: "600",
+  },
 
   upNextOverlay: {
     position: "absolute",
@@ -2966,9 +4033,9 @@ const styles = StyleSheet.create({
   },
 
   metaBlock: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 10,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 6,
     backgroundColor: "rgba(0,0,0,0.20)",
   },
   nowTitle: { color: "#fff", fontSize: 16, fontWeight: "900" },
@@ -3193,9 +4260,9 @@ const styles = StyleSheet.create({
   },
 
   searchWrap: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 12,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 6,
   },
   searchBlur: {
     flexDirection: "row",
@@ -3516,4 +4583,53 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.2)",
   },
+  centerStateWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+    paddingVertical: 40,
+    minHeight: 280,
+  },
+  centerStateTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textAlign: "center",
+    marginBottom: 6,
+  },
+  centerStateSub: {
+    fontSize: 13,
+    color: "#9CA3AF",
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  emptyVideoWrap: {
+    width: 72,
+    height: 60,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  errorWifiWrap: {
+    marginBottom: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorRetryBtn: {
+    marginTop: 20,
+    backgroundColor: "#FF3366",
+    borderRadius: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorRetryBtnText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
 });
+

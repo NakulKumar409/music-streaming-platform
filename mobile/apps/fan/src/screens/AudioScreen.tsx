@@ -26,6 +26,8 @@ import {
   normalizePlaybackUrl,
 } from "../services/streamService";
 import { Colors } from "../theme";
+import { useToast } from "../ui/ToastProvider";
+import { findMediaQueueIndex } from "../utils/mediaQueue";
 
 // New Architecture Components
 import AlbumCard from "../ui/audio/AlbumCard";
@@ -55,6 +57,7 @@ type ApiContentItem = {
   createdAt?: string | null;
   useStreamAccess?: boolean;
   isLocked?: boolean;
+  durationMs?: number | null;
 };
 
 type AudioCard = AudioItemData & {
@@ -64,6 +67,7 @@ type AudioCard = AudioItemData & {
   useStreamAccess?: boolean;
   isLocked?: boolean;
   createdAt?: string | null;
+  durationMs?: number;
 };
 
 const FALLBACK_ARTWORK =
@@ -72,6 +76,7 @@ const FALLBACK_ARTWORK =
 export default function AudioScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
   const { playQueue, currentItem, state: playerState } = useMediaPlayer();
+  const { showToast } = useToast();
 
   const lastContentItemsRef = useRef<ApiContentItem[]>([]);
   const playbackUrlCacheRef = useRef<Map<string, { url: string; ts: number }>>(
@@ -148,6 +153,10 @@ export default function AudioScreen({ navigation }: any) {
           raw.length > 0 ? raw : isRefresh ? lastContentItemsRef.current : [];
 
         const mapped: AudioCard[] = effectiveRaw
+          .filter((it: any) => {
+            const rawType = String(it.type || it.mediaType || "AUDIO").toUpperCase();
+            return rawType !== "VIDEO";
+          })
           .map((it) => {
             const baseUrl = API_HOST_BASE_URL;
             const thumbStorageKey = (it.thumbnail_storage_key ??
@@ -184,6 +193,10 @@ export default function AudioScreen({ navigation }: any) {
               useStreamAccess: Boolean(it.useStreamAccess),
               isLocked: Boolean(it.isLocked),
               createdAt: (it.createdAt ?? null) as any,
+              durationMs:
+                Number.isFinite(Number(it.durationMs)) && Number(it.durationMs) > 0
+                  ? Math.round(Number(it.durationMs))
+                  : undefined,
             };
           })
           .filter(Boolean) as AudioCard[];
@@ -390,26 +403,25 @@ export default function AudioScreen({ navigation }: any) {
   const buildFullPlayerParams = useCallback(
     (song: AudioCard) => {
       const list = searchResults !== null ? searchResults : filtered;
-      const queue: MediaItem[] = list
-        .filter((x) => Boolean(x.mediaUrl) || x.useStreamAccess)
-        .map((x) => ({
-          id: x.id,
-          contentId: x.contentId,
-          title: x.title,
-          artistName: x.artistName,
-          artistId: x.artistId,
-          mediaType: "audio" as const,
-          artworkUrl: x.artworkUrl,
-          mediaUrl:
-            playbackUrlCacheRef.current.get(x.contentId ?? x.id)?.url ??
-            (x.mediaUrl ? normalizePlaybackUrl(x.mediaUrl) : ""),
-          isLocked: x.isLocked ?? false,
-          useStreamAccess: x.useStreamAccess,
-        }));
-      const queueIndex = Math.max(
-        0,
-        queue.findIndex((q) => q.id === song.id || q.contentId === song.id)
-      );
+      const queue: MediaItem[] = list.map((x) => ({
+        id: x.id,
+        contentId: x.contentId,
+        title: x.title,
+        artistName: x.artistName,
+        artistId: x.artistId,
+        mediaType: "audio" as const,
+        artworkUrl: x.artworkUrl,
+        mediaUrl:
+          playbackUrlCacheRef.current.get(x.contentId ?? x.id)?.url ??
+          (x.mediaUrl ? normalizePlaybackUrl(x.mediaUrl) : ""),
+        isLocked: x.isLocked ?? false,
+        useStreamAccess: x.useStreamAccess,
+        duration: x.durationMs,
+      }));
+
+      const queueIndex = findMediaQueueIndex(queue, song);
+      if (queueIndex < 0) return null;
+
       return {
         songId: song.id,
         title: song.title,
@@ -496,6 +508,10 @@ export default function AudioScreen({ navigation }: any) {
               useStreamAccess: Boolean(it.useStreamAccess),
               isLocked: Boolean(it.isLocked),
               createdAt: (it.createdAt ?? null) as any,
+              durationMs:
+                Number.isFinite(Number(it.durationMs)) && Number(it.durationMs) > 0
+                  ? Math.round(Number(it.durationMs))
+                  : undefined,
             };
           });
 
@@ -520,10 +536,37 @@ export default function AudioScreen({ navigation }: any) {
 
   const onPressSong = useCallback(
     (song: AudioCard) => {
+      if (song.isLocked) {
+        showToast({
+          tone: "warning",
+          title: "Subscription required",
+          message: `Subscribe to ${song.artistName || "this artist"} to play "${song.title}".`,
+          actionLabel: "View plan",
+          onAction: () => {
+            navigation.navigate("SubscriptionFlow", {
+              artistId: song.artistId,
+              artistName: song.artistName,
+              contentId: song.contentId ?? song.id,
+              defaultPlan: "ARTIST",
+            });
+          },
+        });
+        return;
+      }
+
       const params = buildFullPlayerParams(song);
+      if (!params) {
+        showToast({
+          tone: "error",
+          title: "Couldn't open this song",
+          message: "The song list changed. Please refresh and try again.",
+        });
+        return;
+      }
+
       navigation.navigate("FullPlayer", params);
     },
-    [buildFullPlayerParams, navigation]
+    [buildFullPlayerParams, navigation, showToast]
   );
 
   const renderHeader = () => {
@@ -553,10 +596,13 @@ export default function AudioScreen({ navigation }: any) {
         )}
 
         {searchResults === null && (
-          <View style={[styles.sectionRow, { marginBottom: 10 }]}>
+          <View style={[styles.sectionRow, styles.sectionRowAllAudio]}>
             <Text style={styles.sectionTitle}>
-              {activeCategory === "All" ? "All Audio" : activeCategory}
+              {activeCategory === 'All' ? 'All Audio' : activeCategory}
             </Text>
+            <View style={styles.sortBadge}>
+              <Text style={styles.sortBadgeText}>Latest ↓</Text>
+            </View>
           </View>
         )}
       </View>
@@ -756,16 +802,36 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "transparent" },
   sectionRow: {
     paddingHorizontal: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 10,
-    marginBottom: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  sectionRowAllAudio: {
+    marginTop: 2,
+    marginBottom: 12,
   },
   sectionTitle: {
-    color: "#fff",
+    color: '#fff',
     fontSize: 18,
-    fontWeight: "800",
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  sortBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  sortBadgeText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    fontWeight: '700',
   },
   emptyWrap: {
     paddingTop: 40,

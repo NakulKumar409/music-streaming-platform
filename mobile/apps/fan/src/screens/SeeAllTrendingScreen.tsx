@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, BadgeCheck } from 'lucide-react-native';
 import { Colors } from '../theme';
+import AppImage from '../components/AppImage';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_GAP = 12;
@@ -39,7 +40,12 @@ export default function SeeAllTrendingScreen({ navigation, route }: any) {
         onPress={() => navigation.navigate('Artist', { artistId: item.id })}
       >
         <View style={styles.imageWrap}>
-          <Image source={{ uri: item.image }} style={styles.image} />
+          <AppImage
+            uri={item.image}
+            fallbackType="artist"
+            style={styles.image}
+            resizeMode="cover"
+          />
           <LinearGradient
             colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.6)']}
             style={styles.imageOverlay}

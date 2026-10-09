@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Lock } from 'lucide-react-native';
 import ErrorBoundary from '../ui/ErrorBoundary';
 import { apiV1 } from '../services/api';
+import AppImage from '../components/AppImage';
 
 type LockedSong = {
   id: string;
@@ -23,7 +24,7 @@ type LockedSong = {
   artistId: string;
   thumbnail: string;
   locked: boolean;
-  reason?: string; // 'NO_SUBSCRIPTION' | 'EXPIRED'
+  reason?: string;
 };
 
 export default function ArtistSubscriptionScreen({ navigation, route }: any) {
@@ -60,17 +61,17 @@ export default function ArtistSubscriptionScreen({ navigation, route }: any) {
         });
       }
 
-      // Check actual access status from backend
+      // The backend derives the artist from contentId. The client never supplies
+      // a second artist identifier as entitlement authority.
       if (paramArtistId) {
         try {
           const contentId = paramSong?.id;
           if (contentId) {
             const res = await apiV1.get('/subscriptions/access-check', {
-              params: { contentId, artistId: paramArtistId },
+              params: { contentId },
             });
             setAccessStatus(res.data?.reason ?? 'NO_SUBSCRIPTION');
           } else {
-            // Check if there's any subscription at all
             const res = await apiV1.get('/subscriptions/me', {
               params: { artistId: paramArtistId },
             });
@@ -90,24 +91,23 @@ export default function ArtistSubscriptionScreen({ navigation, route }: any) {
       setLoading(false);
     };
 
-    init();
+    void init();
   }, [route?.params]);
 
   const handleSubscribe = () => {
-    if (Platform.OS === 'ios' || Platform.OS === 'android') {
+    if (Platform.OS === 'web') {
       Alert.alert(
-        'Billing Policy',
-        'Digital content purchases must be made via our website: music-platform.com. Please manage your plan online to maintain access.',
-        [{ text: 'Got it' }]
+        'Mobile checkout required',
+        'This Phase-1 Razorpay checkout is available in the Android and iOS app.'
       );
       return;
     }
+
     navigation.navigate('SubscriptionFlow', {
       artistId: songData?.artistId ?? '',
       artistName: songData?.artist ?? 'Artist',
       contentId: songData?.id,
       artwork: songData?.thumbnail,
-      defaultPlan: 'ARTIST',
     });
   };
 
@@ -122,25 +122,22 @@ export default function ArtistSubscriptionScreen({ navigation, route }: any) {
   if (!songData) return <View style={styles.container} />;
 
   const isExpired = accessStatus === 'EXPIRED';
-  const lockLabel = isExpired ? '🔒 Subscription Expired' : '🔒 Premium Content';
   const lockBody = isExpired
     ? `Renew your subscription to ${songData.artist} to access this exclusive content.`
-    : `This content is available only for ${songData.artist} subscribers.\n\n10 sec free preview available.`;
+    : `This content is available only for ${songData.artist} subscribers.`;
   const btnLabel = isExpired ? 'Renew Subscription' : 'Subscribe to Artist';
 
   return (
     <ErrorBoundary label="Payments: Artist Subscription">
       <SafeAreaView style={styles.container} edges={['top']}>
-        {/* Background hero */}
         <View style={styles.heroWrap}>
-          <Image source={{ uri: songData.thumbnail }} style={styles.heroImg} />
+          <AppImage uri={songData.thumbnail} fallbackType="song" style={styles.heroImg} resizeMode="cover" />
           <LinearGradient
             colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.95)']}
             style={styles.heroGradient}
           />
         </View>
 
-        {/* Back button */}
         <Pressable
           onPress={() => navigation.goBack()}
           style={styles.backBtn}
@@ -149,7 +146,6 @@ export default function ArtistSubscriptionScreen({ navigation, route }: any) {
           <ArrowLeft color="#fff" size={24} />
         </Pressable>
 
-        {/* Center content */}
         <View style={styles.centerContent}>
           <View style={styles.heroTextWrap}>
             <Text style={styles.songTitle}>{songData.title}</Text>
@@ -169,7 +165,6 @@ export default function ArtistSubscriptionScreen({ navigation, route }: any) {
 
               <Text style={styles.lockBody}>{lockBody}</Text>
 
-              {/* Why subscribe */}
               <View style={styles.benefitsWrap}>
                 {['Early access to new releases', 'Exclusive songs & content', 'Directly support the artist'].map((b, i) => (
                   <View key={i} style={styles.benefitRow}>
@@ -191,9 +186,9 @@ export default function ArtistSubscriptionScreen({ navigation, route }: any) {
               </Pressable>
 
               <Text style={styles.secureNote}>
-                {Platform.OS === 'web' 
-                  ? '🔒 Secure payment via Razorpay' 
-                  : '👤 Manage subscription via website'}
+                {Platform.OS === 'web'
+                  ? 'Checkout is completed in the mobile app'
+                  : '🔒 Secure payment via Razorpay · access after server confirmation'}
               </Text>
             </BlurView>
           </View>
