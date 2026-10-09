@@ -50,6 +50,8 @@ import {
   Maximize,
   Minimize,
   MoreVertical,
+  Pause,
+  Play,
   Search,
   Settings,
   ShieldCheck,
@@ -203,6 +205,60 @@ function EngagementIcon({
         d="M12 15V3"
         stroke={color}
         strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function SeekBack10Icon({
+  size = 18,
+  color = "#fff",
+}: {
+  size?: number;
+  color?: string;
+}) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+        stroke={color}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M3 3v5h5"
+        stroke={color}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function SeekForward10Icon({
+  size = 18,
+  color = "#fff",
+}: {
+  size?: number;
+  color?: string;
+}) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+        stroke={color}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M21 3v5h-5"
+        stroke={color}
+        strokeWidth={2.2}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -900,8 +956,65 @@ export default function VideoScreen() {
     };
   }, [fetchAll, matchesQuery, normalizedQuery]);
 
+  const AUTO_HIDE_DELAY_MS = 3200;
+
+  const hideControls = useCallback(() => {
+    if (controlsHideTimerRef.current) {
+      clearTimeout(controlsHideTimerRef.current);
+      controlsHideTimerRef.current = null;
+    }
+    setShowControls(false);
+    setShowQualitySheet(false);
+  }, []);
+
+  const resetControlsTimeout = useCallback(() => {
+    if (controlsHideTimerRef.current) {
+      clearTimeout(controlsHideTimerRef.current);
+      controlsHideTimerRef.current = null;
+    }
+    if (isVideoPlaying) {
+      controlsHideTimerRef.current = setTimeout(() => {
+        setShowControls(false);
+        setShowQualitySheet(false);
+      }, AUTO_HIDE_DELAY_MS);
+    }
+  }, [isVideoPlaying]);
+
+  const toggleControls = useCallback(() => {
+    setShowControls((prev) => {
+      const next = !prev;
+      if (controlsHideTimerRef.current) {
+        clearTimeout(controlsHideTimerRef.current);
+        controlsHideTimerRef.current = null;
+      }
+      if (next) {
+        if (isVideoPlaying) {
+          controlsHideTimerRef.current = setTimeout(() => {
+            setShowControls(false);
+            setShowQualitySheet(false);
+          }, AUTO_HIDE_DELAY_MS);
+        }
+      } else {
+        setShowQualitySheet(false);
+      }
+      return next;
+    });
+  }, [isVideoPlaying]);
+
+  useEffect(() => {
+    if (isVideoPlaying && showControls) {
+      resetControlsTimeout();
+    } else if (!isVideoPlaying) {
+      if (controlsHideTimerRef.current) {
+        clearTimeout(controlsHideTimerRef.current);
+        controlsHideTimerRef.current = null;
+      }
+    }
+  }, [isVideoPlaying, showControls, resetControlsTimeout]);
+
   const enterFullscreen = useCallback(async () => {
     setIsFullscreen(true);
+    resetControlsTimeout();
     // Lock to landscape when entering fullscreen
     if (Platform.OS !== "web") {
       try {
@@ -910,10 +1023,11 @@ export default function VideoScreen() {
         );
       } catch (err) {}
     }
-  }, []);
+  }, [resetControlsTimeout]);
 
   const exitFullscreen = useCallback(async () => {
     setIsFullscreen(false);
+    resetControlsTimeout();
     // Lock back to portrait when exiting fullscreen
     if (Platform.OS !== "web") {
       try {
@@ -922,7 +1036,7 @@ export default function VideoScreen() {
         );
       } catch (err) {}
     }
-  }, []);
+  }, [resetControlsTimeout]);
 
   const stopAndReset = useCallback(async () => {
     playbackSessionRef.current += 1;
@@ -1079,6 +1193,10 @@ export default function VideoScreen() {
   const onSeekStart = useCallback(() => {
     setIsSeeking(true);
     seekValueRef.current = positionMs;
+    if (controlsHideTimerRef.current) {
+      clearTimeout(controlsHideTimerRef.current);
+      controlsHideTimerRef.current = null;
+    }
   }, [positionMs]);
 
   const onSeekChange = useCallback((value: number) => {
@@ -1089,6 +1207,7 @@ export default function VideoScreen() {
   const onSeekComplete = useCallback(
     async (value: number) => {
       setIsSeeking(false);
+      resetControlsTimeout();
       try {
         const targetSeconds = value / 1000;
         const currentSeconds = videoPlayer?.currentTime ?? 0;
@@ -1111,7 +1230,7 @@ export default function VideoScreen() {
         console.log("SLIDER SEEK ERROR", e);
       }
     },
-    [videoPlayer, isVideoPlaying, safePlay]
+    [videoPlayer, isVideoPlaying, safePlay, resetControlsTimeout]
   );
 
   const load = useCallback(
@@ -2011,6 +2130,52 @@ export default function VideoScreen() {
     [safePlay, triggerSeekFeedback]
   );
 
+  const handleSeekBackward10 = useCallback(() => {
+    resetControlsTimeout();
+    try {
+      const p = playerRef.current || videoPlayer;
+      if (!p) return;
+      triggerSeekFeedback("back");
+      p.seekBy(-10);
+      if (p.playing) {
+        if (Platform.OS === "android") {
+          setTimeout(() => {
+            safePlay(p as any, "backward-seek");
+          }, 50);
+        } else {
+          safePlay(p as any, "backward-seek");
+        }
+      }
+    } catch (e) {
+      console.log("BACKWARD SEEK ERROR", e);
+    }
+  }, [videoPlayer, safePlay, triggerSeekFeedback, resetControlsTimeout]);
+
+  const handleSeekForward10 = useCallback(() => {
+    resetControlsTimeout();
+    try {
+      const p = playerRef.current || videoPlayer;
+      if (!p) return;
+      const dur = p.duration;
+      const currentTime = p.currentTime;
+      const remaining = dur > 0 ? dur - currentTime : 10;
+      const delta = Math.min(10, Math.max(0, remaining));
+      triggerSeekFeedback("forward");
+      p.seekBy(delta);
+      if (p.playing) {
+        if (Platform.OS === "android") {
+          setTimeout(() => {
+            safePlay(p as any, "forward-seek");
+          }, 50);
+        } else {
+          safePlay(p as any, "forward-seek");
+        }
+      }
+    } catch (e) {
+      console.log("FORWARD SEEK ERROR", e);
+    }
+  }, [videoPlayer, safePlay, triggerSeekFeedback, resetControlsTimeout]);
+
   const onPressPlayerSurface = useCallback(
     async (evt: any) => {
       const x = Number(evt?.nativeEvent?.locationX ?? 0);
@@ -2024,26 +2189,13 @@ export default function VideoScreen() {
         const dir = x < SCREEN_WIDTH / 2 ? "back" : "forward";
         await onDoubleTap(dir);
         setShowControls(true);
-        if (controlsHideTimerRef.current) {
-          clearTimeout(controlsHideTimerRef.current);
-          controlsHideTimerRef.current = null;
-        }
+        resetControlsTimeout();
         return;
       }
 
-      setShowControls((s) => {
-        const next = !s;
-        if (controlsHideTimerRef.current) {
-          clearTimeout(controlsHideTimerRef.current);
-          controlsHideTimerRef.current = null;
-        }
-        if (!next) {
-          setShowQualitySheet(false);
-        }
-        return next;
-      });
+      toggleControls();
     },
-    [onDoubleTap]
+    [onDoubleTap, toggleControls, resetControlsTimeout]
   );
 
   const toggleInlinePlayPause = useCallback(async () => {
@@ -2064,12 +2216,18 @@ export default function VideoScreen() {
         v.pause();
         setIsVideoPlaying(false);
         console.log("[VideoScreen] isPlaying updated to false");
+        if (controlsHideTimerRef.current) {
+          clearTimeout(controlsHideTimerRef.current);
+          controlsHideTimerRef.current = null;
+        }
+        setShowControls(true);
       } else {
         userPausedRef.current = false;
         console.log("[VideoScreen] Calling safePlay from toggleInlinePlayPause...");
         safePlay(v as any, "toggleInlinePlayPause");
         setIsVideoPlaying(true);
         console.log("[VideoScreen] isPlaying updated to true");
+        resetControlsTimeout();
       }
     } catch (e: any) {
       console.error("[VideoScreen] toggleInlinePlayPause error:", {
@@ -2079,7 +2237,7 @@ export default function VideoScreen() {
         cause: e?.cause,
       });
     }
-  }, [videoPlayer, safePlay]);
+  }, [videoPlayer, safePlay, resetControlsTimeout]);
 
   const showThankYou = useCallback(() => {
     const message = "Thank you for reporting.";
@@ -2658,8 +2816,7 @@ export default function VideoScreen() {
                 pointerEvents="box-none">
                 <View
                   style={styles.playerInner}
-                  pointerEvents="box-none"
-                  {...panResponder.panHandlers}>
+                  pointerEvents="box-none">
                   {activePlaybackUrl && videoPlayer ? (
                     <Pressable
                       style={[
@@ -2749,8 +2906,9 @@ export default function VideoScreen() {
                         {/* Left: Back / Minimize Button */}
                         <Pressable
                           style={styles.playerControlBtn}
-                          hitSlop={6}
+                          hitSlop={10}
                           onPress={() => {
+                            resetControlsTimeout();
                             if (isFullscreen) {
                               exitFullscreen();
                             } else {
@@ -2766,8 +2924,11 @@ export default function VideoScreen() {
                           pointerEvents="box-none">
                           <Pressable
                             style={styles.playerControlBtn}
-                            hitSlop={6}
-                            onPress={toggleMute}>
+                            hitSlop={10}
+                            onPress={() => {
+                              resetControlsTimeout();
+                              toggleMute();
+                            }}>
                             {isMuted ? (
                               <VolumeX size={18} color="#FF5555" />
                             ) : (
@@ -2780,8 +2941,11 @@ export default function VideoScreen() {
                               styles.playerControlBtn,
                               styles.playerSpeedControlBtn,
                             ]}
-                            hitSlop={6}
-                            onPress={() => setShowSpeedSheet(true)}>
+                            hitSlop={10}
+                            onPress={() => {
+                              resetControlsTimeout();
+                              setShowSpeedSheet(true);
+                            }}>
                             <Text style={styles.playerSpeedBtnText}>
                               {selectedSpeed === 1
                                 ? "1.0x"
@@ -2791,15 +2955,19 @@ export default function VideoScreen() {
 
                           <Pressable
                             style={styles.playerControlBtn}
-                            hitSlop={6}
-                            onPress={() => setShowMoreOptionsSheet(true)}>
+                            hitSlop={10}
+                            onPress={() => {
+                              resetControlsTimeout();
+                              setShowMoreOptionsSheet(true);
+                            }}>
                             <MoreVertical size={18} color="#fff" />
                           </Pressable>
 
                           <Pressable
                             style={styles.playerControlBtn}
-                            hitSlop={6}
+                            hitSlop={10}
                             onPress={() => {
+                              resetControlsTimeout();
                               if (isFullscreen) {
                                 exitFullscreen();
                               } else {
@@ -2872,87 +3040,57 @@ export default function VideoScreen() {
 
                   {activePlaybackUrl && showControls ? (
                     <View
-                      style={[
-                        styles.controlsOverlay,
-                        { flexDirection: "row", gap: 20 },
-                      ]}
+                      style={styles.centerControlsOverlay}
                       pointerEvents="box-none">
                       {/* BACKWARD 10 SEC BUTTON */}
                       <Pressable
                         style={({ pressed }) => [
-                          styles.seekBtn,
-                          pressed ? styles.seekBtnPressed : null,
+                          styles.compactSeekBtn,
+                          pressed ? styles.compactSeekBtnPressed : null,
                         ]}
-                        onPress={async () => {
-                          try {
-                            const p = playerRef.current || videoPlayer;
-                            if (!p) return;
-                            const wasPlaying = p.playing;
-                            triggerSeekFeedback("back");
-                            p.seekBy(-10);
-                            if (wasPlaying) {
-                              if (Platform.OS === "android") {
-                                setTimeout(() => {
-                                  safePlay(p as any, "backward-seek");
-                                }, 50);
-                              } else {
-                                safePlay(p as any, "backward-seek");
-                              }
-                            }
-                          } catch (e) {
-                            console.log("BACKWARD SEEK ERROR", e);
-                          }
-                        }}>
-                        <Text style={styles.seekBtnText}>⏪ 10</Text>
+                        hitSlop={10}
+                        onPress={handleSeekBackward10}>
+                        <View style={styles.compactSeekContent}>
+                          <SeekBack10Icon size={16} color="#fff" />
+                          <Text style={styles.compactSeekNumber}>10</Text>
+                        </View>
                       </Pressable>
 
                       {/* PLAY/PAUSE BUTTON */}
                       <Pressable
                         style={({ pressed }) => [
-                          styles.playPauseBtn,
-                          pressed ? styles.playPauseBtnPressed : null,
+                          styles.compactPlayPauseBtn,
+                          pressed ? styles.compactPlayPauseBtnPressed : null,
                         ]}
-                        onPress={toggleInlinePlayPause}>
-                        <Image
-                          source={
-                            isVideoPlaying ? PauseButtonImg : PlayButtonImg
-                          }
-                          style={styles.playPauseImg}
-                          resizeMode="contain"
-                        />
+                        hitSlop={10}
+                        onPress={() => {
+                          resetControlsTimeout();
+                          toggleInlinePlayPause();
+                        }}>
+                        {isVideoPlaying ? (
+                          <Pause size={24} color="#FFF" fill="#FFF" />
+                        ) : (
+                          <Play
+                            size={24}
+                            color="#FFF"
+                            fill="#FFF"
+                            style={{ marginLeft: 3 }}
+                          />
+                        )}
                       </Pressable>
 
                       {/* FORWARD 10 SEC BUTTON */}
                       <Pressable
                         style={({ pressed }) => [
-                          styles.seekBtn,
-                          pressed ? styles.seekBtnPressed : null,
+                          styles.compactSeekBtn,
+                          pressed ? styles.compactSeekBtnPressed : null,
                         ]}
-                        onPress={async () => {
-                          try {
-                            const p = playerRef.current || videoPlayer;
-                            if (!p) return;
-                            const wasPlaying = p.playing;
-                            const dur = p.duration;
-                            const currentTime = p.currentTime;
-                            const remaining = dur - currentTime;
-                            const seekAmount = Math.min(10, remaining);
-                            triggerSeekFeedback("forward");
-                            p.seekBy(seekAmount);
-                            if (wasPlaying) {
-                              if (Platform.OS === "android") {
-                                setTimeout(() => {
-                                  safePlay(p as any, "forward-seek");
-                                }, 50);
-                              } else {
-                                safePlay(p as any, "forward-seek");
-                              }
-                            }
-                          } catch (e) {
-                            console.log("FORWARD SEEK ERROR", e);
-                          }
-                        }}>
-                        <Text style={styles.seekBtnText}>10 ⏩</Text>
+                        hitSlop={10}
+                        onPress={handleSeekForward10}>
+                        <View style={styles.compactSeekContent}>
+                          <SeekForward10Icon size={16} color="#fff" />
+                          <Text style={styles.compactSeekNumber}>10</Text>
+                        </View>
                       </Pressable>
                     </View>
                   ) : null}
@@ -2966,7 +3104,16 @@ export default function VideoScreen() {
                   ) : null}
 
                   {activePlaybackUrl && showControls ? (
-                    <View style={styles.seekWrap} pointerEvents="box-none">
+                    <View
+                      style={[
+                        styles.seekWrap,
+                        isFullscreen && {
+                          left: Math.max(insets.left, 16),
+                          right: Math.max(insets.right, 16),
+                          bottom: Math.max(insets.bottom, 12),
+                        },
+                      ]}
+                      pointerEvents="box-none">
                       <View style={styles.seekTimesRow}>
                         <Text style={styles.seekTime}>
                           {formatDurationLabel(positionMs, "00:00")}
@@ -3630,48 +3777,56 @@ const styles = StyleSheet.create({
     elevation: 10,
     backgroundColor: "rgba(0,0,0,0.10)",
   },
-
+  centerControlsOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 32,
+    zIndex: 20,
+    elevation: 20,
+  },
   playerSurfacePressable: {
-    zIndex: -1,
-    elevation: -1,
+    zIndex: 1,
+    elevation: 0,
   },
-  playPauseBtn: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
+  compactSeekBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "transparent",
-    borderWidth: 0,
-    borderColor: "transparent",
-  },
-  playPauseBtnPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.95 }],
-  },
-  playPauseImg: {
-    width: 60,
-    height: 60,
-  },
-  // ✅ YAHAN SE NEEECHE YEH ADD KARO
-  seekBtn: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.55)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
+    borderColor: "rgba(255,255,255,0.22)",
   },
-  seekBtnPressed: {
-    transform: [{ scale: 0.95 }],
-    opacity: 0.8,
+  compactSeekBtnPressed: {
+    transform: [{ scale: 0.92 }],
+    backgroundColor: "rgba(255,255,255,0.20)",
   },
-  seekBtnText: {
+  compactSeekContent: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  compactSeekNumber: {
     color: "#fff",
-    fontSize: 14,
-    fontWeight: "bold",
+    fontSize: 9,
+    fontWeight: "900",
+    marginTop: -2,
+  },
+  compactPlayPauseBtn: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.65)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.35)",
+  },
+  compactPlayPauseBtnPressed: {
+    transform: [{ scale: 0.92 }],
+    backgroundColor: "rgba(255,255,255,0.25)",
   },
 
   speedBtn: {
