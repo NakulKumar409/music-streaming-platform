@@ -91,6 +91,18 @@ import {
 
 const REPORTED_CONTENT_STORAGE_KEY = "reportedContentIds";
 
+let shakaModule: any = null;
+if (Platform.OS === "web") {
+  try {
+    shakaModule = require("shaka-player/dist/shaka-player.compiled.js");
+    if (shakaModule?.polyfill?.installAll) {
+      shakaModule.polyfill.installAll();
+    }
+  } catch (err) {
+    console.warn("[VideoScreen] Shaka Player polyfill load failed", err);
+  }
+}
+
 type ApiContentItem = {
   id: string | number;
   title?: string | null;
@@ -387,6 +399,34 @@ export default function VideoScreen() {
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [positionMs, setPositionMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
+  const [scrubPosition, setScrubPosition] = useState<number | null>(null);
+  const pendingSeekTargetMsRef = useRef<number | null>(null);
+  const isSeekingRef = useRef(false);
+  const seekSafetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shakaPlayerRef = useRef<any>(null);
+  const loadedShakaUrlRef = useRef<string | null>(null);
+
+  const setPendingSeek = useCallback((targetMs: number) => {
+    pendingSeekTargetMsRef.current = targetMs;
+    setPositionMs(targetMs);
+    if (seekSafetyTimeoutRef.current) {
+      clearTimeout(seekSafetyTimeoutRef.current);
+    }
+    seekSafetyTimeoutRef.current = setTimeout(() => {
+      if (pendingSeekTargetMsRef.current === targetMs) {
+        pendingSeekTargetMsRef.current = null;
+        setScrubPosition(null);
+      }
+    }, 1000);
+  }, []);
+
+  const displayPositionMs =
+    scrubPosition !== null
+      ? scrubPosition
+      : pendingSeekTargetMsRef.current !== null
+      ? pendingSeekTargetMsRef.current
+      : positionMs;
+
   const [showUpNext, setShowUpNext] = useState(false);
   const [upNextSeconds, setUpNextSeconds] = useState(5);
   const upNextTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -573,8 +613,12 @@ export default function VideoScreen() {
           url.includes("kind=video") ||
           url.includes("/media/stream/") ||
           url.includes(".m3u8");
+        // On Web in Chrome/Edge/Firefox, native <video src> does not support HLS.
+        // We pass empty uri so expo-video creates the player/mounts <video> without triggering native error,
+        // and Shaka Player handles the HLS stream via MediaSource Extensions.
+        const effectiveUri = Platform.OS === "web" && isHls ? "" : url;
         const videoSource: VideoSource = {
-          uri: url,
+          uri: effectiveUri,
           contentType: isHls ? "hls" : "auto",
         };
         if (!playerRef.current) {
@@ -584,11 +628,11 @@ export default function VideoScreen() {
           console.log("[VideoScreen] Creating VideoPlayer with URL:", sanitizedUrl, "contentType:", videoSource.contentType);
           const player = createVideoPlayer(videoSource);
           player.loop = false;
-          player.timeUpdateEventInterval = 0.5;
+          player.timeUpdateEventInterval = Platform.OS === "web" ? 0.1 : 0.25;
           player.staysActiveInBackground = true;
           playerRef.current = player;
           setVideoPlayer(player);
-          if (!userPausedRef.current) {
+          if (!userPausedRef.current && Platform.OS !== "web") {
             console.log("[VideoScreen] Auto-playing on init with valid URL");
             safePlay(player as any, "init");
           }
@@ -598,7 +642,8 @@ export default function VideoScreen() {
             : url;
           console.log("[VideoScreen] Updating VideoPlayer source:", sanitizedUrl, "contentType:", videoSource.contentType);
           playerRef.current.replace(videoSource);
-          if (!userPausedRef.current) {
+          playerRef.current.timeUpdateEventInterval = Platform.OS === "web" ? 0.1 : 0.25;
+          if (!userPausedRef.current && Platform.OS !== "web") {
             safePlay(playerRef.current as any, "replace");
           }
         }
@@ -621,6 +666,17 @@ export default function VideoScreen() {
 
   useEffect(() => {
     return () => {
+      if (seekSafetyTimeoutRef.current) {
+        clearTimeout(seekSafetyTimeoutRef.current);
+        seekSafetyTimeoutRef.current = null;
+      }
+      if (shakaPlayerRef.current) {
+        try {
+          shakaPlayerRef.current.destroy();
+        } catch {}
+        shakaPlayerRef.current = null;
+        loadedShakaUrlRef.current = null;
+      }
       if (playerRef.current) {
         try {
           playerRef.current.pause();
@@ -1047,6 +1103,12 @@ export default function VideoScreen() {
         videoPlayer.seekBy(-videoPlayer.currentTime);
       }
     } finally {
+      if (shakaPlayerRef.current) {
+        try {
+          shakaPlayerRef.current.unload();
+        } catch {}
+        loadedShakaUrlRef.current = null;
+      }
       setActiveVideoId(null);
       setActiveVideoMeta(null);
       setActivePlaybackUrl(null);
@@ -1054,6 +1116,13 @@ export default function VideoScreen() {
       setIsVideoPlaying(false);
       setPositionMs(0);
       setDurationMs(0);
+      setScrubPosition(null);
+      pendingSeekTargetMsRef.current = null;
+      if (seekSafetyTimeoutRef.current) {
+        clearTimeout(seekSafetyTimeoutRef.current);
+        seekSafetyTimeoutRef.current = null;
+      }
+      isSeekingRef.current = false;
       setShowUpNext(false);
       setUpNextSeconds(3);
       setShowControls(true);
@@ -1192,45 +1261,57 @@ export default function VideoScreen() {
 
   const onSeekStart = useCallback(() => {
     setIsSeeking(true);
-    seekValueRef.current = positionMs;
+    isSeekingRef.current = true;
+    setScrubPosition(displayPositionMs);
+    seekValueRef.current = displayPositionMs;
     if (controlsHideTimerRef.current) {
       clearTimeout(controlsHideTimerRef.current);
       controlsHideTimerRef.current = null;
     }
-  }, [positionMs]);
+  }, [displayPositionMs]);
 
   const onSeekChange = useCallback((value: number) => {
-    seekValueRef.current = value;
-    setPositionMs(Math.max(0, Math.round(value)));
+    const clamped = Math.max(0, Math.round(value));
+    seekValueRef.current = clamped;
+    setScrubPosition(clamped);
   }, []);
 
   const onSeekComplete = useCallback(
     async (value: number) => {
+      const targetMs = Math.max(0, Math.round(value));
+      seekValueRef.current = targetMs;
       setIsSeeking(false);
+      isSeekingRef.current = false;
+      setScrubPosition(targetMs);
+      setPendingSeek(targetMs);
       resetControlsTimeout();
+
       try {
-        const targetSeconds = value / 1000;
-        const currentSeconds = videoPlayer?.currentTime ?? 0;
-        const deltaSeconds = targetSeconds - currentSeconds;
+        const targetSeconds = targetMs / 1000;
+        const p = playerRef.current || videoPlayer;
+        if (p) {
+          try {
+            p.currentTime = targetSeconds;
+          } catch {
+            const currentSeconds = p.currentTime ?? 0;
+            p.seekBy(targetSeconds - currentSeconds);
+          }
+        }
 
-        // Use seekBy for better Android compatibility
-        videoPlayer?.seekBy(deltaSeconds);
-
-        // Resume playback after seek on Android with a small delay
-        if (isVideoPlaying && videoPlayer) {
+        if (isVideoPlaying && p) {
           if (Platform.OS === "android") {
             setTimeout(() => {
-              safePlay(videoPlayer as any, "slider-seek");
+              safePlay(p as any, "slider-seek");
             }, 50);
           } else {
-            safePlay(videoPlayer as any, "slider-seek");
+            safePlay(p as any, "slider-seek");
           }
         }
       } catch (e) {
         console.log("SLIDER SEEK ERROR", e);
       }
     },
-    [videoPlayer, isVideoPlaying, safePlay, resetControlsTimeout]
+    [videoPlayer, isVideoPlaying, safePlay, resetControlsTimeout, setPendingSeek]
   );
 
   const load = useCallback(
@@ -1373,11 +1454,18 @@ export default function VideoScreen() {
     const timeSub = videoPlayer.addListener(
       "timeUpdate",
       (event: any) => {
+        if (isSeekingRef.current) return;
         const curMs = Math.round(Number(event.currentTime || 0) * 1000);
-        console.log(`[VideoPlayer:NATIVE] timeUpdate: currentTime=${event.currentTime}s, duration=${videoPlayer.duration}s`);
-        if (!isSeeking) {
-          setPositionMs(curMs);
+        const target = pendingSeekTargetMsRef.current;
+        if (target !== null) {
+          if (Math.abs(curMs - target) < 400) {
+            pendingSeekTargetMsRef.current = null;
+            setScrubPosition(null);
+          } else {
+            return;
+          }
         }
+        setPositionMs(curMs);
         if (videoPlayer.duration && videoPlayer.duration > 0) {
           setDurationMs(Math.round(videoPlayer.duration * 1000));
         }
@@ -1396,10 +1484,116 @@ export default function VideoScreen() {
     isStreamingHdAllowed,
     selectedQuality,
     safePlay,
-    isSeeking,
   ]);
 
-  // ─── 500ms polling for position / duration / sync ───────────────────────────
+  // Web-only: Attach Shaka Player for HLS playback and listen to native 'timeupdate'/'seeked' events for smooth 60fps tracking
+  useEffect(() => {
+    if (Platform.OS !== "web" || !videoPlayer) return;
+
+    const getMountedVideo = (): HTMLVideoElement | null => {
+      const mounted = (videoPlayer as any)?._mountedVideos;
+      if (mounted && mounted.size > 0) {
+        const first = Array.from(mounted.values())[0] as HTMLVideoElement;
+        if (first && typeof first.addEventListener === "function") return first;
+      }
+      return null;
+    };
+
+    let activeEl: HTMLVideoElement | null = null;
+    let cleanupListeners: (() => void) | null = null;
+
+    const bindToVideo = async () => {
+      const video = getMountedVideo();
+      if (!video) return;
+
+      if (video !== activeEl) {
+        if (cleanupListeners) {
+          cleanupListeners();
+          cleanupListeners = null;
+        }
+
+        activeEl = video;
+
+        const onTimeUpdate = () => {
+          if (isSeekingRef.current) return;
+          const currentMs = Math.round(video.currentTime * 1000);
+          const target = pendingSeekTargetMsRef.current;
+          if (target !== null) {
+            if (Math.abs(currentMs - target) < 400) {
+              pendingSeekTargetMsRef.current = null;
+              setScrubPosition(null);
+            } else {
+              return;
+            }
+          }
+          setPositionMs(currentMs);
+          if (video.duration && Number.isFinite(video.duration) && video.duration > 0) {
+            setDurationMs(Math.round(video.duration * 1000));
+          }
+        };
+
+        const onSeeked = () => {
+          pendingSeekTargetMsRef.current = null;
+          setScrubPosition(null);
+          setIsSeeking(false);
+          isSeekingRef.current = false;
+          setPositionMs(Math.round(video.currentTime * 1000));
+        };
+
+        video.addEventListener("timeupdate", onTimeUpdate);
+        video.addEventListener("seeked", onSeeked);
+
+        cleanupListeners = () => {
+          video.removeEventListener("timeupdate", onTimeUpdate);
+          video.removeEventListener("seeked", onSeeked);
+        };
+      }
+
+      // Attach Shaka Player for HLS playback on Web (Chrome/Edge/Firefox)
+      if (activePlaybackUrl && shakaModule && typeof shakaModule.Player === "function") {
+        if (!shakaPlayerRef.current || shakaPlayerRef.current.getMediaElement() !== video) {
+          if (shakaPlayerRef.current) {
+            try {
+              await shakaPlayerRef.current.destroy();
+            } catch {}
+          }
+          const sp = new shakaModule.Player(video);
+          shakaPlayerRef.current = sp;
+          sp.addEventListener("error", (event: any) => {
+            console.error("[Shaka] Player error:", event);
+          });
+        }
+
+        if (loadedShakaUrlRef.current !== activePlaybackUrl) {
+          loadedShakaUrlRef.current = activePlaybackUrl;
+          try {
+            console.log("[Shaka] Loading HLS stream on Web:", activePlaybackUrl.substring(0, 80));
+            await shakaPlayerRef.current.load(activePlaybackUrl);
+            console.log("[Shaka] Loaded HLS stream successfully!");
+            setIsVideoReady(true);
+            setIsBuffering(false);
+            setPlaybackError(null);
+            if (!userPausedRef.current) {
+              video.play().catch(() => {});
+            }
+          } catch (err: any) {
+            console.error("[Shaka] Failed to load HLS stream:", err);
+            setPlaybackError(err?.message || "Failed to load video on Web");
+          }
+        }
+      }
+    };
+
+    bindToVideo();
+    const pollMount = setInterval(bindToVideo, 250);
+
+    return () => {
+      clearInterval(pollMount);
+      if (cleanupListeners) cleanupListeners();
+    };
+  }, [videoPlayer, activePlaybackUrl]);
+
+  // ─── Periodic metadata & global state sync ──────────────────────────────────
   useEffect(() => {
     if (!videoPlayer) {
       setIsVideoPlaying(false);
@@ -1408,9 +1602,9 @@ export default function VideoScreen() {
       return;
     }
     const interval = setInterval(() => {
-      if (!isSeeking) {
+      if (!isSeekingRef.current && pendingSeekTargetMsRef.current === null) {
         const curMs = toFiniteDurationMs(videoPlayer.currentTime * 1000);
-        setPositionMs(curMs);
+        setPositionMs((prev) => (Math.abs(prev - curMs) > 150 ? curMs : prev));
         if (activeVideoMeta) {
           syncActiveMediaItem?.(
             {
@@ -1451,7 +1645,6 @@ export default function VideoScreen() {
     return () => clearInterval(interval);
   }, [
     videoPlayer,
-    isSeeking,
     isAutoplayEnabled,
     activeVideoMeta,
     activePlaybackUrl,
@@ -1536,6 +1729,13 @@ export default function VideoScreen() {
         setPositionMs(0);
         setDurationMs(0);
         seekValueRef.current = 0;
+        setScrubPosition(null);
+        pendingSeekTargetMsRef.current = null;
+        if (seekSafetyTimeoutRef.current) {
+          clearTimeout(seekSafetyTimeoutRef.current);
+          seekSafetyTimeoutRef.current = null;
+        }
+        isSeekingRef.current = false;
         setIsVideoReady(false);
         setIsBuffering(true);
 
@@ -2108,6 +2308,7 @@ export default function VideoScreen() {
           dir === "back" ? current - SEEK_DELTA_MS : current + SEEK_DELTA_MS;
 
         const target = clamp(next, 0, dur > 0 ? dur : Number.MAX_SAFE_INTEGER);
+        setPendingSeek(target);
 
         // Use seekBy for better Android compatibility
         const deltaSeconds = target / 1000 - v.currentTime;
@@ -2127,7 +2328,7 @@ export default function VideoScreen() {
         console.log("SEEK ERROR", e);
       }
     },
-    [safePlay, triggerSeekFeedback]
+    [safePlay, triggerSeekFeedback, setPendingSeek]
   );
 
   const handleSeekBackward10 = useCallback(() => {
@@ -2136,6 +2337,9 @@ export default function VideoScreen() {
       const p = playerRef.current || videoPlayer;
       if (!p) return;
       triggerSeekFeedback("back");
+      const current = toFiniteDurationMs((p.currentTime ?? 0) * 1000);
+      const target = Math.max(0, current - 10_000);
+      setPendingSeek(target);
       p.seekBy(-10);
       if (p.playing) {
         if (Platform.OS === "android") {
@@ -2149,7 +2353,7 @@ export default function VideoScreen() {
     } catch (e) {
       console.log("BACKWARD SEEK ERROR", e);
     }
-  }, [videoPlayer, safePlay, triggerSeekFeedback, resetControlsTimeout]);
+  }, [videoPlayer, safePlay, triggerSeekFeedback, resetControlsTimeout, setPendingSeek]);
 
   const handleSeekForward10 = useCallback(() => {
     resetControlsTimeout();
@@ -2161,6 +2365,10 @@ export default function VideoScreen() {
       const remaining = dur > 0 ? dur - currentTime : 10;
       const delta = Math.min(10, Math.max(0, remaining));
       triggerSeekFeedback("forward");
+      const durMs = toFiniteDurationMs((dur ?? 0) * 1000);
+      const currentMs = toFiniteDurationMs((currentTime ?? 0) * 1000);
+      const target = durMs > 0 ? Math.min(durMs, currentMs + 10_000) : currentMs + 10_000;
+      setPendingSeek(target);
       p.seekBy(delta);
       if (p.playing) {
         if (Platform.OS === "android") {
@@ -2174,7 +2382,7 @@ export default function VideoScreen() {
     } catch (e) {
       console.log("FORWARD SEEK ERROR", e);
     }
-  }, [videoPlayer, safePlay, triggerSeekFeedback, resetControlsTimeout]);
+  }, [videoPlayer, safePlay, triggerSeekFeedback, resetControlsTimeout, setPendingSeek]);
 
   const onPressPlayerSurface = useCallback(
     async (evt: any) => {
@@ -3116,7 +3324,7 @@ export default function VideoScreen() {
                       pointerEvents="box-none">
                       <View style={styles.seekTimesRow}>
                         <Text style={styles.seekTime}>
-                          {formatDurationLabel(positionMs, "00:00")}
+                          {formatDurationLabel(displayPositionMs, "00:00")}
                         </Text>
                         <Text style={styles.seekTime}>
                           {formatDurationLabel(durationMs, "--:--")}
@@ -3149,7 +3357,7 @@ export default function VideoScreen() {
                           style={styles.slider}
                           minimumValue={0}
                           maximumValue={Math.max(1, durationMs || 1)}
-                          value={Math.min(positionMs, durationMs || 1)}
+                          value={Math.min(displayPositionMs, durationMs || 1)}
                           disabled={!hasFiniteDuration(durationMs)}
                           minimumTrackTintColor="#FF0033"
                           maximumTrackTintColor="rgba(255,255,255,0.22)"

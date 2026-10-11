@@ -226,7 +226,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         // Configure background playback capabilities
         player.showNowPlayingNotification = true;
         player.staysActiveInBackground = true;
-        player.timeUpdateEventInterval = 0.5;
+        player.timeUpdateEventInterval = Platform.OS === "web" ? 0.1 : 0.25;
 
         setVideoPlayer(player);
         logger.log("[MediaPlayer] VideoPlayer initialized successfully");
@@ -258,7 +258,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           const player = createVideoPlayer(sourceObj);
           player.showNowPlayingNotification = true;
           player.staysActiveInBackground = true;
-          player.timeUpdateEventInterval = 0.5;
+          player.timeUpdateEventInterval = Platform.OS === "web" ? 0.1 : 0.25;
           setVideoPlayer(player);
           logger.log("[MediaPlayer] VideoPlayer initialized successfully on resume");
         } catch (e) {
