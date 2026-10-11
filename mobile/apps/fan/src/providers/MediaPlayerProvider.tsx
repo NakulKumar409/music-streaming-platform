@@ -115,6 +115,8 @@ type MediaPlayerContextValue = {
     positionMs?: number,
     durationMs?: number
   ) => void;
+  pauseAudio: () => Promise<void>;
+  registerInlineVideoPauseHandler: (handler: (() => void) | null) => void;
 };
 
 const MediaPlayerContext = createContext<MediaPlayerContextValue | undefined>(
@@ -226,7 +228,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
         // Configure background playback capabilities
         player.showNowPlayingNotification = true;
         player.staysActiveInBackground = true;
-        player.timeUpdateEventInterval = Platform.OS === "web" ? 0.1 : 0.25;
+        player.timeUpdateEventInterval = 0.1;
 
         setVideoPlayer(player);
         logger.log("[MediaPlayer] VideoPlayer initialized successfully");
@@ -258,7 +260,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
           const player = createVideoPlayer(sourceObj);
           player.showNowPlayingNotification = true;
           player.staysActiveInBackground = true;
-          player.timeUpdateEventInterval = Platform.OS === "web" ? 0.1 : 0.25;
+          player.timeUpdateEventInterval = 0.1;
           setVideoPlayer(player);
           logger.log("[MediaPlayer] VideoPlayer initialized successfully on resume");
         } catch (e) {
@@ -296,6 +298,7 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
 
     const timeSub = videoPlayer.addListener("timeUpdate", (event) => {
       if (currentItemRef.current?.mediaType !== "video") return;
+      if (inlineVideoHostActiveRef.current) return;
       const pos = Math.round(event.currentTime * 1000);
       setState((s) => {
         // Only update if difference is significant or it's a state change
@@ -353,10 +356,16 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     stateRef.current = state;
   }, [state]);
 
+  const seekSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const clearPendingSeek = useCallback((generation?: number) => {
     const pending = pendingSeekRef.current;
     if (!pending) return;
     if (generation !== undefined && pending.generation !== generation) return;
+    if (seekSafetyTimerRef.current) {
+      clearTimeout(seekSafetyTimerRef.current);
+      seekSafetyTimerRef.current = null;
+    }
     pendingSeekRef.current = null;
     setPendingSeekPositionMs(null);
   }, []);
@@ -365,6 +374,10 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     // Invalidate every in-flight progress read and clear any seek owned by the
     // previous source. This is required on reset/track change.
     seekGenerationRef.current += 1;
+    if (seekSafetyTimerRef.current) {
+      clearTimeout(seekSafetyTimerRef.current);
+      seekSafetyTimerRef.current = null;
+    }
     pendingSeekRef.current = null;
     setPendingSeekPositionMs(null);
   }, []);
@@ -374,8 +387,16 @@ export function MediaPlayerProvider({ children }: { children: ReactNode }) {
     seekGenerationRef.current = generation;
     pendingSeekRef.current = { generation, targetMs };
     setPendingSeekPositionMs(targetMs);
+    if (seekSafetyTimerRef.current) {
+      clearTimeout(seekSafetyTimerRef.current);
+    }
+    seekSafetyTimerRef.current = setTimeout(() => {
+      if (pendingSeekRef.current?.generation === generation) {
+        clearPendingSeek(generation);
+      }
+    }, 2000);
     return generation;
-  }, []);
+  }, [clearPendingSeek]);
 
   const applyAudioProgress = useCallback(
     (positionMs: number, durationMs: number, generationAtRead?: number) => {
@@ -835,9 +856,39 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
     }
   }, [resetSeekCoordinator]);
 
+  const inlineVideoPauseHandlerRef = useRef<(() => void) | null>(null);
+  const registerInlineVideoPauseHandler = useCallback(
+    (handler: (() => void) | null) => {
+      inlineVideoPauseHandlerRef.current = handler;
+    },
+    []
+  );
+
   const stopVideo = useCallback(async () => {
+    if (inlineVideoPauseHandlerRef.current) {
+      try {
+        inlineVideoPauseHandlerRef.current();
+      } catch {}
+    }
     videoPlayer?.pause();
   }, [videoPlayer]);
+
+  const pauseAudio = useCallback(async () => {
+    audioPlayIntentRef.current = false;
+    cancelPendingAudioLoad();
+    if (TrackPlayerAvailable) {
+      try {
+        await TrackPlayer.pause();
+      } catch {}
+    }
+    const wa = webAudioRef.current;
+    if (wa) {
+      try {
+        wa.pause();
+      } catch {}
+    }
+    setState((s) => (s.isPlaying ? { ...s, isPlaying: false } : s));
+  }, [cancelPendingAudioLoad]);
 
   const showSubscriptionToast = useCallback(
     (item: MediaItem) => {
@@ -2292,6 +2343,8 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
       preferredQuality,
       setPreferredQuality,
       syncActiveMediaItem,
+      pauseAudio,
+      registerInlineVideoPauseHandler,
     }),
     [
       close,
@@ -2323,6 +2376,8 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
       isPlayerReady,
       preferredQuality,
       setPreferredQuality,
+      pauseAudio,
+      registerInlineVideoPauseHandler,
     ]
   );
 

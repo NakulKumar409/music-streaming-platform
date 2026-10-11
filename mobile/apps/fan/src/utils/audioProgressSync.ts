@@ -51,7 +51,8 @@ export function evaluateAudioProgressSample({
   }
 
   const confirmsSeek =
-    Math.abs(positionMs - pendingSeek.targetMs) <= Math.max(0, toleranceMs);
+    Math.abs(positionMs - pendingSeek.targetMs) <= Math.max(0, toleranceMs) ||
+    (positionMs >= pendingSeek.targetMs && positionMs - pendingSeek.targetMs <= 5000);
 
   return {
     accept: confirmsSeek,

@@ -355,7 +355,14 @@ export default function VideoScreen() {
     togglePlayPause,
     syncActiveMediaItem,
     setInlineVideoHostActive,
+    pauseAudio,
+    registerInlineVideoPauseHandler,
   } = useMediaPlayer();
+
+  const currentItemRef = useRef(currentItem);
+  useEffect(() => {
+    currentItemRef.current = currentItem;
+  }, [currentItem]);
 
   const insets = useSafeAreaInsets();
 
@@ -558,10 +565,15 @@ export default function VideoScreen() {
   const safePlay = useCallback((target: { play?: () => any; playing?: boolean } | null | undefined, tag: string) => {
     console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) called, target exists:`, Boolean(target), "playing:", target?.playing);
     if (!target || typeof target.play !== "function") return;
+    if (currentItemRef.current?.mediaType === "audio") {
+      console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) skipped - audio is active media item`);
+      return;
+    }
     if (target.playing) {
       console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) skipped - already playing`);
       return;
     }
+    pauseAudio?.().catch(() => undefined);
     try {
       console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) calling target.play()...`);
       const maybePromise = target.play();
@@ -596,7 +608,7 @@ export default function VideoScreen() {
         cause: err?.cause,
       });
     }
-  }, []);
+  }, [pauseAudio]);
 
   const [videoPlayer, setVideoPlayer] = useState<VideoPlayer | null>(null);
   const playerRef = useRef<VideoPlayer | null>(null);
@@ -628,7 +640,7 @@ export default function VideoScreen() {
           console.log("[VideoScreen] Creating VideoPlayer with URL:", sanitizedUrl, "contentType:", videoSource.contentType);
           const player = createVideoPlayer(videoSource);
           player.loop = false;
-          player.timeUpdateEventInterval = Platform.OS === "web" ? 0.1 : 0.25;
+          player.timeUpdateEventInterval = 0.1;
           player.staysActiveInBackground = true;
           playerRef.current = player;
           setVideoPlayer(player);
@@ -642,7 +654,7 @@ export default function VideoScreen() {
             : url;
           console.log("[VideoScreen] Updating VideoPlayer source:", sanitizedUrl, "contentType:", videoSource.contentType);
           playerRef.current.replace(videoSource);
-          playerRef.current.timeUpdateEventInterval = Platform.OS === "web" ? 0.1 : 0.25;
+          playerRef.current.timeUpdateEventInterval = 0.1;
           if (!userPausedRef.current && Platform.OS !== "web") {
             safePlay(playerRef.current as any, "replace");
           }
@@ -1393,13 +1405,24 @@ export default function VideoScreen() {
 
   const pauseInlineVideoIfNeeded = useCallback(async () => {
     try {
-      if (videoPlayer?.playing) {
-        videoPlayer.pause();
+      userPausedRef.current = true;
+      playbackSessionRef.current += 1;
+      const p = playerRef.current || videoPlayer;
+      if (p) {
+        p.pause();
       }
+      setIsVideoPlaying(false);
     } catch {
       // ignore
     }
   }, [videoPlayer]);
+
+  useEffect(() => {
+    registerInlineVideoPauseHandler?.(pauseInlineVideoIfNeeded);
+    return () => {
+      registerInlineVideoPauseHandler?.(null);
+    };
+  }, [registerInlineVideoPauseHandler, pauseInlineVideoIfNeeded]);
 
   // ─── Native event: status change ───────────────────────────────────────────
   // This fires as soon as the player's native layer transitions state.
@@ -1458,14 +1481,28 @@ export default function VideoScreen() {
         const curMs = Math.round(Number(event.currentTime || 0) * 1000);
         const target = pendingSeekTargetMsRef.current;
         if (target !== null) {
-          if (Math.abs(curMs - target) < 400) {
+          if (Math.abs(curMs - target) < 800 || (curMs > target && curMs - target < 2000)) {
             pendingSeekTargetMsRef.current = null;
             setScrubPosition(null);
           } else {
             return;
           }
         }
-        setPositionMs(curMs);
+        setPositionMs((prev) => {
+          if (isSeekingRef.current || pendingSeekTargetMsRef.current !== null) {
+            return prev;
+          }
+          // Video loop / restart detection
+          if (curMs < prev && (prev - curMs > 2000 || curMs < 500)) {
+            return curMs;
+          }
+          // During normal forward playback, enforce monotonic progression to eliminate
+          // ExoPlayer clock jitter that causes second flicker across boundaries.
+          if (videoPlayer.playing && curMs < prev) {
+            return prev;
+          }
+          return curMs;
+        });
         if (videoPlayer.duration && videoPlayer.duration > 0) {
           setDurationMs(Math.round(videoPlayer.duration * 1000));
         }
@@ -1519,14 +1556,25 @@ export default function VideoScreen() {
           const currentMs = Math.round(video.currentTime * 1000);
           const target = pendingSeekTargetMsRef.current;
           if (target !== null) {
-            if (Math.abs(currentMs - target) < 400) {
+            if (Math.abs(currentMs - target) < 800 || (currentMs > target && currentMs - target < 2000)) {
               pendingSeekTargetMsRef.current = null;
               setScrubPosition(null);
             } else {
               return;
             }
           }
-          setPositionMs(currentMs);
+          setPositionMs((prev) => {
+            if (isSeekingRef.current || pendingSeekTargetMsRef.current !== null) {
+              return prev;
+            }
+            if (currentMs < prev && (prev - currentMs > 2000 || currentMs < 500)) {
+              return currentMs;
+            }
+            if (!video.paused && currentMs < prev) {
+              return prev;
+            }
+            return currentMs;
+          });
           if (video.duration && Number.isFinite(video.duration) && video.duration > 0) {
             setDurationMs(Math.round(video.duration * 1000));
           }
@@ -1604,7 +1652,6 @@ export default function VideoScreen() {
     const interval = setInterval(() => {
       if (!isSeekingRef.current && pendingSeekTargetMsRef.current === null) {
         const curMs = toFiniteDurationMs(videoPlayer.currentTime * 1000);
-        setPositionMs((prev) => (Math.abs(prev - curMs) > 150 ? curMs : prev));
         if (activeVideoMeta) {
           syncActiveMediaItem?.(
             {
@@ -1653,11 +1700,11 @@ export default function VideoScreen() {
   ]);
 
   useEffect(() => {
-    // Pause inline video if global audio starts playing.
-    if (currentItem?.mediaType === "audio" && playerState.isPlaying) {
+    // Pause inline video immediately if global audio is selected.
+    if (currentItem?.mediaType === "audio") {
       pauseInlineVideoIfNeeded().catch(() => undefined);
     }
-  }, [currentItem?.mediaType, pauseInlineVideoIfNeeded, playerState.isPlaying]);
+  }, [currentItem?.mediaType, pauseInlineVideoIfNeeded]);
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (s) => {
@@ -1747,8 +1794,8 @@ export default function VideoScreen() {
         setShowControls(true);
         setPlaybackError(null);
 
-        // Stop/unload any previous inline video
-        await pauseGlobalPlaybackIfNeeded();
+        // Stop any active global audio and inline video
+        await pauseAudio?.();
         if (playerRef.current) {
           try {
             playerRef.current.pause();
@@ -4130,6 +4177,8 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.85)",
     fontSize: 11,
     fontWeight: "800",
+    fontVariant: ["tabular-nums"],
+    minWidth: 36,
   },
   sliderContainer: {
     width: "100%",
