@@ -88,7 +88,7 @@ export default function MusicCard({ track, onAction }: MusicCardProps) {
                   : track.artwork)
               }
               style={styles.artwork}
-              resizeMode="contain"
+              resizeMode="cover"
             />
             {renderBadge()}
             <View style={styles.playOverlay} pointerEvents="none">
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 1,
     position: 'relative',
-    backgroundColor: '#000000',
+    backgroundColor: '#1a1a2e',
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 14.5,
@@ -148,7 +148,6 @@ const styles = StyleSheet.create({
   artwork: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#000000',
   },
   badgeContainer: {
     position: 'absolute',

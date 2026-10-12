@@ -5,11 +5,17 @@ export const FALLBACK_ARTWORK =
 
 export function getOptimizedImageUrl(
   url: string | null | undefined,
-  fallback: string = FALLBACK_ARTWORK
+  fallback: string = FALLBACK_ARTWORK,
+  type: 'song' | 'artist' | 'banner' | 'video' = 'song'
 ): string {
   if (!url || typeof url !== 'string') return fallback;
   let trimmed = url.trim();
   if (!trimmed) return fallback;
+
+  // 0. Detect incomplete or directory-like URLs (e.g. /v1/artists/94/images/)
+  if (/\/images\/?$/.test(trimmed) || /\/artists\/\d+\/?$/.test(trimmed)) {
+    return fallback;
+  }
 
   // 1. Rewrite any URL that targets /api/v1/ to use active API_HOST_BASE_URL
   const apiV1Index = trimmed.indexOf('/api/v1/');
@@ -44,22 +50,28 @@ export function getOptimizedImageUrl(
     }
   }
 
-  // 4. Cloudinary optimization — ZERO-CROP policy
-  // Never use c_fill or fixed square crops (e.g. w_300,h_300,c_fill).
-  // Use c_limit with auto quality and format: c_limit resizes larger images to fit within 1000px
-  // while strictly preserving the source aspect ratio and never cropping edges.
+  // 4. Cloudinary optimization — Smart Letterbox-Stripping & Content-Aware Framing
+  // Embedded black bars from 4:3 YouTube frames (640x480 with 60px black bars)
+  // are stripped using c_crop,ar_16:9,g_center, then fitted to the target card shape.
   if (trimmed.includes('res.cloudinary.com')) {
+    const transform =
+      type === 'video'
+        ? 'c_crop,ar_16:9,g_center/c_fill,ar_16:9,w_800,q_auto,f_auto'
+        : type === 'banner'
+        ? 'c_crop,ar_16:9,g_center/c_fill,ar_16:9,w_1200,q_auto,f_auto'
+        : 'c_crop,ar_16:9,g_center/c_fill,ar_1:1,g_auto,w_600,q_auto,f_auto';
+
     const uploadMatch = trimmed.match(/\/upload\/([a-zA-Z0-9_,:-]+)\//);
     if (uploadMatch) {
       const segment = uploadMatch[1];
       if (!/^v\d+$/.test(segment) && !/^s--.+--$/.test(segment)) {
         return trimmed.replace(
           `/upload/${segment}/`,
-          '/upload/c_limit,w_1000,q_auto,f_auto/'
+          `/upload/${transform}/`
         );
       }
     }
-    return trimmed.replace('/upload/', '/upload/c_limit,w_1000,q_auto,f_auto/');
+    return trimmed.replace('/upload/', `/upload/${transform}/`);
   }
 
   return trimmed;

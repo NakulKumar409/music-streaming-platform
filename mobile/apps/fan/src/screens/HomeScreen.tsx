@@ -21,8 +21,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { BadgeCheck, Lock, Play, Search, X, Bell, Settings, ChevronRight, Disc3, Palette } from 'lucide-react-native';
-import ThemeSelectionModal from '../ui/ThemeSelectionModal';
+import { BadgeCheck, Lock, Play, Search, X, Bell, Settings, ChevronRight, Disc3 } from 'lucide-react-native';
 import { useTheme } from '../providers/ThemeProvider';
 import { LockedContentOverlay } from '../ui/SubscriptionUI';
 import { apiV1 } from '../services/api';
@@ -249,7 +248,6 @@ export default function HomeScreen({ navigation }: any) {
     visible: false,
     item: null,
   });
-  const [showThemeModal, setShowThemeModal] = useState(false);
   const mountedRef = useRef(true);
   const dataLoadedRef = useRef(false);
   const [featuredArtists, setFeaturedArtists] = useState<FeaturedArtistCard[]>([]);
@@ -627,7 +625,7 @@ export default function HomeScreen({ navigation }: any) {
               uri={item.thumbnail}
               fallbackType="song"
               style={styles.audioImg}
-              resizeMode="contain"
+              resizeMode="cover"
             />
             {/* NEW badge */}
             {!item.isLocked && (
@@ -685,7 +683,7 @@ export default function HomeScreen({ navigation }: any) {
               uri={item.thumbnail}
               fallbackType="video"
               style={styles.videoImg}
-              resizeMode="contain"
+              resizeMode="cover"
             />
             {item.isLocked && (
               <View style={styles.videoBadgeLock}>
@@ -797,15 +795,6 @@ export default function HomeScreen({ navigation }: any) {
                 <Settings color="#fff" size={17} />
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.headerIconButton}
-                onPress={() => setShowThemeModal(true)}
-                activeOpacity={0.7}
-                accessibilityLabel="Theme"
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Palette color="#fff" size={17} />
-              </TouchableOpacity>
             </View>
           </View>
 
@@ -982,10 +971,6 @@ export default function HomeScreen({ navigation }: any) {
           </Modal>
         )}
 
-        <ThemeSelectionModal
-          visible={showThemeModal}
-          onClose={() => setShowThemeModal(false)}
-        />
       </SafeAreaView>
     </LinearGradient>
   );
@@ -1237,7 +1222,7 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: 14.5,
     overflow: 'hidden',
-    backgroundColor: '#000000',
+    backgroundColor: '#1a1a2e',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -1245,7 +1230,6 @@ const styles = StyleSheet.create({
   audioImg: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#000000',
   },
   audioBadgeNew: {
     position: 'absolute',
@@ -1340,7 +1324,7 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: 14.5,
     overflow: 'hidden',
-    backgroundColor: '#000000',
+    backgroundColor: '#1a1a2e',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -1348,7 +1332,6 @@ const styles = StyleSheet.create({
   videoImg: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#000000',
   },
   videoBadgeLock: {
     position: 'absolute',

@@ -14,10 +14,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Headphones, RefreshCw, Settings, Palette, ChevronRight, X } from 'lucide-react-native';
+import { Headphones, RefreshCw, Settings, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '../providers/ThemeProvider';
-import ThemeSelectionModal from '../ui/ThemeSelectionModal';
 
 import AppHeader from '../components/AppHeader';
 import HeroCarousel from '../components/HeroCarousel';
@@ -28,7 +26,7 @@ import ExclusivePromoCard from '../components/ExclusivePromoCard';
 import LockedContentCard from '../components/LockedContentCard';
 import VideoCard from '../components/VideoCard';
 import BenefitCard from '../components/BenefitCard';
-import BottomNavigation from '../components/BottomNavigation';
+import BottomNavigation, { type BottomNavTab } from '../components/BottomNavigation';
 import PrimaryButton from '../components/PrimaryButton';
 import SecondaryButton from '../components/SecondaryButton';
 
@@ -60,9 +58,8 @@ export default function GuestHomeScreen({ navigation }: Props) {
   const [catalog, setCatalog] = useState<GuestHomeData>(EMPTY_GUEST_DATA);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
-  const { theme } = useTheme();
   const [showGuestSettings, setShowGuestSettings] = useState(false);
-  const [showThemeModal, setShowThemeModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<BottomNavTab>('home');
 
   useEffect(() => {
     StatusBar.setBarStyle('light-content');
@@ -96,6 +93,7 @@ export default function GuestHomeScreen({ navigation }: Props) {
   };
 
   const handleHomePress = () => {
+    setActiveTab('home');
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   };
 
@@ -266,9 +264,13 @@ export default function GuestHomeScreen({ navigation }: Props) {
         </Animated.View>
 
         <BottomNavigation
+          activeTab={activeTab}
           onAction={handleGuestAction}
           onHomePress={handleHomePress}
-          onAccountPress={() => setShowGuestSettings(true)}
+          onAccountPress={() => {
+            setActiveTab('account');
+            setShowGuestSettings(true);
+          }}
         />
 
         {/* Guest Settings Modal */}
@@ -276,17 +278,25 @@ export default function GuestHomeScreen({ navigation }: Props) {
           visible={showGuestSettings}
           transparent
           animationType="fade"
-          onRequestClose={() => setShowGuestSettings(false)}
+          onRequestClose={() => {
+            setShowGuestSettings(false);
+            setActiveTab('home');
+          }}
         >
-          <TouchableWithoutFeedback onPress={() => setShowGuestSettings(false)}>
+          <TouchableWithoutFeedback
+            onPress={() => {
+              setShowGuestSettings(false);
+              setActiveTab('home');
+            }}
+          >
             <View style={styles.settingsOverlay}>
               <TouchableWithoutFeedback onPress={() => {}}>
-                <View style={[styles.settingsModalCard, { borderColor: `${theme.primary}40` }]}>
+                <View style={styles.settingsModalCard}>
                   {/* Header */}
                   <View style={styles.settingsHeader}>
                     <View style={styles.settingsHeaderLeft}>
-                      <View style={[styles.settingsIconWrap, { backgroundColor: `${theme.primary}22` }]}>
-                        <Settings size={20} color={theme.primary} />
+                      <View style={styles.settingsIconWrap}>
+                        <Settings size={20} color="#7C3AED" />
                       </View>
                       <View>
                         <Text style={styles.settingsTitle}>Settings</Text>
@@ -294,7 +304,10 @@ export default function GuestHomeScreen({ navigation }: Props) {
                       </View>
                     </View>
                     <Pressable
-                      onPress={() => setShowGuestSettings(false)}
+                      onPress={() => {
+                        setShowGuestSettings(false);
+                        setActiveTab('home');
+                      }}
                       style={styles.settingsCloseBtn}
                       hitSlop={10}
                       accessibilityLabel="Close settings"
@@ -303,53 +316,15 @@ export default function GuestHomeScreen({ navigation }: Props) {
                     </Pressable>
                   </View>
 
-                  {/* Appearance / Theme Section */}
-                  <View style={styles.settingsSection}>
-                    <Text style={styles.settingsSectionTitle}>Appearance / Theme</Text>
-                    <View style={styles.guestThemeCard}>
-                      <View style={styles.guestThemeInfo}>
-                        <View style={[styles.guestPaletteWrap, { backgroundColor: `${theme.primary}22` }]}>
-                          <Palette size={20} color={theme.primary} />
-                        </View>
-                        <View>
-                          <Text style={styles.guestThemeLabel}>App Theme</Text>
-                          <View style={styles.guestThemeBadge}>
-                            <View style={[styles.guestThemeDot, { backgroundColor: theme.primary }]} />
-                            <Text style={styles.guestThemeName}>{theme.name}</Text>
-                          </View>
-                        </View>
-                      </View>
-
-                      <Pressable
-                        style={[
-                          styles.guestChooseThemeBtn,
-                          {
-                            borderColor: `${theme.primary}70`,
-                            backgroundColor: `${theme.primary}18`,
-                          },
-                        ]}
-                        onPress={() => {
-                          setShowThemeModal(true);
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel="Choose Theme"
-                      >
-                        <Text style={[styles.guestChooseThemeText, { color: theme.primary }]}>
-                          Choose Theme
-                        </Text>
-                        <ChevronRight size={14} color={theme.primary} />
-                      </Pressable>
-                    </View>
-                  </View>
-
                   {/* Account Section */}
                   <View style={styles.settingsSection}>
                     <Text style={styles.settingsSectionTitle}>Account</Text>
                     <View style={styles.accountActionCol}>
                       <Pressable
-                        style={[styles.guestAuthBtn, { backgroundColor: theme.primary }]}
+                        style={[styles.guestAuthBtn, { backgroundColor: colors.primary }]}
                         onPress={() => {
                           setShowGuestSettings(false);
+                          setActiveTab('home');
                           navigation.navigate('Signup');
                         }}
                       >
@@ -359,6 +334,7 @@ export default function GuestHomeScreen({ navigation }: Props) {
                         style={styles.guestSignInBtn}
                         onPress={() => {
                           setShowGuestSettings(false);
+                          setActiveTab('home');
                           navigation.navigate('Login');
                         }}
                       >
@@ -372,10 +348,6 @@ export default function GuestHomeScreen({ navigation }: Props) {
           </TouchableWithoutFeedback>
         </Modal>
 
-        <ThemeSelectionModal
-          visible={showThemeModal}
-          onClose={() => setShowThemeModal(false)}
-        />
       </SafeAreaView>
     </View>
   );
@@ -528,6 +500,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#100D1A',
     borderRadius: 24,
     borderWidth: 1.2,
+    borderColor: 'rgba(124, 58, 237, 0.25)',
     padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
@@ -554,6 +527,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(124, 58, 237, 0.13)',
   },
   settingsTitle: {
     color: '#FFFFFF',
@@ -584,63 +558,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 10,
-  },
-  guestThemeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  guestThemeInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  guestPaletteWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  guestThemeLabel: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  guestThemeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  guestThemeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-  },
-  guestThemeName: {
-    color: '#A2A2B8',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  guestChooseThemeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  guestChooseThemeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.2,
   },
   accountActionCol: {
     gap: 8,

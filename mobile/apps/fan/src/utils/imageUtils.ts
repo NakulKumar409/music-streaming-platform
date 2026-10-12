@@ -38,5 +38,5 @@ export function resolveAppImageUrl(
   const trimmed = url.trim();
   if (!trimmed) return fallback;
 
-  return getOptimizedImageUrl(trimmed, fallback);
+  return getOptimizedImageUrl(trimmed, fallback, type);
 }

@@ -155,7 +155,7 @@ export default function FeaturedHeroCarousel({
               uri={item.thumbnail}
               fallbackType={isVideo ? 'video' : 'song'}
               style={styles.artworkImage}
-              resizeMode="contain"
+              resizeMode="cover"
             />
             {/* Subtle gloss overlay border */}
             <View style={styles.artworkGloss} />

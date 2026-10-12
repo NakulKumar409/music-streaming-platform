@@ -234,7 +234,7 @@ export const themes: ThemeDefinition[] = [
   }
 ];
 
-export const DEFAULT_THEME_ID = "sunset-orange";
+export const DEFAULT_THEME_ID = "ocean-blue";
 
 let activeTheme: ThemeDefinition = themes.find(t => t.id === DEFAULT_THEME_ID) || themes[0];
 

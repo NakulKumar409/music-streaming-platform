@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home as HomeIcon, Search, Music, PlayCircle, User } from 'lucide-react-native';
 import { useTheme } from '../providers/ThemeProvider';
 
 export type BottomNavTab = 'home' | 'search' | 'audio' | 'video' | 'account';
+
+const ACTIVE_BLUE = '#0082FF';
 
 interface BottomNavigationProps {
   onAction?: () => void;
@@ -23,11 +25,27 @@ export default function BottomNavigation({
   onAudioPress,
   onVideoPress,
   onAccountPress,
-  activeTab = 'home',
+  activeTab: activeTabProp,
 }: BottomNavigationProps) {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+
+  // Controlled or uncontrolled active tab state
+  const [internalTab, setInternalTab] = useState<BottomNavTab>(activeTabProp || 'home');
+
+  useEffect(() => {
+    if (activeTabProp !== undefined) {
+      setInternalTab(activeTabProp);
+    }
+  }, [activeTabProp]);
+
+  const currentActiveTab = activeTabProp !== undefined ? activeTabProp : internalTab;
+
+  // Use the canonical blue active color requested for all 5 tabs
+  const activeColor = ACTIVE_BLUE;
 
   const handlePress = (tab: BottomNavTab) => {
+    setInternalTab(tab);
     switch (tab) {
       case 'home':
         if (onHomePress) onHomePress();
@@ -63,8 +81,6 @@ export default function BottomNavigation({
     { key: 'account', label: 'Account', icon: User },
   ];
 
-  const { theme } = useTheme();
-  const primaryColor = theme?.primary || '#7C3AED';
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 14 : 10);
 
   return (
@@ -81,14 +97,14 @@ export default function BottomNavigation({
         style={[
           styles.capsule,
           {
-            borderColor: `${primaryColor}55`,
-            shadowColor: primaryColor,
+            borderColor: `${activeColor}40`,
+            shadowColor: activeColor,
           },
           webGlassStyle,
         ]}
       >
         {tabs.map((tab) => {
-          const isActive = activeTab === tab.key;
+          const isActive = currentActiveTab === tab.key;
           const iconColor = isActive ? '#FFFFFF' : '#8E8E9F';
           const labelColor = isActive ? '#FFFFFF' : '#8E8E9F';
           const Icon = tab.icon;
@@ -97,7 +113,7 @@ export default function BottomNavigation({
             <Pressable
               key={tab.key}
               onPress={() => handlePress(tab.key)}
-              style={styles.tabItem}
+              style={[styles.tabItem, webPressableReset]}
               accessibilityRole="button"
               accessibilityLabel={tab.label}
               accessibilityState={{ selected: isActive }}
@@ -105,13 +121,15 @@ export default function BottomNavigation({
               <View
                 style={[
                   styles.iconContainer,
-                  isActive && [
-                    styles.activeIconPill,
-                    {
-                      backgroundColor: primaryColor,
-                      shadowColor: primaryColor,
-                    },
-                  ],
+                  isActive
+                    ? [
+                        styles.activeIconPill,
+                        {
+                          backgroundColor: activeColor,
+                          shadowColor: activeColor,
+                        },
+                      ]
+                    : styles.inactiveIconContainer,
                 ]}
               >
                 <Icon color={iconColor} size={isActive ? 19 : 20} />
@@ -122,6 +140,7 @@ export default function BottomNavigation({
                   { color: labelColor },
                   isActive && styles.activeTabLabel,
                 ]}
+                numberOfLines={1}
               >
                 {tab.label}
               </Text>
@@ -133,13 +152,23 @@ export default function BottomNavigation({
   );
 }
 
+const webPressableReset =
+  Platform.OS === 'web'
+    ? ({
+        outline: 'none',
+        userSelect: 'none',
+        WebkitTapHighlightColor: 'transparent',
+        cursor: 'pointer',
+      } as any)
+    : undefined;
+
 const webGlassStyle =
   Platform.OS === 'web'
     ? ({
         backdropFilter: 'blur(24px)',
         WebkitBackdropFilter: 'blur(24px)',
         boxShadow:
-          '0 8px 32px rgba(0, 0, 0, 0.5), 0 0 18px rgba(124, 58, 237, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
+          '0 8px 32px rgba(0, 0, 0, 0.5), 0 0 18px rgba(0, 130, 255, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
       } as any)
     : undefined;
 
@@ -161,11 +190,9 @@ const styles = StyleSheet.create({
     maxWidth: 440,
     height: 66,
     borderRadius: 36,
-    backgroundColor: 'rgba(14, 10, 24, 0.84)',
+    backgroundColor: 'rgba(14, 10, 24, 0.88)',
     borderWidth: 1.2,
-    borderColor: 'rgba(139, 92, 246, 0.45)',
     paddingHorizontal: 8,
-    shadowColor: '#7C3AED',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 16,
@@ -180,13 +207,18 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 48,
     height: 30,
-    borderRadius: 15,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  inactiveIconContainer: {
+    backgroundColor: 'transparent',
   },
   activeIconPill: {
-    backgroundColor: '#7C3AED',
-    shadowColor: '#7C3AED',
+    backgroundColor: ACTIVE_BLUE,
+    borderRadius: 999,
+    overflow: 'hidden',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.55,
     shadowRadius: 8,
@@ -200,6 +232,6 @@ const styles = StyleSheet.create({
   },
   activeTabLabel: {
     fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
-
