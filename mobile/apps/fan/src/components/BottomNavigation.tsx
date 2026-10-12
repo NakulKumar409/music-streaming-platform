@@ -65,7 +65,7 @@ export default function BottomNavigation({
 
   const { theme } = useTheme();
   const primaryColor = theme?.primary || '#7C3AED';
-  const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 16 : 12);
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 14 : 10);
 
   return (
     <View
@@ -81,7 +81,7 @@ export default function BottomNavigation({
         style={[
           styles.capsule,
           {
-            borderColor: `${primaryColor}45`,
+            borderColor: `${primaryColor}55`,
             shadowColor: primaryColor,
           },
           webGlassStyle,
@@ -114,7 +114,7 @@ export default function BottomNavigation({
                   ],
                 ]}
               >
-                <Icon color={iconColor} size={20} />
+                <Icon color={iconColor} size={isActive ? 19 : 20} />
               </View>
               <Text
                 style={[
@@ -136,10 +136,10 @@ export default function BottomNavigation({
 const webGlassStyle =
   Platform.OS === 'web'
     ? ({
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
         boxShadow:
-          '0 8px 32px rgba(0, 0, 0, 0.45), 0 0 16px rgba(124, 58, 237, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+          '0 8px 32px rgba(0, 0, 0, 0.5), 0 0 18px rgba(124, 58, 237, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
       } as any)
     : undefined;
 
@@ -157,19 +157,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    width: '92%',
+    width: '94%',
     maxWidth: 440,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(16, 12, 26, 0.88)',
+    height: 66,
+    borderRadius: 36,
+    backgroundColor: 'rgba(14, 10, 24, 0.84)',
     borderWidth: 1.2,
-    borderColor: 'rgba(139, 92, 246, 0.38)',
+    borderColor: 'rgba(139, 92, 246, 0.45)',
     paddingHorizontal: 8,
     shadowColor: '#7C3AED',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 14,
-    elevation: 8,
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 10,
   },
   tabItem: {
     flex: 1,
@@ -178,9 +178,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   iconContainer: {
-    width: 44,
-    height: 28,
-    borderRadius: 14,
+    width: 48,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -188,12 +188,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#7C3AED',
     shadowColor: '#7C3AED',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOpacity: 0.55,
+    shadowRadius: 8,
+    elevation: 5,
   },
   tabLabel: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '500',
     marginTop: 2,
     letterSpacing: 0.2,

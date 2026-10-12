@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { Lock } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import ImageFallback from './ImageFallback';
 import { colors } from '../theme-guest/colors';
 import { spacing } from '../theme-guest/spacing';
@@ -43,8 +44,8 @@ export default function LockedContentCard({ content, onAction }: LockedContentCa
 
     if (content.badge === 'NEW') {
       label = 'NEW';
-      badgeBg = colors.highlight;
-      badgeText = '#000000';
+      badgeBg = '#7C3AED';
+      badgeText = '#FFFFFF';
     } else if (content.badge === 'PREMIUM') {
       label = 'PREMIUM';
       badgeBg = colors.secondary;
@@ -68,26 +69,33 @@ export default function LockedContentCard({ content, onAction }: LockedContentCa
       style={styles.pressable}
     >
       <Animated.View style={[styles.container, { transform: [{ scale }] }]}>
-        <View style={styles.imageContainer}>
-          <ImageFallback
-            source={content.artwork}
-            style={styles.artwork}
-            resizeMode="contain"
-          />
-          {/* Dark overlay */}
-          <View style={styles.darkOverlay} pointerEvents="none" />
-          {renderBadge()}
-          <View style={styles.lockOverlay} pointerEvents="none">
-            <View style={styles.lockCircle}>
-              <Lock color="#FFFFFF" size={15} />
+        <LinearGradient
+          colors={['#8B5CF6', '#3B82F6', '#06B6D4']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientBorder}
+        >
+          <View style={styles.imageContainer}>
+            <ImageFallback
+              source={content.artwork}
+              style={styles.artwork}
+              resizeMode="contain"
+            />
+            {/* Dark overlay */}
+            <View style={styles.darkOverlay} pointerEvents="none" />
+            {renderBadge()}
+            <View style={styles.lockOverlay} pointerEvents="none">
+              <View style={styles.lockCircle}>
+                <Lock color="#FFFFFF" size={15} />
+              </View>
             </View>
+            {(content as any).duration ? (
+              <View style={styles.durationBadge}>
+                <Text style={styles.durationText}>{(content as any).duration}</Text>
+              </View>
+            ) : null}
           </View>
-          {(content as any).duration ? (
-            <View style={styles.durationBadge}>
-              <Text style={styles.durationText}>{(content as any).duration}</Text>
-            </View>
-          ) : null}
-        </View>
+        </LinearGradient>
 
         <View style={styles.infoContainer}>
           <Text style={styles.title} numberOfLines={1}>
@@ -105,25 +113,29 @@ export default function LockedContentCard({ content, onAction }: LockedContentCa
 const styles = StyleSheet.create({
   pressable: {
     marginRight: 12,
-    width: 154,
+    width: 142,
   },
   container: {
     width: '100%',
-    backgroundColor: '#0C0D18',
+  },
+  gradientBorder: {
+    width: '100%',
+    padding: 1.5,
     borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.28)',
-    padding: 6,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   imageContainer: {
     width: '100%',
-    height: 116,
+    aspectRatio: 1,
     position: 'relative',
     backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: 14.5,
     overflow: 'hidden',
   },
   artwork: {
@@ -133,19 +145,19 @@ const styles = StyleSheet.create({
   },
   darkOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.42)',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
   },
   badgeContainer: {
     position: 'absolute',
-    top: 6,
-    left: 6,
+    top: 7,
+    left: 7,
     paddingHorizontal: 7,
     paddingVertical: 2.5,
     borderRadius: 5,
     zIndex: 10,
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
@@ -156,20 +168,20 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   lockCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   durationBadge: {
     position: 'absolute',
-    bottom: 6,
-    right: 6,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    bottom: 7,
+    right: 7,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     paddingHorizontal: 6,
     paddingVertical: 2.5,
     borderRadius: 4,
@@ -183,20 +195,20 @@ const styles = StyleSheet.create({
   },
   infoContainer: {
     paddingTop: 8,
-    paddingHorizontal: 3,
-    paddingBottom: 4,
+    paddingHorizontal: 2,
+    paddingBottom: 2,
   },
   title: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '700',
-    lineHeight: 17,
+    lineHeight: 18,
   },
   artist: {
     color: '#94A3B8',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
     marginTop: 2,
-    lineHeight: 15,
+    lineHeight: 16,
   },
 });

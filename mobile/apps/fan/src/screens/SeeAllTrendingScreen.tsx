@@ -57,7 +57,7 @@ export default function SeeAllTrendingScreen({ navigation, route }: any) {
           )}
         </View>
         <View style={styles.textWrap}>
-          <Text style={styles.name} numberOfLines={1}>
+          <Text style={styles.name} numberOfLines={2}>
             {item.name}
           </Text>
           <Text style={styles.subText} numberOfLines={1}>

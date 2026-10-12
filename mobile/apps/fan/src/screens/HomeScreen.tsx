@@ -21,7 +21,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { BadgeCheck, Lock, Play, Search, X, Bell, Settings, ChevronRight, Disc3 } from 'lucide-react-native';
+import { BadgeCheck, Lock, Play, Search, X, Bell, Settings, ChevronRight, Disc3, Palette } from 'lucide-react-native';
+import ThemeSelectionModal from '../ui/ThemeSelectionModal';
 import { useTheme } from '../providers/ThemeProvider';
 import { LockedContentOverlay } from '../ui/SubscriptionUI';
 import { apiV1 } from '../services/api';
@@ -95,6 +96,7 @@ type ContentCard = {
   mediaUrl?: string | null;
   useStreamAccess?: boolean;
   durationMs?: number;
+  viewCount?: number;
 };
 
 type ApiContentItem = {
@@ -137,6 +139,13 @@ function formatDuration(ms?: number): string {
   const min = Math.floor(totalSec / 60);
   const sec = totalSec % 60;
   return `${min}:${sec.toString().padStart(2, '0')}`;
+}
+
+function formatViews(views?: number): string {
+  if (!views || views <= 0) return '';
+  if (views >= 1_000_000) return `${(views / 1_000_000).toFixed(0)}M+`;
+  if (views >= 1_000) return `${(views / 1_000).toFixed(0)}k`;
+  return `${views}`;
 }
 
 /* ─────────────────────── Section Header Row ─────────────────────── */
@@ -240,6 +249,7 @@ export default function HomeScreen({ navigation }: any) {
     visible: false,
     item: null,
   });
+  const [showThemeModal, setShowThemeModal] = useState(false);
   const mountedRef = useRef(true);
   const dataLoadedRef = useRef(false);
   const [featuredArtists, setFeaturedArtists] = useState<FeaturedArtistCard[]>([]);
@@ -566,11 +576,16 @@ export default function HomeScreen({ navigation }: any) {
     </Pressable>
   ), [onPressArtist]);
 
-  /* ── Render: Trending Artist — perfect circle ── */
+  /* ── Render: Trending Artist — neon glow ring & full name visible ── */
   const renderTrendingArtist = useCallback(({ item }: { item: ArtistCard }) => (
     <Pressable style={styles.trendingCard} onPress={() => onPressArtist(item.id)}>
-      {/* Outer ring border */}
-      <View style={styles.trendingCircleOuter}>
+      {/* Outer neon gradient ring */}
+      <LinearGradient
+        colors={['#8B5CF6', '#3B82F6', '#06B6D4']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.trendingCircleOuter}
+      >
         {/* Inner clip: enforces perfect circle crop */}
         <View style={styles.trendingCircleInner}>
           <AppImage
@@ -580,19 +595,19 @@ export default function HomeScreen({ navigation }: any) {
             resizeMode="cover"
           />
         </View>
-      </View>
+      </LinearGradient>
       <View style={styles.trendingNameWrap}>
-        <Text style={styles.trendingName} numberOfLines={1} ellipsizeMode="tail">
+        <Text style={styles.trendingName} numberOfLines={2}>
           {item.name}
         </Text>
         {item.isVerified && (
-          <BadgeCheck size={11} color={Colors.accent} />
+          <BadgeCheck size={12} color="#06B6D4" fill="rgba(6, 182, 212, 0.15)" style={{ marginLeft: 2 }} />
         )}
       </View>
     </Pressable>
   ), [onPressArtist]);
 
-  /* ── Render: Recently Added Audio — premium card ── */
+  /* ── Render: Recently Added Audio — neon gradient card, uncropped 1:1 image ── */
   const renderRecentAudio = useCallback(({ item }: { item: ContentCard }) => {
     const duration = formatDuration(item.durationMs);
     return (
@@ -601,38 +616,45 @@ export default function HomeScreen({ navigation }: any) {
         onPress={() => onPressAudioItem(item)}
         android_ripple={{ color: 'rgba(255,255,255,0.06)', borderless: false }}
       >
-        <View style={styles.audioImgContainer}>
-          <AppImage
-            uri={item.thumbnail}
-            fallbackType="song"
-            style={styles.audioImg}
-            resizeMode="contain"
-          />
-          {/* NEW badge */}
-          {!item.isLocked && (
-            <View style={styles.audioBadgeNew}>
-              <Text style={styles.audioBadgeNewText}>NEW</Text>
+        <LinearGradient
+          colors={['#8B5CF6', '#3B82F6', '#06B6D4']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.mediaGradientBorder}
+        >
+          <View style={styles.audioImgContainer}>
+            <AppImage
+              uri={item.thumbnail}
+              fallbackType="song"
+              style={styles.audioImg}
+              resizeMode="contain"
+            />
+            {/* NEW badge */}
+            {!item.isLocked && (
+              <View style={styles.audioBadgeNew}>
+                <Text style={styles.audioBadgeNewText}>NEW</Text>
+              </View>
+            )}
+            {/* Lock badge (top-left) */}
+            {item.isLocked && (
+              <View style={styles.audioBadgeLock}>
+                <Lock color="#fff" size={11} />
+              </View>
+            )}
+            {/* Centered play button */}
+            <View style={styles.audioPlayOverlay} pointerEvents="none">
+              <View style={styles.audioPlayBtn}>
+                <Play color="#fff" size={15} fill="#fff" style={{ marginLeft: 2 }} />
+              </View>
             </View>
-          )}
-          {/* Lock badge (top-left) */}
-          {item.isLocked && (
-            <View style={styles.audioBadgeLock}>
-              <Lock color="#fff" size={11} />
-            </View>
-          )}
-          {/* Centered play button */}
-          <View style={styles.audioPlayOverlay} pointerEvents="none">
-            <View style={styles.audioPlayBtn}>
-              <Play color="#fff" size={15} fill="#fff" style={{ marginLeft: 2 }} />
-            </View>
+            {/* Duration badge (bottom-right) */}
+            {!!duration && (
+              <View style={styles.audioDurationBadge}>
+                <Text style={styles.audioDurationText}>{duration}</Text>
+              </View>
+            )}
           </View>
-          {/* Duration badge (bottom-right) */}
-          {!!duration && (
-            <View style={styles.audioDurationBadge}>
-              <Text style={styles.audioDurationText}>{duration}</Text>
-            </View>
-          )}
-        </View>
+        </LinearGradient>
         {/* Text below art */}
         <View style={styles.audioCardText}>
           <Text style={styles.audioCardTitle} numberOfLines={1} ellipsizeMode="tail">
@@ -646,37 +668,58 @@ export default function HomeScreen({ navigation }: any) {
     );
   }, [onPressAudioItem]);
 
-  /* ── Render: Recently Added Video card ── */
-  const renderRecentVideo = useCallback(({ item }: { item: ContentCard }) => (
-    <Pressable style={styles.videoCard} onPress={() => onPressVideoItem(item)}>
-      <View style={styles.videoImgContainer}>
-        <AppImage
-          uri={item.thumbnail}
-          fallbackType="video"
-          style={styles.videoImg}
-          resizeMode="contain"
-        />
-        {item.isLocked && (
-          <View style={styles.videoBadgeLock}>
-            <Lock color="#fff" size={11} />
+  /* ── Render: Recently Added Video card — neon gradient, uncropped 1:1 image ── */
+  const renderRecentVideo = useCallback(({ item }: { item: ContentCard }) => {
+    const duration = formatDuration(item.durationMs);
+    const views = formatViews(item.viewCount);
+    return (
+      <Pressable style={styles.videoCard} onPress={() => onPressVideoItem(item)}>
+        <LinearGradient
+          colors={['#8B5CF6', '#3B82F6', '#06B6D4']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.mediaGradientBorder}
+        >
+          <View style={styles.videoImgContainer}>
+            <AppImage
+              uri={item.thumbnail}
+              fallbackType="video"
+              style={styles.videoImg}
+              resizeMode="contain"
+            />
+            {item.isLocked && (
+              <View style={styles.videoBadgeLock}>
+                <Lock color="#fff" size={11} />
+              </View>
+            )}
+            <View style={styles.videoPlayOverlay} pointerEvents="none">
+              <View style={styles.videoPlayBtn}>
+                <Play color="#fff" size={15} fill="#fff" style={{ marginLeft: 2 }} />
+              </View>
+            </View>
+            {!!views && (
+              <View style={styles.videoViewsBadge}>
+                <Text style={styles.videoViewsText}>{views}</Text>
+              </View>
+            )}
+            {!!duration && (
+              <View style={styles.videoDurationBadge}>
+                <Text style={styles.videoDurationText}>{duration}</Text>
+              </View>
+            )}
           </View>
-        )}
-        <View style={styles.videoPlayOverlay}>
-          <View style={styles.videoPlayBtn}>
-            <Play color="#fff" size={18} fill="#fff" />
-          </View>
+        </LinearGradient>
+        <View style={styles.videoCardText}>
+          <Text style={styles.videoCardTitle} numberOfLines={1} ellipsizeMode="tail">
+            {item.title}
+          </Text>
+          <Text style={styles.videoCardArtist} numberOfLines={1} ellipsizeMode="tail">
+            {item.artist}
+          </Text>
         </View>
-      </View>
-      <View style={styles.videoCardText}>
-        <Text style={styles.videoCardTitle} numberOfLines={1} ellipsizeMode="tail">
-          {item.title}
-        </Text>
-        <Text style={styles.videoCardArtist} numberOfLines={1} ellipsizeMode="tail">
-          {item.artist}
-        </Text>
-      </View>
-    </Pressable>
-  ), [onPressVideoItem]);
+      </Pressable>
+    );
+  }, [onPressVideoItem]);
 
 
   /* ── Full-page loading state ── */
@@ -753,6 +796,16 @@ export default function HomeScreen({ navigation }: any) {
               >
                 <Settings color="#fff" size={17} />
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.headerIconButton}
+                onPress={() => setShowThemeModal(true)}
+                activeOpacity={0.7}
+                accessibilityLabel="Theme"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Palette color="#fff" size={17} />
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -761,7 +814,7 @@ export default function HomeScreen({ navigation }: any) {
             showsVerticalScrollIndicator={false}
             bounces={Platform.OS !== 'web'}
             contentContainerStyle={{
-              paddingBottom: tabBarHeight + (hasActiveAudio ? 180 : 120),
+              paddingBottom: Math.max(tabBarHeight, 90) + (hasActiveAudio ? 160 : 100),
             }}
             refreshControl={
               <RefreshControl
@@ -836,7 +889,10 @@ export default function HomeScreen({ navigation }: any) {
             )}
 
             {/* ══ NEW RELEASES (Recently Added Audio) ══ */}
-            <SectionHeader title="New Releases" />
+            <SectionHeader
+              title="New Releases"
+              onSeeAll={() => navigation.getParent()?.navigate('AudioTab')}
+            />
             {recentAudios.length > 0 ? (
               <FlatList
                 data={recentAudios}
@@ -855,7 +911,10 @@ export default function HomeScreen({ navigation }: any) {
             )}
 
             {/* ══ TRENDING VIDEOS (Recently Added Videos) ══ */}
-            <SectionHeader title="Trending Videos" />
+            <SectionHeader
+              title="Trending Videos"
+              onSeeAll={() => navigation.getParent()?.navigate('VideoTab')}
+            />
             {recentVideos.length > 0 ? (
               <FlatList
                 data={recentVideos}
@@ -922,6 +981,11 @@ export default function HomeScreen({ navigation }: any) {
             </Pressable>
           </Modal>
         )}
+
+        <ThemeSelectionModal
+          visible={showThemeModal}
+          onClose={() => setShowThemeModal(false)}
+        />
       </SafeAreaView>
     </LinearGradient>
   );
@@ -1101,66 +1165,77 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
 
-  /* ── Trending artist card (perfect circle) ── */
+  /* ── Trending artist card (perfect circle & full name visible) ── */
   trendingCard: {
-    width: ARTIST_CIRCLE + 6,
+    width: 90,
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   // Outer ring — neon glow border
   trendingCircleOuter: {
-    width: ARTIST_CIRCLE + 2,
-    height: ARTIST_CIRCLE + 2,
-    borderRadius: (ARTIST_CIRCLE + 2) / 2,
-    borderWidth: 1.5,
-    borderColor: 'rgba(99, 102, 241, 0.45)',
-    padding: 1,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    padding: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 4,
   },
   // Inner clip container — enforces perfect circle crop for any image ratio
   trendingCircleInner: {
-    width: ARTIST_CIRCLE,
-    height: ARTIST_CIRCLE,
-    borderRadius: ARTIST_CIRCLE / 2,
+    width: '100%',
+    height: '100%',
+    borderRadius: 34,
     overflow: 'hidden',
     backgroundColor: '#090D26',
   },
   trendingImg: {
-    width: ARTIST_CIRCLE,
-    height: ARTIST_CIRCLE,
+    width: '100%',
+    height: '100%',
   },
   trendingNameWrap: {
     marginTop: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
-    width: ARTIST_CIRCLE + 8,
+    width: 88,
+    paddingHorizontal: 2,
   },
   trendingName: {
-    color: 'rgba(255,255,255,0.92)',
+    color: 'rgba(255,255,255,0.95)',
     fontSize: 11.5,
+    lineHeight: 14,
     fontWeight: '600',
     textAlign: 'center',
     flexShrink: 1,
   },
 
-  /* ── Recently Added Audio card (Neon Gradient) ── */
+  /* ── Media Card Shared Neon Gradient Border ── */
+  mediaGradientBorder: {
+    width: '100%',
+    padding: 1.5,
+    borderRadius: 16,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+
+  /* ── Recently Added Audio card ── */
   audioCard: {
-    width: 154,
+    width: 142,
     marginRight: 12,
     marginBottom: 4,
-    backgroundColor: '#0C0D18',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.28)',
-    padding: 6,
   },
   audioImgContainer: {
     width: '100%',
-    height: 116,
-    borderRadius: 12,
+    aspectRatio: 1,
+    borderRadius: 14.5,
     overflow: 'hidden',
     backgroundColor: '#000000',
     justifyContent: 'center',
@@ -1174,24 +1249,24 @@ const styles = StyleSheet.create({
   },
   audioBadgeNew: {
     position: 'absolute',
-    top: 6,
-    left: 6,
+    top: 7,
+    left: 7,
     paddingHorizontal: 7,
     paddingVertical: 2.5,
     borderRadius: 5,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#7C3AED',
     zIndex: 10,
   },
   audioBadgeNewText: {
     color: '#FFFFFF',
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
   audioBadgeLock: {
     position: 'absolute',
-    top: 6,
-    left: 6,
+    top: 7,
+    left: 7,
     width: 22,
     height: 22,
     borderRadius: 11,
@@ -1204,9 +1279,9 @@ const styles = StyleSheet.create({
   },
   audioDurationBadge: {
     position: 'absolute',
-    bottom: 6,
-    right: 6,
-    backgroundColor: 'rgba(0,0,0,0.75)',
+    bottom: 7,
+    right: 7,
+    backgroundColor: 'rgba(0,0,0,0.8)',
     paddingHorizontal: 6,
     paddingVertical: 2.5,
     borderRadius: 4,
@@ -1222,53 +1297,48 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.12)',
+    backgroundColor: 'transparent',
     zIndex: 5,
   },
   audioPlayBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   audioCardText: {
     paddingTop: 8,
-    paddingHorizontal: 3,
-    paddingBottom: 4,
+    paddingHorizontal: 2,
+    paddingBottom: 2,
   },
   audioCardTitle: {
     color: '#fff',
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '700',
-    lineHeight: 17,
+    lineHeight: 18,
   },
   audioCardArtist: {
     color: '#94A3B8',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
     marginTop: 2,
-    lineHeight: 15,
+    lineHeight: 16,
   },
 
-  /* ── Recently Added Video card (Neon Gradient) ── */
+  /* ── Recently Added Video card ── */
   videoCard: {
-    width: 210,
+    width: 142,
     marginRight: 12,
     marginBottom: 4,
-    backgroundColor: '#0C0D18',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.28)',
-    padding: 6,
   },
   videoImgContainer: {
     width: '100%',
-    height: 118,
-    borderRadius: 12,
+    aspectRatio: 1,
+    borderRadius: 14.5,
     overflow: 'hidden',
     backgroundColor: '#000000',
     justifyContent: 'center',
@@ -1282,8 +1352,8 @@ const styles = StyleSheet.create({
   },
   videoBadgeLock: {
     position: 'absolute',
-    top: 6,
-    left: 6,
+    top: 7,
+    left: 7,
     width: 22,
     height: 22,
     borderRadius: 11,
@@ -1298,36 +1368,68 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.12)',
+    backgroundColor: 'transparent',
     zIndex: 5,
   },
   videoPlayBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  videoViewsBadge: {
+    position: 'absolute',
+    bottom: 7,
+    left: 7,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    zIndex: 10,
+  },
+  videoViewsText: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 9.5,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  videoDurationBadge: {
+    position: 'absolute',
+    bottom: 7,
+    right: 7,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 4,
+    zIndex: 10,
+  },
+  videoDurationText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
   videoCardText: {
     paddingTop: 8,
-    paddingHorizontal: 3,
-    paddingBottom: 4,
+    paddingHorizontal: 2,
+    paddingBottom: 2,
   },
   videoCardTitle: {
     color: '#fff',
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '700',
-    lineHeight: 17,
+    lineHeight: 18,
   },
   videoCardArtist: {
     color: '#94A3B8',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
     marginTop: 2,
-    lineHeight: 15,
+    lineHeight: 16,
   },
 
   /* ── Modal close button ── */
