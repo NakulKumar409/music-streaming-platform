@@ -53,15 +53,14 @@ export default function VideoCard({ video, onAction }: VideoCardProps) {
                 ? { uri: resolveAppImageUrl(video.thumbnail, 'video') }
                 : (video.thumbnail?.uri
                 ? { uri: resolveAppImageUrl(video.thumbnail.uri, 'video') }
-                : (video.thumbnail || { uri: FALLBACK_BANNER }))
+                : video.thumbnail)
             }
-            fallbackSource={{ uri: FALLBACK_BANNER }}
             style={styles.thumbnail}
-            resizeMode="cover"
+            resizeMode="contain"
           />
-          <View style={styles.playOverlay}>
+          <View style={styles.playOverlay} pointerEvents="none">
             <View style={styles.playCircle}>
-              <Play color="#FFFFFF" size={16} fill="#FFFFFF" />
+              <Play color="#FFFFFF" size={15} fill="#FFFFFF" style={styles.playIcon} />
             </View>
           </View>
           {video.duration ? (
@@ -87,74 +86,91 @@ export default function VideoCard({ video, onAction }: VideoCardProps) {
 
 const styles = StyleSheet.create({
   pressable: {
-    marginRight: spacing.cardGap,
-    width: 220,
+    marginRight: 12,
+    width: 210,
   },
   container: {
     width: '100%',
-    backgroundColor: colors.backgroundCard,
-    borderRadius: radius.lg,
+    backgroundColor: '#0C0D18',
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.borderThin,
+    borderColor: 'rgba(99, 102, 241, 0.28)',
+    padding: 6,
   },
   thumbnailContainer: {
     width: '100%',
-    height: 124,
+    height: 118,
     position: 'relative',
-    backgroundColor: '#1E1E26',
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   thumbnail: {
     width: '100%',
     height: '100%',
+    backgroundColor: '#000000',
   },
   playOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
+    backgroundColor: 'rgba(0, 0, 0, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 5,
+  },
+  playCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  playCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  playIcon: {
+    marginLeft: 2,
   },
   durationBadge: {
     position: 'absolute',
-    bottom: 8,
-    right: 8,
+    bottom: 6,
+    right: 6,
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
     paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radius.xs,
+    paddingVertical: 2.5,
+    borderRadius: 4,
+    zIndex: 10,
   },
   durationText: {
-    color: colors.textPrimary,
+    color: '#FFFFFF',
     fontSize: 10,
-    fontWeight: typography.weightMedium,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   infoContainer: {
-    padding: spacing.md,
+    paddingTop: 8,
+    paddingHorizontal: 3,
+    paddingBottom: 4,
   },
   title: {
-    color: colors.textPrimary,
-    fontSize: typography.cardTitle,
-    fontWeight: typography.weightBold,
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 17,
   },
   artist: {
-    color: colors.textSecondary,
-    fontSize: typography.metadata,
-    fontWeight: typography.weightMedium,
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '500',
     marginTop: 2,
+    lineHeight: 15,
   },
   views: {
-    color: colors.textMuted,
-    fontSize: typography.metadata - 1,
-    marginTop: 4,
+    color: 'rgba(255, 255, 255, 0.45)',
+    fontSize: 10,
+    fontWeight: '400',
+    marginTop: 2,
   },
 });

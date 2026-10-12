@@ -9,11 +9,15 @@ import {
   StyleSheet,
   Text,
   View,
+  Modal,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Headphones, RefreshCw } from 'lucide-react-native';
+import { Headphones, RefreshCw, Settings, Palette, ChevronRight, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../providers/ThemeProvider';
+import ThemeSelectionModal from '../ui/ThemeSelectionModal';
 
 import AppHeader from '../components/AppHeader';
 import HeroCarousel from '../components/HeroCarousel';
@@ -56,6 +60,9 @@ export default function GuestHomeScreen({ navigation }: Props) {
   const [catalog, setCatalog] = useState<GuestHomeData>(EMPTY_GUEST_DATA);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const { theme } = useTheme();
+  const [showGuestSettings, setShowGuestSettings] = useState(false);
+  const [showThemeModal, setShowThemeModal] = useState(false);
 
   useEffect(() => {
     StatusBar.setBarStyle('light-content');
@@ -105,7 +112,10 @@ export default function GuestHomeScreen({ navigation }: Props) {
         style={StyleSheet.absoluteFillObject}
       />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <AppHeader onAction={handleGuestAction} />
+        <AppHeader
+          onAction={handleGuestAction}
+          onSettingsPress={() => setShowGuestSettings(true)}
+        />
 
         <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
           <ScrollView
@@ -160,7 +170,7 @@ export default function GuestHomeScreen({ navigation }: Props) {
 
                 {catalog.tracks.length > 0 ? (
                   <>
-                    <SectionHeader title="Latest Audio" onAction={handleGuestAction} />
+                    <SectionHeader title="New Releases" onAction={handleGuestAction} />
                     <FlatList
                       data={catalog.tracks}
                       renderItem={({ item }) => (
@@ -255,7 +265,117 @@ export default function GuestHomeScreen({ navigation }: Props) {
           </ScrollView>
         </Animated.View>
 
-        <BottomNavigation onAction={handleGuestAction} onHomePress={handleHomePress} />
+        <BottomNavigation
+          onAction={handleGuestAction}
+          onHomePress={handleHomePress}
+          onAccountPress={() => setShowGuestSettings(true)}
+        />
+
+        {/* Guest Settings Modal */}
+        <Modal
+          visible={showGuestSettings}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowGuestSettings(false)}
+        >
+          <TouchableWithoutFeedback onPress={() => setShowGuestSettings(false)}>
+            <View style={styles.settingsOverlay}>
+              <TouchableWithoutFeedback onPress={() => {}}>
+                <View style={[styles.settingsModalCard, { borderColor: `${theme.primary}40` }]}>
+                  {/* Header */}
+                  <View style={styles.settingsHeader}>
+                    <View style={styles.settingsHeaderLeft}>
+                      <View style={[styles.settingsIconWrap, { backgroundColor: `${theme.primary}22` }]}>
+                        <Settings size={20} color={theme.primary} />
+                      </View>
+                      <View>
+                        <Text style={styles.settingsTitle}>Settings</Text>
+                        <Text style={styles.settingsSubtitle}>MusicWave Preferences</Text>
+                      </View>
+                    </View>
+                    <Pressable
+                      onPress={() => setShowGuestSettings(false)}
+                      style={styles.settingsCloseBtn}
+                      hitSlop={10}
+                      accessibilityLabel="Close settings"
+                    >
+                      <X size={18} color="#8E8E9F" />
+                    </Pressable>
+                  </View>
+
+                  {/* Appearance / Theme Section */}
+                  <View style={styles.settingsSection}>
+                    <Text style={styles.settingsSectionTitle}>Appearance / Theme</Text>
+                    <View style={styles.guestThemeCard}>
+                      <View style={styles.guestThemeInfo}>
+                        <View style={[styles.guestPaletteWrap, { backgroundColor: `${theme.primary}22` }]}>
+                          <Palette size={20} color={theme.primary} />
+                        </View>
+                        <View>
+                          <Text style={styles.guestThemeLabel}>App Theme</Text>
+                          <View style={styles.guestThemeBadge}>
+                            <View style={[styles.guestThemeDot, { backgroundColor: theme.primary }]} />
+                            <Text style={styles.guestThemeName}>{theme.name}</Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <Pressable
+                        style={[
+                          styles.guestChooseThemeBtn,
+                          {
+                            borderColor: `${theme.primary}70`,
+                            backgroundColor: `${theme.primary}18`,
+                          },
+                        ]}
+                        onPress={() => {
+                          setShowThemeModal(true);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Choose Theme"
+                      >
+                        <Text style={[styles.guestChooseThemeText, { color: theme.primary }]}>
+                          Choose Theme
+                        </Text>
+                        <ChevronRight size={14} color={theme.primary} />
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {/* Account Section */}
+                  <View style={styles.settingsSection}>
+                    <Text style={styles.settingsSectionTitle}>Account</Text>
+                    <View style={styles.accountActionCol}>
+                      <Pressable
+                        style={[styles.guestAuthBtn, { backgroundColor: theme.primary }]}
+                        onPress={() => {
+                          setShowGuestSettings(false);
+                          navigation.navigate('Signup');
+                        }}
+                      >
+                        <Text style={styles.guestAuthBtnText}>Create Account</Text>
+                      </Pressable>
+                      <Pressable
+                        style={styles.guestSignInBtn}
+                        onPress={() => {
+                          setShowGuestSettings(false);
+                          navigation.navigate('Login');
+                        }}
+                      >
+                        <Text style={styles.guestSignInBtnText}>Sign In</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+
+        <ThemeSelectionModal
+          visible={showThemeModal}
+          onClose={() => setShowThemeModal(false)}
+        />
       </SafeAreaView>
     </View>
   );
@@ -392,6 +512,162 @@ const styles = StyleSheet.create({
     lineHeight: 11,
   },
   bottomSpacer: {
-    height: 20,
+    height: 96,
+  },
+  settingsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+    zIndex: 9999,
+  },
+  settingsModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#100D1A',
+    borderRadius: 24,
+    borderWidth: 1.2,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.6,
+    shadowRadius: 20,
+    elevation: 15,
+  },
+  settingsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  settingsHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  settingsIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  settingsSubtitle: {
+    color: '#8E8E9F',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  settingsCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsSection: {
+    marginTop: 18,
+  },
+  settingsSectionTitle: {
+    color: '#8E8E9F',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
+  guestThemeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  guestThemeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  guestPaletteWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guestThemeLabel: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  guestThemeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  guestThemeDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  guestThemeName: {
+    color: '#A2A2B8',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  guestChooseThemeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  guestChooseThemeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  accountActionCol: {
+    gap: 8,
+  },
+  guestAuthBtn: {
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guestAuthBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  guestSignInBtn: {
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  guestSignInBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

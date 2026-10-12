@@ -236,8 +236,15 @@ export const themes: ThemeDefinition[] = [
 
 export const DEFAULT_THEME_ID = "sunset-orange";
 
-export function applyTheme(themeId: string) {
-  const selectedTheme = themes.find(t => t.id === themeId) || themes[3];
+let activeTheme: ThemeDefinition = themes.find(t => t.id === DEFAULT_THEME_ID) || themes[0];
+
+export function getActiveTheme(): ThemeDefinition {
+  return activeTheme;
+}
+
+export function applyTheme(themeId: string): ThemeDefinition {
+  const selectedTheme = themes.find(t => t.id === themeId) || themes.find(t => t.id === DEFAULT_THEME_ID) || themes[0];
+  activeTheme = selectedTheme;
   
   if (typeof document !== 'undefined') {
     const root = document.documentElement;
@@ -266,4 +273,7 @@ export function applyTheme(themeId: string) {
     root.style.setProperty('--gradient-bg-2', selectedTheme.surface);
     root.style.setProperty('--gradient-bg-3', selectedTheme.bg);
   }
+
+  return selectedTheme;
 }
+

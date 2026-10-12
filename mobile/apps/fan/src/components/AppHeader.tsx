@@ -1,15 +1,16 @@
 import React from 'react';
 import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
-import { Search, User } from 'lucide-react-native';
+import { Search, User, Settings } from 'lucide-react-native';
 import { colors } from '../theme-guest/colors';
 import { spacing } from '../theme-guest/spacing';
 import { typography } from '../theme-guest/typography';
 
 interface AppHeaderProps {
   onAction: () => void;
+  onSettingsPress?: () => void;
 }
 
-export default function AppHeader({ onAction }: AppHeaderProps) {
+export default function AppHeader({ onAction, onSettingsPress }: AppHeaderProps) {
   return (
     <View style={styles.container}>
       <View style={styles.left}>
@@ -22,10 +23,13 @@ export default function AppHeader({ onAction }: AppHeaderProps) {
       </View>
       <View style={styles.right}>
         <Pressable onPress={onAction} style={styles.iconButton} hitSlop={10} accessibilityLabel="Search">
-          <Search color={colors.textPrimary} size={22} />
+          <Search color={colors.textPrimary} size={20} />
         </Pressable>
         <Pressable onPress={onAction} style={styles.iconButton} hitSlop={10} accessibilityLabel="Account">
-          <User color={colors.textPrimary} size={22} />
+          <User color={colors.textPrimary} size={20} />
+        </Pressable>
+        <Pressable onPress={onSettingsPress || onAction} style={styles.iconButton} hitSlop={10} accessibilityLabel="Settings">
+          <Settings color={colors.textPrimary} size={20} />
         </Pressable>
       </View>
     </View>

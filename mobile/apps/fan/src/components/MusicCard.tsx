@@ -40,14 +40,13 @@ export default function MusicCard({ track, onAction }: MusicCardProps) {
 
   const renderBadge = () => {
     if (!track.badge) return null;
-    let label = '';
-    let badgeBg = 'rgba(255, 255, 255, 0.15)';
-    let badgeText = colors.textPrimary;
+    let label: string = track.badge;
+    let badgeBg = '#6366F1';
+    let badgeText = '#FFFFFF';
 
     if (track.badge === 'NEW') {
       label = 'NEW';
-      badgeBg = colors.highlight;
-      badgeText = '#000000';
+      badgeBg = '#6366F1';
     } else if (track.badge === 'PREMIUM') {
       label = 'PREMIUM';
       badgeBg = colors.secondary;
@@ -78,33 +77,31 @@ export default function MusicCard({ track, onAction }: MusicCardProps) {
                 ? { uri: resolveAppImageUrl(track.artwork, 'song') }
                 : (track.artwork?.uri
                 ? { uri: resolveAppImageUrl(track.artwork.uri, 'song') }
-                : (track.artwork || { uri: FALLBACK_ARTWORK }))
+                : track.artwork)
             }
-            fallbackSource={{ uri: FALLBACK_ARTWORK }}
             style={styles.artwork}
-            resizeMode="cover"
+            resizeMode="contain"
           />
           {renderBadge()}
-          <View style={styles.playOverlay}>
+          <View style={styles.playOverlay} pointerEvents="none">
             <View style={styles.playCircle}>
-              <Play color="#FFFFFF" size={14} fill="#FFFFFF" />
+              <Play color="#FFFFFF" size={15} fill="#FFFFFF" style={styles.playIcon} />
             </View>
           </View>
+          {track.duration ? (
+            <View style={styles.durationBadge}>
+              <Text style={styles.durationText}>{track.duration}</Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.infoContainer}>
-          <View style={styles.titleRow}>
-            <Text style={styles.title} numberOfLines={1}>
-              {track.title}
-            </Text>
-            <Pressable onPress={onAction} hitSlop={10}>
-              <Text style={styles.moreText}>⋮</Text>
-            </Pressable>
-          </View>
+          <Text style={styles.title} numberOfLines={1}>
+            {track.title}
+          </Text>
           <Text style={styles.artist} numberOfLines={1}>
             {track.artistName}
           </Text>
-          {track.duration ? <Text style={styles.duration}>{track.duration}</Text> : null}
         </View>
       </Animated.View>
     </Pressable>
@@ -113,90 +110,99 @@ export default function MusicCard({ track, onAction }: MusicCardProps) {
 
 const styles = StyleSheet.create({
   pressable: {
-    marginRight: spacing.cardGap,
-    width: 140,
+    marginRight: 12,
+    width: 154,
   },
   container: {
     width: '100%',
-    backgroundColor: colors.backgroundCard,
-    borderRadius: radius.lg,
+    backgroundColor: '#0C0D18',
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.borderThin,
+    borderColor: 'rgba(99, 102, 241, 0.28)',
+    padding: 6,
   },
   imageContainer: {
     width: '100%',
-    height: 140,
+    height: 116,
     position: 'relative',
-    backgroundColor: '#1E1E26',
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   artwork: {
     width: '100%',
     height: '100%',
+    backgroundColor: '#000000',
   },
   badgeContainer: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.xs,
+    top: 6,
+    left: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 5,
+    zIndex: 10,
   },
   badgeText: {
-    fontSize: 9,
-    fontWeight: typography.weightBold,
+    fontSize: 10,
+    fontWeight: '800',
     letterSpacing: 0.5,
   },
   playOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
-    justifyContent: 'flex-end',
-    alignItems: 'flex-start',
-    padding: 8,
-  },
-  playCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: 'rgba(0, 0, 0, 0.12)',
+    zIndex: 5,
+  },
+  playCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playIcon: {
+    marginLeft: 2,
+  },
+  durationBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 4,
+    zIndex: 10,
+  },
+  durationText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   infoContainer: {
-    padding: spacing.md,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.xs,
+    paddingTop: 8,
+    paddingHorizontal: 3,
+    paddingBottom: 4,
   },
   title: {
-    color: colors.textPrimary,
-    fontSize: typography.cardTitle,
-    fontWeight: typography.weightBold,
-    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 17,
   },
   artist: {
-    color: colors.textSecondary,
-    fontSize: typography.metadata,
-    fontWeight: typography.weightMedium,
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '500',
     marginTop: 2,
-  },
-  duration: {
-    color: colors.textMuted,
-    fontSize: typography.metadata - 1,
-    marginTop: 4,
-  },
-  moreText: {
-    color: colors.textMuted,
-    fontSize: 18,
-    fontWeight: 'bold',
-    paddingHorizontal: 4,
+    lineHeight: 15,
   },
 });

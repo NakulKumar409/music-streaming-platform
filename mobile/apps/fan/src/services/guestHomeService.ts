@@ -22,11 +22,21 @@ export type GuestAudioTrack = {
   badge?: 'EARLY_ACCESS' | 'PREMIUM' | 'NEW';
 };
 
+function formatDurationMs(rawMs: unknown, rawSec?: unknown): string | undefined {
+  const ms = Number(rawMs || (Number(rawSec || 0) * 1000) || 0);
+  if (!Number.isFinite(ms) || ms <= 0) return undefined;
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
 export type GuestExclusiveContent = {
   id: string;
   title: string;
   artistName: string;
   artwork: any;
+  duration?: string;
   badge: 'EARLY_ACCESS' | 'PREMIUM' | 'NEW';
 };
 
@@ -114,6 +124,7 @@ export async function loadGuestHomeData(): Promise<GuestHomeData> {
     const artwork = imageSource(item?.thumbnailUrl || item?.artwork, 'song');
     const mediaType = String(item?.mediaType || item?.type || '').toLowerCase();
     const isLocked = item?.isLocked === true || item?.subscriptionRequired === true;
+    const duration = formatDurationMs(item?.durationMs, item?.duration || item?.durationSeconds);
 
     if (isLocked) {
       locked.push({
@@ -121,6 +132,7 @@ export async function loadGuestHomeData(): Promise<GuestHomeData> {
         title,
         artistName,
         artwork,
+        duration,
         badge: 'EARLY_ACCESS',
       });
       continue;
@@ -132,6 +144,7 @@ export async function loadGuestHomeData(): Promise<GuestHomeData> {
         title,
         artistName,
         thumbnail: imageSource(item?.thumbnailUrl || item?.artwork, 'video'),
+        duration,
         viewCount: compactCount(item?.viewCount),
       });
       continue;
@@ -142,7 +155,8 @@ export async function loadGuestHomeData(): Promise<GuestHomeData> {
       title,
       artistName,
       artwork,
-      badge: String(item?.lifecycleState || '').toUpperCase() === 'EARLY_ACCESS' ? 'EARLY_ACCESS' : undefined,
+      duration,
+      badge: 'NEW',
     });
   }
 

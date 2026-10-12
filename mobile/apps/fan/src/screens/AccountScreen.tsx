@@ -34,7 +34,11 @@ import {
   Clock3,
   Check,
   FileText,
+  Palette,
+  ChevronRight,
 } from 'lucide-react-native';
+import { useTheme } from '../providers/ThemeProvider';
+import ThemeSelectionModal from '../ui/ThemeSelectionModal';
 import { SubscriptionStatusCard, DetailedPlatformCard, ArtistSubscriptionItem, EmptySubscriptionState } from '../ui/SubscriptionUI';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -62,6 +66,8 @@ export default function AccountScreen() {
   const { user, userAccountStatus, logout } = useAuth();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const [showThemeModal, setShowThemeModal] = React.useState(false);
 
   const scrollContentPaddingBottom = React.useMemo(() => {
     return Math.max(insets.bottom, 0) + 110;
@@ -569,6 +575,33 @@ export default function AccountScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Settings</Text>
 
+          {/* Appearance / Theme */}
+          <View style={styles.appearanceCard}>
+            <View style={styles.appearanceHeader}>
+              <View style={[styles.paletteIconWrap, { backgroundColor: `${theme.primary}22` }]}>
+                <Palette size={20} color={theme.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.appearanceTitle}>Appearance / Theme</Text>
+                <View style={styles.themeBadgeRow}>
+                  <View style={[styles.themeColorDot, { backgroundColor: theme.primary }]} />
+                  <Text style={styles.themeNameBadge}>{theme.name}</Text>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.chooseThemeBtn, { borderColor: `${theme.primary}60`, backgroundColor: `${theme.primary}18` }]}
+              onPress={() => setShowThemeModal(true)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Choose Theme"
+            >
+              <Text style={[styles.chooseThemeBtnText, { color: theme.primary }]}>Choose Theme</Text>
+              <ChevronRight size={15} color={theme.primary} />
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity
             style={styles.menuItem}
             onPress={handleOpenArtistDashboard}
@@ -905,6 +938,11 @@ export default function AccountScreen() {
         }}
       />
 
+      <ThemeSelectionModal
+        visible={showThemeModal}
+        onClose={() => setShowThemeModal(false)}
+      />
+
       </SafeAreaView>
     </LinearGradient>
   );
@@ -924,6 +962,63 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 24,
+  },
+  appearanceCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  appearanceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  paletteIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appearanceTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+  },
+  themeBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 3,
+  },
+  themeColorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  themeNameBadge: {
+    color: '#A2A2B8',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  chooseThemeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1.2,
+  },
+  chooseThemeBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   header: {
     alignItems: 'center',

@@ -29,6 +29,7 @@ import { applyTheme, DEFAULT_THEME_ID } from './apps/fan/src/config/themeConfig'
 import { SENTRY_DSN, SENTRY_RELEASE } from './apps/fan/src/config/env';
 import { sanitizeSentryEvent } from './apps/fan/src/utils/sentrySanitizer';
 import { ToastProvider } from './apps/fan/src/ui/ToastProvider';
+import { ThemeProvider } from './apps/fan/src/providers/ThemeProvider';
 
 if (Platform.OS === 'web') {
   const savedTheme = localStorage.getItem('global-theme') || DEFAULT_THEME_ID;
@@ -352,18 +353,20 @@ export default function App() {
     <ErrorBoundary label="Fan App">
       <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
-          <ToastProvider>
-            <AuthProvider>
-              <ConnectivityProvider>
-                <MediaPlayerProvider>
-                <PlaybackProgressLifecycleBridge />
-                <PlaybackHeartbeatLifecycleBridge />
-                <PlaybackLeaseLifecycleBridge />
-                <AppNavigator />
-                </MediaPlayerProvider>
-              </ConnectivityProvider>
-            </AuthProvider>
-          </ToastProvider>
+          <ThemeProvider>
+            <ToastProvider>
+              <AuthProvider>
+                <ConnectivityProvider>
+                  <MediaPlayerProvider>
+                    <PlaybackProgressLifecycleBridge />
+                    <PlaybackHeartbeatLifecycleBridge />
+                    <PlaybackLeaseLifecycleBridge />
+                    <AppNavigator />
+                  </MediaPlayerProvider>
+                </ConnectivityProvider>
+              </AuthProvider>
+            </ToastProvider>
+          </ThemeProvider>
         </SafeAreaProvider>
       </QueryClientProvider>
     </ErrorBoundary>

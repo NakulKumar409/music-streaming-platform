@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Image, ImageProps, View, StyleSheet, ActivityIndicator } from 'react-native';
+import { Image, ImageProps, View, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { Image as ImageIcon } from 'lucide-react-native';
 import { colors } from '../theme-guest/colors';
 import { resolveAppImageUrl, FALLBACK_ARTWORK } from '../utils/imageUtils';
@@ -13,7 +13,8 @@ export default function ImageFallback({
   source,
   style,
   fallbackIconSize = 24,
-  fallbackSource = { uri: FALLBACK_ARTWORK },
+  fallbackSource,
+  resizeMode = 'contain',
   ...props
 }: ImageFallbackProps) {
   const [loading, setLoading] = useState(true);
@@ -21,7 +22,9 @@ export default function ImageFallback({
 
   const resolvedSource = React.useMemo(() => {
     if (source && typeof source === 'object' && 'uri' in source && typeof (source as any).uri === 'string') {
-      return { ...source, uri: resolveAppImageUrl((source as any).uri, 'song') };
+      const rawUri = (source as any).uri.trim();
+      if (!rawUri) return null;
+      return { ...source, uri: resolveAppImageUrl(rawUri, 'song') };
     }
     return source;
   }, [source]);
@@ -31,18 +34,31 @@ export default function ImageFallback({
     setLoading(true);
   }, [source]);
 
+  const imageStyle = [
+    StyleSheet.absoluteFillObject,
+    { width: '100%', height: '100%' },
+    Platform.OS === 'web' ? ({ objectFit: resizeMode } as any) : undefined,
+  ];
+
   return (
     <View style={[styles.container, style]}>
-      {error ? (
-        <Image
-          source={fallbackSource}
-          style={StyleSheet.absoluteFill}
-          resizeMode={props.resizeMode || 'cover'}
-        />
+      {error || !resolvedSource ? (
+        fallbackSource ? (
+          <Image
+            source={fallbackSource}
+            style={imageStyle}
+            resizeMode={resizeMode}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, styles.fallbackContainer]}>
+            <ImageIcon color="rgba(255, 255, 255, 0.15)" size={fallbackIconSize} />
+          </View>
+        )
       ) : (
         <Image
           source={resolvedSource}
-          style={StyleSheet.absoluteFill}
+          style={imageStyle}
+          resizeMode={resizeMode}
           onLoad={() => setLoading(false)}
           onError={() => {
             setLoading(false);
@@ -52,7 +68,7 @@ export default function ImageFallback({
         />
       )}
 
-      {loading && !error && (
+      {loading && !error && resolvedSource && (
         <View style={[StyleSheet.absoluteFill, styles.loadingContainer]}>
           <ActivityIndicator color={colors.primary} size="small" />
         </View>
@@ -64,16 +80,18 @@ export default function ImageFallback({
 const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    backgroundColor: '#000000',
     position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingContainer: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   fallbackContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
   },

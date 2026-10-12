@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Image, ImageProps, ImageSourcePropType } from 'react-native';
+import { Image, ImageProps, ImageSourcePropType, Platform } from 'react-native';
 import {
   resolveAppImageUrl,
   FALLBACK_ARTWORK,
@@ -48,11 +48,12 @@ export default function AppImage({
   };
 
   const finalSource: ImageSourcePropType = source ? source : { uri: currentUri };
+  const webStyle = Platform.OS === 'web' && props.resizeMode ? ({ objectFit: props.resizeMode } as any) : undefined;
 
   return (
     <Image
       source={finalSource}
-      style={style}
+      style={[style, webStyle]}
       onError={handleError}
       {...props}
     />

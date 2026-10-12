@@ -1,7 +1,7 @@
 import { API_HOST_BASE_URL } from '../config/env';
 
 export const FALLBACK_ARTWORK =
-  'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=800&q=80';
+  'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=max&w=800&q=80';
 
 export function getOptimizedImageUrl(
   url: string | null | undefined,
@@ -44,9 +44,22 @@ export function getOptimizedImageUrl(
     }
   }
 
-  // 4. Cloudinary optimization
+  // 4. Cloudinary optimization — ZERO-CROP policy
+  // Never use c_fill or fixed square crops (e.g. w_300,h_300,c_fill).
+  // Use c_limit with auto quality and format: c_limit resizes larger images to fit within 1000px
+  // while strictly preserving the source aspect ratio and never cropping edges.
   if (trimmed.includes('res.cloudinary.com')) {
-    return trimmed.replace('/upload/', '/upload/w_300,h_300,c_fill,q_auto,f_auto/');
+    const uploadMatch = trimmed.match(/\/upload\/([a-zA-Z0-9_,:-]+)\//);
+    if (uploadMatch) {
+      const segment = uploadMatch[1];
+      if (!/^v\d+$/.test(segment) && !/^s--.+--$/.test(segment)) {
+        return trimmed.replace(
+          `/upload/${segment}/`,
+          '/upload/c_limit,w_1000,q_auto,f_auto/'
+        );
+      }
+    }
+    return trimmed.replace('/upload/', '/upload/c_limit,w_1000,q_auto,f_auto/');
   }
 
   return trimmed;

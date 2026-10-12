@@ -22,7 +22,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { BadgeCheck, Lock, Play, Search, X, Bell, Settings, ChevronRight, Disc3 } from 'lucide-react-native';
-import ThemeSwitcher from '../ui/ThemeSwitcher';
+import { useTheme } from '../providers/ThemeProvider';
 import { LockedContentOverlay } from '../ui/SubscriptionUI';
 import { apiV1 } from '../services/api';
 import { fetchVerifiedArtists, fetchFeaturedArtists, type ArtistListItem } from '../services/artistService';
@@ -229,6 +229,7 @@ export default function HomeScreen({ navigation }: any) {
   const { currentItem, togglePlayPause, playQueue } = useMediaPlayer();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { theme } = useTheme();
   const activeAudioMeta = currentItem?.mediaType === 'audio' ? currentItem : null;
   const hasActiveAudio = !!activeAudioMeta;
 
@@ -600,38 +601,37 @@ export default function HomeScreen({ navigation }: any) {
         onPress={() => onPressAudioItem(item)}
         android_ripple={{ color: 'rgba(255,255,255,0.06)', borderless: false }}
       >
-        {/* Album art container — square, clipped */}
         <View style={styles.audioImgContainer}>
           <AppImage
             uri={item.thumbnail}
             fallbackType="song"
             style={styles.audioImg}
-            resizeMode="cover"
+            resizeMode="contain"
           />
-          {/* Bottom fade for depth */}
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.42)']}
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none"
-          />
+          {/* NEW badge */}
+          {!item.isLocked && (
+            <View style={styles.audioBadgeNew}>
+              <Text style={styles.audioBadgeNewText}>NEW</Text>
+            </View>
+          )}
           {/* Lock badge (top-left) */}
           {item.isLocked && (
             <View style={styles.audioBadgeLock}>
               <Lock color="#fff" size={11} />
             </View>
           )}
+          {/* Centered play button */}
+          <View style={styles.audioPlayOverlay} pointerEvents="none">
+            <View style={styles.audioPlayBtn}>
+              <Play color="#fff" size={15} fill="#fff" style={{ marginLeft: 2 }} />
+            </View>
+          </View>
           {/* Duration badge (bottom-right) */}
           {!!duration && (
             <View style={styles.audioDurationBadge}>
               <Text style={styles.audioDurationText}>{duration}</Text>
             </View>
           )}
-          {/* Centered play button */}
-          <View style={styles.audioPlayOverlay} pointerEvents="none">
-            <View style={styles.audioPlayBtn}>
-              <Play color="#fff" size={14} fill="#fff" />
-            </View>
-          </View>
         </View>
         {/* Text below art */}
         <View style={styles.audioCardText}>
@@ -654,7 +654,7 @@ export default function HomeScreen({ navigation }: any) {
           uri={item.thumbnail}
           fallbackType="video"
           style={styles.videoImg}
-          resizeMode="cover"
+          resizeMode="contain"
         />
         {item.isLocked && (
           <View style={styles.videoBadgeLock}>
@@ -698,7 +698,7 @@ export default function HomeScreen({ navigation }: any) {
   /* ── Main render ── */
   return (
     <LinearGradient
-      colors={Platform.OS === 'web' ? ['var(--color-bg)', 'var(--color-bg)'] : ['#000000', '#000000']}
+      colors={Platform.OS === 'web' ? ['var(--color-bg)', 'var(--color-bg)'] : [theme.bg, theme.surface, '#000000']}
       style={styles.gradientBackground}
     >
       <StatusBar barStyle="light-content" />
@@ -753,8 +753,6 @@ export default function HomeScreen({ navigation }: any) {
               >
                 <Settings color="#fff" size={17} />
               </TouchableOpacity>
-
-              {Platform.OS === 'web' && <ThemeSwitcher />}
             </View>
           </View>
 
@@ -781,6 +779,37 @@ export default function HomeScreen({ navigation }: any) {
                 onPlayItem={onPlayHeroItem}
               />
             )}
+
+            {/* ── BECOME AN ARTIST / ARTIST DASHBOARD BANNER (Top Priority Above Cards) ── */}
+            <Pressable onPress={onPressBecomeArtist} style={styles.artistBannerContainer}>
+              <LinearGradient
+                colors={['rgba(168,85,247,0.22)', 'rgba(236,72,153,0.12)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.artistBannerGradient}
+              >
+                <View style={styles.artistBannerContent}>
+                  <View style={styles.artistBannerIconWrap}>
+                    <Disc3 color="#EC4899" size={22} />
+                  </View>
+                  <View style={styles.artistBannerTextBlock}>
+                    <Text style={styles.artistBannerTitle}>
+                      {user?.role === 'ARTIST' ? 'Artist Dashboard' : 'Become an Artist'}
+                    </Text>
+                    <Text style={styles.artistBannerSub} numberOfLines={1}>
+                      {user?.role === 'ARTIST'
+                        ? 'Manage your music & analytics'
+                        : 'Upload your music & grow your audience'}
+                    </Text>
+                  </View>
+                  <View style={styles.artistBannerBtn}>
+                    <Text style={styles.artistBannerBtnText}>
+                      {user?.role === 'ARTIST' ? 'Open' : 'Start'}
+                    </Text>
+                  </View>
+                </View>
+              </LinearGradient>
+            </Pressable>
 
             {/* ══ TOP ARTISTS ══ */}
             <SectionHeader title="Top Artists" onSeeAll={onPressSeeAllTrending} />
@@ -863,38 +892,7 @@ export default function HomeScreen({ navigation }: any) {
               </>
             )}
 
-            {/* ── BECOME AN ARTIST / ARTIST DASHBOARD BANNER ── */}
-            <Pressable onPress={onPressBecomeArtist} style={styles.artistBannerContainer}>
-              <LinearGradient
-                colors={['rgba(255,106,0,0.14)', 'rgba(255,106,0,0.03)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.artistBannerGradient}
-              >
-                <View style={styles.artistBannerContent}>
-                  <View style={styles.artistBannerIconWrap}>
-                    <Disc3 color={Colors.accent} size={22} />
-                  </View>
-                  <View style={styles.artistBannerTextBlock}>
-                    <Text style={styles.artistBannerTitle}>
-                      {user?.role === 'ARTIST' ? 'Artist Dashboard' : 'Become an Artist'}
-                    </Text>
-                    <Text style={styles.artistBannerSub} numberOfLines={1}>
-                      {user?.role === 'ARTIST'
-                        ? 'Manage your music & analytics'
-                        : 'Upload your music & grow your audience'}
-                    </Text>
-                  </View>
-                  <View style={styles.artistBannerBtn}>
-                    <Text style={styles.artistBannerBtnText}>
-                      {user?.role === 'ARTIST' ? 'Open' : 'Start'}
-                    </Text>
-                  </View>
-                </View>
-              </LinearGradient>
-            </Pressable>
-
-            <View style={{ height: 16 }} />
+            <View style={{ height: 96 }} />
           </ScrollView>
         </View>
 
@@ -1010,8 +1008,8 @@ const styles = StyleSheet.create({
   /* ── Artist become banner ── */
   artistBannerContainer: {
     marginHorizontal: H_PAD,
-    marginTop: 18,
-    marginBottom: 4,
+    marginTop: 10,
+    marginBottom: 8,
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
@@ -1109,13 +1107,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 14,
   },
-  // Outer ring — subtle glow border
+  // Outer ring — neon glow border
   trendingCircleOuter: {
     width: ARTIST_CIRCLE + 2,
     height: ARTIST_CIRCLE + 2,
     borderRadius: (ARTIST_CIRCLE + 2) / 2,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(99, 102, 241, 0.45)',
     padding: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1126,7 +1124,7 @@ const styles = StyleSheet.create({
     height: ARTIST_CIRCLE,
     borderRadius: ARTIST_CIRCLE / 2,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#090D26',
   },
   trendingImg: {
     width: ARTIST_CIRCLE,
@@ -1141,29 +1139,54 @@ const styles = StyleSheet.create({
     width: ARTIST_CIRCLE + 8,
   },
   trendingName: {
-    color: 'rgba(255,255,255,0.9)',
+    color: 'rgba(255,255,255,0.92)',
     fontSize: 11.5,
     fontWeight: '600',
     textAlign: 'center',
     flexShrink: 1,
   },
 
-  /* ── Recently Added Audio card (compact Apple Music) ── */
+  /* ── Recently Added Audio card (Neon Gradient) ── */
   audioCard: {
-    width: AUDIO_CARD_WIDTH,
+    width: 154,
     marginRight: 12,
     marginBottom: 4,
+    backgroundColor: '#0C0D18',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.28)',
+    padding: 6,
   },
   audioImgContainer: {
-    width: AUDIO_CARD_WIDTH,
-    height: AUDIO_CARD_WIDTH, // 1:1 square
-    borderRadius: 10,
+    width: '100%',
+    height: 116,
+    borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
   },
   audioImg: {
     width: '100%',
     height: '100%',
+    backgroundColor: '#000000',
+  },
+  audioBadgeNew: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 5,
+    backgroundColor: '#6366F1',
+    zIndex: 10,
+  },
+  audioBadgeNewText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   audioBadgeLock: {
     position: 'absolute',
@@ -1183,15 +1206,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 6,
     right: 6,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    paddingHorizontal: 5,
-    paddingVertical: 2,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
     borderRadius: 4,
     zIndex: 10,
   },
   audioDurationText: {
     color: '#fff',
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.2,
   },
@@ -1199,52 +1222,63 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.12)',
+    zIndex: 5,
   },
   audioPlayBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.48)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   audioCardText: {
-    marginTop: 8,
-    paddingHorizontal: 1,
+    paddingTop: 8,
+    paddingHorizontal: 3,
+    paddingBottom: 4,
   },
   audioCardTitle: {
     color: '#fff',
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: '700',
-    letterSpacing: -0.1,
-    lineHeight: 16,
+    lineHeight: 17,
   },
   audioCardArtist: {
-    color: 'rgba(255,255,255,0.48)',
+    color: '#94A3B8',
     fontSize: 11,
     fontWeight: '500',
     marginTop: 2,
-    lineHeight: 14,
+    lineHeight: 15,
   },
 
-  /* ── Recently Added Video card ── */
+  /* ── Recently Added Video card (Neon Gradient) ── */
   videoCard: {
-    width: VIDEO_CARD_WIDTH,
+    width: 210,
     marginRight: 12,
     marginBottom: 4,
+    backgroundColor: '#0C0D18',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.28)',
+    padding: 6,
   },
   videoImgContainer: {
-    width: VIDEO_CARD_WIDTH,
-    height: VIDEO_CARD_HEIGHT,
-    borderRadius: 10,
+    width: '100%',
+    height: 118,
+    borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
   },
   videoImg: {
     width: '100%',
     height: '100%',
+    backgroundColor: '#000000',
   },
   videoBadgeLock: {
     position: 'absolute',
@@ -1264,35 +1298,36 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.18)',
+    backgroundColor: 'rgba(0,0,0,0.12)',
+    zIndex: 5,
   },
   videoPlayBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.52)',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.32)',
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   videoCardText: {
-    marginTop: 8,
-    paddingHorizontal: 1,
+    paddingTop: 8,
+    paddingHorizontal: 3,
+    paddingBottom: 4,
   },
   videoCardTitle: {
     color: '#fff',
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: '700',
-    letterSpacing: -0.1,
-    lineHeight: 16,
+    lineHeight: 17,
   },
   videoCardArtist: {
-    color: 'rgba(255,255,255,0.48)',
+    color: '#94A3B8',
     fontSize: 11,
     fontWeight: '500',
     marginTop: 2,
-    lineHeight: 14,
+    lineHeight: 15,
   },
 
   /* ── Modal close button ── */

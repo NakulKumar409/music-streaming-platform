@@ -175,10 +175,9 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     position: 'absolute',
-    bottom: 24,
-    left: spacing.lg,
-    right: spacing.lg,
-    maxWidth: '85%',
+    bottom: 20,
+    left: spacing.md,
+    right: spacing.md,
   },
   title: {
     color: colors.textPrimary,
@@ -200,7 +199,8 @@ const styles = StyleSheet.create({
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    alignItems: 'center',
+    gap: 10,
     marginTop: spacing.xs,
   },
   primaryBtn: {

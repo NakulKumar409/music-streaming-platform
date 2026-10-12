@@ -72,16 +72,21 @@ export default function LockedContentCard({ content, onAction }: LockedContentCa
           <ImageFallback
             source={content.artwork}
             style={styles.artwork}
-            resizeMode="cover"
+            resizeMode="contain"
           />
           {/* Dark overlay */}
-          <View style={styles.darkOverlay} />
+          <View style={styles.darkOverlay} pointerEvents="none" />
           {renderBadge()}
-          <View style={styles.lockOverlay}>
+          <View style={styles.lockOverlay} pointerEvents="none">
             <View style={styles.lockCircle}>
-              <Lock color="#FFFFFF" size={16} />
+              <Lock color="#FFFFFF" size={15} />
             </View>
           </View>
+          {(content as any).duration ? (
+            <View style={styles.durationBadge}>
+              <Text style={styles.durationText}>{(content as any).duration}</Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.infoContainer}>
@@ -99,71 +104,99 @@ export default function LockedContentCard({ content, onAction }: LockedContentCa
 
 const styles = StyleSheet.create({
   pressable: {
-    marginRight: spacing.cardGap,
-    width: 140,
+    marginRight: 12,
+    width: 154,
   },
   container: {
     width: '100%',
-    backgroundColor: colors.backgroundCard,
-    borderRadius: radius.lg,
+    backgroundColor: '#0C0D18',
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.borderThin,
+    borderColor: 'rgba(99, 102, 241, 0.28)',
+    padding: 6,
   },
   imageContainer: {
     width: '100%',
-    height: 140,
+    height: 116,
     position: 'relative',
-    backgroundColor: '#1E1E26',
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   artwork: {
     width: '100%',
     height: '100%',
+    backgroundColor: '#000000',
   },
   darkOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: 'rgba(0, 0, 0, 0.42)',
   },
   badgeContainer: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.xs,
+    top: 6,
+    left: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 5,
+    zIndex: 10,
   },
   badgeText: {
-    fontSize: 9,
-    fontWeight: typography.weightBold,
+    fontSize: 10,
+    fontWeight: '800',
     letterSpacing: 0.5,
   },
   lockOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 5,
   },
   lockCircle: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  durationBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 4,
+    zIndex: 10,
+  },
+  durationText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
   infoContainer: {
-    padding: spacing.md,
+    paddingTop: 8,
+    paddingHorizontal: 3,
+    paddingBottom: 4,
   },
   title: {
-    color: colors.textInactive,
-    fontSize: typography.cardTitle,
-    fontWeight: typography.weightBold,
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 17,
   },
   artist: {
-    color: colors.textMuted,
-    fontSize: typography.metadata,
-    fontWeight: typography.weightMedium,
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '500',
     marginTop: 2,
+    lineHeight: 15,
   },
 });

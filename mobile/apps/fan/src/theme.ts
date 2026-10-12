@@ -1,27 +1,46 @@
 import { Platform } from 'react-native';
+import { getActiveTheme } from './config/themeConfig';
 
 const isWeb = Platform.OS === 'web';
 
 export const Colors = {
-  // Solid black background for app surfaces
-  background: isWeb ? 'var(--color-bg)' : '#000000',
-  backgroundAlt: isWeb ? 'var(--color-surface)' : '#000000',
+  // Background for app surfaces
+  get background() {
+    return isWeb ? 'var(--color-bg)' : getActiveTheme().bg;
+  },
+  get backgroundAlt() {
+    return isWeb ? 'var(--color-surface)' : getActiveTheme().surface;
+  },
+  get card() {
+    return isWeb ? 'var(--color-card)' : getActiveTheme().card;
+  },
 
-  // Accent colors from the reference gradient
-  accent: isWeb ? 'var(--color-primary)' : '#FFB608',
-  accentSecondary: isWeb ? 'var(--color-secondary)' : '#FF2553',
+  // Accent colors from the active theme
+  get accent() {
+    return isWeb ? 'var(--color-primary)' : getActiveTheme().primary;
+  },
+  get accentSecondary() {
+    return isWeb ? 'var(--color-secondary)' : getActiveTheme().secondary;
+  },
   
-  // Primary brand gradient: Black -> Pink -> Black? or consistent with branding
-  backgroundGradient: ['#000000', '#000000', '#000000'] as const,
-  primaryGradient: isWeb 
-    ? ['var(--color-primary)', 'var(--color-secondary)', '#000000'] as const
-    : ['#FFB608', '#FF2553', '#000000'] as const,
-  accentGradient: isWeb 
-    ? ['var(--color-primary)', 'var(--color-secondary)', '#000000'] as const
-    : ['#FFB608', '#FF2553', '#000000'] as const,
+  // Gradients reflecting the active theme
+  get backgroundGradient() {
+    const t = getActiveTheme();
+    return [t.bg, t.surface, t.bg] as const;
+  },
+  get primaryGradient() {
+    const t = getActiveTheme();
+    return isWeb 
+      ? (['var(--color-primary)', 'var(--color-secondary)', 'var(--color-bg)'] as const)
+      : ([t.gradientStart, t.gradientEnd, t.bg] as const);
+  },
+  get accentGradient() {
+    const t = getActiveTheme();
+    return isWeb 
+      ? (['var(--color-primary)', 'var(--color-secondary)', 'var(--color-bg)'] as const)
+      : ([t.gradientStart, t.gradientEnd, t.bg] as const);
+  },
 
   textPrimary: '#FFFFFF',
   textMuted: 'rgba(255,255,255,0.6)',
 };
-
-

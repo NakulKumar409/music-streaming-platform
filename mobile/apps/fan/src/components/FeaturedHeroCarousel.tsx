@@ -103,25 +103,26 @@ export default function FeaturedHeroCarousel({
         onPress={() => onPlayItem(item)}
         android_ripple={{ color: 'rgba(255,255,255,0.08)' }}
       >
-        {/* Luxury editorial background gradient */}
+        {/* Neon electric indigo/blue background gradient */}
         <LinearGradient
-          colors={['#20102B', '#110817', '#08040B']}
+          colors={['#0E1442', '#0A0E2F', '#040618']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
 
-        {/* Ambient glow accent behind artwork */}
-        <View style={styles.ambientGlow} />
+        {/* Ambient neon glows */}
+        <View style={styles.ambientGlowBlue} pointerEvents="none" />
+        <View style={styles.ambientGlowPurple} pointerEvents="none" />
 
         {/* Content row: Text block on left, artwork on right */}
         <View style={styles.cardContent}>
           <View style={styles.textColumn}>
-            {/* Editorial Kicker Badge */}
+            {/* Neon Kicker Badge */}
             <View style={styles.kickerRow}>
-              <Sparkles size={11} color="#EC4899" />
+              <Sparkles size={11} color="#818CF8" />
               <Text style={styles.kickerText}>
-                {isVideo ? 'TRENDING VIDEO' : 'NEW MUSIC'}
+                {isVideo ? 'TRENDING VIDEO' : 'FEATURED'}
               </Text>
             </View>
 
@@ -135,26 +136,26 @@ export default function FeaturedHeroCarousel({
               Curated for you • {item.artist}
             </Text>
 
-            {/* Apple Music-inspired CTA pill */}
+            {/* White pill CTA button — guaranteed single line matching Column 3 */}
             <TouchableOpacity
               style={styles.ctaPill}
               onPress={() => onPlayItem(item)}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              <Play color="#000" size={12} fill="#000" />
-              <Text style={styles.ctaText}>
+              <Play color="#000000" size={12} fill="#000000" />
+              <Text style={styles.ctaText} numberOfLines={1} ellipsizeMode="tail">
                 {isVideo ? 'Watch Now' : 'Listen Now'}
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Real Artwork Thumbnail */}
+          {/* Real Artwork Thumbnail with neon border */}
           <View style={styles.artworkContainer}>
             <AppImage
               uri={item.thumbnail}
               fallbackType={isVideo ? 'video' : 'song'}
               style={styles.artworkImage}
-              resizeMode="cover"
+              resizeMode="contain"
             />
             {/* Subtle gloss overlay border */}
             <View style={styles.artworkGloss} />
@@ -220,19 +221,33 @@ const styles = StyleSheet.create({
     height: BANNER_HEIGHT,
     borderRadius: 20,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(99, 102, 241, 0.45)',
     position: 'relative',
-    backgroundColor: '#120A18',
+    backgroundColor: '#090D2B',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  ambientGlow: {
+  ambientGlowBlue: {
     position: 'absolute',
-    right: -20,
+    left: -20,
     top: -20,
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: 'rgba(236,72,153,0.14)',
+    backgroundColor: 'rgba(99, 102, 241, 0.22)',
+  },
+  ambientGlowPurple: {
+    position: 'absolute',
+    right: -25,
+    bottom: -25,
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    backgroundColor: 'rgba(168, 85, 247, 0.18)',
   },
   cardContent: {
     flex: 1,
@@ -253,7 +268,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   kickerText: {
-    color: '#EC4899',
+    color: '#818CF8',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.8,
@@ -295,19 +310,21 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   artworkContainer: {
-    width: 136,
-    height: 136,
+    width: 130,
+    height: 130,
     borderRadius: 16,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: '#070A1E',
+    borderWidth: 1.5,
+    borderColor: 'rgba(99, 102, 241, 0.4)',
     flexShrink: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
     elevation: 6,
   },
   artworkImage: {

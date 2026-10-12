@@ -2,7 +2,7 @@ import { API_HOST_BASE_URL } from '../config/env';
 import { getOptimizedImageUrl } from './cloudinary';
 
 export const FALLBACK_ARTWORK =
-  'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=800&q=80';
+  'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=max&w=800&q=80';
 
 export const FALLBACK_ARTIST_AVATAR =
   'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=800&q=80';
