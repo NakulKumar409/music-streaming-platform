@@ -579,13 +579,13 @@ export default function HomeScreen({ navigation }: any) {
     <Pressable style={styles.trendingCard} onPress={() => onPressArtist(item.id)}>
       {/* Outer neon gradient ring */}
       <LinearGradient
-        colors={['#8B5CF6', '#3B82F6', '#06B6D4']}
+        colors={[theme.primary, theme.secondary, theme.accent]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.trendingCircleOuter}
+        style={[styles.trendingCircleOuter, { shadowColor: theme.primary }]}
       >
         {/* Inner clip: enforces perfect circle crop */}
-        <View style={styles.trendingCircleInner}>
+        <View style={[styles.trendingCircleInner, { backgroundColor: theme.surface }]}>
           <AppImage
             uri={item.image}
             fallbackType="artist"
@@ -599,11 +599,11 @@ export default function HomeScreen({ navigation }: any) {
           {item.name}
         </Text>
         {item.isVerified && (
-          <BadgeCheck size={12} color="#06B6D4" fill="rgba(6, 182, 212, 0.15)" style={{ marginLeft: 2 }} />
+          <BadgeCheck size={12} color={theme.accent} fill={`${theme.accent}26`} style={{ marginLeft: 2 }} />
         )}
       </View>
     </Pressable>
-  ), [onPressArtist]);
+  ), [onPressArtist, theme]);
 
   /* ── Render: Recently Added Audio — neon gradient card, uncropped 1:1 image ── */
   const renderRecentAudio = useCallback(({ item }: { item: ContentCard }) => {
@@ -615,12 +615,12 @@ export default function HomeScreen({ navigation }: any) {
         android_ripple={{ color: 'rgba(255,255,255,0.06)', borderless: false }}
       >
         <LinearGradient
-          colors={['#8B5CF6', '#3B82F6', '#06B6D4']}
+          colors={[theme.primary, theme.secondary, theme.accent]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.mediaGradientBorder}
+          style={[styles.mediaGradientBorder, { shadowColor: theme.primary }]}
         >
-          <View style={styles.audioImgContainer}>
+          <View style={[styles.audioImgContainer, { backgroundColor: theme.surface }]}>
             <AppImage
               uri={item.thumbnail}
               fallbackType="song"
@@ -629,7 +629,7 @@ export default function HomeScreen({ navigation }: any) {
             />
             {/* NEW badge */}
             {!item.isLocked && (
-              <View style={styles.audioBadgeNew}>
+              <View style={[styles.audioBadgeNew, { backgroundColor: theme.primary }]}>
                 <Text style={styles.audioBadgeNewText}>NEW</Text>
               </View>
             )}
@@ -664,7 +664,7 @@ export default function HomeScreen({ navigation }: any) {
         </View>
       </Pressable>
     );
-  }, [onPressAudioItem]);
+  }, [onPressAudioItem, theme]);
 
   /* ── Render: Recently Added Video card — neon gradient, uncropped 1:1 image ── */
   const renderRecentVideo = useCallback(({ item }: { item: ContentCard }) => {
@@ -673,12 +673,12 @@ export default function HomeScreen({ navigation }: any) {
     return (
       <Pressable style={styles.videoCard} onPress={() => onPressVideoItem(item)}>
         <LinearGradient
-          colors={['#8B5CF6', '#3B82F6', '#06B6D4']}
+          colors={[theme.primary, theme.secondary, theme.accent]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.mediaGradientBorder}
+          style={[styles.mediaGradientBorder, { shadowColor: theme.primary }]}
         >
-          <View style={styles.videoImgContainer}>
+          <View style={[styles.videoImgContainer, { backgroundColor: theme.surface }]}>
             <AppImage
               uri={item.thumbnail}
               fallbackType="video"
@@ -717,19 +717,19 @@ export default function HomeScreen({ navigation }: any) {
         </View>
       </Pressable>
     );
-  }, [onPressVideoItem]);
+  }, [onPressVideoItem, theme]);
 
 
   /* ── Full-page loading state ── */
   if (loading) {
     return (
       <LinearGradient
-        colors={Platform.OS === 'web' ? ['var(--color-bg)', 'var(--color-bg)'] : ['#000000', '#000000']}
+        colors={Platform.OS === 'web' ? ['var(--color-bg)', 'var(--color-bg)'] : [theme.bg, theme.surface, theme.bg]}
         style={styles.gradientBackground}
       >
         <StatusBar barStyle="light-content" />
         <View style={styles.fullLoading}>
-          <ActivityIndicator color={Colors.accent} size="large" />
+          <ActivityIndicator color={theme.primary} size="large" />
           <Text style={styles.fullLoadingText}>Loading your music…</Text>
         </View>
       </LinearGradient>
@@ -739,7 +739,7 @@ export default function HomeScreen({ navigation }: any) {
   /* ── Main render ── */
   return (
     <LinearGradient
-      colors={Platform.OS === 'web' ? ['var(--color-bg)', 'var(--color-bg)'] : [theme.bg, theme.surface, '#000000']}
+      colors={Platform.OS === 'web' ? ['var(--color-bg)', 'var(--color-bg)'] : [theme.bg, theme.surface, theme.bg]}
       style={styles.gradientBackground}
     >
       <StatusBar barStyle="light-content" />
@@ -807,8 +807,8 @@ export default function HomeScreen({ navigation }: any) {
             }}
             refreshControl={
               <RefreshControl
-                tintColor={Colors.accent}
-                colors={[Colors.accent]}
+                tintColor={theme.primary}
+                colors={[theme.primary]}
                 refreshing={refreshing}
                 onRefresh={() => { fetchContent({ isRefresh: true }); }}
               />
@@ -825,14 +825,14 @@ export default function HomeScreen({ navigation }: any) {
             {/* ── BECOME AN ARTIST / ARTIST DASHBOARD BANNER (Top Priority Above Cards) ── */}
             <Pressable onPress={onPressBecomeArtist} style={styles.artistBannerContainer}>
               <LinearGradient
-                colors={['rgba(168,85,247,0.22)', 'rgba(236,72,153,0.12)']}
+                colors={[`${theme.primary}2E`, `${theme.secondary}18`]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={styles.artistBannerGradient}
+                style={[styles.artistBannerGradient, { borderColor: `${theme.primary}33` }]}
               >
                 <View style={styles.artistBannerContent}>
-                  <View style={styles.artistBannerIconWrap}>
-                    <Disc3 color="#EC4899" size={22} />
+                  <View style={[styles.artistBannerIconWrap, { backgroundColor: `${theme.primary}25` }]}>
+                    <Disc3 color={theme.accent} size={22} />
                   </View>
                   <View style={styles.artistBannerTextBlock}>
                     <Text style={styles.artistBannerTitle}>
@@ -844,8 +844,8 @@ export default function HomeScreen({ navigation }: any) {
                         : 'Upload your music & grow your audience'}
                     </Text>
                   </View>
-                  <View style={styles.artistBannerBtn}>
-                    <Text style={styles.artistBannerBtnText}>
+                  <View style={[styles.artistBannerBtn, { backgroundColor: `${theme.primary}25`, borderColor: `${theme.primary}50` }]}>
+                    <Text style={[styles.artistBannerBtnText, { color: theme.primary }]}>
                       {user?.role === 'ARTIST' ? 'Open' : 'Start'}
                     </Text>
                   </View>

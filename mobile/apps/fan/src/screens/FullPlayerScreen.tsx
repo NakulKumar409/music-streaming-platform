@@ -9,13 +9,14 @@ import {
   Dimensions,
   Easing,
   ImageBackground,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
-  Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Slider from '@react-native-community/slider';
@@ -24,6 +25,7 @@ import Svg, { Path, Rect, Circle } from 'react-native-svg';
 
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import { Colors } from '../theme';
+import { useTheme } from '../providers/ThemeProvider';
 import { formatDurationLabel, hasFiniteDuration } from '../utils/mediaTime';
 import type { MediaItem } from '../media.types';
 import { navigationRef } from '../navigation/rootNavigation';
@@ -89,6 +91,37 @@ function PauseIcon({ size = 32, color = '#000' }: { size?: number; color?: strin
   );
 }
 
+function ShuffleIcon({ size = 22, color = '#fff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M16 3h5v5M4 20l5.5-5.5M21 3l-7.5 7.5M4 4l17 17M16 21h5v-5"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function RepeatIcon({ size = 22, color = '#fff', one = false }: { size?: number; color?: string; one?: boolean }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M17 1l4 4-4 4M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 01-4 4H3"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {one ? (
+        <Path d="M12 9v6M10.5 10.5L12 9" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+      ) : null}
+    </Svg>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 type FullPlayerRouteParams = {
@@ -117,7 +150,23 @@ export default function FullPlayerScreen({ navigation, route }: any) {
     pendingSeekPositionMs,
     setVolume,
     close,
+    toggleShuffle,
+    cycleRepeatMode,
   } = useMediaPlayer();
+
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+
+  // Dynamic layout metrics strictly preventing bottom navigation overlap
+  const isShortScreen = windowHeight < 720;
+  const bottomNavHeight = 66 + Math.max(insets.bottom, Platform.OS === 'ios' ? 14 : 10);
+  const bottomSpacing = isShortScreen ? 16 : 22; // within 16-24px target clearance
+  const bottomPadding = bottomNavHeight + bottomSpacing;
+
+  // Adapt disc artwork size proportionally to vertical budget
+  const verticalBudget = windowHeight - (insets.top + bottomPadding + (isShortScreen ? 230 : 270));
+  const discSize = Math.max(160, Math.min(windowWidth - 72, 260, verticalBudget));
 
   // ── Local UI state ─────────────────────────────────────────────────────────
   const [scrubPosition, setScrubPosition] = useState<number | null>(null);
@@ -332,124 +381,193 @@ export default function FullPlayerScreen({ navigation, route }: any) {
         />
       </ImageBackground>
 
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-
-        {/* ── Top Bar ── */}
-        <View style={styles.topBar}>
-          <Pressable
-            style={styles.topIconBtn}
-            onPress={() => navigation.goBack()}
-            hitSlop={10}
-          >
-            <ArrowLeft size={22} color="#fff" />
-          </Pressable>
-
-          <View style={styles.topCenter}>
-            <Text style={styles.topLabel}>Now Playing</Text>
-            <Text style={styles.topTitle} numberOfLines={1}>{displayTitle}</Text>
-          </View>
-
-          <View style={styles.topRight}>
+      <SafeAreaView
+        style={[
+          styles.safeArea,
+          {
+            paddingBottom: bottomPadding,
+          },
+        ]}
+        edges={['top']}
+      >
+        <View style={styles.contentContainer}>
+          {/* ── Top Bar ── */}
+          <View style={styles.topBar}>
             <Pressable
               style={styles.topIconBtn}
-              onPress={() => setIsHearted((v) => !v)}
+              onPress={() => navigation.goBack()}
               hitSlop={10}
             >
-              <HeartIcon
-                size={22}
-                filled={isHearted}
-                color={isHearted ? Colors.accent : '#fff'}
+              <ArrowLeft size={22} color="#fff" />
+            </Pressable>
+
+            <View style={styles.topCenter}>
+              <Text style={styles.topLabel}>Now Playing</Text>
+              <Text style={styles.topTitle} numberOfLines={1}>{displayTitle}</Text>
+            </View>
+
+            <View style={styles.topRight}>
+              <Pressable
+                style={styles.topIconBtn}
+                onPress={() => setIsHearted((v) => !v)}
+                hitSlop={10}
+              >
+                <HeartIcon
+                  size={22}
+                  filled={isHearted}
+                  color={isHearted ? (theme?.primary || Colors.accent) : '#fff'}
+                />
+              </Pressable>
+              <Pressable
+                style={styles.topIconBtn}
+                onPress={() => stopAndGoToAudio().catch(() => undefined)}
+                hitSlop={10}
+              >
+                <X size={22} color="#fff" />
+              </Pressable>
+            </View>
+          </View>
+
+          {/* ── Center Section: Disc & Song Info ── */}
+          <View style={styles.centerSection}>
+            {/* ── Disc / Artwork ── */}
+            <View style={[styles.discContainer, { width: discSize, height: discSize }]}>
+              {/* Glow ring */}
+              <Animated.View
+                style={[
+                  styles.discGlow,
+                  {
+                    width: discSize + 40,
+                    height: discSize + 40,
+                    borderRadius: (discSize + 40) / 2,
+                    backgroundColor: theme?.primary || Colors.accent,
+                    transform: [{ scale: pulseAnim }],
+                    opacity: glowOpacity,
+                  },
+                ]}
               />
-            </Pressable>
-            <Pressable
-              style={styles.topIconBtn}
-              onPress={() => stopAndGoToAudio().catch(() => undefined)}
-              hitSlop={10}
-            >
-              <X size={22} color="#fff" />
-            </Pressable>
+              {/* Spinning disc */}
+              <Animated.Image
+                source={{ uri: displayImage }}
+                style={[
+                  styles.disc,
+                  {
+                    width: discSize,
+                    height: discSize,
+                    borderRadius: discSize / 2,
+                    transform: [{ rotate: spin }],
+                  },
+                ]}
+                resizeMode="cover"
+                onError={() => setImageError(true)}
+              />
+              {/* Center hole */}
+              <View
+                style={[
+                  styles.discHole,
+                  {
+                    width: Math.max(24, Math.round(discSize * 0.11)),
+                    height: Math.max(24, Math.round(discSize * 0.11)),
+                    borderRadius: Math.max(12, Math.round(discSize * 0.055)),
+                  },
+                ]}
+              />
+            </View>
+
+            {/* ── Song Info ── */}
+            <View style={[styles.songInfo, { marginVertical: isShortScreen ? 12 : 20 }]}>
+              <Text style={styles.songTitle} numberOfLines={1}>{displayTitle}</Text>
+              <Text style={styles.songArtist} numberOfLines={1}>{displayArtist}</Text>
+            </View>
+          </View>
+
+          {/* ── Bottom Section: Seek Bar & Controls ── */}
+          <View style={styles.bottomSection}>
+            {/* ── Seek Bar ── */}
+            <View style={styles.seekSection}>
+              <View style={styles.timesRow}>
+                <Text style={styles.timeText}>{formatDurationLabel(positionForUi, '00:00')}</Text>
+                <Text style={styles.timeText}>
+                  {durationKnown ? formatDurationLabel(playerState.durationMs, '--:--') : '--:--'}
+                </Text>
+              </View>
+              <Slider
+                style={styles.seekSlider}
+                minimumValue={0}
+                maximumValue={durationKnown ? playerState.durationMs : 1}
+                value={sliderValue}
+                disabled={!durationKnown}
+                minimumTrackTintColor={theme?.primary || Colors.accent}
+                maximumTrackTintColor="rgba(255,255,255,0.20)"
+                thumbTintColor={theme?.primary || Colors.accent}
+                onSlidingStart={onSeekStart}
+                onValueChange={onSeekChange}
+                onSlidingComplete={onSeekComplete}
+              />
+            </View>
+
+            {/* ── Playback Controls ── */}
+            <View style={[styles.controlsRow, { marginTop: isShortScreen ? 10 : 16 }]}>
+              <Pressable
+                style={styles.auxControlBtn}
+                onPress={() => toggleShuffle()}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Shuffle"
+              >
+                <ShuffleIcon
+                  size={22}
+                  color={playerState.isShuffle ? (theme?.primary || Colors.accent) : 'rgba(255,255,255,0.55)'}
+                />
+              </Pressable>
+
+              <Pressable
+                style={styles.skipBtn}
+                onPress={() => skipPrev().catch(() => undefined)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Previous track"
+              >
+                <SkipPrevIcon size={24} color="#fff" />
+              </Pressable>
+
+              <Pressable
+                style={styles.playPauseBtn}
+                onPress={() => togglePlayPause().catch(() => undefined)}
+                accessibilityRole="button"
+                accessibilityLabel={playerState.isPlaying ? "Pause" : "Play"}
+              >
+                {playerState.isPlaying
+                  ? <PauseIcon size={30} color="#000" />
+                  : <PlayIcon size={30} color="#000" />}
+              </Pressable>
+
+              <Pressable
+                style={styles.skipBtn}
+                onPress={() => skipNext().catch(() => undefined)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Next track"
+              >
+                <SkipNextIcon size={24} color="#fff" />
+              </Pressable>
+
+              <Pressable
+                style={styles.auxControlBtn}
+                onPress={() => cycleRepeatMode()}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Repeat mode"
+              >
+                <RepeatIcon
+                  size={22}
+                  color={playerState.repeatMode !== 'off' ? (theme?.primary || Colors.accent) : 'rgba(255,255,255,0.55)'}
+                  one={playerState.repeatMode === 'one'}
+                />
+              </Pressable>
+            </View>
           </View>
         </View>
-
-        {/* ── Disc / Artwork ── */}
-        <View style={styles.discContainer}>
-          {/* Glow ring */}
-          <Animated.View
-            style={[
-              styles.discGlow,
-              { transform: [{ scale: pulseAnim }], opacity: glowOpacity },
-            ]}
-          />
-          {/* Spinning disc */}
-          <Animated.Image
-            source={{ uri: displayImage }}
-            style={[styles.disc, { transform: [{ rotate: spin }] }]}
-            resizeMode="cover"
-            onError={() => setImageError(true)}
-          />
-          {/* Center hole */}
-          <View style={styles.discHole} />
-        </View>
-
-        {/* ── Song Info ── */}
-        <View style={styles.songInfo}>
-          <Text style={styles.songTitle} numberOfLines={1}>{displayTitle}</Text>
-          <Text style={styles.songArtist} numberOfLines={1}>{displayArtist}</Text>
-        </View>
-
-
-        {/* ── Seek Bar ── */}
-        <View style={styles.seekSection}>
-          <View style={styles.timesRow}>
-            <Text style={styles.timeText}>{formatDurationLabel(positionForUi, '00:00')}</Text>
-            <Text style={styles.timeText}>
-              {durationKnown ? formatDurationLabel(playerState.durationMs, '--:--') : '--:--'}
-            </Text>
-          </View>
-          <Slider
-            style={styles.seekSlider}
-            minimumValue={0}
-            maximumValue={durationKnown ? playerState.durationMs : 1}
-            value={sliderValue}
-            disabled={!durationKnown}
-            minimumTrackTintColor={Colors.accent}
-            maximumTrackTintColor="rgba(255,255,255,0.20)"
-            thumbTintColor={Colors.accent}
-            onSlidingStart={onSeekStart}
-            onValueChange={onSeekChange}
-            onSlidingComplete={onSeekComplete}
-          />
-        </View>
-
-        {/* ── Playback Controls ── */}
-        <View style={styles.controlsRow}>
-          <Pressable
-            style={styles.skipBtn}
-            onPress={() => skipPrev().catch(() => undefined)}
-            hitSlop={10}
-          >
-            <SkipPrevIcon size={24} color="#fff" />
-          </Pressable>
-
-          <Pressable
-            style={[styles.playPauseBtn, playerState.isPlaying && styles.playPauseBtnActive]}
-            onPress={() => togglePlayPause().catch(() => undefined)}
-          >
-            {playerState.isPlaying
-              ? <PauseIcon size={30} color="#000" />
-              : <PlayIcon size={30} color="#000" />}
-          </Pressable>
-
-          <Pressable
-            style={styles.skipBtn}
-            onPress={() => skipNext().catch(() => undefined)}
-            hitSlop={10}
-          >
-            <SkipNextIcon size={24} color="#fff" />
-          </Pressable>
-        </View>
-
-
       </SafeAreaView>
     </View>
   );
@@ -458,6 +576,18 @@ export default function FullPlayerScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
   safeArea: { flex: 1, paddingHorizontal: 24 },
+  contentContainer: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  centerSection: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  bottomSection: {
+    width: '100%',
+  },
 
   // ── Top Bar ──
   topBar: {
@@ -465,7 +595,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: 8,
-    paddingBottom: 12,
+    paddingBottom: 8,
   },
   topIconBtn: {
     width: 42,
@@ -504,31 +634,18 @@ const styles = StyleSheet.create({
   // ── Disc ──
   discContainer: {
     alignSelf: 'center',
-    width: DISC_SIZE,
-    height: DISC_SIZE,
-    marginTop: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   discGlow: {
     position: 'absolute',
-    width: DISC_SIZE + 44,
-    height: DISC_SIZE + 44,
-    borderRadius: (DISC_SIZE + 44) / 2,
-    backgroundColor: Colors.accent,
   },
   disc: {
-    width: DISC_SIZE,
-    height: DISC_SIZE,
-    borderRadius: DISC_SIZE / 2,
     borderWidth: 5,
     borderColor: 'rgba(255,255,255,0.10)',
   },
   discHole: {
     position: 'absolute',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
     backgroundColor: '#111',
     borderWidth: 3,
     borderColor: 'rgba(255,255,255,0.20)',
@@ -536,8 +653,8 @@ const styles = StyleSheet.create({
 
   songInfo: {
     alignItems: 'center',
-    marginVertical: 32,
     paddingHorizontal: 8,
+    width: '100%',
   },
   songTitle: {
     color: '#fff',
@@ -554,10 +671,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-
   // ── Seek ──
   seekSection: {
-    marginTop: 24,
+    width: '100%',
   },
   timesRow: {
     flexDirection: 'row',
@@ -575,41 +691,42 @@ const styles = StyleSheet.create({
     height: 24,
   },
 
+  // ── Playback Controls ──
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 32,
-    marginTop: 32,
+    justifyContent: 'space-between',
+    paddingHorizontal: 6,
+    width: '100%',
   },
-  skipBtn: {
-    width: 54,
-    height: 54,
+  auxControlBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 27,
+  },
+  skipBtn: {
+    width: 52,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 26,
     backgroundColor: 'rgba(255,255,255,0.07)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
   },
   playPauseBtn: {
-    width: 74,
-    height: 74,
-    borderRadius: 37,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#fff',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 18,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  playPauseBtnActive: {
-    backgroundColor: Colors.accent,
-    shadowColor: Colors.accent,
-    shadowOpacity: 0.60,
-  },
-
-
 });

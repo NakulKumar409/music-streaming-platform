@@ -41,8 +41,21 @@ export default function BottomNavigation({
 
   const currentActiveTab = activeTabProp !== undefined ? activeTabProp : internalTab;
 
-  // Use the canonical blue active color requested for all 5 tabs
-  const activeColor = ACTIVE_BLUE;
+  // Use the theme's primary accent color across all 5 tabs
+  const activeColor = theme?.primary || ACTIVE_BLUE;
+
+  const capsuleBg = theme?.bgRgb
+    ? `rgba(${theme.bgRgb.split(' ').join(', ')}, 0.90)`
+    : 'rgba(10, 18, 36, 0.90)';
+
+  const webGlass =
+    Platform.OS === 'web'
+      ? ({
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          boxShadow: `0 8px 32px rgba(0, 0, 0, 0.5), 0 0 18px ${activeColor}38, inset 0 1px 0 rgba(255, 255, 255, 0.12)`,
+        } as any)
+      : undefined;
 
   const handlePress = (tab: BottomNavTab) => {
     setInternalTab(tab);
@@ -97,10 +110,11 @@ export default function BottomNavigation({
         style={[
           styles.capsule,
           {
+            backgroundColor: capsuleBg,
             borderColor: `${activeColor}40`,
             shadowColor: activeColor,
           },
-          webGlassStyle,
+          webGlass,
         ]}
       >
         {tabs.map((tab) => {
@@ -162,16 +176,6 @@ const webPressableReset =
       } as any)
     : undefined;
 
-const webGlassStyle =
-  Platform.OS === 'web'
-    ? ({
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        boxShadow:
-          '0 8px 32px rgba(0, 0, 0, 0.5), 0 0 18px rgba(0, 130, 255, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
-      } as any)
-    : undefined;
-
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
@@ -190,7 +194,7 @@ const styles = StyleSheet.create({
     maxWidth: 440,
     height: 66,
     borderRadius: 36,
-    backgroundColor: 'rgba(14, 10, 24, 0.88)',
+    backgroundColor: 'rgba(10, 18, 36, 0.90)',
     borderWidth: 1.2,
     paddingHorizontal: 8,
     shadowOffset: { width: 0, height: 4 },
@@ -216,7 +220,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   activeIconPill: {
-    backgroundColor: ACTIVE_BLUE,
     borderRadius: 999,
     overflow: 'hidden',
     shadowOffset: { width: 0, height: 2 },

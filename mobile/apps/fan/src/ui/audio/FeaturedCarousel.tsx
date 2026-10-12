@@ -3,6 +3,7 @@ import { ActivityIndicator, Dimensions, Image, Pressable, StyleSheet, Text, View
 import { LinearGradient } from 'expo-linear-gradient';
 import { Play } from 'lucide-react-native';
 import { Colors } from '../../theme';
+import { useTheme } from '../../providers/ThemeProvider';
 import { getOptimizedImageUrl } from '../../utils/cloudinary';
 import AppImage from '../../components/AppImage';
 
@@ -30,6 +31,8 @@ interface FeaturedCarouselProps {
 }
 
 export default function FeaturedCarousel({ items, onPressItem, isLoading }: FeaturedCarouselProps) {
+  const { theme } = useTheme();
+
   // Show skeleton placeholder while loading
   if (isLoading && items.length === 0) {
     return (
@@ -38,7 +41,7 @@ export default function FeaturedCarousel({ items, onPressItem, isLoading }: Feat
           <Text style={styles.sectionTitle}>New Song</Text>
         </View>
         <View style={[styles.card, styles.skeletonCard]}>
-          <ActivityIndicator color={Colors.accent} size="small" />
+          <ActivityIndicator color={theme.primary} size="small" />
         </View>
       </View>
     );
@@ -89,7 +92,7 @@ export default function FeaturedCarousel({ items, onPressItem, isLoading }: Feat
             </Text>
           </View>
 
-          <View style={styles.playButton}>
+          <View style={[styles.playButton, { backgroundColor: theme.primary, shadowColor: theme.primary }]}>
             <Play size={16} color="#fff" fill="#fff" />
           </View>
         </View>

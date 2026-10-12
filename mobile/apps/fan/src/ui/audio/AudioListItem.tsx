@@ -2,6 +2,7 @@ import React, { memo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Lock, MoreVertical, Pause, Play } from 'lucide-react-native';
 import { Colors } from '../../theme';
+import { useTheme } from '../../providers/ThemeProvider';
 import { getOptimizedImageUrl } from '../../utils/cloudinary';
 import AppImage from '../../components/AppImage';
 
@@ -27,13 +28,17 @@ interface AudioListItemProps {
 }
 
 const AudioListItem = memo(({ item, onPress, isActive, isPlaying }: AudioListItemProps) => {
+  const { theme } = useTheme();
   const isLocked = item.isLocked || (item as any).locked;
   return (
     <View style={styles.container}>
       <Pressable
         style={({ pressed }) => [
           styles.row,
-          isActive && styles.rowActive,
+          isActive && [
+            styles.rowActive,
+            { backgroundColor: `${theme.primary}18`, borderColor: `${theme.primary}40` },
+          ],
           pressed && styles.rowPressed,
         ]}
         onPress={() => onPress(item)}
@@ -49,7 +54,7 @@ const AudioListItem = memo(({ item, onPress, isActive, isPlaying }: AudioListIte
           />
           {/* Active playing indicator overlay */}
           {isActive && isPlaying && (
-            <View style={styles.thumbActiveOverlay}>
+            <View style={[styles.thumbActiveOverlay, { backgroundColor: `${theme.primary}40` }]}>
               <View style={styles.thumbActiveDot} />
             </View>
           )}
@@ -58,7 +63,7 @@ const AudioListItem = memo(({ item, onPress, isActive, isPlaying }: AudioListIte
         {/* Title + artist */}
         <View style={styles.meta}>
           <Text
-            style={[styles.title, isActive && styles.titleActive]}
+            style={[styles.title, isActive && { color: theme.primary }]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
@@ -74,7 +79,10 @@ const AudioListItem = memo(({ item, onPress, isActive, isPlaying }: AudioListIte
           {/* Play / Pause / Lock button */}
           <View style={[
             styles.playBtn,
-            isActive && styles.playBtnActive,
+            isActive && [
+              styles.playBtnActive,
+              { backgroundColor: theme.primary, borderColor: theme.primary },
+            ],
             isLocked && styles.playBtnLocked,
           ]}>
             {isLocked ? (

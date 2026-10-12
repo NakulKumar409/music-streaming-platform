@@ -1,6 +1,7 @@
 import React from 'react';
 import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Search as SearchIcon } from 'lucide-react-native';
+import { useTheme } from '../../providers/ThemeProvider';
 
 interface AudioHeaderProps {
   query: string;
@@ -8,6 +9,8 @@ interface AudioHeaderProps {
 }
 
 export default function AudioHeader({ query, setQuery }: AudioHeaderProps) {
+  const { theme } = useTheme();
+
   return (
     <View style={styles.container}>
       {/* Page title row */}
@@ -18,7 +21,7 @@ export default function AudioHeader({ query, setQuery }: AudioHeaderProps) {
 
       {/* Search box */}
       <View style={styles.searchWrap}>
-        <View style={styles.searchBox}>
+        <View style={[styles.searchBox, { backgroundColor: `${theme.surface}CC`, borderColor: 'rgba(255,255,255,0.12)' }]}>
           <SearchIcon color="rgba(255,255,255,0.5)" size={17} />
           <TextInput
             value={query}

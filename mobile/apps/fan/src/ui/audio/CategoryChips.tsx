@@ -1,6 +1,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../../theme';
+import { useTheme } from '../../providers/ThemeProvider';
 
 export type CategoryType = 'All' | 'Trending' | 'Artists' | 'Albums';
 
@@ -12,6 +13,8 @@ interface CategoryChipsProps {
 }
 
 export default function CategoryChips({ activeCategory, onSelectCategory }: CategoryChipsProps) {
+  const { theme } = useTheme();
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -28,7 +31,9 @@ export default function CategoryChips({ activeCategory, onSelectCategory }: Cate
               onPress={() => onSelectCategory(cat)}
               style={[
                 styles.chip,
-                isActive ? styles.chipActive : styles.chipInactive,
+                isActive
+                  ? [styles.chipActive, { backgroundColor: theme.primary, borderColor: theme.primary }]
+                  : [styles.chipInactive, { backgroundColor: `${theme.surface}99`, borderColor: 'rgba(255,255,255,0.08)' }],
               ]}
             >
               <Text style={[styles.chipText, isActive ? styles.chipTextActive : null]}>

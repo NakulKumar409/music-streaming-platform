@@ -54,10 +54,11 @@ import { ARTIST_WEB_URL } from '../config/env';
 import { registerForPushNotifications, disablePushNotifications } from '../services/notificationService';
 import StatusModal from '../components/StatusModal';
 
-function PremiumBadge() {
+function PremiumBadge({ theme }: { theme?: any }) {
+  const accent = theme?.primary || Colors.accent;
   return (
-    <View style={styles.premiumBadge}>
-      <Text style={styles.premiumBadgeText}>Premium Member</Text>
+    <View style={[styles.premiumBadge, { backgroundColor: `${accent}20`, borderColor: `${accent}50` }]}>
+      <Text style={[styles.premiumBadgeText, { color: accent }]}>Premium Member</Text>
     </View>
   );
 }
@@ -427,7 +428,7 @@ export default function AccountScreen() {
 
   return (
     <LinearGradient
-      colors={Colors.backgroundGradient}
+      colors={Platform.OS === 'web' ? ['var(--color-bg)', 'var(--color-bg)'] : [theme.bg, theme.surface, theme.bg]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.gradientBackground}
@@ -441,8 +442,8 @@ export default function AccountScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#4AA3FF"
-              colors={['#4AA3FF']}
+              tintColor={theme.primary}
+              colors={[theme.primary]}
             />
           }
         >
@@ -452,44 +453,44 @@ export default function AccountScreen() {
           </View>
 
         <View style={styles.section}>
-          <View style={styles.profileCard}>
+          <View style={[styles.profileCard, { backgroundColor: `${theme.card}A6`, borderColor: `${theme.primary}25` }]}>
             <View style={styles.profileAvatarRow}>
               <TouchableOpacity onPress={handleChangeProfileImage} disabled={isLoading}>
                 {profileImageUrl ? (
-                  <AppImage uri={profileImageUrl} fallbackType="artist" style={styles.profileAvatar} resizeMode="cover" />
+                  <AppImage uri={profileImageUrl} fallbackType="artist" style={[styles.profileAvatar, { borderColor: `${theme.primary}60` }]} resizeMode="cover" />
                 ) : (
-                  <View style={styles.profileAvatarPlaceholder}>
+                  <View style={[styles.profileAvatarPlaceholder, { borderColor: `${theme.primary}60` }]}>
                     <User size={40} color="#fff" />
                   </View>
                 )}
-                <View style={styles.cameraIconOverlay}>
+                <View style={[styles.cameraIconOverlay, { backgroundColor: theme.primary }]}>
                   <Camera size={18} color="#fff" />
                 </View>
               </TouchableOpacity>
             </View>
             <View style={styles.profileTitleRow}>
               <Text style={styles.profileName}>{profileName || user?.name?.toString?.() || (user as any)?.fullName || (user as any)?.full_name || 'User'}</Text>
-              {!isLoading && isPremium ? <PremiumBadge /> : null}
+              {!isLoading && isPremium ? <PremiumBadge theme={theme} /> : null}
             </View>
             <Text style={styles.profileEmail}>{user?.email || 'Not available'}</Text>
 
             <View style={styles.statsRow}>
               <TouchableOpacity 
-                style={styles.statBox} 
+                style={[styles.statBox, { backgroundColor: `${theme.surface}B3`, borderColor: 'rgba(255,255,255,0.08)' }]} 
                 onPress={() => setShowArtistSubList(true)}
                 activeOpacity={0.7}
               >
                 <Text style={styles.statValue}>{artistSubs.length || subscriptionCount || 0}</Text>
                 <Text style={styles.statLabel}>Subscribed Artists</Text>
               </TouchableOpacity>
-              <View style={styles.statBox}>
+              <View style={[styles.statBox, { backgroundColor: `${theme.surface}B3`, borderColor: 'rgba(255,255,255,0.08)' }]}>
                 <Text style={styles.statValue}>{listenTime || '—'}</Text>
                 <Text style={styles.statLabel}>Monthly Listening</Text>
               </View>
             </View>
 
-            <TouchableOpacity style={styles.primaryButton} onPress={handleOpenEditProfile} disabled={isLoading}>
-              <Text style={styles.primaryButtonText}>Edit Profile</Text>
+            <TouchableOpacity style={[styles.primaryButton, { backgroundColor: theme.primary }]} onPress={handleOpenEditProfile} disabled={isLoading}>
+              <Text style={[styles.primaryButtonText, { color: '#FFFFFF' }]}>Edit Profile</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -502,7 +503,7 @@ export default function AccountScreen() {
             <Text style={styles.sectionTitle}>My Subscriptions</Text>
             {isPremium && (
               <TouchableOpacity onPress={() => navigation.navigate('SubscriptionFlow')}>
-                <Text style={styles.sectionAction}>Explore More</Text>
+                <Text style={[styles.sectionAction, { color: theme.primary }]}>Explore More</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -542,12 +543,12 @@ export default function AccountScreen() {
           {/* Upsell if no Platform sub */}
           {!platformPlan && isPremium && (
             <TouchableOpacity 
-              style={styles.upsellNudge}
+              style={[styles.upsellNudge, { borderColor: `${theme.primary}40`, backgroundColor: `${theme.primary}12` }]}
               onPress={() => navigation.navigate('SubscriptionFlow', { defaultPlan: 'PLATFORM' })}
             >
-              <Crown color={Colors.accent} size={20} />
-              <Text style={styles.upsellNudgeText}>Upgrade to <Text style={{fontWeight:'900', color: Colors.accent}}>Platform Plan</Text> for HD streaming</Text>
-              <ArrowLeft style={{transform: [{rotate: '180deg'}]}} color={Colors.accent} size={16} />
+              <Crown color={theme.primary} size={20} />
+              <Text style={styles.upsellNudgeText}>Upgrade to <Text style={{fontWeight:'900', color: theme.primary}}>Platform Plan</Text> for HD streaming</Text>
+              <ArrowLeft style={{transform: [{rotate: '180deg'}]}} color={theme.primary} size={16} />
             </TouchableOpacity>
           )}
 
@@ -625,7 +626,12 @@ export default function AccountScreen() {
 
           <View style={styles.prefRow}>
             <Text style={styles.prefLabel}>Push Notifications</Text>
-            <Switch value={pushNotifications} onValueChange={handleToggleNotifications} />
+            <Switch
+              value={pushNotifications}
+              onValueChange={handleToggleNotifications}
+              thumbColor={pushNotifications ? theme.primary : '#ccc'}
+              trackColor={{ false: '#3e3e3e', true: `${theme.primary}80` }}
+            />
           </View>
 
 
@@ -635,8 +641,8 @@ export default function AccountScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
-            <LogOut size={20} color={Colors.accent} />
-            <Text style={[styles.menuText, { color: Colors.accent }]}>Log Out</Text>
+            <LogOut size={20} color={theme.primary} />
+            <Text style={[styles.menuText, { color: theme.primary }]}>Log Out</Text>
           </TouchableOpacity>
         </View>
 

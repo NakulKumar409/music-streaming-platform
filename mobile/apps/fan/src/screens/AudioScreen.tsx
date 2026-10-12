@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   FlatList,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -26,6 +27,7 @@ import {
   normalizePlaybackUrl,
 } from "../services/streamService";
 import { Colors } from "../theme";
+import { useTheme } from "../providers/ThemeProvider";
 import { useToast } from "../ui/ToastProvider";
 import { findMediaQueueIndex } from "../utils/mediaQueue";
 
@@ -77,6 +79,7 @@ export default function AudioScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
   const { playQueue, currentItem, state: playerState } = useMediaPlayer();
   const { showToast } = useToast();
+  const { theme } = useTheme();
 
   const lastContentItemsRef = useRef<ApiContentItem[]>([]);
   const playbackUrlCacheRef = useRef<Map<string, { url: string; ts: number }>>(
@@ -661,7 +664,7 @@ export default function AudioScreen({ navigation }: any) {
 
   return (
     <LinearGradient
-      colors={["#0A0A0A", "#000000"]}
+      colors={Platform.OS === 'web' ? ['var(--color-bg)', 'var(--color-bg)'] : [theme.bg, theme.surface, theme.bg]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.gradient}>
@@ -716,7 +719,7 @@ export default function AudioScreen({ navigation }: any) {
               activeCategory !== "Artists" &&
               items.length > 0) ? (
               <ActivityIndicator
-                color={Colors.accent}
+                color={theme.primary}
                 size="large"
                 style={{ marginVertical: 20 }}
               />
@@ -736,7 +739,8 @@ export default function AudioScreen({ navigation }: any) {
           }}
           refreshControl={
             <RefreshControl
-              tintColor={Colors.accent}
+              tintColor={theme.primary}
+              colors={[theme.primary]}
               refreshing={refreshing}
               onRefresh={() => {
                 if (activeCategory === "Artists") {

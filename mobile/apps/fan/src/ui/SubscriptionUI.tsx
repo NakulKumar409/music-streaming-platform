@@ -12,6 +12,7 @@ import {
   X, CreditCard, ShieldCheck, Check, Star 
 } from 'lucide-react-native';
 import { Modal, ScrollView, Switch } from 'react-native';
+import { useTheme } from '../providers/ThemeProvider';
 import type { SubscriptionRecord } from '../services/userService';
 
 // ─────────────────────────────────────────────────────
@@ -30,6 +31,7 @@ export function LockedContentOverlay({
   onSubscribe,
   previewSeconds = 10,
 }: LockedContentOverlayProps) {
+  const { theme } = useTheme();
   const headingText =
     reason === 'EXPIRED'
       ? '🔒 Subscription Expired'
@@ -49,14 +51,14 @@ export function LockedContentOverlay({
         style={StyleSheet.absoluteFill}
       />
       <View style={lockedStyles.card}>
-        <View style={lockedStyles.iconRow}>
-          <Lock color="#FF7A18" size={26} />
+        <View style={[lockedStyles.iconRow, { backgroundColor: `${theme.primary}20`, borderColor: `${theme.primary}40` }]}>
+          <Lock color={theme.primary} size={26} />
         </View>
         <Text style={lockedStyles.heading}>{headingText}</Text>
         <Text style={lockedStyles.body}>{bodyText}</Text>
         <Pressable style={lockedStyles.btn} onPress={onSubscribe}>
           <LinearGradient
-            colors={['#FF7A18', '#FF3D00']}
+            colors={[theme.primary, theme.secondary]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={lockedStyles.btnInner}
@@ -77,16 +79,17 @@ type QualityLockBannerProps = {
 };
 
 export function QualityLockBanner({ onUpgrade }: QualityLockBannerProps) {
+  const { theme } = useTheme();
   return (
     <View style={qualityStyles.container}>
-      <Crown color="#4AA3FF" size={22} />
+      <Crown color={theme.primary} size={22} />
       <View style={qualityStyles.textWrap}>
         <Text style={qualityStyles.title}>🔒 HD Quality Locked</Text>
         <Text style={qualityStyles.sub}>
           Upgrade to Platform Plan to watch in 720p / 1080p
         </Text>
       </View>
-      <Pressable style={qualityStyles.btn} onPress={onUpgrade}>
+      <Pressable style={[qualityStyles.btn, { backgroundColor: theme.primary }]} onPress={onUpgrade}>
         <Text style={qualityStyles.btnText}>Upgrade Now</Text>
       </Pressable>
     </View>
@@ -120,6 +123,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export function SubscriptionStatusCard({ plan, onRenew, onManage }: SubscriptionStatusCardProps) {
+  const { theme } = useTheme();
   const status = (plan.status ?? '').toUpperCase();
   const statusColor = STATUS_COLORS[status] ?? '#6B7280';
   const statusLabel = STATUS_LABELS[status] ?? plan.status;
@@ -142,9 +146,9 @@ export function SubscriptionStatusCard({ plan, onRenew, onManage }: Subscription
       <View style={cardStyles.headerRow}>
         <View style={[cardStyles.planIconWrap, isPlatform && cardStyles.platformIconWrap]}>
           {isPlatform ? (
-            <Crown color="#4AA3FF" size={18} />
+            <Crown color={theme.primary} size={18} />
           ) : (
-            <Award color="#FF7A18" size={18} />
+            <Award color={theme.accent} size={18} />
           )}
         </View>
         <View style={{ flex: 1, marginLeft: 10 }}>
@@ -192,7 +196,7 @@ export function SubscriptionStatusCard({ plan, onRenew, onManage }: Subscription
         {status !== 'ACTIVE' || isExpiringSoon ? (
           <Pressable style={cardStyles.renewBtn} onPress={onRenew}>
             <LinearGradient
-              colors={['#FF7A18', '#FF3D00']}
+              colors={[theme.primary, theme.secondary]}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
               style={cardStyles.renewBtnInner}
             >
@@ -219,6 +223,7 @@ export function SubscriptionStatusCard({ plan, onRenew, onManage }: Subscription
 
 export function DetailedPlatformCard({ plan, onManage, onUpgrade }: { plan: SubscriptionRecord | null, onManage: () => void, onUpgrade: () => void }) {
   if (!plan) return null;
+  const { theme } = useTheme();
   const status = (plan.status ?? '').toUpperCase();
   const statusColor = STATUS_COLORS[status] ?? '#6B7280';
   const statusLabel = STATUS_LABELS[status] ?? plan.status;
@@ -229,8 +234,8 @@ export function DetailedPlatformCard({ plan, onManage, onUpgrade }: { plan: Subs
   return (
     <View style={cardStyles.container}>
       <View style={cardStyles.headerRow}>
-        <View style={[cardStyles.planIconWrap, cardStyles.platformIconWrap]}>
-          <Crown color="#4AA3FF" size={24} />
+        <View style={[cardStyles.planIconWrap, cardStyles.platformIconWrap, { backgroundColor: `${theme.primary}20` }]}>
+          <Crown color={theme.primary} size={24} />
         </View>
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={[cardStyles.planTitle, { fontSize: 18 }]}>Platform Plan</Text>
@@ -255,7 +260,7 @@ export function DetailedPlatformCard({ plan, onManage, onUpgrade }: { plan: Subs
       <View style={cardStyles.benefitsList}>
         {(plan.features || ["HD streaming", "Ad-free experience", "Unlimited skips"]).slice(0, 3).map((f, i) => (
           <View key={i} style={cardStyles.benefitListItem}>
-            <Text style={cardStyles.benefitTick}>✓</Text>
+            <Text style={[cardStyles.benefitTick, { color: theme.primary }]}>✓</Text>
             <Text style={cardStyles.benefitListText}>{f}</Text>
           </View>
         ))}
@@ -267,7 +272,7 @@ export function DetailedPlatformCard({ plan, onManage, onUpgrade }: { plan: Subs
         </Pressable>
         {status !== 'ACTIVE' && (
           <Pressable style={[cardStyles.renewBtn, { flex: 1, height: 48 }]} onPress={onUpgrade}>
-             <LinearGradient colors={['#FF7A18', '#FF3D00']} style={cardStyles.renewBtnInner}>
+             <LinearGradient colors={[theme.primary, theme.secondary]} style={cardStyles.renewBtnInner}>
                <Text style={cardStyles.renewBtnText}>Upgrade</Text>
              </LinearGradient>
           </Pressable>
@@ -278,6 +283,7 @@ export function DetailedPlatformCard({ plan, onManage, onUpgrade }: { plan: Subs
 }
 
 export function ArtistSubscriptionItem({ sub, onPress }: { sub: SubscriptionRecord, onPress: () => void }) {
+  const { theme } = useTheme();
   const status = (sub.status ?? '').toUpperCase();
   const statusColor = STATUS_COLORS[status] ?? '#6B7280';
   const expiryDate = sub.endDate ?? sub.nextBillingDate;
@@ -285,8 +291,8 @@ export function ArtistSubscriptionItem({ sub, onPress }: { sub: SubscriptionReco
 
   return (
     <Pressable style={cardStyles.artistItem} onPress={onPress}>
-      <View style={cardStyles.artistAvatarWrap}>
-        <Award color="#FF7A18" size={20} />
+      <View style={[cardStyles.artistAvatarWrap, { backgroundColor: `${theme.primary}18`, borderColor: `${theme.primary}35` }]}>
+        <Award color={theme.accent} size={20} />
       </View>
       <View style={{ flex: 1, marginLeft: 12 }}>
         <Text style={cardStyles.artistName}>{sub.artistName || 'Artist'}</Text>
@@ -305,6 +311,7 @@ export function ArtistSubscriptionItem({ sub, onPress }: { sub: SubscriptionReco
 }
 
 export function EmptySubscriptionState({ onExplore }: { onExplore: () => void }) {
+  const { theme } = useTheme();
   return (
     <View style={cardStyles.emptyContainer}>
       <View style={cardStyles.emptyIconWrap}>
@@ -313,7 +320,7 @@ export function EmptySubscriptionState({ onExplore }: { onExplore: () => void })
       <Text style={cardStyles.emptyTitle}>You're not subscribed yet</Text>
       <Text style={cardStyles.emptySub}>Unlock premium quality, exclusive artist content, and an ad-free experience.</Text>
       <Pressable style={cardStyles.exploreBtn} onPress={onExplore}>
-        <LinearGradient colors={['#FF7A18', '#FF3D00']} style={cardStyles.exploreBtnInner}>
+        <LinearGradient colors={[theme.primary, theme.secondary]} style={cardStyles.exploreBtnInner}>
           <Text style={cardStyles.exploreBtnText}>Explore Plans</Text>
         </LinearGradient>
       </Pressable>

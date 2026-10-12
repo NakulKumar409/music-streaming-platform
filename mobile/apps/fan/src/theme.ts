@@ -16,6 +16,12 @@ export const Colors = {
   },
 
   // Accent colors from the active theme
+  get primary() {
+    return isWeb ? 'var(--color-primary)' : getActiveTheme().primary;
+  },
+  get secondary() {
+    return isWeb ? 'var(--color-secondary)' : getActiveTheme().secondary;
+  },
   get accent() {
     return isWeb ? 'var(--color-primary)' : getActiveTheme().primary;
   },

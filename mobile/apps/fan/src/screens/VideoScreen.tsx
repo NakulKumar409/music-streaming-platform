@@ -76,6 +76,7 @@ import { startHeartbeat, stopHeartbeat } from "../services/heartbeatService";
 import * as streamService from "../services/streamService";
 import { userService } from "../services/userService";
 import { Colors } from "../theme";
+import { useTheme } from "../providers/ThemeProvider";
 import { getOptimizedImageUrl } from "../utils/cloudinary";
 import { resolveAppImageUrl } from "../utils/imageUtils";
 import AppImage from "../components/AppImage";
@@ -349,6 +350,7 @@ export default function VideoScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const tabBarHeight = useBottomTabBarHeight();
+  const { theme } = useTheme();
   const {
     currentItem,
     state: playerState,
@@ -2947,9 +2949,9 @@ export default function VideoScreen() {
   );
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: theme.bg }]}>
       <LinearGradient
-        colors={Colors.backgroundGradient}
+        colors={Platform.OS === 'web' ? ['var(--color-bg)', 'var(--color-bg)'] : [theme.bg, theme.surface, theme.bg]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
@@ -2971,7 +2973,7 @@ export default function VideoScreen() {
               styles.centerStateWrap,
               { paddingTop: measuredHeaderHeight + 8 },
             ]}>
-            <ActivityIndicator size="large" color="#fff" style={{ marginBottom: 16 }} />
+            <ActivityIndicator size="large" color={theme.primary} style={{ marginBottom: 16 }} />
             <Text style={styles.centerStateTitle}>Loading videos...</Text>
             <Text style={styles.centerStateSub}>Please wait</Text>
           </View>
@@ -2983,7 +2985,8 @@ export default function VideoScreen() {
             ]}
             refreshControl={
               <RefreshControl
-                tintColor="#fff"
+                tintColor={theme.primary}
+                colors={[theme.primary]}
                 refreshing={refreshing}
                 onRefresh={() => load({ refresh: true })}
               />
@@ -3041,6 +3044,15 @@ export default function VideoScreen() {
         <View
           style={[
             styles.stickyHeader,
+            {
+              backgroundColor: isFullscreen
+                ? "#000"
+                : theme?.bgRgb
+                  ? `rgba(${theme.bgRgb.split(' ').join(', ')}, 0.94)`
+                  : (theme?.bg ? `${theme.bg}F0` : '#0A1224'),
+              borderBottomWidth: isFullscreen ? 0 : StyleSheet.hairlineWidth,
+              borderBottomColor: isFullscreen ? 'transparent' : 'rgba(255, 255, 255, 0.08)',
+            },
             isFullscreen ? styles.stickyHeaderFullscreen : null,
           ]}
           pointerEvents="box-none">
@@ -3501,14 +3513,14 @@ export default function VideoScreen() {
                               hitSlop={8}>
                               <EngagementIcon
                                 name="like"
-                                color={likeActive ? Colors.accent : "#fff"}
+                                color={likeActive ? theme.primary : "#fff"}
                               />
                               {typeof likeCount === "number" ? (
                                 <Text
                                   style={[
                                     styles.engagementIconCount,
                                     likeActive
-                                      ? styles.engagementIconCountActive
+                                      ? [styles.engagementIconCountActive, { color: theme.primary }]
                                       : null,
                                   ]}>
                                   {formatCompactViews(likeCount).replace(
@@ -3529,14 +3541,14 @@ export default function VideoScreen() {
                               hitSlop={8}>
                               <EngagementIcon
                                 name="dislike"
-                                color={dislikeActive ? Colors.accent : "#fff"}
+                                color={dislikeActive ? theme.primary : "#fff"}
                               />
                               {typeof dislikeCount === "number" ? (
                                 <Text
                                   style={[
                                     styles.engagementIconCount,
                                     dislikeActive
-                                      ? styles.engagementIconCountActive
+                                      ? [styles.engagementIconCountActive, { color: theme.primary }]
                                       : null,
                                   ]}>
                                   {formatCompactViews(dislikeCount).replace(
@@ -3593,7 +3605,16 @@ export default function VideoScreen() {
             ) : null}
 
             <View style={styles.searchWrap}>
-              <BlurView intensity={24} tint="dark" style={styles.searchBlur}>
+              <BlurView
+                intensity={24}
+                tint="dark"
+                style={[
+                  styles.searchBlur,
+                  {
+                    backgroundColor: `${theme.surface}CC`,
+                    borderColor: 'rgba(255, 255, 255, 0.12)',
+                  },
+                ]}>
                 <Search size={18} color="rgba(255,255,255,0.7)" />
                 <TextInput
                   value={searchQuery}
@@ -3691,8 +3712,8 @@ export default function VideoScreen() {
         onRequestClose={() => setShowHdLockModal(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalContainer}>
-            <View style={styles.modalIconWrap}>
-              <Crown color="#4AA3FF" size={28} />
+            <View style={[styles.modalIconWrap, { backgroundColor: `${theme.primary}20` }]}>
+              <Crown color={theme.primary} size={28} />
             </View>
             <Text style={styles.modalTitle}>HD Quality Locked</Text>
             <Text style={styles.modalMessage}>
@@ -3707,7 +3728,7 @@ export default function VideoScreen() {
                 });
               }}>
               <LinearGradient
-                colors={["#4AA3FF", "#0B7EE8"]}
+                colors={[theme.primary, theme.secondary]}
                 style={styles.modalBtnGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}>
@@ -3753,7 +3774,7 @@ export default function VideoScreen() {
                   key={spd}
                   style={[
                     styles.sheetOptionRow,
-                    active ? styles.sheetOptionRowActive : null,
+                    active ? [styles.sheetOptionRowActive, { backgroundColor: `${theme.primary}18` }] : null,
                   ]}
                   onPress={() => {
                     applyPlaybackSpeed(spd);
@@ -3762,11 +3783,11 @@ export default function VideoScreen() {
                   <Text
                     style={[
                       styles.sheetOptionText,
-                      active ? styles.sheetOptionTextActive : null,
+                      active ? [styles.sheetOptionTextActive, { color: theme.primary }] : null,
                     ]}>
                     {spd === 1 ? "Normal (1x)" : `${spd}x`}
                   </Text>
-                  {active ? <Check size={18} color="#FF5500" /> : null}
+                  {active ? <Check size={18} color={theme.primary} /> : null}
                 </Pressable>
               );
             })}
@@ -3886,7 +3907,7 @@ export default function VideoScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#000" },
+  root: { flex: 1 },
   safe: { flex: 1 },
   title: {
     color: "#fff",
@@ -3902,7 +3923,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingBottom: 4,
-    backgroundColor: "#000",
     zIndex: 100,
     elevation: 20,
   },

@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -19,6 +20,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useQuery } from "@tanstack/react-query";
 import { useMediaPlayer } from "../providers/MediaPlayerProvider";
+import { useTheme } from "../providers/ThemeProvider";
 import { api } from "../services/api";
 import { Colors } from "../theme";
 import { getOptimizedImageUrl } from "../utils/cloudinary";
@@ -43,8 +45,14 @@ type SearchHistoryItem = {
 const RECENT_SEARCHES_STORAGE_KEY = "recentSearches";
 
 const ArtistItem = React.memo(
-  ({ item, onPress }: { item: Artist; onPress: (item: Artist) => void }) => (
-    <Pressable style={styles.artistRow} onPress={() => onPress(item)}>
+  ({ item, onPress, theme }: { item: Artist; onPress: (item: Artist) => void; theme?: any }) => (
+    <Pressable
+      style={[
+        styles.artistRow,
+        theme?.card ? { backgroundColor: `${theme.card}B0`, borderColor: `${theme.primary}25` } : null,
+      ]}
+      onPress={() => onPress(item)}
+    >
       <View style={styles.artistThumbWrap}>
         <AppImage
           uri={item.profileImageUrl}
@@ -58,7 +66,7 @@ const ArtistItem = React.memo(
           {item.name}
         </Text>
         {item.genre ? (
-          <Text style={styles.artistGenre} numberOfLines={1}>
+          <Text style={[styles.artistGenre, theme?.accent ? { color: theme.accent } : null]} numberOfLines={1}>
             {item.genre}
           </Text>
         ) : null}
@@ -96,6 +104,7 @@ const HistoryItem = React.memo(
 export default function SearchScreen({ navigation }: any) {
   const tabBarHeight = useBottomTabBarHeight();
   const { currentItem } = useMediaPlayer();
+  const { theme } = useTheme();
   const activeAudioMeta =
     currentItem?.mediaType === "audio" ? currentItem : null;
   const hasActiveAudio = !!activeAudioMeta;
@@ -252,9 +261,9 @@ export default function SearchScreen({ navigation }: any) {
   // Render artist item
   const renderArtistItem = useCallback(
     ({ item }: { item: Artist }) => (
-      <ArtistItem item={item} onPress={navigateToArtist} />
+      <ArtistItem item={item} onPress={navigateToArtist} theme={theme} />
     ),
-    [navigateToArtist]
+    [navigateToArtist, theme]
   );
 
   // Render history item
@@ -281,7 +290,7 @@ export default function SearchScreen({ navigation }: any) {
 
   return (
     <LinearGradient
-      colors={Colors.backgroundGradient}
+      colors={Platform.OS === 'web' ? ['var(--color-bg)', 'var(--color-bg)'] : [theme.bg, theme.surface, theme.bg]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.gradientBackground}>
@@ -289,8 +298,16 @@ export default function SearchScreen({ navigation }: any) {
         {/* Search Header */}
         <View>
           <BlurView intensity={20} tint="dark" style={styles.searchBar}>
-            <View style={styles.searchPill}>
-              <SearchIcon color="rgba(255,255,255,0.7)" size={18} />
+            <View
+              style={[
+                styles.searchPill,
+                {
+                  backgroundColor: `${theme.surface}CC`,
+                  borderColor: isSearchFocused ? theme.primary : 'rgba(255,255,255,0.22)',
+                },
+              ]}
+            >
+              <SearchIcon color={isSearchFocused ? theme.primary : "rgba(255,255,255,0.7)"} size={18} />
               <TextInput
                 ref={(r) => {
                   inputRef.current = r;
@@ -388,7 +405,7 @@ export default function SearchScreen({ navigation }: any) {
         {/* Loading Overlay */}
         {isLoading && !showRecent && (
           <View style={styles.loadingOverlay}>
-            <ActivityIndicator color="#fff" size="large" />
+            <ActivityIndicator color={theme.primary} size="large" />
           </View>
         )}
       </SafeAreaView>
