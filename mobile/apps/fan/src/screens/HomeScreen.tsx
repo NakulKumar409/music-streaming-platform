@@ -36,25 +36,29 @@ import { resolveAppImageUrl, FALLBACK_ARTWORK, FALLBACK_ARTIST_AVATAR, FALLBACK_
 import type { MediaItem } from '../media.types';
 import { useToast } from '../ui/ToastProvider';
 import { findMediaQueueIndex } from '../utils/mediaQueue';
+import FeaturedHeroCarousel, { FeaturedItem } from '../components/FeaturedHeroCarousel';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+// Bounded content width for responsive layout
+const CONTENT_MAX_WIDTH = Math.min(SCREEN_WIDTH, 480);
+
 // Consistent horizontal padding used throughout the page
-const H_PAD = 20;
+const H_PAD = 18;
 
-// Artist circle: fixed consistent size for ALL trending artists
-const ARTIST_CIRCLE = 84;
+// Artist circle: compact Apple Music style circular avatar (~66px)
+const ARTIST_CIRCLE = Math.max(62, Math.min(Math.round(CONTENT_MAX_WIDTH * 0.17), 70));
 
-// Audio card: ~2.3 visible cards on screen at once
-const AUDIO_CARD_WIDTH = Math.round(SCREEN_WIDTH * 0.42);
+// Audio card: compact ~3 visible cards on screen (~125px)
+const AUDIO_CARD_WIDTH = Math.round(CONTENT_MAX_WIDTH * 0.32);
 
-// Video card: 16:9 landscape
-const VIDEO_CARD_WIDTH = Math.round(SCREEN_WIDTH * 0.56);
+// Video card: compact ~2 visible cards on screen (16:9 ratio, ~188px)
+const VIDEO_CARD_WIDTH = Math.round(CONTENT_MAX_WIDTH * 0.48);
 const VIDEO_CARD_HEIGHT = Math.round(VIDEO_CARD_WIDTH * (9 / 16));
 
 // Featured artist card
-const FEATURED_CARD_WIDTH = Math.round(SCREEN_WIDTH * 0.62);
-const FEATURED_CARD_HEIGHT = 176;
+const FEATURED_CARD_WIDTH = Math.round(CONTENT_MAX_WIDTH * 0.58);
+const FEATURED_CARD_HEIGHT = 160;
 
 // Keep `width` alias for any legacy use
 const width = SCREEN_WIDTH;
@@ -160,17 +164,17 @@ const shStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: H_PAD,
-    marginTop: 28,
-    marginBottom: 14,
+    marginTop: 22,
+    marginBottom: 10,
   },
   title: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '700',
     letterSpacing: -0.3,
   },
   seeAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  seeAllText: { color: 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: '600' },
+  seeAllText: { color: 'rgba(255,255,255,0.45)', fontSize: 12, fontWeight: '600' },
 });
 
 /* ─────────────────────── Section State Wrappers ─────────────────── */
@@ -471,6 +475,36 @@ export default function HomeScreen({ navigation }: any) {
     });
   }, [navigation, showToast]);
 
+  // Top Hero carousel items (real backend records, up to 6 items)
+  const heroItems: FeaturedItem[] = React.useMemo(() => {
+    return recentlyAdded.slice(0, 6).map((item) => ({
+      id: item.id,
+      contentId: item.contentId ?? item.id,
+      title: item.title,
+      artist: item.artist,
+      artistId: item.artistId,
+      thumbnail: item.thumbnail,
+      mediaType: item.mediaType,
+      mediaUrl: item.mediaUrl,
+      durationMs: item.durationMs,
+      isLocked: item.isLocked,
+    }));
+  }, [recentlyAdded]);
+
+  // Unified hero carousel play action: plays audio or launches video depending on media type
+  const onPlayHeroItem = useCallback(
+    (heroItem: FeaturedItem) => {
+      const matchedContent = recentlyAdded.find((x) => x.id === heroItem.id);
+      if (!matchedContent) return;
+      if (matchedContent.mediaType === 'video') {
+        onPressVideoItem(matchedContent);
+      } else {
+        onPressAudioItem(matchedContent);
+      }
+    },
+    [recentlyAdded, onPressAudioItem, onPressVideoItem]
+  );
+
   const onPressSeeAllTrending = useCallback(() => {
     navigation.navigate('SeeAllTrending', {
       artists: trendingArtists,
@@ -672,18 +706,15 @@ export default function HomeScreen({ navigation }: any) {
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <View style={styles.pageWrap}>
 
-          {/* ══ STATIC HEADER ══ */}
+          {/* ══ STATIC HEADER (Apple Music-Inspired) ══ */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <Image
                 source={require('../../assets/logo.png')}
                 style={styles.headerLogo}
-                resizeMode="cover"
+                resizeMode="contain"
               />
-              <View>
-                <Text style={styles.headerTitle}>Discover</Text>
-                <Text style={styles.headerSubtitle}>Music you'll love</Text>
-              </View>
+              <Text style={styles.headerTitle}>MusicWave</Text>
             </View>
 
             <View style={styles.headerRight}>
@@ -694,34 +725,36 @@ export default function HomeScreen({ navigation }: any) {
                 accessibilityLabel="Search"
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Search color="#fff" size={18} />
+                <Search color="#fff" size={17} />
               </TouchableOpacity>
 
-              {Platform.OS === 'web' && (
-                <>
-                  <TouchableOpacity
-                    style={styles.headerIconButton}
-                    onPress={() => { /* Notifications placeholder */ }}
-                    activeOpacity={0.7}
-                    accessibilityLabel="Notifications"
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Bell color="#fff" size={18} />
-                  </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.headerIconButton}
+                onPress={() => {
+                  showToast({
+                    tone: 'info',
+                    title: 'Notifications',
+                    message: 'You have no new notifications.',
+                  });
+                }}
+                activeOpacity={0.7}
+                accessibilityLabel="Notifications"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Bell color="#fff" size={17} />
+              </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.headerIconButton}
-                    onPress={() => navigation.getParent()?.navigate('AccountTab')}
-                    activeOpacity={0.7}
-                    accessibilityLabel="Settings"
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Settings color="#fff" size={18} />
-                  </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.headerIconButton}
+                onPress={() => navigation.getParent()?.navigate('AccountTab')}
+                activeOpacity={0.7}
+                accessibilityLabel="Settings"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Settings color="#fff" size={17} />
+              </TouchableOpacity>
 
-                  <ThemeSwitcher />
-                </>
-              )}
+              {Platform.OS === 'web' && <ThemeSwitcher />}
             </View>
           </View>
 
@@ -741,8 +774,96 @@ export default function HomeScreen({ navigation }: any) {
               />
             }
           >
+            {/* ══ TOP FEATURED HERO CAROUSEL (Real Backend Content, Auto-Rotating) ══ */}
+            {heroItems.length > 0 && (
+              <FeaturedHeroCarousel
+                items={heroItems}
+                onPlayItem={onPlayHeroItem}
+              />
+            )}
 
-            {/* ── BECOME AN ARTIST BANNER ── */}
+            {/* ══ TOP ARTISTS ══ */}
+            <SectionHeader title="Top Artists" onSeeAll={onPressSeeAllTrending} />
+            {artistsError ? (
+              <SectionError
+                message="Couldn't load artists."
+                onRetry={() => fetchContent()}
+              />
+            ) : trendingArtists.length > 0 ? (
+              <FlatList
+                data={trendingArtists}
+                horizontal
+                initialNumToRender={6}
+                windowSize={5}
+                removeClippedSubviews={true}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.hListPad}
+                renderItem={renderTrendingArtist}
+                keyExtractor={(item) => item.id}
+                nestedScrollEnabled
+              />
+            ) : (
+              <SectionEmpty message="No artists yet." />
+            )}
+
+            {/* ══ NEW RELEASES (Recently Added Audio) ══ */}
+            <SectionHeader title="New Releases" />
+            {recentAudios.length > 0 ? (
+              <FlatList
+                data={recentAudios}
+                horizontal
+                initialNumToRender={5}
+                windowSize={5}
+                removeClippedSubviews={true}
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled
+                contentContainerStyle={styles.hListPad}
+                renderItem={renderRecentAudio}
+                keyExtractor={(item) => `audio-${item.id}`}
+              />
+            ) : (
+              <SectionEmpty message="No audio tracks added yet." />
+            )}
+
+            {/* ══ TRENDING VIDEOS (Recently Added Videos) ══ */}
+            <SectionHeader title="Trending Videos" />
+            {recentVideos.length > 0 ? (
+              <FlatList
+                data={recentVideos}
+                horizontal
+                initialNumToRender={5}
+                windowSize={5}
+                removeClippedSubviews={true}
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled
+                contentContainerStyle={[styles.hListPad, { paddingBottom: 8 }]}
+                renderItem={renderRecentVideo}
+                keyExtractor={(item) => `video-${item.id}`}
+              />
+            ) : (
+              <SectionEmpty message="No videos added yet." />
+            )}
+
+            {/* ══ FEATURED ARTISTS (Retained) ══ */}
+            {featuredArtists.length > 0 && (
+              <>
+                <SectionHeader title="Featured Artists" />
+                <FlatList
+                  data={featuredArtists}
+                  horizontal
+                  initialNumToRender={5}
+                  windowSize={5}
+                  removeClippedSubviews={true}
+                  renderItem={renderFeaturedArtist}
+                  keyExtractor={(item) => item.id}
+                  showsHorizontalScrollIndicator={false}
+                  nestedScrollEnabled
+                  contentContainerStyle={styles.hListPad}
+                />
+              </>
+            )}
+
+            {/* ── BECOME AN ARTIST / ARTIST DASHBOARD BANNER ── */}
             <Pressable onPress={onPressBecomeArtist} style={styles.artistBannerContainer}>
               <LinearGradient
                 colors={['rgba(255,106,0,0.14)', 'rgba(255,106,0,0.03)']}
@@ -772,92 +893,6 @@ export default function HomeScreen({ navigation }: any) {
                 </View>
               </LinearGradient>
             </Pressable>
-
-            {/* ══ FEATURED ARTISTS ══ */}
-            <SectionHeader title="Featured Artists" />
-            {artistsError ? (
-              <SectionError
-                message="Couldn't load featured artists."
-                onRetry={() => fetchContent()}
-              />
-            ) : featuredArtists.length > 0 ? (
-              <FlatList
-                data={featuredArtists}
-                horizontal
-                initialNumToRender={5}
-                windowSize={5}
-                removeClippedSubviews={true}
-                renderItem={renderFeaturedArtist}
-                keyExtractor={(item) => item.id}
-                showsHorizontalScrollIndicator={false}
-                nestedScrollEnabled
-                contentContainerStyle={styles.hListPad}
-              />
-            ) : (
-              <SectionEmpty message="No featured artists yet." />
-            )}
-
-            {/* ══ TRENDING ARTISTS ══ */}
-            <SectionHeader title="Trending Artists" onSeeAll={onPressSeeAllTrending} />
-            {artistsError ? (
-              <SectionError
-                message="Couldn't load trending artists."
-                onRetry={() => fetchContent()}
-              />
-            ) : trendingArtists.length > 0 ? (
-              <FlatList
-                data={trendingArtists}
-                horizontal
-                initialNumToRender={6}
-                windowSize={5}
-                removeClippedSubviews={true}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.hListPad}
-                renderItem={renderTrendingArtist}
-                keyExtractor={(item) => item.id}
-                nestedScrollEnabled
-              />
-            ) : (
-              <SectionEmpty message="No trending artists yet." />
-            )}
-
-            {/* ══ RECENTLY ADDED AUDIO ══ */}
-            <SectionHeader title="Recently Added Audio" />
-            {recentAudios.length > 0 ? (
-              <FlatList
-                data={recentAudios}
-                horizontal
-                initialNumToRender={5}
-                windowSize={5}
-                removeClippedSubviews={true}
-                showsHorizontalScrollIndicator={false}
-                nestedScrollEnabled
-                contentContainerStyle={styles.hListPad}
-                renderItem={renderRecentAudio}
-                keyExtractor={(item) => `audio-${item.id}`}
-              />
-            ) : (
-              <SectionEmpty message="No audio tracks added yet." />
-            )}
-
-            {/* ══ RECENTLY ADDED VIDEOS ══ */}
-            <SectionHeader title="Recently Added Videos" />
-            {recentVideos.length > 0 ? (
-              <FlatList
-                data={recentVideos}
-                horizontal
-                initialNumToRender={5}
-                windowSize={5}
-                removeClippedSubviews={true}
-                showsHorizontalScrollIndicator={false}
-                nestedScrollEnabled
-                contentContainerStyle={[styles.hListPad, { paddingBottom: 8 }]}
-                renderItem={renderRecentVideo}
-                keyExtractor={(item) => `video-${item.id}`}
-              />
-            ) : (
-              <SectionEmpty message="No videos added yet." />
-            )}
 
             <View style={{ height: 16 }} />
           </ScrollView>
@@ -927,28 +962,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: H_PAD,
-    paddingTop: Platform.OS === 'android' ? 10 : 4,
-    paddingBottom: 12,
+    paddingTop: Platform.OS === 'android' ? 8 : 4,
+    paddingBottom: 10,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     flex: 1,
-    marginRight: 8,
   },
   headerLogo: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 28,
+    height: 28,
+    borderRadius: 7,
     flexShrink: 0,
   },
   headerTitle: {
     color: '#fff',
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     letterSpacing: -0.4,
-    lineHeight: 26,
   },
   headerSubtitle: {
     color: 'rgba(255,255,255,0.38)',
@@ -960,24 +993,24 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
     flexShrink: 0,
   },
   headerIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 35,
+    height: 35,
+    borderRadius: 17.5,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
 
   /* ── Artist become banner ── */
   artistBannerContainer: {
     marginHorizontal: H_PAD,
-    marginTop: 6,
+    marginTop: 18,
     marginBottom: 4,
     borderRadius: 16,
     overflow: 'hidden',
@@ -1042,7 +1075,7 @@ const styles = StyleSheet.create({
   featuredCard: {
     width: FEATURED_CARD_WIDTH,
     height: FEATURED_CARD_HEIGHT,
-    borderRadius: 18,
+    borderRadius: 16,
     overflow: 'hidden',
     marginRight: 12,
     backgroundColor: 'rgba(255,255,255,0.04)',
@@ -1062,7 +1095,7 @@ const styles = StyleSheet.create({
   },
   featuredArtistName: {
     color: '#fff',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
     letterSpacing: -0.2,
     textShadowColor: 'rgba(0,0,0,0.6)',
@@ -1072,18 +1105,18 @@ const styles = StyleSheet.create({
 
   /* ── Trending artist card (perfect circle) ── */
   trendingCard: {
-    width: ARTIST_CIRCLE + 8,
+    width: ARTIST_CIRCLE + 6,
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 14,
   },
   // Outer ring — subtle glow border
   trendingCircleOuter: {
-    width: ARTIST_CIRCLE + 4,
-    height: ARTIST_CIRCLE + 4,
-    borderRadius: (ARTIST_CIRCLE + 4) / 2,
-    borderWidth: 1.5,
+    width: ARTIST_CIRCLE + 2,
+    height: ARTIST_CIRCLE + 2,
+    borderRadius: (ARTIST_CIRCLE + 2) / 2,
+    borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
-    padding: 2,
+    padding: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1100,7 +1133,7 @@ const styles = StyleSheet.create({
     height: ARTIST_CIRCLE,
   },
   trendingNameWrap: {
-    marginTop: 8,
+    marginTop: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1108,23 +1141,23 @@ const styles = StyleSheet.create({
     width: ARTIST_CIRCLE + 8,
   },
   trendingName: {
-    color: 'rgba(255,255,255,0.88)',
-    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 11.5,
     fontWeight: '600',
     textAlign: 'center',
     flexShrink: 1,
   },
 
-  /* ── Recently Added Audio card (premium) ── */
+  /* ── Recently Added Audio card (compact Apple Music) ── */
   audioCard: {
     width: AUDIO_CARD_WIDTH,
-    marginRight: 14,
+    marginRight: 12,
     marginBottom: 4,
   },
   audioImgContainer: {
     width: AUDIO_CARD_WIDTH,
     height: AUDIO_CARD_WIDTH, // 1:1 square
-    borderRadius: 14,
+    borderRadius: 10,
     overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
@@ -1134,11 +1167,11 @@ const styles = StyleSheet.create({
   },
   audioBadgeLock: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    top: 6,
+    left: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.65)',
@@ -1148,19 +1181,19 @@ const styles = StyleSheet.create({
   },
   audioDurationBadge: {
     position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.62)',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
+    bottom: 6,
+    right: 6,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
     zIndex: 10,
   },
   audioDurationText: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '700',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   audioPlayOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1168,44 +1201,44 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   audioPlayBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: 'rgba(0,0,0,0.48)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   audioCardText: {
-    marginTop: 10,
-    paddingHorizontal: 2,
+    marginTop: 8,
+    paddingHorizontal: 1,
   },
   audioCardTitle: {
     color: '#fff',
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
-    letterSpacing: 0.05,
-    lineHeight: 17,
+    letterSpacing: -0.1,
+    lineHeight: 16,
   },
   audioCardArtist: {
-    color: 'rgba(255,255,255,0.45)',
+    color: 'rgba(255,255,255,0.48)',
     fontSize: 11,
     fontWeight: '500',
-    marginTop: 3,
+    marginTop: 2,
     lineHeight: 14,
   },
 
   /* ── Recently Added Video card ── */
   videoCard: {
     width: VIDEO_CARD_WIDTH,
-    marginRight: 14,
+    marginRight: 12,
     marginBottom: 4,
   },
   videoImgContainer: {
     width: VIDEO_CARD_WIDTH,
     height: VIDEO_CARD_HEIGHT,
-    borderRadius: 12,
+    borderRadius: 10,
     overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
@@ -1215,11 +1248,11 @@ const styles = StyleSheet.create({
   },
   videoBadgeLock: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    top: 6,
+    left: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.65)',
@@ -1231,34 +1264,34 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.20)',
+    backgroundColor: 'rgba(0,0,0,0.18)',
   },
   videoPlayBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(0,0,0,0.52)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.32)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   videoCardText: {
-    marginTop: 10,
-    paddingHorizontal: 2,
+    marginTop: 8,
+    paddingHorizontal: 1,
   },
   videoCardTitle: {
     color: '#fff',
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
-    letterSpacing: 0.05,
-    lineHeight: 17,
+    letterSpacing: -0.1,
+    lineHeight: 16,
   },
   videoCardArtist: {
-    color: 'rgba(255,255,255,0.45)',
+    color: 'rgba(255,255,255,0.48)',
     fontSize: 11,
     fontWeight: '500',
-    marginTop: 3,
+    marginTop: 2,
     lineHeight: 14,
   },
 
