@@ -1,47 +1,95 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Home, Compass, Users, Library, User } from 'lucide-react-native';
-import { colors } from '../theme-guest/colors';
-import { spacing } from '../theme-guest/spacing';
-import { radius } from '../theme-guest/radius';
-import { typography } from '../theme-guest/typography';
+import { Home as HomeIcon, Search, Music, PlayCircle, User } from 'lucide-react-native';
+
+export type BottomNavTab = 'home' | 'search' | 'audio' | 'video' | 'account';
 
 interface BottomNavigationProps {
-  onAction: () => void;
+  onAction?: () => void;
   onHomePress?: () => void;
+  onSearchPress?: () => void;
+  onAudioPress?: () => void;
+  onVideoPress?: () => void;
+  onAccountPress?: () => void;
+  activeTab?: BottomNavTab;
 }
 
-export default function BottomNavigation({ onAction, onHomePress }: BottomNavigationProps) {
+export default function BottomNavigation({
+  onAction,
+  onHomePress,
+  onSearchPress,
+  onAudioPress,
+  onVideoPress,
+  onAccountPress,
+  activeTab = 'home',
+}: BottomNavigationProps) {
   const insets = useSafeAreaInsets();
 
+  const handlePress = (tab: BottomNavTab) => {
+    switch (tab) {
+      case 'home':
+        if (onHomePress) onHomePress();
+        break;
+      case 'search':
+        if (onSearchPress) onSearchPress();
+        else if (onAction) onAction();
+        break;
+      case 'audio':
+        if (onAudioPress) onAudioPress();
+        else if (onAction) onAction();
+        break;
+      case 'video':
+        if (onVideoPress) onVideoPress();
+        else if (onAction) onAction();
+        break;
+      case 'account':
+        if (onAccountPress) onAccountPress();
+        else if (onAction) onAction();
+        break;
+    }
+  };
+
+  const tabs: {
+    key: BottomNavTab;
+    label: string;
+    icon: React.ComponentType<{ color: string; size: number }>;
+  }[] = [
+    { key: 'home', label: 'Home', icon: HomeIcon },
+    { key: 'search', label: 'Search', icon: Search },
+    { key: 'audio', label: 'Audio', icon: Music },
+    { key: 'video', label: 'Video', icon: PlayCircle },
+    { key: 'account', label: 'Account', icon: User },
+  ];
+
   return (
-    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-      <Pressable onPress={onHomePress} style={styles.tabItem} accessibilityRole="button">
-        <Home color={colors.primary} size={24} />
-        <Text style={[styles.label, styles.activeLabel]}>Home</Text>
-        <View style={styles.activeIndicator} />
-      </Pressable>
+    <View
+      style={[
+        styles.container,
+        {
+          paddingBottom: Math.max(insets.bottom, 10),
+          height: 84 + (insets.bottom > 10 ? insets.bottom - 10 : 0),
+        },
+      ]}
+    >
+      {tabs.map((tab) => {
+        const isActive = activeTab === tab.key;
+        const color = isActive ? '#fff' : '#666';
+        const Icon = tab.icon;
 
-      <Pressable onPress={onAction} style={styles.tabItem} accessibilityRole="button">
-        <Compass color={colors.textInactive} size={24} />
-        <Text style={styles.label}>Discover</Text>
-      </Pressable>
-
-      <Pressable onPress={onAction} style={styles.tabItem} accessibilityRole="button">
-        <Users color={colors.textInactive} size={24} />
-        <Text style={styles.label}>Artists</Text>
-      </Pressable>
-
-      <Pressable onPress={onAction} style={styles.tabItem} accessibilityRole="button">
-        <Library color={colors.textInactive} size={24} />
-        <Text style={styles.label}>Library</Text>
-      </Pressable>
-
-      <Pressable onPress={onAction} style={styles.tabItem} accessibilityRole="button">
-        <User color={colors.textInactive} size={24} />
-        <Text style={styles.label}>Profile</Text>
-      </Pressable>
+        return (
+          <Pressable
+            key={tab.key}
+            onPress={() => handlePress(tab.key)}
+            style={styles.tabItem}
+            accessibilityRole="button"
+            accessibilityLabel={tab.label}
+          >
+            <Icon color={color} size={24} />
+            <Text style={[styles.tabLabel, { color }]}>{tab.label}</Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -49,45 +97,24 @@ export default function BottomNavigation({ onAction, onHomePress }: BottomNaviga
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: '#000000',
+    backgroundColor: '#000',
     borderTopWidth: 1,
-    borderTopColor: colors.borderThin,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    paddingTop: spacing.sm,
+    borderTopColor: 'rgba(255,255,255,0.08)',
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 15,
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 48,
-    position: 'relative',
+    paddingTop: 8,
+    paddingBottom: 10,
   },
-  label: {
+  tabLabel: {
     fontSize: 10,
     marginTop: 4,
-    color: colors.textInactive,
-    fontWeight: typography.weightMedium,
-  },
-  activeLabel: {
-    color: colors.primary,
-    fontWeight: typography.weightBold,
-  },
-  activeIndicator: {
-    position: 'absolute',
-    top: -spacing.sm,
-    width: 24,
-    height: 2,
-    backgroundColor: colors.primary,
-    borderRadius: 1,
   },
 });
+
