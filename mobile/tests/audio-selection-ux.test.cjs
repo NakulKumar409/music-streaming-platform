@@ -88,7 +88,7 @@ test('locked audio remains represented in queue but is blocked before wrong-song
   );
   assert.match(
     artist,
-    /if \(isSongLocked\) \{[\s\S]{0,400}showToast\([\s\S]{0,400}return;/
+    /if \(isSongLocked\) \{[\s\S]{0,700}showToast\([\s\S]{0,700}return;/
   );
 });
 

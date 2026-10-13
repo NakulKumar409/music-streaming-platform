@@ -178,6 +178,13 @@ export function getPlaybackErrorPresentation(error: unknown): PlaybackErrorPrese
         retryable: false,
         shouldStopPlayback: true,
       };
+    case 'PLAYBACK_REQUEST_SUPERSEDED':
+      return {
+        title: '',
+        message: '',
+        retryable: false,
+        shouldStopPlayback: false,
+      };
     default:
       return {
         title: 'Playback error',
@@ -682,10 +689,27 @@ export async function getPlaybackDescriptor(
       // killing otherwise healthy playback.
       access = await requestNewAccess();
     } catch (error) {
-      // With the product limit of two playback sessions, an old current stream
-      // plus another device can consume both slots. In that one explicit case,
-      // switching content is allowed to release the old current slot and retry.
       if (
+        existing &&
+        error instanceof StreamAccessError &&
+        (error.code === 'PLAYBACK_SESSION_EXPIRED' ||
+          error.code === 'PLAYBACK_SESSION_MISMATCH')
+      ) {
+        if (options.isStillRelevant && !options.isStillRelevant()) {
+          throw new StreamAccessError(
+            'Playback request was superseded',
+            'PLAYBACK_REQUEST_SUPERSEDED',
+            null
+          );
+        }
+        clearActivePlaybackLease(existing.sessionId);
+        access = await getPlaybackAccess(
+          numericContentId,
+          kind,
+          quality,
+          undefined
+        );
+      } else if (
         previousDifferentContentLease &&
         error instanceof StreamAccessError &&
         error.code === 'PLAYBACK_SESSION_LIMIT'

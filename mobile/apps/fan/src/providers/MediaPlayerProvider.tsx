@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Alert, AppState, Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 
 import { createVideoPlayer, VideoPlayer, type VideoSource } from "expo-video";
 
@@ -64,6 +64,7 @@ import {
   releaseActivePlaybackLease,
   normalizePlaybackUrl,
   validatePlaybackUrl,
+  StreamAccessError,
   type VideoQuality,
 } from "../services/streamService";
 import { evaluateAudioProgressSample } from "../utils/audioProgressSync";
@@ -116,7 +117,7 @@ type MediaPlayerContextValue = {
     durationMs?: number
   ) => void;
   pauseAudio: () => Promise<void>;
-  registerInlineVideoPauseHandler: (handler: (() => void) | null) => void;
+  registerInlineVideoPauseHandler: (handler: (() => Promise<void> | void) | null) => void;
 };
 
 const MediaPlayerContext = createContext<MediaPlayerContextValue | undefined>(
@@ -856,30 +857,55 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
     }
   }, [resetSeekCoordinator]);
 
-  const inlineVideoPauseHandlerRef = useRef<(() => void) | null>(null);
+  const inlineVideoPauseHandlerRef = useRef<(() => Promise<void> | void) | null>(null);
   const registerInlineVideoPauseHandler = useCallback(
-    (handler: (() => void) | null) => {
+    (handler: (() => Promise<void> | void) | null) => {
       inlineVideoPauseHandlerRef.current = handler;
     },
     []
   );
 
+  const stopVideoInFlightRef = useRef<Promise<void> | null>(null);
   const stopVideo = useCallback(async () => {
-    if (inlineVideoPauseHandlerRef.current) {
-      try {
-        inlineVideoPauseHandlerRef.current();
-      } catch {}
+    if (stopVideoInFlightRef.current) {
+      return stopVideoInFlightRef.current;
     }
-    videoPlayer?.pause();
+    const runStop = async () => {
+      logger.log(`[PlaybackRCA] platform=${Platform.OS} action=stopVideo requested`);
+      if (inlineVideoPauseHandlerRef.current) {
+        try {
+          await inlineVideoPauseHandlerRef.current();
+        } catch (e) {
+          logger.warn(`[PlaybackRCA] platform=${Platform.OS} action=stopVideo inlineHandler error`, e);
+        }
+      }
+      if (videoPlayer) {
+        try {
+          videoPlayer.pause();
+        } catch {}
+      }
+    };
+    const p = runStop().finally(() => {
+      if (stopVideoInFlightRef.current === p) {
+        stopVideoInFlightRef.current = null;
+      }
+    });
+    stopVideoInFlightRef.current = p;
+    return p;
   }, [videoPlayer]);
 
   const pauseAudio = useCallback(async () => {
+    logger.log(`[PlaybackRCA] platform=${Platform.OS} action=pauseAudio requested`);
     audioPlayIntentRef.current = false;
     cancelPendingAudioLoad();
     if (TrackPlayerAvailable) {
       try {
         await TrackPlayer.pause();
-      } catch {}
+        const tpState = await TrackPlayer.getPlaybackState().catch(() => null);
+        logger.log(`[PlaybackRCA] platform=${Platform.OS} action=pauseAudio tpState=${tpState?.state}`);
+      } catch (err) {
+        logger.warn(`[PlaybackRCA] platform=${Platform.OS} action=pauseAudio failed`, err);
+      }
     }
     const wa = webAudioRef.current;
     if (wa) {
@@ -984,7 +1010,11 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
           playbackUrl = normalizePlaybackUrl(descriptor.playbackUrl);
           playbackSessionId = descriptor.sessionId;
           descriptorDurationMs = descriptor.durationMs ?? 0;
-        } catch (e) {
+        } catch (e: any) {
+          if (!isCurrentLoad() || (e instanceof StreamAccessError && e.code === "PLAYBACK_REQUEST_SUPERSEDED")) {
+            logger.log("[MediaPlayer] getPlaybackUrl superseded by newer selection");
+            return;
+          }
           const presentation = getPlaybackErrorPresentation(e);
           logger.warn("[MediaPlayer] getPlaybackUrl failed", e);
           if (!options.recovery && isCurrentLoad()) {
@@ -994,7 +1024,6 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
             if (presentation.title.toLowerCase().includes("subscription")) {
               showSubscriptionToast(item);
             } else {
-              Alert.alert(presentation.title, presentation.message);
               showToast({
                 tone: "error",
                 title: presentation.title || "Playback unavailable",
@@ -1024,7 +1053,10 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
               item.title
             );
           }
-        } catch (e) {
+        } catch (e: any) {
+          if (!isCurrentLoad() || (e instanceof StreamAccessError && e.code === "PLAYBACK_REQUEST_SUPERSEDED")) {
+            return;
+          }
           const presentation = getPlaybackErrorPresentation(e);
           logger.warn("[MediaPlayer] fallback stream resolution failed", e);
           if (!options.recovery && isCurrentLoad()) {
@@ -1573,6 +1605,8 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
       }));
 
       if (item.mediaType === "audio") {
+        logger.log(`[PlaybackRCA] platform=${Platform.OS} action=playQueue(audio) stopping video first`);
+        await stopVideo();
         await loadAndPlayAudio(item);
         return;
       }
@@ -1590,6 +1624,7 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
       cancelPendingAudioLoad,
       shuffleQueueKeepCurrent,
       showToast,
+      stopVideo,
     ]
   );
 
@@ -1672,6 +1707,7 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
         const wa = webAudioRef.current;
         if (!wa || !audioSourceRef.current) {
           audioPlayIntentRef.current = true;
+          await stopVideo();
           await loadAndPlayAudio(item, {
             resumePositionMs: stateRef.current.positionMs,
             shouldPlay: true,
@@ -1685,6 +1721,7 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
           // state updated by 'pause' DOM event
         } else {
           audioPlayIntentRef.current = true;
+          await stopVideo();
           const p = wa.play();
           if (p && typeof p.catch === 'function') {
             p.catch((err: any) => {
@@ -1703,12 +1740,14 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
           setState((s) => ({ ...s, isPlaying: false }));
         } else if (!audioSourceRef.current) {
           audioPlayIntentRef.current = true;
+          await stopVideo();
           await loadAndPlayAudio(item, {
             resumePositionMs: stateRef.current.positionMs,
             shouldPlay: true,
           });
         } else {
           audioPlayIntentRef.current = true;
+          await stopVideo();
           await TrackPlayer.play();
           setState((s) => ({ ...s, isPlaying: true }));
         }
@@ -1727,14 +1766,14 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
         videoPlayer.pause();
         setState((s) => ({ ...s, isPlaying: false }));
       } else {
-
+        await pauseAudio();
         videoPlayer.play();
         setState((s) => ({ ...s, isPlaying: true }));
       }
     } catch (err) {
       logger.warn("[MediaPlayer] togglePlayPause video failed", err);
     }
-  }, [audioPlayer, videoPlayer, loadAndPlayAudio]);
+  }, [audioPlayer, videoPlayer, loadAndPlayAudio, stopVideo, pauseAudio]);
 
   const seekTo = useCallback(
     async (positionMs: number) => {

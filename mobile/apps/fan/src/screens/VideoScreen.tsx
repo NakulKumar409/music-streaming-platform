@@ -575,25 +575,30 @@ export default function VideoScreen() {
   const listRef = useRef<FlatList<VideoCard> | null>(null);
   const userPausedRef = useRef<boolean>(false); // Track if user explicitly paused
 
-  const safePlay = useCallback((target: { play?: () => any; playing?: boolean } | null | undefined, tag: string) => {
-    console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) called, target exists:`, Boolean(target), "playing:", target?.playing);
+  const safePlay = useCallback(async (target: { play?: () => any; playing?: boolean } | null | undefined, tag: string) => {
+    console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) called, target exists:`, Boolean(target), "playing:", target?.playing);
     if (!target || typeof target.play !== "function") return;
-    if (currentItemRef.current?.mediaType === "audio") {
-      console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) skipped - audio is active media item`);
+    if (currentItemRef.current?.mediaType === "audio" && playerState.isPlaying) {
+      console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) skipped - audio is active media item`);
       return;
     }
     if (target.playing) {
-      console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) skipped - already playing`);
+      console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) skipped - already playing`);
       return;
     }
-    pauseAudio?.().catch(() => undefined);
+    console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) awaiting pauseAudio before video play`);
     try {
-      console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) calling target.play()...`);
+      await pauseAudio?.();
+    } catch (e) {
+      console.warn(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) pauseAudio error`, e);
+    }
+    try {
+      console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) calling target.play()...`);
       const maybePromise = target.play();
       if (maybePromise && typeof maybePromise.then === "function") {
         maybePromise
           .then((res: any) => {
-            console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) target.play() Promise resolved, res:`, res);
+            console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) target.play() Promise resolved, res:`, res);
           })
           .catch((err: any) => {
             const name = (err?.name || "").toString();
@@ -603,25 +608,21 @@ export default function VideoScreen() {
               /interrupted by a call to pause\(\)/i.test(msg)
             )
               return;
-            console.error(`[VideoPlayer:NATIVE] safePlay(${tag}) target.play() rejected:`, {
+            console.error(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) target.play() rejected:`, {
               name: err?.name,
               message: err?.message,
-              stack: err?.stack,
-              cause: err?.cause,
             });
           });
       } else {
-        console.log(`[VideoPlayer:NATIVE] safePlay(${tag}) target.play() synchronous result:`, maybePromise);
+        console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) target.play() synchronous result:`, maybePromise);
       }
     } catch (err: any) {
-      console.error(`[VideoPlayer:NATIVE] safePlay(${tag}) synchronous throw:`, {
+      console.error(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) synchronous throw:`, {
         name: err?.name,
         message: err?.message,
-        stack: err?.stack,
-        cause: err?.cause,
       });
     }
-  }, [pauseAudio]);
+  }, [pauseAudio, playerState.isPlaying]);
 
   const safePlayRef = useRef(safePlay);
   useEffect(() => {
@@ -1429,6 +1430,7 @@ export default function VideoScreen() {
 
   const pauseInlineVideoIfNeeded = useCallback(async () => {
     try {
+      console.log(`[PlaybackRCA] platform=${Platform.OS} action=pauseInlineVideoIfNeeded called`);
       userPausedRef.current = true;
       playbackSessionRef.current += 1;
       const p = playerRef.current || videoPlayer;
@@ -1873,6 +1875,7 @@ export default function VideoScreen() {
         setPlaybackError(null);
 
         // Stop any active global audio and inline video
+        console.log(`[PlaybackRCA] platform=${Platform.OS} action=onPressVideo stopping audio before video switch`);
         await pauseAudio?.();
         if (playerRef.current) {
           try {
@@ -2069,6 +2072,21 @@ export default function VideoScreen() {
     activeVideoMeta,
     onPressVideo,
   ]);
+
+  useEffect(() => {
+    const unsubBlur = navigation.addListener("blur", () => {
+      console.log(`[PlaybackRCA] platform=${Platform.OS} action=VideoScreen blurred - pausing video`);
+      setInlineVideoHostActive(false);
+      if (playerRef.current) {
+        try {
+          playerRef.current.pause();
+          setIsVideoPlaying(false);
+        } catch {}
+      }
+    });
+
+    return unsubBlur;
+  }, [navigation, setInlineVideoHostActive]);
 
   useFocusEffect(
     useCallback(() => {
