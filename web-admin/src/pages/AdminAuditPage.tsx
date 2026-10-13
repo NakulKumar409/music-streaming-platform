@@ -61,12 +61,12 @@ export default function AdminAuditPage() {
   };
 
   return (
-    <div className="flex h-full w-full bg-background text-white relative">
-      <div className="flex-1 flex flex-col p-8 overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
+    <div className="flex flex-col w-full min-w-0 max-w-full text-white relative">
+      <div className="flex-1 flex flex-col w-full min-w-0 max-w-full">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2 text-white">
-              <Terminal className="text-primary w-6 h-6" />
+            <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 text-white">
+              <Terminal className="text-primary w-6 h-6 shrink-0" />
               System Audit Logs
             </h1>
             <p className="text-sm text-[#8D7B77] mt-1">
@@ -75,7 +75,7 @@ export default function AdminAuditPage() {
           </div>
           <button
             onClick={fetchLogs}
-            className="flex items-center gap-2 px-4 py-2 bg-surface hover:bg-card border border-white/10 rounded-xl text-sm font-medium text-white transition shadow-sm"
+            className="self-start sm:self-auto flex items-center justify-center gap-2 px-4 py-2 bg-surface hover:bg-card border border-white/10 rounded-xl text-sm font-medium text-white transition shadow-sm shrink-0"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -83,9 +83,9 @@ export default function AdminAuditPage() {
         </div>
 
         {/* Filters */}
-        <div className="bg-surface p-4 rounded-2xl border border-white/10 mb-6 flex flex-wrap gap-4 items-center">
-          <form onSubmit={handleSearch} className="flex-1 min-w-[300px] relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8D7B77] w-5 h-5" />
+        <div className="bg-surface p-4 rounded-2xl border border-white/10 mb-6 flex flex-col md:flex-row gap-3 md:gap-4 md:items-center">
+          <form onSubmit={handleSearch} className="w-full md:flex-1 relative min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8D7B77] w-5 h-5 shrink-0" />
             <input
               type="text"
               placeholder="Search by ID, correlation, or action..."
@@ -95,53 +95,55 @@ export default function AdminAuditPage() {
             />
           </form>
 
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-[#8D7B77]" />
-            <select
-              className="border border-white/10 rounded-xl px-3 py-2 text-sm outline-none bg-black/40 text-white focus:border-primary transition"
-              value={roleFilter}
-              onChange={(e) => { setPage(1); setRoleFilter(e.target.value); }}
-            >
-              <option value="" className="bg-[#181818] text-white">All Roles</option>
-              <option value="system" className="bg-[#181818] text-white">System</option>
-              <option value="admin" className="bg-[#181818] text-white">Admin</option>
-              <option value="fan" className="bg-[#181818] text-white">Fan</option>
-              <option value="artist" className="bg-[#181818] text-white">Artist</option>
-            </select>
-          </div>
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 w-full md:w-auto">
+            <div className="flex-1 sm:flex-initial flex items-center gap-2 min-w-0">
+              <Filter className="w-4 h-4 text-[#8D7B77] shrink-0" />
+              <select
+                className="w-full sm:w-auto border border-white/10 rounded-xl px-3 py-2 text-sm outline-none bg-black/40 text-white focus:border-primary transition"
+                value={roleFilter}
+                onChange={(e) => { setPage(1); setRoleFilter(e.target.value); }}
+              >
+                <option value="" className="bg-[#181818] text-white">All Roles</option>
+                <option value="system" className="bg-[#181818] text-white">System</option>
+                <option value="admin" className="bg-[#181818] text-white">Admin</option>
+                <option value="fan" className="bg-[#181818] text-white">Fan</option>
+                <option value="artist" className="bg-[#181818] text-white">Artist</option>
+              </select>
+            </div>
 
-          <div className="flex items-center gap-2">
-            <select
-              className="border border-white/10 rounded-xl px-3 py-2 text-sm outline-none bg-black/40 text-white focus:border-primary transition"
-              value={statusFilter}
-              onChange={(e) => { setPage(1); setStatusFilter(e.target.value); }}
-            >
-              <option value="" className="bg-[#181818] text-white">All Statuses</option>
-              <option value="success" className="bg-[#181818] text-white">Success</option>
-              <option value="pending" className="bg-[#181818] text-white">Pending</option>
-              <option value="failed" className="bg-[#181818] text-white">Failed</option>
-            </select>
+            <div className="flex-1 sm:flex-initial flex items-center gap-2 min-w-0">
+              <select
+                className="w-full sm:w-auto border border-white/10 rounded-xl px-3 py-2 text-sm outline-none bg-black/40 text-white focus:border-primary transition"
+                value={statusFilter}
+                onChange={(e) => { setPage(1); setStatusFilter(e.target.value); }}
+              >
+                <option value="" className="bg-[#181818] text-white">All Statuses</option>
+                <option value="success" className="bg-[#181818] text-white">Success</option>
+                <option value="pending" className="bg-[#181818] text-white">Pending</option>
+                <option value="failed" className="bg-[#181818] text-white">Failed</option>
+              </select>
+            </div>
           </div>
         </div>
 
         {/* Table */}
-        <div className="bg-surface rounded-2xl border border-white/10 overflow-hidden flex-1 flex flex-col">
-          <div className="overflow-x-auto h-full max-h-[600px]">
-            <table className="w-full text-left text-sm whitespace-nowrap">
+        <div className="bg-surface rounded-2xl border border-white/10 overflow-hidden flex-1 flex flex-col min-w-0 max-w-full">
+          <div className="overflow-x-auto w-full max-h-[600px]">
+            <table className="w-full min-w-[640px] text-left text-sm whitespace-nowrap">
               <thead className="bg-white/5 border-b border-white/10 sticky top-0 backdrop-blur-md">
                 <tr>
-                  <th className="px-6 py-4 font-medium text-[#8D7B77]">Timestamp</th>
-                  <th className="px-6 py-4 font-medium text-[#8D7B77]">Action</th>
-                  <th className="px-6 py-4 font-medium text-[#8D7B77]">Actor</th>
-                  <th className="px-6 py-4 font-medium text-[#8D7B77]">Entity</th>
-                  <th className="px-6 py-4 font-medium text-[#8D7B77]">Status</th>
-                  <th className="px-6 py-4 font-medium text-[#8D7B77]">Details</th>
+                  <th className="px-4 py-3 sm:px-6 sm:py-4 font-medium text-[#8D7B77]">Timestamp</th>
+                  <th className="px-4 py-3 sm:px-6 sm:py-4 font-medium text-[#8D7B77]">Action</th>
+                  <th className="px-4 py-3 sm:px-6 sm:py-4 font-medium text-[#8D7B77]">Actor</th>
+                  <th className="px-4 py-3 sm:px-6 sm:py-4 font-medium text-[#8D7B77]">Entity</th>
+                  <th className="px-4 py-3 sm:px-6 sm:py-4 font-medium text-[#8D7B77]">Status</th>
+                  <th className="px-4 py-3 sm:px-6 sm:py-4 font-medium text-[#8D7B77]">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {logs.length === 0 && !loading && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-[#8D7B77]">
+                    <td colSpan={6} className="px-4 py-12 sm:px-6 text-center text-[#8D7B77]">
                       No audit logs found matching your criteria.
                     </td>
                   </tr>
@@ -152,13 +154,13 @@ export default function AdminAuditPage() {
                     className="hover:bg-white/5 transition cursor-pointer border-b border-white/5"
                     onClick={() => setSelectedLog(log)}
                   >
-                    <td className="px-6 py-3 text-[#B8A6A1]">
+                    <td className="px-4 py-3 sm:px-6 text-[#B8A6A1]">
                       {new Date(log.created_at).toLocaleString()}
                     </td>
-                    <td className="px-6 py-3 font-mono text-xs text-primary font-medium">
+                    <td className="px-4 py-3 sm:px-6 font-mono text-xs text-primary font-medium">
                       {log.action}
                     </td>
-                    <td className="px-6 py-3">
+                    <td className="px-4 py-3 sm:px-6">
                       <span className={`px-2.5 py-1 text-xs rounded-full font-medium ${
                         log.actor_role === 'system' ? 'bg-white/10 text-gray-300 border border-white/10' : 
                         log.actor_role === 'admin' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 
@@ -167,10 +169,10 @@ export default function AdminAuditPage() {
                         {log.actor_role} {log.actor_id ? `#${log.actor_id}` : ''}
                       </span>
                     </td>
-                    <td className="px-6 py-3 text-white text-xs">
+                    <td className="px-4 py-3 sm:px-6 text-white text-xs">
                       {log.entity} <span className="text-[#8D7B77]">#{log.entity_id}</span>
                     </td>
-                    <td className="px-6 py-3">
+                    <td className="px-4 py-3 sm:px-6">
                       <span className={`px-2.5 py-1 text-xs rounded-full font-medium ${
                         log.status === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
                         log.status === 'failed' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 
@@ -179,7 +181,7 @@ export default function AdminAuditPage() {
                         {log.status}
                       </span>
                     </td>
-                    <td className="px-6 py-3">
+                    <td className="px-4 py-3 sm:px-6">
                       <button className="text-primary hover:text-primary-hover text-xs flex items-center gap-1 font-medium">
                         View <Activity className="w-3.5 h-3.5"/>
                       </button>
@@ -191,20 +193,20 @@ export default function AdminAuditPage() {
           </div>
           
           {/* Pagination */}
-          <div className="p-4 border-t border-white/10 flex justify-between items-center text-sm text-[#8D7B77] bg-surface">
-            <span>Showing {logs.length} of {total} logs</span>
+          <div className="p-4 border-t border-white/10 flex flex-col sm:flex-row sm:justify-between items-center gap-3 text-sm text-[#8D7B77] bg-surface">
+            <span className="text-xs sm:text-sm">Showing {logs.length} of {total} logs</span>
             <div className="flex gap-2">
               <button
                 disabled={page === 1}
                 onClick={() => setPage(p => p - 1)}
-                className="px-3 py-1 bg-black/40 border border-white/10 rounded-lg text-white hover:bg-white/10 disabled:opacity-40 transition"
+                className="px-3 py-1 bg-black/40 border border-white/10 rounded-lg text-white hover:bg-white/10 disabled:opacity-40 transition text-xs sm:text-sm"
               >
                 Prev
               </button>
               <button
                 disabled={logs.length < 50}
                 onClick={() => setPage(p => p + 1)}
-                className="px-3 py-1 bg-black/40 border border-white/10 rounded-lg text-white hover:bg-white/10 disabled:opacity-40 transition"
+                className="px-3 py-1 bg-black/40 border border-white/10 rounded-lg text-white hover:bg-white/10 disabled:opacity-40 transition text-xs sm:text-sm"
               >
                 Next
               </button>
@@ -215,7 +217,7 @@ export default function AdminAuditPage() {
 
       {/* Slide-out Drawer Component */}
       {selectedLog && (
-        <div className="absolute top-0 right-0 h-full w-[540px] bg-surface shadow-2xl border-l border-white/10 flex flex-col z-50 animate-in slide-in-from-right">
+        <div className="fixed sm:absolute top-0 right-0 h-full w-full sm:w-[540px] max-w-full bg-surface shadow-2xl border-l border-white/10 flex flex-col z-50 animate-in slide-in-from-right">
           <div className="p-6 border-b border-white/10 flex justify-between items-center bg-black/40">
             <div>
               <h3 className="font-bold text-lg flex items-center gap-2 text-white">
@@ -237,7 +239,7 @@ export default function AdminAuditPage() {
           </div>
 
           <div className="p-6 overflow-y-auto flex-1 space-y-6 text-white">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <p className="text-xs text-[#8D7B77] uppercase tracking-wide font-semibold mb-1">Timestamp</p>
                 <p className="font-medium text-sm text-white">{new Date(selectedLog.created_at).toLocaleString()}</p>
@@ -284,7 +286,7 @@ export default function AdminAuditPage() {
             {selectedLog.metadata?.before && selectedLog.metadata?.after && (
               <div className="mt-4">
                 <p className="text-xs text-[#8D7B77] uppercase tracking-wide font-semibold mb-2">State Diff</p>
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
                   <div className="bg-red-950/30 p-3 rounded-xl border border-red-500/20">
                     <p className="text-red-400 mb-2 font-bold">- Before</p>
                     <pre className="text-red-300 bg-transparent overflow-x-auto">{JSON.stringify(selectedLog.metadata.before, null, 2)}</pre>
