@@ -631,6 +631,8 @@ export default function VideoScreen() {
 
   const [videoPlayer, setVideoPlayer] = useState<VideoPlayer | null>(null);
   const playerRef = useRef<VideoPlayer | null>(null);
+  const currentVideoSourceUrlRef = useRef<string | null>(null);
+  const isInteractingWithControlRef = useRef<boolean>(false);
 
   const initializeOrUpdatePlayer = useCallback(
     (url: string) => {
@@ -657,6 +659,7 @@ export default function VideoScreen() {
             ? `${new URL(url).origin}${new URL(url).pathname}?[token-redacted]`
             : url;
           console.log("[VideoScreen] Creating VideoPlayer with URL:", sanitizedUrl, "contentType:", videoSource.contentType);
+          currentVideoSourceUrlRef.current = url;
           const player = createVideoPlayer(videoSource);
           player.loop = false;
           player.timeUpdateEventInterval = 0.1;
@@ -668,9 +671,14 @@ export default function VideoScreen() {
           );
           if (!userPausedRef.current && Platform.OS !== "web") {
             console.log("[VideoScreen] Auto-playing on init with valid URL");
-            safePlay(player as any, "init");
+            safePlayRef.current?.(player as any, "init");
           }
         } else {
+          if (currentVideoSourceUrlRef.current === url) {
+            console.log("[VideoScreen] VideoPlayer source already matches, skipping replacement");
+            return;
+          }
+          currentVideoSourceUrlRef.current = url;
           const sanitizedUrl = url.includes("?")
             ? `${new URL(url).origin}${new URL(url).pathname}?[token-redacted]`
             : url;
@@ -681,14 +689,14 @@ export default function VideoScreen() {
             `[PlaybackTimeRCA] platform=${Platform.OS} action=replaceVideoSource timeUpdateEventInterval=${playerRef.current.timeUpdateEventInterval}`
           );
           if (!userPausedRef.current && Platform.OS !== "web") {
-            safePlay(playerRef.current as any, "replace");
+            safePlayRef.current?.(playerRef.current as any, "replace");
           }
         }
       } catch (err) {
         console.error("[VideoScreen] Error creating or updating VideoPlayer", err);
       }
     },
-    [safePlay]
+    []
   );
 
   useEffect(() => {
@@ -1049,7 +1057,7 @@ export default function VideoScreen() {
     };
   }, [fetchAll, matchesQuery, normalizedQuery]);
 
-  const AUTO_HIDE_DELAY_MS = 3200;
+  const AUTO_HIDE_DELAY_MS = 2000;
 
   const hideControls = useCallback(() => {
     if (controlsHideTimerRef.current) {
@@ -1065,13 +1073,24 @@ export default function VideoScreen() {
       clearTimeout(controlsHideTimerRef.current);
       controlsHideTimerRef.current = null;
     }
-    if (isVideoPlaying) {
+    if (
+      isVideoPlaying &&
+      !isSeekingRef.current &&
+      !showQualitySheet &&
+      !showSpeedSheet &&
+      !showMoreOptionsSheet
+    ) {
       controlsHideTimerRef.current = setTimeout(() => {
         setShowControls(false);
         setShowQualitySheet(false);
       }, AUTO_HIDE_DELAY_MS);
     }
-  }, [isVideoPlaying]);
+  }, [
+    isVideoPlaying,
+    showQualitySheet,
+    showSpeedSheet,
+    showMoreOptionsSheet,
+  ]);
 
   const toggleControls = useCallback(() => {
     setShowControls((prev) => {
@@ -1081,7 +1100,13 @@ export default function VideoScreen() {
         controlsHideTimerRef.current = null;
       }
       if (next) {
-        if (isVideoPlaying) {
+        if (
+          isVideoPlaying &&
+          !isSeekingRef.current &&
+          !showQualitySheet &&
+          !showSpeedSheet &&
+          !showMoreOptionsSheet
+        ) {
           controlsHideTimerRef.current = setTimeout(() => {
             setShowControls(false);
             setShowQualitySheet(false);
@@ -1092,7 +1117,12 @@ export default function VideoScreen() {
       }
       return next;
     });
-  }, [isVideoPlaying]);
+  }, [
+    isVideoPlaying,
+    showQualitySheet,
+    showSpeedSheet,
+    showMoreOptionsSheet,
+  ]);
 
   useEffect(() => {
     if (isVideoPlaying && showControls) {
@@ -1149,6 +1179,7 @@ export default function VideoScreen() {
       setActiveVideoId(null);
       setActiveVideoMeta(null);
       setActivePlaybackUrl(null);
+      currentVideoSourceUrlRef.current = null;
       setIsVideoReady(false);
       setIsVideoPlaying(false);
       setPositionMs(0);
@@ -1307,15 +1338,30 @@ export default function VideoScreen() {
     }
   }, [displayPositionMs]);
 
-  const onSeekChange = useCallback((value: number) => {
-    const clamped = Math.max(0, Math.round(value));
-    seekValueRef.current = clamped;
-    setScrubPosition(clamped);
-  }, []);
+  const onSeekChange = useCallback(
+    (value: number) => {
+      const p = playerRef.current || videoPlayer;
+      const effectiveDuration =
+        durationMs > 0 ? durationMs : (p?.duration ?? 0) * 1000;
+      const clamped =
+        effectiveDuration > 0
+          ? Math.min(Math.max(0, Math.round(value)), effectiveDuration)
+          : Math.max(0, Math.round(value));
+      seekValueRef.current = clamped;
+      setScrubPosition(clamped);
+    },
+    [durationMs, videoPlayer]
+  );
 
   const onSeekComplete = useCallback(
     async (value: number) => {
-      const targetMs = Math.max(0, Math.round(value));
+      const p = playerRef.current || videoPlayer;
+      const effectiveDuration =
+        durationMs > 0 ? durationMs : (p?.duration ?? 0) * 1000;
+      const targetMs =
+        effectiveDuration > 0
+          ? Math.min(Math.max(0, Math.round(value)), effectiveDuration)
+          : Math.max(0, Math.round(value));
       seekValueRef.current = targetMs;
       setIsSeeking(false);
       isSeekingRef.current = false;
@@ -1489,6 +1535,28 @@ export default function VideoScreen() {
             safePlayRef.current?.(videoPlayer as any, "status-readyToPlay");
           }
         } else if (status === "error" || status === "failed") {
+          console.log("[VideoScreen] Player status failed or URL expired, attempting refresh...");
+          const qualityGeneration = qualityAccessGenerationRef.current;
+          const sessionId = playbackSessionRef.current;
+          const isStillRelevant = () =>
+            sessionId === playbackSessionRef.current &&
+            qualityGeneration === qualityAccessGenerationRef.current;
+          (async () => {
+            if (!activeVideoMeta?.id) return;
+            try {
+              const nextUrl = await streamService.getPlaybackUrl(
+                activeVideoMeta.id,
+                "video",
+                selectedQuality,
+                { isStillRelevant }
+              );
+              if (isStillRelevant()) {
+                setActivePlaybackUrl(nextUrl);
+              }
+            } catch {
+              // ignore
+            }
+          })().catch(() => undefined);
           console.error("[VideoPlayer:NATIVE] Playback failed with error:", error);
           setPlaybackError(error?.message || "Playback failed");
         }
@@ -2529,6 +2597,7 @@ export default function VideoScreen() {
 
   const onPressPlayerSurface = useCallback(
     async (evt: any) => {
+      if (isInteractingWithControlRef.current) return;
       const x = Number(evt?.nativeEvent?.locationX ?? 0);
       const now = Date.now();
       const delta = now - lastTapRef.current;
@@ -3410,7 +3479,14 @@ export default function VideoScreen() {
                           pressed ? styles.compactSeekBtnPressed : null,
                         ]}
                         hitSlop={10}
-                        onPress={handleSeekBackward10}>
+                        onPress={(e) => {
+                          e?.stopPropagation?.();
+                          isInteractingWithControlRef.current = true;
+                          setTimeout(() => {
+                            isInteractingWithControlRef.current = false;
+                          }, 250);
+                          handleSeekBackward10();
+                        }}>
                         <View style={styles.compactSeekContent}>
                           <SeekBack10Icon size={16} color="#fff" />
                           <Text style={styles.compactSeekNumber}>10</Text>
@@ -3424,7 +3500,12 @@ export default function VideoScreen() {
                           pressed ? styles.compactPlayPauseBtnPressed : null,
                         ]}
                         hitSlop={10}
-                        onPress={() => {
+                        onPress={(e) => {
+                          e?.stopPropagation?.();
+                          isInteractingWithControlRef.current = true;
+                          setTimeout(() => {
+                            isInteractingWithControlRef.current = false;
+                          }, 250);
                           resetControlsTimeout();
                           toggleInlinePlayPause();
                         }}>
@@ -3447,7 +3528,14 @@ export default function VideoScreen() {
                           pressed ? styles.compactSeekBtnPressed : null,
                         ]}
                         hitSlop={10}
-                        onPress={handleSeekForward10}>
+                        onPress={(e) => {
+                          e?.stopPropagation?.();
+                          isInteractingWithControlRef.current = true;
+                          setTimeout(() => {
+                            isInteractingWithControlRef.current = false;
+                          }, 250);
+                          handleSeekForward10();
+                        }}>
                         <View style={styles.compactSeekContent}>
                           <SeekForward10Icon size={16} color="#fff" />
                           <Text style={styles.compactSeekNumber}>10</Text>

@@ -160,13 +160,21 @@ export default function FullPlayerScreen({ navigation, route }: any) {
 
   // Dynamic layout metrics strictly preventing bottom navigation overlap
   const isShortScreen = windowHeight < 720;
+  const isVeryShortScreen = windowHeight < 640;
   const bottomNavHeight = 66 + Math.max(insets.bottom, Platform.OS === 'ios' ? 14 : 10);
-  const bottomSpacing = isShortScreen ? 16 : 22; // within 16-24px target clearance
+  const bottomSpacing = isShortScreen ? 14 : 20; // clearance above floating bottom nav
   const bottomPadding = bottomNavHeight + bottomSpacing;
 
-  // Adapt disc artwork size proportionally to vertical budget
-  const verticalBudget = windowHeight - (insets.top + bottomPadding + (isShortScreen ? 230 : 270));
-  const discSize = Math.max(160, Math.min(windowWidth - 72, 260, verticalBudget));
+  // Responsive artwork sizing: well-proportioned, leaving ample breathing room
+  const artSize = isVeryShortScreen
+    ? Math.min(windowWidth * 0.48, 160)
+    : isShortScreen
+    ? Math.min(windowWidth * 0.54, 185)
+    : Math.min(windowWidth * 0.60, 230);
+
+  const rimPadding = isShortScreen ? 14 : 18;
+  const rimSize = artSize + rimPadding * 2;
+  const artworkToTitleGap = isShortScreen ? 20 : 30;
 
   // ── Local UI state ─────────────────────────────────────────────────────────
   const [scrubPosition, setScrubPosition] = useState<number | null>(null);
@@ -203,7 +211,7 @@ export default function FullPlayerScreen({ navigation, route }: any) {
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.06,
+          toValue: 1.05,
           duration: 900,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
@@ -312,6 +320,15 @@ export default function FullPlayerScreen({ navigation, route }: any) {
     setImageError(false);
   }, [resolvedImage]);
 
+  const isDraggingRef = useRef(false);
+
+  // Reset scrub and drag state whenever active track changes
+  const activeTrackKey = currentItem?.id ?? currentItem?.contentId ?? null;
+  useEffect(() => {
+    setScrubPosition(null);
+    isDraggingRef.current = false;
+  }, [activeTrackKey]);
+
   const durationKnown = hasFiniteDuration(playerState.durationMs);
   const enginePositionForUi =
     pendingSeekPositionMs !== null
@@ -325,15 +342,18 @@ export default function FullPlayerScreen({ navigation, route }: any) {
 
   // ── Seek ───────────────────────────────────────────────────────────────────
   const onSeekStart = useCallback(() => {
+    isDraggingRef.current = true;
     setScrubPosition(enginePositionForUi);
   }, [enginePositionForUi]);
 
   const onSeekChange = useCallback((v: number) => {
+    isDraggingRef.current = true;
     setScrubPosition(v);
   }, []);
 
   const onSeekComplete = useCallback(
     (v: number) => {
+      isDraggingRef.current = false;
       // Keep the user's scrub value visible until the provider has registered
       // the pending seek target. No fixed timing window is involved.
       setScrubPosition(v);
@@ -357,11 +377,10 @@ export default function FullPlayerScreen({ navigation, route }: any) {
     });
   }, [close]);
 
-
   // ── Glow opacity ──────────────────────────────────────────────────────────
   const glowOpacity = pulseAnim.interpolate({
-    inputRange: [1.0, 1.06],
-    outputRange: [0.3, 0.55],
+    inputRange: [1.0, 1.05],
+    outputRange: [0.25, 0.45],
   });
 
   return (
@@ -375,7 +394,7 @@ export default function FullPlayerScreen({ navigation, route }: any) {
       >
         <BlurView intensity={85} tint="dark" style={StyleSheet.absoluteFill} />
         <LinearGradient
-          colors={['rgba(0,0,0,0.30)', 'rgba(0,0,0,0.72)', 'rgba(0,0,0,0.97)']}
+          colors={['rgba(0,0,0,0.32)', 'rgba(0,0,0,0.72)', 'rgba(0,0,0,0.98)']}
           locations={[0, 0.5, 1]}
           style={StyleSheet.absoluteFill}
         />
@@ -397,13 +416,14 @@ export default function FullPlayerScreen({ navigation, route }: any) {
               style={styles.topIconBtn}
               onPress={() => navigation.goBack()}
               hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
             >
               <ArrowLeft size={22} color="#fff" />
             </Pressable>
 
             <View style={styles.topCenter}>
-              <Text style={styles.topLabel}>Now Playing</Text>
-              <Text style={styles.topTitle} numberOfLines={1}>{displayTitle}</Text>
+              <Text style={styles.topHeading}>NOW PLAYING</Text>
             </View>
 
             <View style={styles.topRight}>
@@ -411,6 +431,8 @@ export default function FullPlayerScreen({ navigation, route }: any) {
                 style={styles.topIconBtn}
                 onPress={() => setIsHearted((v) => !v)}
                 hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Favorite"
               >
                 <HeartIcon
                   size={22}
@@ -422,6 +444,8 @@ export default function FullPlayerScreen({ navigation, route }: any) {
                 style={styles.topIconBtn}
                 onPress={() => stopAndGoToAudio().catch(() => undefined)}
                 hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Close player"
               >
                 <X size={22} color="#fff" />
               </Pressable>
@@ -430,71 +454,73 @@ export default function FullPlayerScreen({ navigation, route }: any) {
 
           {/* ── Center Section: Disc & Song Info ── */}
           <View style={styles.centerSection}>
-            {/* ── Disc / Artwork ── */}
-            <View style={[styles.discContainer, { width: discSize, height: discSize }]}>
+            {/* ── Disc / Artwork with amber rim ── */}
+            <View style={[styles.discOuterRim, { width: rimSize, height: rimSize, borderRadius: rimSize / 2 }]}>
               {/* Glow ring */}
               <Animated.View
                 style={[
                   styles.discGlow,
                   {
-                    width: discSize + 40,
-                    height: discSize + 40,
-                    borderRadius: (discSize + 40) / 2,
+                    width: rimSize,
+                    height: rimSize,
+                    borderRadius: rimSize / 2,
                     backgroundColor: theme?.primary || Colors.accent,
                     transform: [{ scale: pulseAnim }],
                     opacity: glowOpacity,
                   },
                 ]}
               />
-              {/* Spinning disc */}
-              <Animated.Image
-                source={{ uri: displayImage }}
-                style={[
-                  styles.disc,
-                  {
-                    width: discSize,
-                    height: discSize,
-                    borderRadius: discSize / 2,
-                    transform: [{ rotate: spin }],
-                  },
-                ]}
-                resizeMode="cover"
-                onError={() => setImageError(true)}
-              />
-              {/* Center hole */}
+              {/* Concentric platter rim */}
               <View
                 style={[
-                  styles.discHole,
+                  styles.discRimLayer,
                   {
-                    width: Math.max(24, Math.round(discSize * 0.11)),
-                    height: Math.max(24, Math.round(discSize * 0.11)),
-                    borderRadius: Math.max(12, Math.round(discSize * 0.055)),
+                    width: rimSize,
+                    height: rimSize,
+                    borderRadius: rimSize / 2,
+                    borderColor: `${theme?.primary || Colors.accent}45`,
                   },
                 ]}
-              />
+              >
+                {/* Circular album artwork */}
+                <Animated.Image
+                  source={{ uri: displayImage }}
+                  style={[
+                    styles.disc,
+                    {
+                      width: artSize,
+                      height: artSize,
+                      borderRadius: artSize / 2,
+                      transform: [{ rotate: spin }],
+                    },
+                  ]}
+                  resizeMode="cover"
+                  onError={() => setImageError(true)}
+                />
+              </View>
             </View>
 
-            {/* ── Song Info ── */}
-            <View style={[styles.songInfo, { marginVertical: isShortScreen ? 12 : 20 }]}>
-              <Text style={styles.songTitle} numberOfLines={1}>{displayTitle}</Text>
-              <Text style={styles.songArtist} numberOfLines={1}>{displayArtist}</Text>
+            {/* ── Song Info: Clearly separated from artwork ── */}
+            <View style={[styles.songInfo, { marginTop: artworkToTitleGap }]}>
+              <Text style={styles.songTitle} numberOfLines={1} ellipsizeMode="tail">
+                {displayTitle}
+              </Text>
+              <Text style={styles.songArtist} numberOfLines={1} ellipsizeMode="tail">
+                {displayArtist}
+              </Text>
             </View>
           </View>
 
           {/* ── Bottom Section: Seek Bar & Controls ── */}
-          <View style={styles.bottomSection}>
-            {/* ── Seek Bar ── */}
+          <View style={[styles.bottomSection, { marginTop: isShortScreen ? 12 : 20 }]}>
+            {/* ── Seek Bar (Slider above timestamps) ── */}
             <View style={styles.seekSection}>
-              <View style={styles.timesRow}>
-                <Text style={styles.timeText}>{formatDurationLabel(positionForUi, '00:00')}</Text>
-                <Text style={styles.timeText}>
-                  {durationKnown ? formatDurationLabel(playerState.durationMs, '--:--') : '--:--'}
-                </Text>
-              </View>
               <Slider
+                key={`audio-slider-${currentItem?.id ?? 'track'}-${durationKnown ? playerState.durationMs : 0}`}
                 style={styles.seekSlider}
                 minimumValue={0}
                 maximumValue={durationKnown ? playerState.durationMs : 1}
+                step={1}
                 value={sliderValue}
                 disabled={!durationKnown}
                 minimumTrackTintColor={theme?.primary || Colors.accent}
@@ -504,10 +530,16 @@ export default function FullPlayerScreen({ navigation, route }: any) {
                 onValueChange={onSeekChange}
                 onSlidingComplete={onSeekComplete}
               />
+              <View style={styles.timesRow}>
+                <Text style={styles.timeText}>{formatDurationLabel(positionForUi, '00:00')}</Text>
+                <Text style={styles.timeText}>
+                  {durationKnown ? formatDurationLabel(playerState.durationMs, '--:--') : '--:--'}
+                </Text>
+              </View>
             </View>
 
-            {/* ── Playback Controls ── */}
-            <View style={[styles.controlsRow, { marginTop: isShortScreen ? 10 : 16 }]}>
+            {/* ── Playback Controls: Balanced 5-button row with clear gaps ── */}
+            <View style={[styles.controlsRow, { marginTop: isShortScreen ? 14 : 22 }]}>
               <Pressable
                 style={styles.auxControlBtn}
                 onPress={() => toggleShuffle()}
@@ -516,8 +548,8 @@ export default function FullPlayerScreen({ navigation, route }: any) {
                 accessibilityLabel="Shuffle"
               >
                 <ShuffleIcon
-                  size={22}
-                  color={playerState.isShuffle ? (theme?.primary || Colors.accent) : 'rgba(255,255,255,0.55)'}
+                  size={17}
+                  color={playerState.isShuffle ? (theme?.primary || Colors.accent) : 'rgba(255,255,255,0.65)'}
                 />
               </Pressable>
 
@@ -528,7 +560,7 @@ export default function FullPlayerScreen({ navigation, route }: any) {
                 accessibilityRole="button"
                 accessibilityLabel="Previous track"
               >
-                <SkipPrevIcon size={24} color="#fff" />
+                <SkipPrevIcon size={20} color="#fff" />
               </Pressable>
 
               <Pressable
@@ -538,8 +570,8 @@ export default function FullPlayerScreen({ navigation, route }: any) {
                 accessibilityLabel={playerState.isPlaying ? "Pause" : "Play"}
               >
                 {playerState.isPlaying
-                  ? <PauseIcon size={30} color="#000" />
-                  : <PlayIcon size={30} color="#000" />}
+                  ? <PauseIcon size={25} color="#000" />
+                  : <PlayIcon size={25} color="#000" />}
               </Pressable>
 
               <Pressable
@@ -549,7 +581,7 @@ export default function FullPlayerScreen({ navigation, route }: any) {
                 accessibilityRole="button"
                 accessibilityLabel="Next track"
               >
-                <SkipNextIcon size={24} color="#fff" />
+                <SkipNextIcon size={20} color="#fff" />
               </Pressable>
 
               <Pressable
@@ -560,8 +592,8 @@ export default function FullPlayerScreen({ navigation, route }: any) {
                 accessibilityLabel="Repeat mode"
               >
                 <RepeatIcon
-                  size={22}
-                  color={playerState.repeatMode !== 'off' ? (theme?.primary || Colors.accent) : 'rgba(255,255,255,0.55)'}
+                  size={17}
+                  color={playerState.repeatMode !== 'off' ? (theme?.primary || Colors.accent) : 'rgba(255,255,255,0.65)'}
                   one={playerState.repeatMode === 'one'}
                 />
               </Pressable>
@@ -581,6 +613,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   centerSection: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
@@ -596,6 +629,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: 8,
     paddingBottom: 8,
+    minHeight: 48,
   },
   topIconBtn: {
     width: 42,
@@ -610,6 +644,7 @@ const styles = StyleSheet.create({
   topCenter: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 8,
   },
   topRight: {
@@ -617,57 +652,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  topLabel: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 11,
+  topHeading: {
+    color: 'rgba(255,255,255,0.70)',
+    fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 1.2,
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
-  topTitle: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '800',
-    marginTop: 2,
-  },
 
-  // ── Disc ──
-  discContainer: {
+  // ── Circular Artwork & Rim ──
+  discOuterRim: {
     alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
   discGlow: {
     position: 'absolute',
   },
-  disc: {
-    borderWidth: 5,
-    borderColor: 'rgba(255,255,255,0.10)',
+  discRimLayer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(120, 53, 15, 0.32)',
+    borderWidth: 1.5,
   },
-  discHole: {
-    position: 'absolute',
-    backgroundColor: '#111',
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.20)',
+  disc: {
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.18)',
   },
 
+  // ── Song Info ──
   songInfo: {
     alignItems: 'center',
-    paddingHorizontal: 8,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
     width: '100%',
   },
   songTitle: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 22,
-    fontWeight: '900',
+    fontWeight: '800',
     textAlign: 'center',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   songArtist: {
     color: 'rgba(255,255,255,0.60)',
     fontSize: 14,
-    fontWeight: '700',
-    marginTop: 5,
+    fontWeight: '500',
+    marginTop: 6,
     textAlign: 'center',
   },
 
@@ -675,20 +707,21 @@ const styles = StyleSheet.create({
   seekSection: {
     width: '100%',
   },
+  seekSlider: {
+    width: '100%',
+    height: 28,
+  },
   timesRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    paddingHorizontal: 4,
+    marginTop: 2,
   },
   timeText: {
     color: 'rgba(255,255,255,0.65)',
     fontSize: 12,
-    fontWeight: '800',
-  },
-  seekSlider: {
-    width: '100%',
-    height: 24,
+    fontWeight: '600',
   },
 
   // ── Playback Controls ──
@@ -696,37 +729,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 6,
+    paddingHorizontal: 10,
     width: '100%',
   },
   auxControlBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   skipBtn: {
-    width: 52,
-    height: 52,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
   },
   playPauseBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#fff',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#fff',
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowRadius: 10,
+    elevation: 6,
   },
 });
+

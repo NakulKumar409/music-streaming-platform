@@ -271,24 +271,26 @@ export default function ArtistPricingPage() {
                 The backend resolves this configured rupee price and converts it to integer paise at the payment boundary. The browser never supplies the checkout amount.
               </p>
 
-              <div className="mt-7 flex items-center gap-3 border-t border-white/10 pt-6">
+              <div className="mt-7 flex flex-col gap-3 border-t border-white/10 pt-6 sm:flex-row sm:items-center">
                 <button
                   type="button"
                   disabled={saving || !monthlyValid}
                   onClick={() => void save()}
-                  className="inline-flex h-12 items-center gap-2 rounded-xl bg-gradient-to-r from-primary to-secondary px-7 font-semibold text-white shadow-lg shadow-primary/25 transition-all hover:shadow-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex min-h-[48px] w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-r from-primary to-secondary px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-primary/25 transition-all hover:shadow-primary/40 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-7 sm:text-base"
                 >
                   {saving ? (
                     <>
-                      <Loader2 className="h-5 w-5 animate-spin" /> Saving…
+                      <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
+                      <span>Saving…</span>
                     </>
                   ) : (
                     <>
-                      <CheckCircle className="h-5 w-5" /> Save monthly price
+                      <CheckCircle className="h-5 w-5 shrink-0" />
+                      <span>Save monthly price</span>
                     </>
                   )}
                 </button>
-                <span className="text-xs text-[#8D7B77]">
+                <span className="min-w-0 text-xs text-[#8D7B77]">
                   Duplicate submissions are blocked while saving.
                 </span>
               </div>

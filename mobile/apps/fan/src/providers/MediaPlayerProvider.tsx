@@ -866,9 +866,17 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
   );
 
   const stopVideoInFlightRef = useRef<Promise<void> | null>(null);
+  const lastStopVideoTimeRef = useRef<number>(0);
   const stopVideo = useCallback(async () => {
     if (stopVideoInFlightRef.current) {
       return stopVideoInFlightRef.current;
+    }
+    if (
+      Date.now() - lastStopVideoTimeRef.current < 250 &&
+      !videoPlayer?.playing &&
+      !inlineVideoHostActiveRef.current
+    ) {
+      return;
     }
     const runStop = async () => {
       logger.log(`[PlaybackRCA] platform=${Platform.OS} action=stopVideo requested`);
@@ -884,6 +892,7 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
           videoPlayer.pause();
         } catch {}
       }
+      lastStopVideoTimeRef.current = Date.now();
     };
     const p = runStop().finally(() => {
       if (stopVideoInFlightRef.current === p) {
@@ -1011,7 +1020,8 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
           playbackSessionId = descriptor.sessionId;
           descriptorDurationMs = descriptor.durationMs ?? 0;
         } catch (e: any) {
-          if (!isCurrentLoad() || (e instanceof StreamAccessError && e.code === "PLAYBACK_REQUEST_SUPERSEDED")) {
+          const errCode = e?.code || (e instanceof StreamAccessError ? e.code : null);
+          if (!isCurrentLoad() || errCode === "PLAYBACK_REQUEST_SUPERSEDED") {
             logger.log("[MediaPlayer] getPlaybackUrl superseded by newer selection");
             return;
           }
@@ -1346,17 +1356,7 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
         await ensureTrackPlayerReady();
         if (!isCurrentLoad()) return;
 
-        try {
-          await TrackPlayer.reset();
-        } catch (resetErr: any) {
-          if (String(resetErr?.message || "").includes("not initialized")) {
-            resetTrackPlayerReadyPromise();
-            await ensureTrackPlayerReady();
-            await TrackPlayer.reset();
-          } else {
-            throw resetErr;
-          }
-        }
+        await TrackPlayer.reset();
         if (!isCurrentLoad()) return;
 
         await TrackPlayer.add([track]);
@@ -1555,15 +1555,15 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
 
       if (item.mediaType === "video" && item.useStreamAccess) {
         try {
-          const rawUrl = await getPlaybackUrl(
+          const url = await getPlaybackUrl(
             item.contentId ?? item.id,
             "video",
             preferredQuality,
             { isStillRelevant: isCurrentSelection }
           );
-          const url = normalizePlaybackUrl(rawUrl);
           if (!isCurrentSelection()) return;
-          if (!validatePlaybackUrl(url, "video")) {
+          const normalizedUrl = normalizePlaybackUrl(url);
+          if (!validatePlaybackUrl(normalizedUrl, "video")) {
             showToast({
               tone: "error",
               title: "Video unavailable",
@@ -1571,11 +1571,11 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
             });
             return;
           }
-          item = { ...item, mediaUrl: url };
+          item = { ...item, mediaUrl: normalizedUrl };
           nextState.queue[nextState.currentIndex] = item;
           currentItemRef.current = item;
-        } catch (e) {
-          if (!isCurrentSelection()) return;
+        } catch (e: any) {
+          if (!isCurrentSelection() || e?.code === "PLAYBACK_REQUEST_SUPERSEDED") return;
           const presentation = getPlaybackErrorPresentation(e);
           logger.warn("[MediaPlayer] getPlaybackUrl for video failed", e);
           showToast({

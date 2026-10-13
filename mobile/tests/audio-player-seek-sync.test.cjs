@@ -108,6 +108,20 @@ test('unknown duration cannot render as 100 percent progress', () => {
   assert.match(fullPlayer, /: 0;/);
 });
 
+test('full player slider synchronizes with authoritative duration and drag lifecycle', () => {
+  const fullPlayer = read('apps/fan/src/screens/FullPlayerScreen.tsx');
+
+  // Slider has step=1 and remount key to guarantee Android native SeekBar geometry updates
+  assert.match(fullPlayer, /step=\{1\}/);
+  assert.match(fullPlayer, /key=\{`audio-slider-\$\{currentItem\?\.id \?\? 'track'\}-\$\{durationKnown \? playerState\.durationMs : 0\}`\}/);
+
+  // Dragging lifecycle guards scrub position against background poll overrides
+  assert.match(fullPlayer, /const isDraggingRef = useRef\(false\);/);
+  assert.match(fullPlayer, /isDraggingRef\.current = true;/);
+  assert.match(fullPlayer, /isDraggingRef\.current = false;/);
+  assert.match(fullPlayer, /setScrubPosition\(null\);[\s\S]{0,60}isDraggingRef\.current = false;/);
+});
+
 
 test('protected audio source recovery is event-driven, position-preserving, and timer-free', () => {
   const provider = read('apps/fan/src/providers/MediaPlayerProvider.tsx');

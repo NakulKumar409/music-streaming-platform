@@ -85,7 +85,9 @@ export type PlaybackErrorPresentation = {
 };
 
 export function getPlaybackErrorPresentation(error: unknown): PlaybackErrorPresentation {
-  const code = error instanceof StreamAccessError ? error.code : 'STREAM_ACCESS_FAILED';
+  const code =
+    (error as any)?.code ||
+    (error instanceof StreamAccessError ? error.code : 'STREAM_ACCESS_FAILED');
 
   switch (code) {
     case 'AUTHENTICATION_REQUIRED':
