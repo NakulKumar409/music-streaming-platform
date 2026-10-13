@@ -406,7 +406,15 @@ export default function VideoScreen() {
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-  const [positionMs, setPositionMs] = useState(0);
+  const [positionMs, setPositionMsState] = useState(0);
+  const positionMsRef = useRef(0);
+  const setPositionMs = useCallback((updater: number | ((prev: number) => number)) => {
+    setPositionMsState((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      positionMsRef.current = next;
+      return next;
+    });
+  }, []);
   const [durationMs, setDurationMs] = useState(0);
   const [scrubPosition, setScrubPosition] = useState<number | null>(null);
   const pendingSeekTargetMsRef = useRef<number | null>(null);
@@ -427,7 +435,7 @@ export default function VideoScreen() {
         setScrubPosition(null);
       }
     }, 1000);
-  }, []);
+  }, [setPositionMs]);
 
   const displayPositionMs =
     scrubPosition !== null
@@ -452,6 +460,9 @@ export default function VideoScreen() {
   const lastStatusPositionRef = useRef(0);
   const lastStatusDurationRef = useRef(0);
   const durationSetForUrlRef = useRef<string | null>(null);
+  const rcaLogTimeUpdateRef = useRef(0);
+  const rcaLogWebTimeUpdateRef = useRef(0);
+  const rcaLogIntervalRef = useRef(0);
 
   const [showQualitySheet, setShowQualitySheet] = useState(false);
   const [selectedQuality, setSelectedQuality] =
@@ -612,6 +623,11 @@ export default function VideoScreen() {
     }
   }, [pauseAudio]);
 
+  const safePlayRef = useRef(safePlay);
+  useEffect(() => {
+    safePlayRef.current = safePlay;
+  }, [safePlay]);
+
   const [videoPlayer, setVideoPlayer] = useState<VideoPlayer | null>(null);
   const playerRef = useRef<VideoPlayer | null>(null);
 
@@ -646,6 +662,9 @@ export default function VideoScreen() {
           player.staysActiveInBackground = true;
           playerRef.current = player;
           setVideoPlayer(player);
+          console.log(
+            `[PlaybackTimeRCA] platform=${Platform.OS} action=createVideoPlayer timeUpdateEventInterval=${player.timeUpdateEventInterval}`
+          );
           if (!userPausedRef.current && Platform.OS !== "web") {
             console.log("[VideoScreen] Auto-playing on init with valid URL");
             safePlay(player as any, "init");
@@ -657,6 +676,9 @@ export default function VideoScreen() {
           console.log("[VideoScreen] Updating VideoPlayer source:", sanitizedUrl, "contentType:", videoSource.contentType);
           playerRef.current.replace(videoSource);
           playerRef.current.timeUpdateEventInterval = 0.1;
+          console.log(
+            `[PlaybackTimeRCA] platform=${Platform.OS} action=replaceVideoSource timeUpdateEventInterval=${playerRef.current.timeUpdateEventInterval}`
+          );
           if (!userPausedRef.current && Platform.OS !== "web") {
             safePlay(playerRef.current as any, "replace");
           }
@@ -1432,6 +1454,10 @@ export default function VideoScreen() {
   useEffect(() => {
     if (!videoPlayer) return;
 
+    console.log(
+      `[PlaybackTimeRCA] platform=${Platform.OS} action=registerListeners activeVideoId=${activeVideoMeta?.id}`
+    );
+
     const statusSub = videoPlayer.addListener(
       "statusChange",
       (event: any) => {
@@ -1452,13 +1478,13 @@ export default function VideoScreen() {
             try {
               videoPlayer.currentTime = targetSeconds;
               console.log("[VideoPlayer:NATIVE] Quality resume seek to", targetSeconds);
-              safePlay(videoPlayer as any, "status-ready-quality");
+              safePlayRef.current?.(videoPlayer as any, "status-ready-quality");
             } catch (e) {
               console.error("[VideoPlayer:NATIVE] Quality resume seek failed", e);
             }
           } else if (!userPausedRef.current && !videoPlayer.playing) {
             console.log("[VideoPlayer:NATIVE] Calling safePlay for readyToPlay");
-            safePlay(videoPlayer as any, "status-readyToPlay");
+            safePlayRef.current?.(videoPlayer as any, "status-readyToPlay");
           }
         } else if (status === "error" || status === "failed") {
           console.error("[VideoPlayer:NATIVE] Playback failed with error:", error);
@@ -1470,7 +1496,7 @@ export default function VideoScreen() {
     const playingSub = videoPlayer.addListener(
       "playingChange",
       (event: any) => {
-        const isPlaying = Boolean(event.isPlaying);
+        const isPlaying = Boolean(typeof event === "object" ? event?.isPlaying : event);
         console.log(`[VideoPlayer:NATIVE] playingChange: isPlaying=${isPlaying}, currentTime=${videoPlayer.currentTime}`);
         setIsVideoPlaying(isPlaying);
       }
@@ -1480,7 +1506,17 @@ export default function VideoScreen() {
       "timeUpdate",
       (event: any) => {
         if (isSeekingRef.current) return;
-        const curMs = Math.round(Number(event.currentTime || 0) * 1000);
+        const playerSec = typeof videoPlayer.currentTime === "number" ? videoPlayer.currentTime : 0;
+        const eventSec = typeof event?.currentTime === "number" && event.currentTime > 0 ? event.currentTime : 0;
+        const rawSec = playerSec > 0 ? playerSec : (eventSec > 0 ? eventSec : playerSec);
+        const curMs = Math.round(Number(rawSec || 0) * 1000);
+        const now = Date.now();
+        if (now - rcaLogTimeUpdateRef.current >= 1000) {
+          rcaLogTimeUpdateRef.current = now;
+          console.log(
+            `[PlaybackTimeRCA] platform=${Platform.OS} source=timeUpdate playerTime=${Number(rawSec).toFixed(2)}s duration=${Number(videoPlayer.duration || 0).toFixed(2)}s eventTime=${event?.currentTime} positionMs=${curMs} displayPositionMs=${positionMsRef.current} elapsedLabel=${formatDurationLabel(curMs, "00:00")}`
+          );
+        }
         const target = pendingSeekTargetMsRef.current;
         if (target !== null) {
           if (Math.abs(curMs - target) < 800 || (curMs > target && curMs - target < 2000)) {
@@ -1492,6 +1528,10 @@ export default function VideoScreen() {
         }
         setPositionMs((prev) => {
           if (isSeekingRef.current || pendingSeekTargetMsRef.current !== null) {
+            return prev;
+          }
+          // Spurious 0 guard: ignore 0s during active forward playback if previous position is ahead
+          if (videoPlayer.playing && curMs === 0 && prev > 500) {
             return prev;
           }
           // Video loop / restart detection
@@ -1512,18 +1552,14 @@ export default function VideoScreen() {
     );
 
     return () => {
+      console.log(
+        `[PlaybackTimeRCA] platform=${Platform.OS} action=removeListeners activeVideoId=${activeVideoMeta?.id}`
+      );
       statusSub.remove();
       playingSub.remove();
       timeSub.remove();
     };
-  }, [
-    videoPlayer,
-    activePlaybackUrl,
-    activeVideoMeta?.id,
-    isStreamingHdAllowed,
-    selectedQuality,
-    safePlay,
-  ]);
+  }, [videoPlayer]);
 
   // Web-only: Attach Shaka Player for HLS playback and listen to native 'timeupdate'/'seeked' events for smooth 60fps tracking
   useEffect(() => {
@@ -1556,6 +1592,13 @@ export default function VideoScreen() {
         const onTimeUpdate = () => {
           if (isSeekingRef.current) return;
           const currentMs = Math.round(video.currentTime * 1000);
+          const now = Date.now();
+          if (now - rcaLogWebTimeUpdateRef.current >= 1000) {
+            rcaLogWebTimeUpdateRef.current = now;
+            console.log(
+              `[PlaybackTimeRCA] platform=web source=domTimeUpdate playerTime=${video.currentTime.toFixed(2)}s duration=${Number(video.duration || 0).toFixed(2)}s currentMs=${currentMs} displayPositionMs=${displayPositionMs} elapsedLabel=${formatDurationLabel(currentMs, "00:00")}`
+            );
+          }
           const target = pendingSeekTargetMsRef.current;
           if (target !== null) {
             if (Math.abs(currentMs - target) < 800 || (currentMs > target && currentMs - target < 2000)) {
@@ -1652,8 +1695,41 @@ export default function VideoScreen() {
       return;
     }
     const interval = setInterval(() => {
+      const p = playerRef.current || videoPlayer;
+      if (!p) return;
+      const rawSec = typeof p.currentTime === "number" ? p.currentTime : 0;
+      const curMs = toFiniteDurationMs(rawSec * 1000);
+      const rawDurSec = typeof p.duration === "number" ? p.duration : 0;
+      const durMs = toFiniteDurationMs(rawDurSec * 1000);
+
+      const now = Date.now();
+      if (now - rcaLogIntervalRef.current >= 1000) {
+        rcaLogIntervalRef.current = now;
+        console.log(
+          `[PlaybackTimeRCA] platform=${Platform.OS} source=intervalSync status=${p.status} playing=${p.playing} playerTime=${rawSec.toFixed(2)}s duration=${rawDurSec.toFixed(2)}s rawCurMs=${curMs} positionMsRef=${positionMsRef.current} elapsedLabel=${formatDurationLabel(curMs, "00:00")}`
+        );
+      }
+
       if (!isSeekingRef.current && pendingSeekTargetMsRef.current === null) {
-        const curMs = toFiniteDurationMs(videoPlayer.currentTime * 1000);
+        setPositionMs((prev) => {
+          if (isSeekingRef.current || pendingSeekTargetMsRef.current !== null) {
+            return prev;
+          }
+          // Spurious 0 guard: ignore 0s during active forward playback if previous position is ahead
+          if (p.playing && curMs === 0 && prev > 500) {
+            return prev;
+          }
+          // Video loop / restart detection
+          if (curMs < prev && (prev - curMs > 2000 || curMs < 500)) {
+            return curMs;
+          }
+          // Enforce monotonic progression during normal forward play to prevent clock jitter
+          if (p.playing && curMs < prev) {
+            return prev;
+          }
+          return curMs;
+        });
+
         if (activeVideoMeta) {
           syncActiveMediaItem?.(
             {
@@ -1666,31 +1742,31 @@ export default function VideoScreen() {
               artworkUrl: activeVideoMeta.artworkUrl,
               mediaUrl: activePlaybackUrl,
               useStreamAccess: activeVideoMeta.useStreamAccess,
-              duration: videoPlayer.duration
-                ? Math.round(videoPlayer.duration * 1000)
-                : undefined,
+              duration: durMs || undefined,
             },
-            videoPlayer.playing,
+            p.playing,
             curMs,
-            toFiniteDurationMs(videoPlayer.duration * 1000)
+            durMs
           );
         }
       }
-      setDurationMs(toFiniteDurationMs(videoPlayer.duration * 1000));
-      setIsBuffering(videoPlayer.status === "loading");
-      setIsVideoReady(videoPlayer.status === "readyToPlay");
+      if (durMs > 0) {
+        setDurationMs(durMs);
+      }
+      setIsBuffering(p.status === "loading");
+      setIsVideoReady(p.status === "readyToPlay");
 
       // Handle finished with autoplay check
       if (
         isAutoplayEnabled &&
-        videoPlayer.duration > 0 &&
-        videoPlayer.currentTime >= videoPlayer.duration - 0.2 &&
-        videoPlayer.playing === false &&
+        rawDurSec > 0 &&
+        rawSec >= rawDurSec - 0.2 &&
+        p.playing === false &&
         isVideoPlaying
       ) {
         setShowUpNext(true);
       }
-    }, 500);
+    }, 250);
     return () => clearInterval(interval);
   }, [
     videoPlayer,
