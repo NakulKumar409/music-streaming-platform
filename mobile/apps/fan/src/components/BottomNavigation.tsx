@@ -34,17 +34,18 @@ export default function BottomNavigation({
   // Controlled or uncontrolled active tab state
   const [internalTab, setInternalTab] = useState<BottomNavTab>(activeTabProp || 'home');
 
-  // In native mobile app, landscape orientation is exclusively used for full-screen video playback.
-  // The bottom navigation tab bar must be completely hidden in landscape mode.
-  if (Platform.OS !== 'web' && width > height) {
-    return null;
-  }
-
   useEffect(() => {
     if (activeTabProp !== undefined) {
       setInternalTab(activeTabProp);
     }
   }, [activeTabProp]);
+
+  // In native mobile app, landscape orientation is exclusively used for full-screen video playback.
+  // The bottom navigation tab bar must be completely hidden in landscape mode.
+  // Note: Placed after all Hooks to ensure consistent hook call order.
+  if (Platform.OS !== 'web' && width > height) {
+    return null;
+  }
 
   const currentActiveTab = activeTabProp !== undefined ? activeTabProp : internalTab;
 
