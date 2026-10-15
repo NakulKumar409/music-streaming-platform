@@ -1,35 +1,22 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
-import { WifiOff, RefreshCw } from 'lucide-react-native';
-
-const { width, height } = Dimensions.get('window');
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Wifi } from 'lucide-react-native';
+import { Colors } from '../theme';
 
 const OfflineScreen: React.FC<{ onRetry: () => void }> = ({ onRetry }) => {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        {/* Cloud with WiFi signal illustration */}
-        <View style={styles.illustrationContainer}>
-          <View style={styles.cloudContainer}>
-            <WifiOff size={80} color="#6B7280" />
-          </View>
-          <View style={styles.wifiSignal}>
-            <View style={[styles.signalBar, { height: 20, opacity: 0.3 }]} />
-            <View style={[styles.signalBar, { height: 35, opacity: 0.5 }]} />
-            <View style={[styles.signalBar, { height: 50, opacity: 0.7 }]} />
-            <View style={[styles.signalBar, { height: 65, opacity: 0.9 }]} />
-          </View>
+        <View style={styles.iconContainer}>
+          <Wifi size={64} color="#6B7280" />
         </View>
 
-        {/* Offline message */}
-        <Text style={styles.title}>You're offline</Text>
+        <Text style={styles.title}>No Internet Connection</Text>
         <Text style={styles.subtitle}>
-          You are currently offline. Please check your connection.
+          Please check your internet connection and try again.
         </Text>
 
-        {/* Retry button */}
-        <TouchableOpacity style={styles.retryButton} onPress={onRetry}>
-          <RefreshCw size={20} color="#FFFFFF" />
+        <TouchableOpacity style={styles.retryButton} onPress={onRetry} activeOpacity={0.85}>
           <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
       </View>
@@ -52,67 +39,47 @@ const styles = StyleSheet.create({
   content: {
     alignItems: 'center',
     paddingHorizontal: 40,
+    width: '100%',
+    maxWidth: 360,
   },
-  illustrationContainer: {
-    marginBottom: 40,
+  iconContainer: {
+    marginBottom: 28,
     alignItems: 'center',
-    position: 'relative',
-  },
-  cloudContainer: {
-    backgroundColor: '#1F1F1F',
-    borderRadius: 100,
-    padding: 30,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  wifiSignal: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    height: 65,
-    gap: 4,
-  },
-  signalBar: {
-    width: 6,
-    backgroundColor: '#6B7280',
-    borderRadius: 3,
+    justifyContent: 'center',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
     color: '#FFFFFF',
-    marginBottom: 12,
+    marginBottom: 10,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#9CA3AF',
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 40,
+    lineHeight: 20,
+    marginBottom: 32,
   },
   retryButton: {
-    flexDirection: 'row',
+    width: '100%',
     alignItems: 'center',
-    backgroundColor: '#3B82F6',
-    paddingHorizontal: 24,
+    justifyContent: 'center',
+    backgroundColor: Colors.accent || '#FFB800',
     paddingVertical: 14,
-    borderRadius: 12,
-    gap: 8,
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    borderRadius: 24,
     elevation: 4,
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: '#000000',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '800',
   },
 });
 
 export default OfflineScreen;
+

@@ -21,3 +21,8 @@ export function getRootState(): NavigationState | undefined {
   if (!navigationRef.isReady()) return undefined;
   return navigationRef.getRootState();
 }
+
+export function navigate(name: string, params?: any) {
+  if (!navigationRef.isReady()) return;
+  (navigationRef as any).navigate(name, params);
+}

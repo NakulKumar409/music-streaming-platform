@@ -12,9 +12,13 @@ export function formatDurationLabel(ms: number, fallback = "--:--"): string {
   if (!Number.isFinite(ms) || ms < 0) return fallback;
   const totalSeconds = Math.floor(ms / 1000);
   if (!Number.isFinite(totalSeconds)) return fallback;
-  const mm = Math.floor(totalSeconds / 60);
+  const hh = Math.floor(totalSeconds / 3600);
+  const mm = Math.floor((totalSeconds % 3600) / 60);
   const ss = totalSeconds % 60;
   if (!Number.isFinite(mm) || !Number.isFinite(ss)) return fallback;
+  if (hh > 0) {
+    return `${hh}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+  }
   return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
 }
 

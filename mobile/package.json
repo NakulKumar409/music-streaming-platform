@@ -7,7 +7,9 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests",
+    "verify": "npm run typecheck && npm test",
     "start": "expo start",
     "build": "expo build:android",
     "deploy": "expo deploy",
@@ -52,6 +54,7 @@
     "expo-linear-gradient": "~15.0.8",
     "expo-notifications": "~0.32.16",
     "expo-screen-orientation": "~9.0.8",
+    "expo-secure-store": "~15.0.8",
     "expo-sharing": "~14.0.8",
     "expo-video": "~3.0.16",
     "lucide-react-native": "^0.564.0",

@@ -10,6 +10,8 @@ export interface UploadObjectParams {
   storageKey: string;
   body: Buffer | Readable;
   contentType: string;
+  /** Known source size allows streaming providers to avoid buffering. */
+  contentLength?: number;
   metadata?: Record<string, string>;
 }
 
@@ -19,6 +21,12 @@ export interface UploadObjectResult {
   providerUrl?: string;
   etag?: string;
   sizeBytes?: number;
+  /** Provider-reported source duration in milliseconds when available. */
+  durationMs?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
+  /** Planned adaptive variants. They are not playable until provider completion is verified. */
+  adaptiveQualities?: string[];
 }
 
 export interface ObjectMetadata {

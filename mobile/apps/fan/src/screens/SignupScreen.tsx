@@ -3,10 +3,12 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft, Check, Eye, EyeOff } from "lucide-react-native";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -75,6 +77,124 @@ export default function SignupScreen({ navigation }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [focusedField, setFocusedField] = useState<string | null>(null);
+
+  // Keyboard awareness & auto-scrolling
+  const scrollViewRef = useRef<ScrollView>(null);
+  const cardY = useRef(0);
+  const stepWrapY = useRef(0);
+  const fieldLayouts = useRef<Record<string, number>>({});
+  const focusedFieldRef = useRef<string | null>(null);
+
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  // Field refs for smooth returnKeyType flow
+  const fullNameRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
+  const usernameRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmPasswordRef = useRef<TextInput>(null);
+  const locationCityRef = useRef<TextInput>(null);
+
+  const FIELD_FALLBACK_OFFSETS: Record<string, number> = {
+    fullName: 30,
+    email: 110,
+    phoneNumber: 190,
+    username: 30,
+    password: 110,
+    confirmPassword: 190,
+    dob: 30,
+    genre: 110,
+    locationCity: 190,
+  };
+
+  const scrollToField = (fieldName: string) => {
+    if (Platform.OS === "web") return;
+
+    const fieldY =
+      fieldLayouts.current[fieldName] ??
+      FIELD_FALLBACK_OFFSETS[fieldName] ??
+      100;
+
+    const targetY = Math.max(
+      0,
+      (cardY.current || 40) + (stepWrapY.current || 120) + fieldY - 60
+    );
+
+    scrollViewRef.current?.scrollTo({
+      y: targetY,
+      animated: true,
+    });
+  };
+
+  const handleFocus = (fieldName: string) => {
+    setFocusedField(fieldName);
+    focusedFieldRef.current = fieldName;
+    if (Platform.OS !== "web") {
+      if (isKeyboardVisible) {
+        scrollToField(fieldName);
+      } else {
+        setTimeout(() => {
+          if (focusedFieldRef.current === fieldName) {
+            scrollToField(fieldName);
+          }
+        }, 120);
+      }
+    }
+  };
+
+  const handleBlur = (fieldName: string) => {
+    if (focusedFieldRef.current === fieldName) {
+      focusedFieldRef.current = null;
+    }
+    setFocusedField(null);
+  };
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setIsKeyboardVisible(true);
+      const h = e.endCoordinates?.height ?? 0;
+      setKeyboardHeight(h);
+      if (focusedFieldRef.current) {
+        const fieldToScroll = focusedFieldRef.current;
+        setTimeout(() => {
+          scrollToField(fieldToScroll);
+        }, 50);
+      }
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardVisible(false);
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      focusedFieldRef.current = null;
+      setFocusedField(null);
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    }
+  }, [currentStep]);
+
+  const extraBottomPadding = Platform.select({
+    ios: isKeyboardVisible ? 40 : 0,
+    android: isKeyboardVisible ? Math.max(keyboardHeight, 280) + 40 : 0,
+    default: 0,
+  });
 
   const onNextStep = () => {
     setStepError("");
@@ -238,61 +358,100 @@ export default function SignupScreen({ navigation }: Props) {
           <>
             <Text style={styles.stepTitle}>Basic Information</Text>
 
-            <Text style={styles.label}>Full Name</Text>
-            <View style={[styles.inputGlass, focusedField === "fullName" && styles.inputGlassFocused]}>
-              <TextInput
-                placeholder="Your full name"
-                placeholderTextColor={Colors.textMuted}
-                style={styles.input}
-                value={fullName}
-                onChangeText={(t) => {
-                  setFullName(t);
-                  if (stepError) setStepError("");
-                }}
-                onFocus={() => setFocusedField("fullName")}
-                onBlur={() => setFocusedField(null)}
-                autoCapitalize="words"
-                autoCorrect={false}
-              />
+            <View
+              onLayout={(e) => {
+                fieldLayouts.current["fullName"] = e.nativeEvent.layout.y;
+              }}>
+              <Text style={styles.label}>Full Name</Text>
+              <View
+                style={[
+                  styles.inputGlass,
+                  focusedField === "fullName" && styles.inputGlassFocused,
+                ]}>
+                <TextInput
+                  ref={fullNameRef}
+                  placeholder="Your full name"
+                  placeholderTextColor={Colors.textMuted}
+                  style={styles.input}
+                  value={fullName}
+                  onChangeText={(t) => {
+                    setFullName(t);
+                    if (stepError) setStepError("");
+                  }}
+                  onFocus={() => handleFocus("fullName")}
+                  onBlur={() => handleBlur("fullName")}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  onSubmitEditing={() => emailRef.current?.focus()}
+                />
+              </View>
             </View>
 
-            <Text style={styles.label}>Email</Text>
-            <View style={[styles.inputGlass, focusedField === "email" && styles.inputGlassFocused]}>
-              <TextInput
-                placeholder="Email address"
-                placeholderTextColor={Colors.textMuted}
-                style={styles.input}
-                value={email}
-                onChangeText={(t) => {
-                  setEmail(t);
-                  if (stepError) setStepError("");
-                }}
-                onFocus={() => setFocusedField("email")}
-                onBlur={() => setFocusedField(null)}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-              />
+            <View
+              onLayout={(e) => {
+                fieldLayouts.current["email"] = e.nativeEvent.layout.y;
+              }}>
+              <Text style={styles.label}>Email</Text>
+              <View
+                style={[
+                  styles.inputGlass,
+                  focusedField === "email" && styles.inputGlassFocused,
+                ]}>
+                <TextInput
+                  ref={emailRef}
+                  placeholder="Email address"
+                  placeholderTextColor={Colors.textMuted}
+                  style={styles.input}
+                  value={email}
+                  onChangeText={(t) => {
+                    setEmail(t);
+                    if (stepError) setStepError("");
+                  }}
+                  onFocus={() => handleFocus("email")}
+                  onBlur={() => handleBlur("email")}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  returnKeyType="next"
+                  onSubmitEditing={() => phoneRef.current?.focus()}
+                />
+              </View>
             </View>
 
-            <Text style={styles.label}>Phone Number</Text>
-            <View style={[styles.inputGlass, focusedField === "phoneNumber" && styles.inputGlassFocused]}>
-              <TextInput
-                placeholder="Phone number"
-                placeholderTextColor={Colors.textMuted}
-                style={styles.input}
-                value={phoneNumber}
-                onChangeText={(t) => {
-                  setPhoneNumber(t);
-                  if (stepError) setStepError("");
-                }}
-                onFocus={() => setFocusedField("phoneNumber")}
-                onBlur={() => setFocusedField(null)}
-                keyboardType={Platform.select({
-                  ios: "number-pad",
-                  default: "phone-pad",
-                })}
-              />
+            <View
+              onLayout={(e) => {
+                fieldLayouts.current["phoneNumber"] = e.nativeEvent.layout.y;
+              }}>
+              <Text style={styles.label}>Phone Number</Text>
+              <View
+                style={[
+                  styles.inputGlass,
+                  focusedField === "phoneNumber" && styles.inputGlassFocused,
+                ]}>
+                <TextInput
+                  ref={phoneRef}
+                  placeholder="Phone number"
+                  placeholderTextColor={Colors.textMuted}
+                  style={styles.input}
+                  value={phoneNumber}
+                  onChangeText={(t) => {
+                    setPhoneNumber(t);
+                    if (stepError) setStepError("");
+                  }}
+                  onFocus={() => handleFocus("phoneNumber")}
+                  onBlur={() => handleBlur("phoneNumber")}
+                  keyboardType={Platform.select({
+                    ios: "number-pad",
+                    default: "phone-pad",
+                  })}
+                  returnKeyType="done"
+                  onSubmitEditing={() => {
+                    Keyboard.dismiss();
+                    onNextStep();
+                  }}
+                />
+              </View>
             </View>
           </>
         );
@@ -301,80 +460,119 @@ export default function SignupScreen({ navigation }: Props) {
           <>
             <Text style={styles.stepTitle}>Account Security</Text>
 
-            <Text style={styles.label}>Username</Text>
-            <View style={[styles.inputGlass, focusedField === "username" && styles.inputGlassFocused]}>
-              <TextInput
-                placeholder="Choose a username "
-                placeholderTextColor={Colors.textMuted}
-                style={styles.input}
-                value={username}
-                onChangeText={(t) => {
-                  setUsername(t);
-                  if (stepError) setStepError("");
-                }}
-                onFocus={() => setFocusedField("username")}
-                onBlur={() => setFocusedField(null)}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
+            <View
+              onLayout={(e) => {
+                fieldLayouts.current["username"] = e.nativeEvent.layout.y;
+              }}>
+              <Text style={styles.label}>Username</Text>
+              <View
+                style={[
+                  styles.inputGlass,
+                  focusedField === "username" && styles.inputGlassFocused,
+                ]}>
+                <TextInput
+                  ref={usernameRef}
+                  placeholder="Choose a username "
+                  placeholderTextColor={Colors.textMuted}
+                  style={styles.input}
+                  value={username}
+                  onChangeText={(t) => {
+                    setUsername(t);
+                    if (stepError) setStepError("");
+                  }}
+                  onFocus={() => handleFocus("username")}
+                  onBlur={() => handleBlur("username")}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                />
+              </View>
             </View>
 
-            <Text style={styles.label}>Password</Text>
-            <View style={[styles.passwordContainer, focusedField === "password" && styles.inputGlassFocused]}>
-              <TextInput
-                placeholder="Enter password "
-                placeholderTextColor={Colors.textMuted}
-                style={styles.passwordInput}
-                secureTextEntry={!isPasswordVisible}
-                value={password}
-                onChangeText={(t) => {
-                  setPassword(t);
-                  if (stepError) setStepError("");
-                }}
-                onFocus={() => setFocusedField("password")}
-                onBlur={() => setFocusedField(null)}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <Pressable
-                onPress={() => setIsPasswordVisible((v) => !v)}
-                hitSlop={10}
-                style={styles.eyeButton}>
-                {isPasswordVisible ? (
-                  <EyeOff color={Colors.textPrimary} size={18} />
-                ) : (
-                  <Eye color={Colors.textPrimary} size={18} />
-                )}
-              </Pressable>
+            <View
+              onLayout={(e) => {
+                fieldLayouts.current["password"] = e.nativeEvent.layout.y;
+              }}>
+              <Text style={styles.label}>Password</Text>
+              <View
+                style={[
+                  styles.passwordContainer,
+                  focusedField === "password" && styles.inputGlassFocused,
+                ]}>
+                <TextInput
+                  ref={passwordRef}
+                  placeholder="Enter password "
+                  placeholderTextColor={Colors.textMuted}
+                  style={styles.passwordInput}
+                  secureTextEntry={!isPasswordVisible}
+                  value={password}
+                  onChangeText={(t) => {
+                    setPassword(t);
+                    if (stepError) setStepError("");
+                  }}
+                  onFocus={() => handleFocus("password")}
+                  onBlur={() => handleBlur("password")}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  onSubmitEditing={() => confirmPasswordRef.current?.focus()}
+                />
+                <Pressable
+                  onPress={() => setIsPasswordVisible((v) => !v)}
+                  hitSlop={10}
+                  style={styles.eyeButton}>
+                  {isPasswordVisible ? (
+                    <EyeOff color={Colors.textPrimary} size={18} />
+                  ) : (
+                    <Eye color={Colors.textPrimary} size={18} />
+                  )}
+                </Pressable>
+              </View>
             </View>
 
-            <Text style={styles.label}>Confirm Password</Text>
-            <View style={[styles.passwordContainer, focusedField === "confirmPassword" && styles.inputGlassFocused]}>
-              <TextInput
-                placeholder="Repeat password"
-                placeholderTextColor={Colors.textMuted}
-                style={styles.passwordInput}
-                secureTextEntry={!isConfirmPasswordVisible}
-                value={confirmPassword}
-                onChangeText={(t) => {
-                  setConfirmPassword(t);
-                  if (stepError) setStepError("");
-                }}
-                onFocus={() => setFocusedField("confirmPassword")}
-                onBlur={() => setFocusedField(null)}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <Pressable
-                onPress={() => setIsConfirmPasswordVisible((v) => !v)}
-                hitSlop={10}
-                style={styles.eyeButton}>
-                {isConfirmPasswordVisible ? (
-                  <EyeOff color={Colors.textPrimary} size={18} />
-                ) : (
-                  <Eye color={Colors.textPrimary} size={18} />
-                )}
-              </Pressable>
+            <View
+              onLayout={(e) => {
+                fieldLayouts.current["confirmPassword"] = e.nativeEvent.layout.y;
+              }}>
+              <Text style={styles.label}>Confirm Password</Text>
+              <View
+                style={[
+                  styles.passwordContainer,
+                  focusedField === "confirmPassword" && styles.inputGlassFocused,
+                ]}>
+                <TextInput
+                  ref={confirmPasswordRef}
+                  placeholder="Repeat password"
+                  placeholderTextColor={Colors.textMuted}
+                  style={styles.passwordInput}
+                  secureTextEntry={!isConfirmPasswordVisible}
+                  value={confirmPassword}
+                  onChangeText={(t) => {
+                    setConfirmPassword(t);
+                    if (stepError) setStepError("");
+                  }}
+                  onFocus={() => handleFocus("confirmPassword")}
+                  onBlur={() => handleBlur("confirmPassword")}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  onSubmitEditing={() => {
+                    Keyboard.dismiss();
+                    onNextStep();
+                  }}
+                />
+                <Pressable
+                  onPress={() => setIsConfirmPasswordVisible((v) => !v)}
+                  hitSlop={10}
+                  style={styles.eyeButton}>
+                  {isConfirmPasswordVisible ? (
+                    <EyeOff color={Colors.textPrimary} size={18} />
+                  ) : (
+                    <Eye color={Colors.textPrimary} size={18} />
+                  )}
+                </Pressable>
+              </View>
             </View>
           </>
         );
@@ -384,149 +582,199 @@ export default function SignupScreen({ navigation }: Props) {
             <Text style={styles.stepTitle}>Personalization</Text>
 
             {/* ✅ FIX BUG 6: Date Picker for DOB */}
-            <Text style={styles.label}>Date of Birth</Text>
-            {Platform.OS === "web" ? (
-              <View style={[styles.selectInput, focusedField === "dob" && styles.inputGlassFocused]}>
-                <input
-                  type="date"
-                  value={dateOfBirth}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setDateOfBirth(val);
+            <View
+              onLayout={(e) => {
+                fieldLayouts.current["dob"] = e.nativeEvent.layout.y;
+              }}>
+              <Text style={styles.label}>Date of Birth</Text>
+              {Platform.OS === "web" ? (
+                <View
+                  style={[
+                    styles.selectInput,
+                    focusedField === "dob" && styles.inputGlassFocused,
+                  ]}>
+                  <input
+                    type="date"
+                    value={dateOfBirth}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDateOfBirth(val);
+                      if (stepError) setStepError("");
+                    }}
+                    onFocus={() => handleFocus("dob")}
+                    onBlur={() => handleBlur("dob")}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "#FFFFFF",
+                      fontSize: "14px",
+                      fontFamily: "inherit",
+                      width: "100%",
+                      height: "100%",
+                      outline: "none",
+                      cursor: "pointer",
+                      colorScheme: "dark",
+                    }}
+                  />
+                </View>
+              ) : (
+                <>
+                  <Pressable
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setShowDatePicker(true);
+                    }}
+                    style={styles.selectInput}>
+                    <Text style={styles.selectText}>
+                      {dateOfBirth || "Select your date of birth"}
+                    </Text>
+
+                    <Text style={styles.selectCaret}>▾</Text>
+                  </Pressable>
+                  {showDatePicker && (
+                    <DateTimePicker
+                      value={selectedDate}
+                      mode="date"
+                      display={Platform.OS === "ios" ? "spinner" : "default"}
+                      onChange={(event, selected) => {
+                        setShowDatePicker(false);
+                        if (selected) {
+                          setSelectedDate(selected);
+                          const formattedDate =
+                            selected.toISOString().split("T")[0];
+                          setDateOfBirth(formattedDate);
+                          if (stepError) setStepError("");
+                        }
+                      }}
+                    />
+                  )}
+                </>
+              )}
+            </View>
+
+            <View
+              onLayout={(e) => {
+                fieldLayouts.current["genre"] = e.nativeEvent.layout.y;
+              }}>
+              <Text style={styles.label}>Favorite Genre</Text>
+              {Platform.OS === "web" ? (
+                <View
+                  style={[
+                    styles.selectInput,
+                    focusedField === "genre" && styles.inputGlassFocused,
+                  ]}>
+                  <select
+                    value={favoriteGenre}
+                    onChange={(e) => {
+                      const val = e.target.value as FavoriteGenre;
+                      setFavoriteGenre(val);
+                      if (stepError) setStepError("");
+                    }}
+                    onFocus={() => handleFocus("genre")}
+                    onBlur={() => handleBlur("genre")}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: favoriteGenre
+                        ? "#FFFFFF"
+                        : "rgba(255, 255, 255, 0.5)",
+                      fontSize: "14px",
+                      fontFamily: "inherit",
+                      width: "100%",
+                      height: "100%",
+                      outline: "none",
+                      cursor: "pointer",
+                      colorScheme: "dark",
+                    }}>
+                    <option
+                      value=""
+                      disabled
+                      style={{
+                        background: "#121212",
+                        color: "rgba(255,255,255,0.5)",
+                      }}>
+                      Select a genre
+                    </option>
+                    {GENRES.map((g) => (
+                      <option
+                        key={g}
+                        value={g}
+                        style={{ background: "#121212", color: "#FFFFFF" }}>
+                        {g}
+                      </option>
+                    ))}
+                  </select>
+                </View>
+              ) : (
+                <>
+                  <Pressable
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setIsGenreOpen((v) => !v);
+                    }}
+                    style={styles.selectInput}>
+                    <Text style={styles.selectText} numberOfLines={1}>
+                      {favoriteGenre ? favoriteGenre : "Select a genre"}
+                    </Text>
+                    <Text style={styles.selectCaret}>▾</Text>
+                  </Pressable>
+
+                  {isGenreOpen && (
+                    <View style={styles.selectDropdown}>
+                      {GENRES.map((g) => (
+                        <Pressable
+                          key={g}
+                          onPress={() => {
+                            setFavoriteGenre(g);
+                            setIsGenreOpen(false);
+                            if (stepError) setStepError("");
+                          }}
+                          style={styles.selectOption}>
+                          <Text style={styles.selectOptionText}>{g}</Text>
+                          {favoriteGenre === g ? (
+                            <Check color={Colors.textPrimary} size={18} />
+                          ) : (
+                            <View style={{ width: 18, height: 18 }} />
+                          )}
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+                </>
+              )}
+            </View>
+
+            <View
+              onLayout={(e) => {
+                fieldLayouts.current["locationCity"] = e.nativeEvent.layout.y;
+              }}>
+              <Text style={styles.label}>Location (City)</Text>
+              <View
+                style={[
+                  styles.inputGlass,
+                  focusedField === "locationCity" && styles.inputGlassFocused,
+                ]}>
+                <TextInput
+                  ref={locationCityRef}
+                  placeholder="Your city"
+                  placeholderTextColor={Colors.textMuted}
+                  style={styles.input}
+                  value={locationCity}
+                  onChangeText={(t) => {
+                    setLocationCity(t);
                     if (stepError) setStepError("");
                   }}
-                  onFocus={() => setFocusedField("dob")}
-                  onBlur={() => setFocusedField(null)}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: "#FFFFFF",
-                    fontSize: "14px",
-                    fontFamily: "inherit",
-                    width: "100%",
-                    height: "100%",
-                    outline: "none",
-                    cursor: "pointer",
-                    colorScheme: "dark",
+                  onFocus={() => handleFocus("locationCity")}
+                  onBlur={() => handleBlur("locationCity")}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  onSubmitEditing={() => {
+                    Keyboard.dismiss();
+                    onNextStep();
                   }}
                 />
               </View>
-            ) : (
-              <>
-                <Pressable
-                  onPress={() => setShowDatePicker(true)}
-                  style={styles.selectInput}>
-                  <Text style={styles.selectText}>
-                    {dateOfBirth || "Select your date of birth"}
-                  </Text>
-
-                  <Text style={styles.selectCaret}>▾</Text>
-                </Pressable>
-                {showDatePicker && (
-                  <DateTimePicker
-                    value={selectedDate}
-                    mode="date"
-                    display={Platform.OS === "ios" ? "spinner" : "default"}
-                    onChange={(event, selected) => {
-                      setShowDatePicker(false);
-                      if (selected) {
-                        setSelectedDate(selected);
-                        const formattedDate = selected.toISOString().split("T")[0];
-                        setDateOfBirth(formattedDate);
-                        if (stepError) setStepError("");
-                      }
-                    }}
-                  />
-                )}
-              </>
-            )}
-
-            <Text style={styles.label}>Favorite Genre</Text>
-            {Platform.OS === "web" ? (
-              <View style={[styles.selectInput, focusedField === "genre" && styles.inputGlassFocused]}>
-                <select
-                  value={favoriteGenre}
-                  onChange={(e) => {
-                    const val = e.target.value as FavoriteGenre;
-                    setFavoriteGenre(val);
-                    if (stepError) setStepError("");
-                  }}
-                  onFocus={() => setFocusedField("genre")}
-                  onBlur={() => setFocusedField(null)}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: favoriteGenre ? "#FFFFFF" : "rgba(255, 255, 255, 0.5)",
-                    fontSize: "14px",
-                    fontFamily: "inherit",
-                    width: "100%",
-                    height: "100%",
-                    outline: "none",
-                    cursor: "pointer",
-                    colorScheme: "dark",
-                  }}
-                >
-                  <option value="" disabled style={{ background: "#121212", color: "rgba(255,255,255,0.5)" }}>
-                    Select a genre
-                  </option>
-                  {GENRES.map((g) => (
-                    <option key={g} value={g} style={{ background: "#121212", color: "#FFFFFF" }}>
-                      {g}
-                    </option>
-                  ))}
-                </select>
-              </View>
-            ) : (
-              <>
-                <Pressable
-                  onPress={() => setIsGenreOpen((v) => !v)}
-                  style={styles.selectInput}>
-                  <Text style={styles.selectText} numberOfLines={1}>
-                    {favoriteGenre ? favoriteGenre : "Select a genre"}
-                  </Text>
-                  <Text style={styles.selectCaret}>▾</Text>
-                </Pressable>
-
-                {isGenreOpen && (
-                  <View style={styles.selectDropdown}>
-                    {GENRES.map((g) => (
-                      <Pressable
-                        key={g}
-                        onPress={() => {
-                          setFavoriteGenre(g);
-                          setIsGenreOpen(false);
-                          if (stepError) setStepError("");
-                        }}
-                        style={styles.selectOption}>
-                        <Text style={styles.selectOptionText}>{g}</Text>
-                        {favoriteGenre === g ? (
-                          <Check color={Colors.textPrimary} size={18} />
-                        ) : (
-                          <View style={{ width: 18, height: 18 }} />
-                        )}
-                      </Pressable>
-                    ))}
-                  </View>
-                )}
-              </>
-            )}
-
-            <Text style={styles.label}>Location (City)</Text>
-            <View style={[styles.inputGlass, focusedField === "locationCity" && styles.inputGlassFocused]}>
-              <TextInput
-                placeholder="Your city"
-                placeholderTextColor={Colors.textMuted}
-                style={styles.input}
-                value={locationCity}
-                onChangeText={(t) => {
-                  setLocationCity(t);
-                  if (stepError) setStepError("");
-                }}
-                onFocus={() => setFocusedField("locationCity")}
-                onBlur={() => setFocusedField(null)}
-                autoCapitalize="words"
-                autoCorrect={false}
-              />
             </View>
           </>
         );
@@ -598,66 +846,100 @@ export default function SignupScreen({ navigation }: Props) {
         translucent
       />
       <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          automaticallyAdjustKeyboardInsets={true}>
-          <View
-            style={[
-              styles.content,
-              isDesktop ? styles.contentDesktop : styles.contentMobile,
-            ]}>
-            <Pressable onPress={onBack} hitSlop={10} style={styles.backBtn}>
-              <ArrowLeft color={Colors.textPrimary} size={22} />
-              <Text style={styles.backText}>Back</Text>
-            </Pressable>
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoidingView}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <ScrollView
+            ref={scrollViewRef}
+            contentContainerStyle={[
+              styles.scrollContent,
+              extraBottomPadding > 0 && {
+                paddingBottom: 18 + extraBottomPadding,
+              },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={
+              Platform.OS === "ios" ? "interactive" : "on-drag"
+            }
+            showsVerticalScrollIndicator={false}>
+            <View
+              style={[
+                styles.content,
+                isDesktop ? styles.contentDesktop : styles.contentMobile,
+                isKeyboardVisible && styles.contentKeyboardActive,
+              ]}>
+              <Pressable
+                onPress={() => {
+                  Keyboard.dismiss();
+                  onBack();
+                }}
+                hitSlop={10}
+                style={styles.backBtn}>
+                <ArrowLeft color={Colors.textPrimary} size={22} />
+                <Text style={styles.backText}>Back</Text>
+              </Pressable>
 
-            <BlurView
-              intensity={25}
-              tint="dark"
-              style={[styles.cardBlur, isDesktop && styles.cardBlurDesktop]}>
-              <View
-                style={[
-                  styles.cardInner,
-                  isDesktop && styles.cardInnerDesktop,
-                ]}>
-                <Text style={styles.title}>Create Account</Text>
+              <BlurView
+                intensity={25}
+                tint="dark"
+                style={[styles.cardBlur, isDesktop && styles.cardBlurDesktop]}>
+                <View
+                  onLayout={(e) => {
+                    cardY.current = e.nativeEvent.layout.y;
+                  }}
+                  style={[
+                    styles.cardInner,
+                    isDesktop && styles.cardInnerDesktop,
+                  ]}>
+                  <Text style={styles.title}>Create Account</Text>
 
-                {renderProgressIndicator()}
+                  {renderProgressIndicator()}
 
-                <View style={styles.stepContentWrap}>
-                  {renderStepContent()}
-                </View>
-
-                {/* Inline Step Error */}
-                {!!stepError && (
-                  <Text style={styles.errorText}>{stepError}</Text>
-                )}
-
-                <Pressable onPress={currentStep < 4 ? onNextStep : onSubmit}>
                   <View
-                    style={[
-                      styles.buttonWrap,
-                      isSubmitting && styles.buttonWrapDisabled,
-                    ]}>
-                    {isSubmitting ? (
-                      <ActivityIndicator color="#000" />
-                    ) : (
-                      <Text style={styles.btnText}>
-                        {currentStep < 4
-                          ? currentStep === 3
-                            ? "Preview Details"
-                            : "Next Step"
-                          : "Create Account"}
-                      </Text>
-                    )}
+                    onLayout={(e) => {
+                      stepWrapY.current = e.nativeEvent.layout.y;
+                    }}
+                    style={styles.stepContentWrap}>
+                    {renderStepContent()}
                   </View>
-                </Pressable>
-              </View>
-            </BlurView>
-          </View>
-        </ScrollView>
+
+                  {/* Inline Step Error */}
+                  {!!stepError && (
+                    <Text style={styles.errorText}>{stepError}</Text>
+                  )}
+
+                  <Pressable
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      if (currentStep < 4) {
+                        onNextStep();
+                      } else {
+                        onSubmit();
+                      }
+                    }}>
+                    <View
+                      style={[
+                        styles.buttonWrap,
+                        isSubmitting && styles.buttonWrapDisabled,
+                      ]}>
+                      {isSubmitting ? (
+                        <ActivityIndicator color="#000" />
+                      ) : (
+                        <Text style={styles.btnText}>
+                          {currentStep < 4
+                            ? currentStep === 3
+                              ? "Preview Details"
+                              : "Next Step"
+                            : "Create Account"}
+                        </Text>
+                      )}
+                    </View>
+                  </Pressable>
+                </View>
+              </BlurView>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -669,6 +951,12 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  contentKeyboardActive: {
+    justifyContent: "flex-start",
   },
   overlay: {
     flex: 1,

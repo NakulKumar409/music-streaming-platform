@@ -47,8 +47,10 @@ export default function PrimaryButton({ title, onPress, style, showPlayIcon }: P
           end={{ x: 1, y: 0 }}
           style={styles.gradient}
         >
-          {showPlayIcon && <Play color="#FFFFFF" size={14} fill="#FFFFFF" style={styles.playIcon} />}
-          <Text style={styles.text}>{title}</Text>
+          {showPlayIcon && <Play color="#FFFFFF" size={13} fill="#FFFFFF" style={styles.playIcon} />}
+          <Text style={styles.text} numberOfLines={1} ellipsizeMode="tail">
+            {title}
+          </Text>
         </LinearGradient>
       </Animated.View>
     </Pressable>
@@ -65,19 +67,20 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   gradient: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
+    height: 44,
+    minHeight: 44,
   },
   playIcon: {
     marginRight: 6,
   },
   text: {
     color: colors.textPrimary,
-    fontSize: typography.buttonText,
+    fontSize: 13.5,
     fontWeight: typography.weightBold,
   },
 });

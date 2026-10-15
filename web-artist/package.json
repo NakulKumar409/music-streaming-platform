@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "validate:config": "node scripts/validate-production-config.mjs",
+    "test:config": "node scripts/test-runtime-config.mjs",
+    "build": "npm run validate:config && npm run typecheck && vite build",
+    "verify": "npm run test:config && npm run build",
     "preview": "vite preview"
   },
   "dependencies": {

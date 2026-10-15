@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   Platform,
@@ -18,10 +19,30 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../store/authStore';
-import { CreditCard, HelpCircle, Library, LogOut, User, Camera, Crown, ShieldCheck, Lock, ArrowLeft, X } from 'lucide-react-native';
+import {
+  CreditCard,
+  HelpCircle,
+  Library,
+  LogOut,
+  User,
+  Camera,
+  Crown,
+  ShieldCheck,
+  Lock,
+  ArrowLeft,
+  X,
+  Clock3,
+  Check,
+  FileText,
+  Palette,
+  ChevronRight,
+} from 'lucide-react-native';
+import { useTheme } from '../providers/ThemeProvider';
+import ThemeSelectionModal from '../ui/ThemeSelectionModal';
 import { SubscriptionStatusCard, DetailedPlatformCard, ArtistSubscriptionItem, EmptySubscriptionState } from '../ui/SubscriptionUI';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import AppImage from '../components/AppImage';
 import * as Sharing from 'expo-sharing';
 
 import { userService, type AudioQualityPref, type SubscriptionPlanSummary, type Transaction } from '../services/userService';
@@ -31,11 +52,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../theme';
 import { ARTIST_WEB_URL } from '../config/env';
 import { registerForPushNotifications, disablePushNotifications } from '../services/notificationService';
+import StatusModal from '../components/StatusModal';
 
-function PremiumBadge() {
+function PremiumBadge({ theme }: { theme?: any }) {
+  const accent = theme?.primary || Colors.accent;
   return (
-    <View style={styles.premiumBadge}>
-      <Text style={styles.premiumBadgeText}>Premium Member</Text>
+    <View style={[styles.premiumBadge, { backgroundColor: `${accent}20`, borderColor: `${accent}50` }]}>
+      <Text style={[styles.premiumBadgeText, { color: accent }]}>Premium Member</Text>
     </View>
   );
 }
@@ -44,6 +67,8 @@ export default function AccountScreen() {
   const { user, userAccountStatus, logout } = useAuth();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const [showThemeModal, setShowThemeModal] = React.useState(false);
 
   const scrollContentPaddingBottom = React.useMemo(() => {
     return Math.max(insets.bottom, 0) + 110;
@@ -95,6 +120,12 @@ export default function AccountScreen() {
 
   const [showTransactions, setShowTransactions] = React.useState(false);
   const [showHelpSupport, setShowHelpSupport] = React.useState(false);
+
+  const [showLogoutModal, setShowLogoutModal] = React.useState(false);
+  const [downloadingTxId, setDownloadingTxId] = React.useState<string | null>(null);
+  const [downloadSuccessTxId, setDownloadSuccessTxId] = React.useState<string | null>(null);
+  const [showInvoiceErrorModal, setShowInvoiceErrorModal] = React.useState(false);
+  const [failedInvoiceTxId, setFailedInvoiceTxId] = React.useState<string | null>(null);
 
   const refresh = React.useCallback(async () => {
     setIsLoading(true);
@@ -200,33 +231,7 @@ export default function AccountScreen() {
   }, [navigation, refresh]);
 
   const handleLogout = () => {
-    console.log('LOGOUT_CLICKED');
-
-    if (Platform.OS === 'web') {
-      const confirmed =
-        typeof window !== 'undefined'
-          ? window.confirm('Are you sure you want to log out?')
-          : true;
-      if (confirmed) {
-        void performLogout();
-      }
-      return;
-    }
-
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: () => {
-            void performLogout();
-          },
-        },
-      ]
-    );
+    setShowLogoutModal(true);
   };
 
   const getStatusColor = () => {
@@ -345,7 +350,8 @@ export default function AccountScreen() {
           asset.mimeType || 'image/jpeg',
           asset.fileName || 'profile.jpg'
         );
-        setProfileImageUrl(newImageUrl);
+        const freshUri = newImageUrl ? `${newImageUrl.split('?')[0]}?t=${Date.now()}` : '';
+        setProfileImageUrl(freshUri);
       } catch (error: any) {
         Alert.alert('Error', 'Failed to upload profile image. Please try again.');
       } finally {
@@ -355,28 +361,23 @@ export default function AccountScreen() {
   };
 
   const handleDownloadInvoice = async (transactionId: string) => {
+    setDownloadingTxId(transactionId);
     try {
-      Alert.alert('Download', 'Preparing your invoice...');
-      
       const downloadUrl = `${API_BASE_URL}/user/transactions/${transactionId}/invoice`;
-      const token = await AsyncStorage.getItem(JWT_STORAGE_KEY) || await AsyncStorage.getItem('userToken');
-      
-      console.log('[AccountScreen] Download URL:', downloadUrl);
-      console.log('[AccountScreen] Platform:', Platform.OS);
-      console.log('[AccountScreen] Token exists:', !!token);
-      
+      const token = (await AsyncStorage.getItem(JWT_STORAGE_KEY)) || (await AsyncStorage.getItem('userToken'));
+
       // Web: Fetch with Authorization header, create blob, then download
       if (Platform.OS === 'web') {
         const response = await fetch(downloadUrl, {
           headers: {
-            'Authorization': `Bearer ${token}`
-          }
+            Authorization: `Bearer ${token}`,
+          },
         });
-        
+
         if (!response.ok) {
           throw new Error(`Download failed: ${response.status}`);
         }
-        
+
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -386,29 +387,25 @@ export default function AccountScreen() {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
-        
-        Alert.alert('Success', 'Invoice downloaded successfully');
+
+        setDownloadSuccessTxId(transactionId);
+        setTimeout(() => setDownloadSuccessTxId(null), 4000);
         return;
       }
-      
+
       // Mobile: Download to device storage
       const fileUri = `${(FileSystem as any).documentDirectory}invoice_${transactionId}.pdf`;
-      console.log('[AccountScreen] File URI:', fileUri);
-      
-      const downloadRes = await FileSystem.downloadAsync(
-        downloadUrl,
-        fileUri,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
 
-      console.log('[AccountScreen] Download response:', downloadRes);
+      const downloadRes = await FileSystem.downloadAsync(downloadUrl, fileUri, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (downloadRes.status === 200) {
-        // Use Sharing API to make the file accessible to user
+        setDownloadSuccessTxId(transactionId);
+        setTimeout(() => setDownloadSuccessTxId(null), 4000);
+
         const isAvailable = await Sharing.isAvailableAsync();
         if (isAvailable) {
           await Sharing.shareAsync(fileUri, {
@@ -416,22 +413,22 @@ export default function AccountScreen() {
             dialogTitle: 'Save Invoice',
             UTI: 'com.adobe.pdf',
           });
-        } else {
-          Alert.alert('Downloaded', 'Invoice saved to app storage. You can access it from the app.');
         }
       } else {
         throw new Error('Download failed with status ' + downloadRes.status);
       }
     } catch (error: any) {
       console.error('[AccountScreen] Invoice download error:', error);
-      console.error('[AccountScreen] Error details:', JSON.stringify(error, null, 2));
-      Alert.alert('Error', 'Failed to download invoice. Please try again later.');
+      setFailedInvoiceTxId(transactionId);
+      setShowInvoiceErrorModal(true);
+    } finally {
+      setDownloadingTxId(null);
     }
   };
 
   return (
     <LinearGradient
-      colors={Colors.backgroundGradient}
+      colors={Platform.OS === 'web' ? ['var(--color-bg)', 'var(--color-bg)'] : [theme.bg, theme.surface, theme.bg]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.gradientBackground}
@@ -445,8 +442,8 @@ export default function AccountScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#4AA3FF"
-              colors={['#4AA3FF']}
+              tintColor={theme.primary}
+              colors={[theme.primary]}
             />
           }
         >
@@ -456,44 +453,44 @@ export default function AccountScreen() {
           </View>
 
         <View style={styles.section}>
-          <View style={styles.profileCard}>
+          <View style={[styles.profileCard, { backgroundColor: `${theme.card}A6`, borderColor: `${theme.primary}25` }]}>
             <View style={styles.profileAvatarRow}>
               <TouchableOpacity onPress={handleChangeProfileImage} disabled={isLoading}>
                 {profileImageUrl ? (
-                  <Image source={{ uri: profileImageUrl }} style={styles.profileAvatar} />
+                  <AppImage uri={profileImageUrl} fallbackType="artist" style={[styles.profileAvatar, { borderColor: `${theme.primary}60` }]} resizeMode="cover" />
                 ) : (
-                  <View style={styles.profileAvatarPlaceholder}>
+                  <View style={[styles.profileAvatarPlaceholder, { borderColor: `${theme.primary}60` }]}>
                     <User size={40} color="#fff" />
                   </View>
                 )}
-                <View style={styles.cameraIconOverlay}>
+                <View style={[styles.cameraIconOverlay, { backgroundColor: theme.primary }]}>
                   <Camera size={18} color="#fff" />
                 </View>
               </TouchableOpacity>
             </View>
             <View style={styles.profileTitleRow}>
               <Text style={styles.profileName}>{profileName || user?.name?.toString?.() || (user as any)?.fullName || (user as any)?.full_name || 'User'}</Text>
-              {!isLoading && isPremium ? <PremiumBadge /> : null}
+              {!isLoading && isPremium ? <PremiumBadge theme={theme} /> : null}
             </View>
             <Text style={styles.profileEmail}>{user?.email || 'Not available'}</Text>
 
             <View style={styles.statsRow}>
               <TouchableOpacity 
-                style={styles.statBox} 
+                style={[styles.statBox, { backgroundColor: `${theme.surface}B3`, borderColor: 'rgba(255,255,255,0.08)' }]} 
                 onPress={() => setShowArtistSubList(true)}
                 activeOpacity={0.7}
               >
                 <Text style={styles.statValue}>{artistSubs.length || subscriptionCount || 0}</Text>
                 <Text style={styles.statLabel}>Subscribed Artists</Text>
               </TouchableOpacity>
-              <View style={styles.statBox}>
+              <View style={[styles.statBox, { backgroundColor: `${theme.surface}B3`, borderColor: 'rgba(255,255,255,0.08)' }]}>
                 <Text style={styles.statValue}>{listenTime || '—'}</Text>
                 <Text style={styles.statLabel}>Monthly Listening</Text>
               </View>
             </View>
 
-            <TouchableOpacity style={styles.primaryButton} onPress={handleOpenEditProfile} disabled={isLoading}>
-              <Text style={styles.primaryButtonText}>Edit Profile</Text>
+            <TouchableOpacity style={[styles.primaryButton, { backgroundColor: theme.primary }]} onPress={handleOpenEditProfile} disabled={isLoading}>
+              <Text style={[styles.primaryButtonText, { color: '#FFFFFF' }]}>Edit Profile</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -506,7 +503,7 @@ export default function AccountScreen() {
             <Text style={styles.sectionTitle}>My Subscriptions</Text>
             {isPremium && (
               <TouchableOpacity onPress={() => navigation.navigate('SubscriptionFlow')}>
-                <Text style={styles.sectionAction}>Explore More</Text>
+                <Text style={[styles.sectionAction, { color: theme.primary }]}>Explore More</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -546,12 +543,12 @@ export default function AccountScreen() {
           {/* Upsell if no Platform sub */}
           {!platformPlan && isPremium && (
             <TouchableOpacity 
-              style={styles.upsellNudge}
+              style={[styles.upsellNudge, { borderColor: `${theme.primary}40`, backgroundColor: `${theme.primary}12` }]}
               onPress={() => navigation.navigate('SubscriptionFlow', { defaultPlan: 'PLATFORM' })}
             >
-              <Crown color={Colors.accent} size={20} />
-              <Text style={styles.upsellNudgeText}>Upgrade to <Text style={{fontWeight:'900', color: Colors.accent}}>Platform Plan</Text> for HD streaming</Text>
-              <ArrowLeft style={{transform: [{rotate: '180deg'}]}} color={Colors.accent} size={16} />
+              <Crown color={theme.primary} size={20} />
+              <Text style={styles.upsellNudgeText}>Upgrade to <Text style={{fontWeight:'900', color: theme.primary}}>Platform Plan</Text> for HD streaming</Text>
+              <ArrowLeft style={{transform: [{rotate: '180deg'}]}} color={theme.primary} size={16} />
             </TouchableOpacity>
           )}
 
@@ -579,6 +576,33 @@ export default function AccountScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Settings</Text>
 
+          {/* Appearance / Theme */}
+          <View style={styles.appearanceCard}>
+            <View style={styles.appearanceHeader}>
+              <View style={[styles.paletteIconWrap, { backgroundColor: `${theme.primary}22` }]}>
+                <Palette size={20} color={theme.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.appearanceTitle}>Appearance / Theme</Text>
+                <View style={styles.themeBadgeRow}>
+                  <View style={[styles.themeColorDot, { backgroundColor: theme.primary }]} />
+                  <Text style={styles.themeNameBadge}>{theme.name}</Text>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.chooseThemeBtn, { borderColor: `${theme.primary}60`, backgroundColor: `${theme.primary}18` }]}
+              onPress={() => setShowThemeModal(true)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Choose Theme"
+            >
+              <Text style={[styles.chooseThemeBtnText, { color: theme.primary }]}>Choose Theme</Text>
+              <ChevronRight size={15} color={theme.primary} />
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity
             style={styles.menuItem}
             onPress={handleOpenArtistDashboard}
@@ -602,7 +626,12 @@ export default function AccountScreen() {
 
           <View style={styles.prefRow}>
             <Text style={styles.prefLabel}>Push Notifications</Text>
-            <Switch value={pushNotifications} onValueChange={handleToggleNotifications} />
+            <Switch
+              value={pushNotifications}
+              onValueChange={handleToggleNotifications}
+              thumbColor={pushNotifications ? theme.primary : '#ccc'}
+              trackColor={{ false: '#3e3e3e', true: `${theme.primary}80` }}
+            />
           </View>
 
 
@@ -612,8 +641,8 @@ export default function AccountScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
-            <LogOut size={20} color={Colors.accent} />
-            <Text style={[styles.menuText, { color: Colors.accent }]}>Log Out</Text>
+            <LogOut size={20} color={theme.primary} />
+            <Text style={[styles.menuText, { color: theme.primary }]}>Log Out</Text>
           </TouchableOpacity>
         </View>
 
@@ -648,28 +677,73 @@ export default function AccountScreen() {
           </View>
 
           <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
-            {transactions.map((tx) => (
-              <View key={tx.id} style={styles.txRow}>
-                <View style={styles.txLeft}>
-                  <Text style={styles.txArtist}>{tx.artistName || 'Platform Plan'}</Text>
-                  <Text style={styles.txDate}>{new Date(tx.date).toLocaleDateString()}</Text>
-                </View>
-                <View style={[styles.txRight, { flexDirection: 'row', alignItems: 'center' }]}>
-                  <View style={{ alignItems: 'flex-end', marginRight: 16 }}>
-                    <Text style={styles.txAmount}>₹{(tx.amount / 100).toFixed(2)}</Text>
-                    <Text style={[styles.txStatus, { color: tx.status === 'CAPTURED' || tx.status === 'SUCCESS' ? '#10B981' : '#FFA500' }]}>
-                      {tx.status ?? 'PENDING'}
-                    </Text>
+            {transactions.map((tx) => {
+              const statusUpper = (tx.status ?? '').toUpperCase();
+              const isPaid = statusUpper === 'CAPTURED' || statusUpper === 'SUCCESS' || statusUpper === 'PAID';
+              const isPending = statusUpper === 'PENDING' || statusUpper === 'CREATED';
+              const isDownloading = downloadingTxId === String(tx.id);
+              const isDownloaded = downloadSuccessTxId === String(tx.id);
+
+              return (
+                <View key={tx.id} style={styles.txCardWrapper}>
+                  <View style={styles.txRow}>
+                    <View style={styles.txLeft}>
+                      <Text style={styles.txArtist}>{tx.artistName || 'Platform Plan'}</Text>
+                      <Text style={styles.txDate}>{new Date(tx.date).toLocaleDateString()}</Text>
+                    </View>
+                    <View style={[styles.txRight, { flexDirection: 'row', alignItems: 'center' }]}>
+                      <View style={{ alignItems: 'flex-end', marginRight: 12 }}>
+                        <Text style={styles.txAmount}>₹{(tx.amount / 100).toFixed(2)}</Text>
+                        <View
+                          style={[
+                            styles.statusBadgeSmall,
+                            {
+                              backgroundColor: isPaid ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                              borderColor: isPaid ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)',
+                            },
+                          ]}>
+                          <Text style={[styles.txStatusText, { color: isPaid ? '#10B981' : '#F59E0B' }]}>
+                            {isPaid ? 'PAID' : isPending ? 'PENDING' : (tx.status ?? 'PENDING')}
+                          </Text>
+                        </View>
+                      </View>
+                      {isPaid ? (
+                        <TouchableOpacity
+                          style={styles.downloadIcon}
+                          onPress={() => handleDownloadInvoice(String(tx.id))}
+                          disabled={isDownloading}>
+                          {isDownloading ? (
+                            <ActivityIndicator size="small" color="#000" />
+                          ) : (
+                            <Text style={styles.downloadBtnText}>Download</Text>
+                          )}
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={styles.invoicePendingBtn}>
+                          <Text style={styles.invoicePendingBtnText}>Invoice Pending</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
-                  <TouchableOpacity 
-                    style={styles.downloadIcon} 
-                    onPress={() => handleDownloadInvoice(tx.id)}
-                  >
-                    <Text style={{ color: Colors.accent, fontSize: 12, fontWeight: '600' }}>Download</Text>
-                  </TouchableOpacity>
+
+                  {isDownloaded ? (
+                    <View style={styles.downloadSuccessRow}>
+                      <Check size={14} color="#10B981" />
+                      <Text style={styles.downloadSuccessText}>Invoice downloaded successfully</Text>
+                    </View>
+                  ) : null}
+
+                  {isPending ? (
+                    <View style={styles.invoicePendingRow}>
+                      <Clock3 size={13} color="#F59E0B" />
+                      <Text style={styles.invoicePendingText}>
+                        Invoice will be available after payment confirmation.
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
-              </View>
-            ))}
+              );
+            })}
             {transactions.length === 0 ? (
               <View style={styles.modalEmptyWrap}>
                 <View style={styles.modalEmptyIconCircle}>
@@ -830,6 +904,51 @@ export default function AccountScreen() {
         </SafeAreaView>
       </Modal>
 
+      <StatusModal
+        visible={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        icon={<LogOut size={30} color="#FF2553" />}
+        iconBgColor="rgba(255, 37, 83, 0.15)"
+        iconBorderColor="rgba(255, 37, 83, 0.3)"
+        title="Log Out"
+        message="Are you sure you want to log out?"
+        buttonLayout="row"
+        secondaryButtonText="Cancel"
+        onSecondaryPress={() => setShowLogoutModal(false)}
+        primaryButtonText="Log Out"
+        primaryButtonColor={Colors.accent}
+        primaryButtonTextColor="#000"
+        onPrimaryPress={() => {
+          setShowLogoutModal(false);
+          void performLogout();
+        }}
+      />
+
+      <StatusModal
+        visible={showInvoiceErrorModal}
+        onClose={() => setShowInvoiceErrorModal(false)}
+        icon={<FileText size={30} color="#EF4444" />}
+        iconBgColor="rgba(239, 68, 68, 0.15)"
+        iconBorderColor="rgba(239, 68, 68, 0.3)"
+        title="Unable to Download Invoice"
+        message="We couldn't generate your invoice right now. Please try again later."
+        buttonLayout="row"
+        secondaryButtonText="Cancel"
+        onSecondaryPress={() => setShowInvoiceErrorModal(false)}
+        primaryButtonText="Retry"
+        primaryButtonColor={Colors.accent}
+        primaryButtonTextColor="#000"
+        onPrimaryPress={() => {
+          setShowInvoiceErrorModal(false);
+          if (failedInvoiceTxId) void handleDownloadInvoice(failedInvoiceTxId);
+        }}
+      />
+
+      <ThemeSelectionModal
+        visible={showThemeModal}
+        onClose={() => setShowThemeModal(false)}
+      />
+
       </SafeAreaView>
     </LinearGradient>
   );
@@ -849,6 +968,63 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 24,
+  },
+  appearanceCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  appearanceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  paletteIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appearanceTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+  },
+  themeBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 3,
+  },
+  themeColorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  themeNameBadge: {
+    color: '#A2A2B8',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  chooseThemeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1.2,
+  },
+  chooseThemeBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   header: {
     alignItems: 'center',
@@ -1303,16 +1479,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
-  txRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  txCardWrapper: {
     backgroundColor: 'rgba(255,255,255,0.04)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     borderRadius: 16,
-    padding: 16,
+    padding: 14,
     marginBottom: 12,
+  },
+  txRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   txLeft: {
     flex: 1,
@@ -1332,22 +1510,76 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   txAmount: {
-    color: '#4AA3FF',
-    fontSize: 16,
-    fontWeight: '900',
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '800',
   },
-  txStatus: {
-    color: '#10B981',
+  statusBadgeSmall: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  txStatusText: {
     fontSize: 10,
     fontWeight: '800',
-    marginTop: 4,
-    textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   downloadIcon: {
-    padding: 8,
-    backgroundColor: 'rgba(255,106,0,0.1)',
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: Colors.accent,
+    borderRadius: 10,
+    minWidth: 84,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  downloadBtnText: {
+    color: '#000',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  invoicePendingBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 10,
+  },
+  invoicePendingBtnText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  downloadSuccessRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+    gap: 6,
+  },
+  downloadSuccessText: {
+    color: '#10B981',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  invoicePendingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+    gap: 6,
+  },
+  invoicePendingText: {
+    color: '#F59E0B',
+    fontSize: 12,
+    fontWeight: '500',
   },
   faqSection: {
     marginBottom: 30,

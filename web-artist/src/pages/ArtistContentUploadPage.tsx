@@ -1,626 +1,260 @@
-// src/pages/ArtistContentUploadPage.tsx
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { Link } from "react-router-dom";
-import { http } from "../services/http";
+import { FormEvent, useMemo, useState } from "react";
 import {
-  Upload,
-  Music,
-  Video,
-  Image as ImageIcon,
-  Lock,
-  Unlock,
-  ChevronDown,
-  Sparkles,
-  AlertCircle,
-  CheckCircle,
-  Loader2,
-  ArrowLeft,
-  Play,
+  AlertTriangle,
+  CheckCircle2,
   FileAudio,
   FileVideo,
-  Album,
-  Radio,
+  Image as ImageIcon,
+  Loader2,
+  Lock,
+  Music2,
+  UploadCloud,
+  Video,
 } from "lucide-react";
+import { http, toApiFailure } from "../services/http";
 
-type UploadResponse = {
-  success: boolean;
-  item?: {
-    id: number;
-  };
-  message?: string;
-  correlationId?: string;
-};
-
-type UploadFormState = {
+type UploadResult = {
+  id: number;
   title: string;
-  genre: string;
-  thumbnailFile: File | null;
-  audioFile: File | null;
-  videoFile: File | null;
-  isSubscriberOnly: boolean;
+  type: "AUDIO" | "VIDEO";
+  lifecycleState: string;
+  technicalStatus: string;
+  isApproved: boolean;
 };
-
-const GENRES = [
-  "Pop",
-  "Hip-Hop",
-  "Rock",
-  "R&B",
-  "Electronic",
-  "Jazz",
-  "Classical",
-  "Country",
-  "Indie",
-  "Other",
-];
-
-function buildObjectUrl(file: File | null) {
-  if (!file) return null;
-  try {
-    return URL.createObjectURL(file);
-  } catch {
-    return null;
-  }
-}
-
-function GenreCombobox({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [inputValue, setInputValue] = useState(value);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    setInputValue(value);
-  }, [value]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const filtered = useCallback(() => {
-    const q = (inputValue || "").trim().toLowerCase();
-    if (!q) return GENRES;
-    return GENRES.filter((g) => g.toLowerCase().includes(q));
-  }, [inputValue]);
-
-  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = e.target.value;
-    setInputValue(v);
-    onChange(v);
-    setOpen(true);
-  };
-
-  const handleSelect = (g: string) => {
-    setInputValue(g);
-    onChange(g);
-    setOpen(false);
-    inputRef.current?.blur();
-  };
-
-  const suggestions = filtered();
-
-  return (
-    <div ref={containerRef} className="relative">
-      <div className="flex h-[52px] w-full rounded-xl border border-white/10 bg-background/60 overflow-hidden focus-within:border-primary/50 transition-all">
-        <input
-          ref={inputRef}
-          type="text"
-          value={inputValue}
-          onChange={handleInput}
-          onFocus={() => setOpen(true)}
-          placeholder="Type or select a genre…"
-          className="flex-1 h-full bg-transparent px-4 text-sm text-white placeholder-[#6b5b57] outline-none"
-        />
-        <button
-          type="button"
-          onClick={() => {
-            setOpen((prev) => !prev);
-            if (!open) inputRef.current?.focus();
-          }}
-          className="flex items-center justify-center px-3 text-[#8D7B77] hover:text-primary transition-colors">
-          <ChevronDown
-            className={`w-4 h-4 transition-transform duration-200 ${
-              open ? "rotate-180" : ""
-            }`}
-          />
-        </button>
-      </div>
-
-      {open && (
-        <div className="absolute z-50 left-0 right-0 mt-1 rounded-xl border border-white/10 bg-background shadow-2xl overflow-hidden">
-          {inputValue.trim() &&
-            !GENRES.map((g) => g.toLowerCase()).includes(
-              inputValue.trim().toLowerCase()
-            ) && (
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  handleSelect(inputValue.trim());
-                }}
-                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-primary hover:bg-white/5 transition-colors border-b border-white/5">
-                <span className="text-sm">✏️</span>
-                Use "<strong>{inputValue.trim()}</strong>" as custom genre
-              </button>
-            )}
-          {suggestions.length > 0 ? (
-            <ul className="max-h-[220px] overflow-y-auto">
-              {suggestions.map((g) => (
-                <li key={g}>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      handleSelect(g);
-                    }}
-                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-white/5 ${
-                      inputValue === g
-                        ? "text-primary bg-primary/10"
-                        : "text-white"
-                    }`}>
-                    {g}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="px-4 py-3 text-sm text-[#6b5b57]">
-              No matching genres
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FileDropZone({
-  label,
-  icon: Icon,
-  file,
-  onFileSelect,
-  accept,
-  className = "",
-}: {
-  label: string;
-  icon: React.ElementType;
-  file: File | null;
-  onFileSelect: (file: File | null) => void;
-  accept: string;
-  className?: string;
-}) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  return (
-    <div>
-      <label className="block text-xs uppercase tracking-wider text-[#B8A6A1] mb-2 font-medium">
-        {label}
-      </label>
-      <div
-        className={`h-[120px] rounded-xl border-2 border-dashed border-white/20 bg-background/40 flex flex-col items-center justify-center cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all ${className}`}
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          const files = Array.from(e.dataTransfer?.files ?? []);
-          if (files.length) onFileSelect(files[0]);
-        }}>
-        <input
-          ref={inputRef}
-          type="file"
-          accept={accept}
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0] || null;
-            onFileSelect(f);
-            if (e.target) e.target.value = "";
-          }}
-        />
-        <Icon className="w-8 h-8 text-[#6b5b57] mb-2" />
-        <div className="text-sm font-medium text-white text-center px-2">
-          {file?.name || `Click or drag to upload ${label.toLowerCase()}`}
-        </div>
-        <div className="text-xs text-[#6b5b57] mt-1">
-          {accept.split(",").join(" ")}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function UnifiedUploadSection({
-  value,
-  onChange,
-  onPost,
-  onError,
-  busy,
-}: {
-  value: UploadFormState;
-  onChange: (next: UploadFormState) => void;
-  onPost: () => void;
-  onError: (message: string | null) => void;
-  busy: boolean;
-}) {
-  const thumbnailPreviewUrl = useMemo(
-    () => buildObjectUrl(value.thumbnailFile),
-    [value.thumbnailFile]
-  );
-  const audioPreviewUrl = useMemo(
-    () => buildObjectUrl(value.audioFile),
-    [value.audioFile]
-  );
-  const videoPreviewUrl = useMemo(
-    () => buildObjectUrl(value.videoFile),
-    [value.videoFile]
-  );
-
-  const canPost = Boolean(
-    (value.title || "").trim() &&
-      (value.genre || "").trim() &&
-      value.thumbnailFile &&
-      value.audioFile &&
-      value.videoFile
-  );
-
-  return (
-    <div className="rounded-2xl border border-white/10 bg-surface overflow-hidden">
-      <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between">
-        <div>
-          <div className="text-lg font-semibold text-white flex items-center gap-2">
-            <Upload className="w-5 h-5 text-primary" />
-            Upload Track
-          </div>
-          <div className="mt-0.5 text-sm text-[#B8A6A1]">
-            Upload your audio, video, and cover art. Your release will be
-            processed and live in seconds.
-          </div>
-        </div>
-      </div>
-
-      <div className="p-6 grid grid-cols-1 lg:grid-cols-5 gap-8">
-        <div className="space-y-6 lg:col-span-3">
-          {/* Track Title */}
-          <div>
-            <label className="block text-xs uppercase tracking-wider text-[#B8A6A1] mb-2 font-medium">
-              Track Title <span className="text-primary">*</span>
-            </label>
-            <input
-              value={value.title}
-              onChange={(e) => onChange({ ...value, title: e.target.value })}
-              className="w-full h-[52px] rounded-xl bg-background/60 border border-white/10 px-5 text-sm text-white placeholder-[#6b5b57] outline-none focus:border-primary/50 transition-all"
-              placeholder="e.g. Midnight City"
-              autoFocus
-            />
-          </div>
-
-          {/* Genre */}
-          <div>
-            <label className="block text-xs uppercase tracking-wider text-[#B8A6A1] mb-2 font-medium">
-              Genre <span className="text-primary">*</span>
-            </label>
-            <GenreCombobox
-              value={value.genre}
-              onChange={(g) => onChange({ ...value, genre: g })}
-            />
-          </div>
-
-          {/* Cover Art */}
-          <FileDropZone
-            label="Cover Art"
-            icon={ImageIcon}
-            file={value.thumbnailFile}
-            onFileSelect={(f) => onChange({ ...value, thumbnailFile: f })}
-            accept="image/*"
-          />
-
-          {/* Audio & Video */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FileDropZone
-              label="Audio File (MP3)"
-              icon={FileAudio}
-              file={value.audioFile}
-              onFileSelect={(f) => onChange({ ...value, audioFile: f })}
-              accept=".mp3"
-            />
-            <FileDropZone
-              label="Video File (MP4/WEBM)"
-              icon={FileVideo}
-              file={value.videoFile}
-              onFileSelect={(f) => onChange({ ...value, videoFile: f })}
-              accept="video/mp4,video/webm"
-            />
-          </div>
-
-          {/* Subscriber Toggle */}
-          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center">
-                {value.isSubscriberOnly ? (
-                  <Lock className="w-5 h-5 text-primary" />
-                ) : (
-                  <Unlock className="w-5 h-5 text-primary" />
-                )}
-              </div>
-              <div>
-                <div className="text-sm font-medium text-white">
-                  Subscriber Only Content
-                </div>
-                <div className="text-xs text-[#B8A6A1]">
-                  Only active subscribers can play this track
-                </div>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                onChange({
-                  ...value,
-                  isSubscriberOnly: !value.isSubscriberOnly,
-                })
-              }
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                value.isSubscriberOnly
-                  ? "bg-primary"
-                  : "bg-background/80 border border-white/10"
-              }`}>
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  value.isSubscriberOnly ? "translate-x-6" : "translate-x-1"
-                }`}
-              />
-            </button>
-          </div>
-
-          {/* Submit Button */}
-          <button
-            type="button"
-            disabled={busy || !canPost}
-            onClick={onPost}
-            className="w-full h-[56px] rounded-xl bg-gradient-to-r from-primary to-secondary text-white font-semibold shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-            {busy ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Uploading...
-              </>
-            ) : (
-              <>
-                <Upload className="w-5 h-5" />
-                Publish Track
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* Preview Panel */}
-        <div className="lg:col-span-2">
-          <div className="rounded-xl border border-white/10 bg-background/60 p-6">
-            <h3 className="text-xs uppercase tracking-wider text-[#B8A6A1] font-medium mb-6 flex items-center gap-2">
-              <Radio className="w-4 h-4 text-primary" />
-              Preview
-            </h3>
-
-            <div className="h-[200px] w-[200px] mx-auto rounded-2xl overflow-hidden shadow-xl bg-background mb-6">
-              {thumbnailPreviewUrl ? (
-                <img
-                  src={thumbnailPreviewUrl}
-                  alt="Cover"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-[#6b5b57]">
-                  <Album className="w-12 h-12 mb-2" />
-                  <span className="text-xs">No Cover Art</span>
-                </div>
-              )}
-            </div>
-
-            <div className="text-center mb-6">
-              <h4 className="text-xl font-semibold text-white truncate">
-                {value.title || "Untitled Track"}
-              </h4>
-              <p className="text-sm text-primary mt-1">
-                {value.genre || "Genre"}
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <span className="text-xs text-[#B8A6A1] uppercase tracking-wide font-medium flex items-center gap-2">
-                  <Music className="w-4 h-4" /> Audio
-                </span>
-                {audioPreviewUrl ? (
-                  <audio
-                    controls
-                    className="w-full h-[40px] mt-2 rounded-lg"
-                    src={audioPreviewUrl}
-                  />
-                ) : (
-                  <div className="h-[40px] flex items-center justify-center text-xs text-[#6b5b57] bg-background/50 rounded-lg mt-2">
-                    No audio loaded
-                  </div>
-                )}
-              </div>
-              <div>
-                <span className="text-xs text-[#B8A6A1] uppercase tracking-wide font-medium flex items-center gap-2">
-                  <Video className="w-4 h-4" /> Video
-                </span>
-                {videoPreviewUrl ? (
-                  <video
-                    controls
-                    className="w-full h-[140px] rounded-lg bg-black mt-2"
-                    src={videoPreviewUrl}
-                  />
-                ) : (
-                  <div className="h-[140px] flex items-center justify-center text-xs text-[#6b5b57] bg-background/50 rounded-lg mt-2">
-                    No video loaded
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function ArtistContentUploadPage() {
-  const [busy, setBusy] = useState<boolean>(false);
+  const [title, setTitle] = useState("");
+  const [genre, setGenre] = useState("");
+  const [contentType, setContentType] = useState<"AUDIO" | "VIDEO">("AUDIO");
+  const [subscriptionRequired, setSubscriptionRequired] = useState(true);
+  const [thumbnail, setThumbnail] = useState<File | null>(null);
+  const [media, setMedia] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [result, setResult] = useState<UploadResult | null>(null);
+  const [fileInputVersion, setFileInputVersion] = useState(0);
 
-  const [form, setForm] = useState<UploadFormState>({
-    title: "",
-    genre: "",
-    thumbnailFile: null,
-    audioFile: null,
-    videoFile: null,
-    isSubscriberOnly: false,
-  });
+  const mediaAccept = contentType === "AUDIO"
+    ? "audio/mpeg,audio/mp3,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,audio/aac"
+    : "video/mp4,video/quicktime";
 
-  const backgroundStyle = useMemo(() => {
-    return {
-      backgroundImage:
-        "radial-gradient(circle at 30% 10%, rgba(232,93,44,0.06) 0%, rgba(10,10,10,0.95) 100%)",
-    } as const;
-  }, []);
+  const mediaLabel = contentType === "AUDIO" ? "Audio file" : "Video file";
 
-  const post = async () => {
+  const canSubmit = useMemo(
+    () => Boolean(title.trim() && genre.trim() && thumbnail && media && !submitting),
+    [genre, media, submitting, thumbnail, title]
+  );
+
+  const resetFiles = () => {
+    setThumbnail(null);
+    setMedia(null);
+  };
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
     setError(null);
-    setSuccess(null);
-    setBusy(true);
+    setResult(null);
+
+    const missing: string[] = [];
+    if (!title.trim()) missing.push("title");
+    if (!genre.trim()) missing.push("genre");
+    if (!thumbnail) missing.push("cover image");
+    if (!media) missing.push(mediaLabel.toLowerCase());
+
+    if (missing.length) {
+      setError(`Please provide ${missing.join(", ")}.`);
+      return;
+    }
+
+    const form = new FormData();
+    form.append("title", title.trim());
+    form.append("genre", genre.trim());
+    form.append("contentType", contentType);
+    form.append("subscriptionRequired", String(subscriptionRequired));
+    form.append("thumbnail", thumbnail!);
+    form.append("media", media!);
 
     try {
-      const title = (form.title || "").trim();
-      const genre = (form.genre || "").trim();
-
-      if (!title) throw new Error("Title is required");
-      if (!genre) throw new Error("Genre is required");
-      if (!form.thumbnailFile) throw new Error("Cover Art is required");
-      if (!form.audioFile) throw new Error("Audio File is required");
-      if (!form.videoFile) throw new Error("Video File is required");
-
-      const fd = new FormData();
-      fd.append("title", title);
-      fd.append("genre", genre);
-      fd.append("thumbnail", form.thumbnailFile);
-      fd.append("audio", form.audioFile);
-      fd.append("video", form.videoFile);
-      fd.append("isSubscriberOnly", String(form.isSubscriberOnly));
-
-      const res = await http.post<UploadResponse>(
-        "/api/v1/content/upload",
-        fd,
-        {
-          headers: {
-            "Content-Type": undefined as any,
-          },
-        }
-      );
-
-      if (!res.data?.success) {
-        throw new Error(res.data?.message || "Upload failed");
-      }
-
-      setSuccess(
-        "Your release has been uploaded and is currently Under Review!"
-      );
-      setForm({
-        title: "",
-        genre: "",
-        thumbnailFile: null,
-        audioFile: null,
-        videoFile: null,
-        isSubscriberOnly: false,
+      setSubmitting(true);
+      const response = await http.post("/api/v1/artist/media/upload", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 600_000,
       });
+      const uploaded = response.data?.content as UploadResult | undefined;
+      if (!uploaded) throw new Error("Upload completed but no content result was returned");
+      setResult(uploaded);
+      setTitle("");
+      setGenre("");
+      resetFiles();
+      setFileInputVersion((value) => value + 1);
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Upload failed");
+      const failure = toApiFailure(e);
+      setError(failure.message || e?.message || "Content upload failed");
     } finally {
-      setBusy(false);
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="w-full animate-fadeIn" style={backgroundStyle}>
-      <div className="px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-6 mb-8">
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-white/10 bg-surface p-6">
+        <div className="flex items-start gap-3">
+          <div className="rounded-xl border border-primary/30 bg-primary/10 p-2.5 text-primary">
+            <UploadCloud size={21} />
+          </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-2">
-              <Sparkles className="w-6 h-6 text-primary" />
-              New Release
-            </h1>
+            <h1 className="text-2xl font-bold text-white">Upload Content</h1>
             <p className="mt-1 text-sm text-[#B8A6A1]">
-              Share your latest master track alongside a visual experience.
+              Upload your own release. No admin song approval is required. Content becomes live automatically when media processing is ready.
             </p>
           </div>
-          <Link
-            to="/artist/dashboard"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-sm text-[#B8A6A1] hover:text-white hover:bg-white/5 transition-all">
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </Link>
         </div>
-
-        {/* Error Message */}
-        {error && (
-          <div className="mb-6 rounded-xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
-            <p className="text-sm text-rose-300">{error}</p>
-          </div>
-        )}
-
-        {/* Success Message */}
-        {success && (
-          <div className="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3 text-sm text-emerald-300">
-              <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-              <span>{success}</span>
-            </div>
-            <Link
-              to="/artist/dashboard"
-              className="px-6 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-sm font-semibold transition-colors whitespace-nowrap">
-              Back to Dashboard
-            </Link>
-          </div>
-        )}
-
-        {/* Upload Section */}
-        <UnifiedUploadSection
-          value={form}
-          onChange={setForm}
-          onPost={post}
-          onError={(m) => {
-            setError(m);
-            if (m) setSuccess(null);
-          }}
-          busy={busy}
-        />
       </div>
 
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.5s ease-out forwards;
-        }
-      `}</style>
+      {error && (
+        <div className="flex gap-3 rounded-2xl border border-rose-500/25 bg-rose-500/10 p-4 text-sm text-rose-300">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {result && (
+        <div className="flex gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm text-emerald-300">
+          <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
+          <div>
+            <div className="font-semibold">Upload accepted successfully.</div>
+            <div className="mt-1 text-emerald-200/80">
+              “{result.title}” is {result.technicalStatus === "READY" ? "live now" : "processing and will go live automatically when ready"}.
+            </div>
+          </div>
+        </div>
+      )}
+
+      <form onSubmit={submit} className="rounded-2xl border border-white/10 bg-surface p-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="space-y-5">
+            <label className="block">
+              <span className="text-sm font-medium text-white/70">Content type</span>
+              <div className="mt-2 grid grid-cols-2 gap-3">
+                {(["AUDIO", "VIDEO"] as const).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => {
+                      setContentType(kind);
+                      setMedia(null);
+                    }}
+                    className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition ${
+                      contentType === kind
+                        ? "border-primary/40 bg-primary/10 text-white"
+                        : "border-white/10 bg-black/20 text-white/50 hover:text-white"
+                    }`}
+                  >
+                    {kind === "AUDIO" ? <Music2 size={17} /> : <Video size={17} />}
+                    {kind === "AUDIO" ? "Audio" : "Video"}
+                  </button>
+                ))}
+              </div>
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-medium text-white/70">Title</span>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                maxLength={200}
+                disabled={submitting}
+                placeholder="Release title"
+                className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/25 focus:border-primary/50"
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-medium text-white/70">Genre</span>
+              <input
+                value={genre}
+                onChange={(e) => setGenre(e.target.value)}
+                maxLength={80}
+                disabled={submitting}
+                placeholder="e.g. Indie Pop"
+                className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/25 focus:border-primary/50"
+              />
+            </label>
+
+            <label className="flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-black/20 p-4">
+              <div className="flex gap-3">
+                <Lock size={18} className="mt-0.5 text-primary" />
+                <div>
+                  <div className="text-sm font-medium text-white">Subscriber-only playback</div>
+                  <div className="mt-1 text-xs text-white/45">
+                    Require an active subscription before fans can play this release.
+                  </div>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={subscriptionRequired}
+                onChange={(e) => setSubscriptionRequired(e.target.checked)}
+                disabled={submitting}
+                className="mt-1 h-4 w-4 accent-current"
+              />
+            </label>
+          </div>
+
+          <div className="space-y-5">
+            <label className="block rounded-2xl border border-dashed border-white/15 bg-black/20 p-5">
+              <span className="flex items-center gap-2 text-sm font-medium text-white/70">
+                <ImageIcon size={17} /> Cover image
+              </span>
+              <div className="mt-2 text-xs text-white/40">JPEG, PNG or WebP</div>
+              <input
+                key={`cover-${fileInputVersion}`}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                disabled={submitting}
+                onChange={(e) => setThumbnail(e.target.files?.[0] || null)}
+                className="mt-4 block w-full text-sm text-white/60"
+              />
+              {thumbnail && <div className="mt-2 truncate text-xs text-primary">{thumbnail.name}</div>}
+            </label>
+
+            <label className="block rounded-2xl border border-dashed border-white/15 bg-black/20 p-5">
+              <span className="flex items-center gap-2 text-sm font-medium text-white/70">
+                {contentType === "AUDIO" ? <FileAudio size={17} /> : <FileVideo size={17} />}
+                {mediaLabel}
+              </span>
+              <div className="mt-2 text-xs text-white/40">
+                {contentType === "AUDIO" ? "MP3, M4A, WAV or AAC" : "MP4 or MOV"}
+              </div>
+              <input
+                key={`${contentType}-${fileInputVersion}`}
+                type="file"
+                accept={mediaAccept}
+                disabled={submitting}
+                onChange={(e) => setMedia(e.target.files?.[0] || null)}
+                className="mt-4 block w-full text-sm text-white/60"
+              />
+              {media && <div className="mt-2 truncate text-xs text-primary">{media.name}</div>}
+            </label>
+
+            <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-xs leading-5 text-white/45">
+              Files are validated by MIME type, size and file signature before provider upload. Failed or still-processing media is not exposed to fans.
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className="inline-flex min-w-44 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {submitting ? <Loader2 size={17} className="animate-spin" /> : <UploadCloud size={17} />}
+            {submitting ? "Uploading…" : "Upload & Publish"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

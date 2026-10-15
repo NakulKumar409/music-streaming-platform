@@ -12,3 +12,17 @@
 -keep class com.facebook.react.turbomodule.** { *; }
 
 # Add any project specific keep options here:
+# TrackPlayer
+-keep class com.doublesymmetry.trackplayer.** { *; }
+
+# Expo Video & AV
+-keep class expo.modules.video.** { *; }
+-keep class expo.modules.av.** { *; }
+-keep class expo.modules.core.** { *; }
+
+# SVG
+-keep class com.horcrux.svg.** { *; }
+
+# Razorpay
+-keep class com.razorpay.** { *; }
+-dontwarn com.razorpay.**

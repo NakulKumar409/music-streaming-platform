@@ -1,15 +1,12 @@
-import React, {} from 'react';
-import { StyleSheet } from 'react-native';
-
-import { createBottomTabNavigator, type BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
-import { Home as HomeIcon, Music, PlayCircle, Search, User } from 'lucide-react-native';
+import React from 'react';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import BottomNavigation, { type BottomNavTab } from '../components/BottomNavigation';
 
 import SearchStackNavigator from './SearchStackNavigator';
 import AccountStackNavigator from './AccountStackNavigator';
 import AudioStackNavigator from './AudioStackNavigator';
 import HomeStackNavigator from './HomeStackNavigator';
 import VideoStackNavigator from './VideoStackNavigator';
-
 
 export type MainTabParamList = {
   HomeTab: undefined;
@@ -21,27 +18,42 @@ export type MainTabParamList = {
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
+const ROUTE_TO_TAB: Record<string, BottomNavTab> = {
+  HomeTab: 'home',
+  SearchTab: 'search',
+  AudioTab: 'audio',
+  VideoTab: 'video',
+  AccountTab: 'account',
+};
+
 export default function MainTabsNavigator() {
   return (
     <Tab.Navigator
       id="fan-tabs"
-      screenOptions={({ route }): BottomTabNavigationOptions => ({
+      tabBar={({ state, navigation }) => {
+        const currentRoute = state.routes[state.index]?.name || 'HomeTab';
+        const activeTab = ROUTE_TO_TAB[currentRoute] || 'home';
+
+        return (
+          <BottomNavigation
+            activeTab={activeTab}
+            onHomePress={() => navigation.navigate('HomeTab')}
+            onSearchPress={() => navigation.navigate('SearchTab')}
+            onAudioPress={() => navigation.navigate('AudioTab')}
+            onVideoPress={() => navigation.navigate('VideoTab')}
+            onAccountPress={() => navigation.navigate('AccountTab')}
+          />
+        );
+      }}
+      screenOptions={{
         headerShown: false,
-        tabBarShowLabel: true,
-        tabBarActiveTintColor: '#fff',
-        tabBarInactiveTintColor: '#666',
-        tabBarLabelStyle: styles.tabLabel,
-        tabBarStyle: styles.tabBar,
-        tabBarIcon: ({ color, size }) => {
-          const iconSize = size ?? 24;
-          if (route.name === 'HomeTab') return <HomeIcon color={color} size={iconSize} />;
-          if (route.name === 'SearchTab') return <Search color={color} size={iconSize} />;
-          if (route.name === 'AudioTab') return <Music color={color} size={iconSize} />;
-          if (route.name === 'VideoTab') return <PlayCircle color={color} size={iconSize} />;
-          return <User color={color} size={iconSize} />;
+        tabBarStyle: {
+          position: 'absolute',
+          backgroundColor: 'transparent',
+          borderTopWidth: 0,
+          elevation: 0,
         },
-        tabBarItemStyle: styles.tabBarItem,
-      })}
+      }}
     >
       <Tab.Screen name="HomeTab" component={HomeStackNavigator} options={{ title: 'Home' }} />
       <Tab.Screen name="SearchTab" component={SearchStackNavigator} options={{ title: 'Search' }} />
@@ -51,20 +63,3 @@ export default function MainTabsNavigator() {
     </Tab.Navigator>
   );
 }
-
-const styles = StyleSheet.create({
-  tabBar: {
-    height: 84,
-    backgroundColor: '#000',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
-  },
-  tabBarItem: {
-    paddingTop: 8,
-    paddingBottom: 10,
-  },
-  tabLabel: {
-    fontSize: 10,
-    marginTop: 4,
-  },
-});

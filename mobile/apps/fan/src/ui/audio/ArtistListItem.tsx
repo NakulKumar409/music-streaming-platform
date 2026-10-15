@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getOptimizedImageUrl } from '../../utils/cloudinary';
+import AppImage from '../../components/AppImage';
 
 const FALLBACK_ARTWORK =
   'https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=1400&q=80';
@@ -27,9 +28,11 @@ const ArtistListItem = memo(({ item, onPress }: ArtistListItemProps) => {
         ]}
         onPress={() => onPress(item)}
       >
-        <Image
-          source={{ uri: getOptimizedImageUrl(item.image || item.artworkUrl || FALLBACK_ARTWORK) }}
+        <AppImage
+          uri={item.image || item.artworkUrl}
+          fallbackType="artist"
           style={styles.avatar}
+          resizeMode="cover"
         />
         <View style={styles.meta}>
           <Text style={styles.title} numberOfLines={1}>

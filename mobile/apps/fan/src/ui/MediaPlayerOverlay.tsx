@@ -13,10 +13,9 @@ import {
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { navigationRef } from '../navigation/rootNavigation';
-import { ArrowLeft, Pause, Play, SkipForward, X } from 'lucide-react-native';
+import { ArrowLeft, Maximize, Pause, Play, SkipForward, X } from 'lucide-react-native';
 import { VideoView, VideoPlayer } from 'expo-video';
 import { AudioPlayer } from 'expo-audio';
-import Slider from '@react-native-community/slider';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -24,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { MediaItem, PlayerState } from '../media.types';
 import YouTubeVideoControlsOverlay from './YouTubeVideoControlsOverlay';
 import { Colors } from '../theme';
+import AppImage from '../components/AppImage';
 import { formatDurationLabel } from '../utils/mediaTime';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -150,28 +150,6 @@ export default function MediaPlayerOverlay({
     });
   }, [pan, currentItem?.mediaType, bottomOffset, insets.top]);
 
-  const [isSeeking, setIsSeeking] = useState(false);
-  const seekValueRef = useRef<number>(0);
-
-  const positionForUi = isSeeking ? seekValueRef.current : state.positionMs;
-
-  const onSeekStart = useCallback(() => {
-    setIsSeeking(true);
-    seekValueRef.current = state.positionMs;
-  }, [state.positionMs]);
-
-  const onSeekChange = useCallback((value: number) => {
-    seekValueRef.current = value;
-  }, []);
-
-  const onSeekComplete = useCallback(
-    (value: number) => {
-      setIsSeeking(false);
-      seekTo(value).catch(() => undefined);
-    },
-    [seekTo]
-  );
-
   const cycleSpeed = useCallback(() => {
     const current = state.playbackRate;
     const next = current <= 0.5 ? 1 : current <= 1 ? 1.5 : current <= 1.5 ? 2 : 0.5;
@@ -199,91 +177,6 @@ export default function MediaPlayerOverlay({
   }, []);
 
   if (!isVisible || !currentItem) return null;
-
-  if (currentItem.mediaType === 'video' && state.isExpanded) {
-    return (
-      <View pointerEvents="box-none" style={styles.root}>
-        <LinearGradient
-          colors={Colors.backgroundGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-        <View
-          style={[
-            styles.videoContainer,
-            {
-              paddingTop: insets.top + 8,
-            },
-          ]}
-        >
-          <LinearGradient
-            colors={['rgba(0,0,0,0.9)', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0)']}
-            style={styles.videoTopGradient}
-          />
-
-          <View style={styles.videoTopRow}>
-            <Pressable
-              onPress={() => setExpanded(false)}
-              style={[styles.videoTopBtn, { marginRight: 10 }]}
-            >
-              <Text style={styles.videoTopBtnText}>Minimize</Text>
-            </Pressable>
-            <Pressable onPress={close} style={styles.videoTopBtn}>
-              <X color="#fff" size={18} />
-            </Pressable>
-          </View>
-
-          <View style={[styles.videoFrame, { aspectRatio: expandedVideoAspectRatio }]}>
-            <Pressable
-              onPress={toggleControls}
-              style={StyleSheet.absoluteFill}
-            >
-              {videoPlayer && (
-                <VideoView
-                  player={videoPlayer}
-                  style={StyleSheet.absoluteFill}
-                  contentFit="contain"
-                  nativeControls={false}
-                  allowsPictureInPicture={true}
-                />
-              )}
-            </Pressable>
-
-            <YouTubeVideoControlsOverlay
-              isPlaying={state.isPlaying}
-              positionMs={state.positionMs}
-              durationMs={state.durationMs}
-              isVisible={controlsVisible}
-              onToggleVisibility={toggleControls}
-              onInteraction={onUserInteraction}
-              onTogglePlay={() => {
-                togglePlayPause().catch(() => undefined);
-              }}
-              onSeek={(pos) => {
-                seekTo(pos).catch(() => undefined);
-              }}
-              isFullscreen={true}
-              onToggleFullscreen={() => setExpanded(false)}
-            />
-          </View>
-
-          <View style={styles.videoMeta}>
-            <Text style={styles.videoTitle} numberOfLines={1}>
-              {currentItem.title}
-            </Text>
-            <Text style={styles.videoArtist} numberOfLines={1}>
-              {currentItem.artistName ?? 'Artist'}
-            </Text>
-          </View>
-        </View>
-      </View>
-    );
-  }
-
-  if (currentItem.mediaType === 'video' && inlineVideoHostActive) {
-    return null;
-  }
 
   if (currentItem.mediaType === 'video') {
     return null;
@@ -328,9 +221,11 @@ export default function MediaPlayerOverlay({
             });
           }}
         >
-          <Image
-            source={{ uri: currentItem.artworkUrl || 'https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=400&q=80' }}
+          <AppImage
+            uri={currentItem.artworkUrl}
+            fallbackType="song"
             style={styles.miniArt}
+            resizeMode="cover"
           />
           <View style={styles.miniMeta}>
             <Text style={styles.miniTitle} numberOfLines={1}>{currentItem.title}</Text>
@@ -361,15 +256,6 @@ export default function MediaPlayerOverlay({
       </Animated.View>
     </View>
   );
-}
-
-function progressWidth(positionMs: number, durationMs: number) {
-  const p = durationMs > 0 ? Math.min(1, Math.max(0, positionMs / durationMs)) : 0;
-  return `${Math.round(p * 100)}%`;
-}
-
-function formatTime(ms: number) {
-  return formatDurationLabel(ms, '--:--');
 }
 
 const styles = StyleSheet.create({
@@ -516,5 +402,82 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 4,
+  },
+  videoMiniPlayer: {
+    height: 68,
+    borderRadius: 14,
+    backgroundColor: 'rgba(20,20,20,0.96)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    gap: 10,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  videoMiniThumbWrap: {
+    width: 60,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#111',
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+  },
+  videoMiniThumb: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  videoMiniDurationBadge: {
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+    margin: 3,
+  },
+  videoMiniDurationText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  videoMiniSub: {
+    marginTop: 3,
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  videoMiniActionBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoMiniCloseBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -2,
+  },
+  videoMiniProgressTrack: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2.5,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  videoMiniProgressBar: {
+    height: '100%',
+    backgroundColor: '#FF0000',
   },
 });

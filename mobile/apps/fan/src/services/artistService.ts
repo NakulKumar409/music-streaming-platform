@@ -38,25 +38,12 @@ export type ArtistListItem = {
   genre: string;
 };
 
-const FALLBACK_ARTIST_IMAGE =
-  'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1000&q=80';
+import { resolveAppImageUrl, FALLBACK_ARTIST_AVATAR } from '../utils/imageUtils';
 
-function resolveImageUrl(url: string) {
-  const trimmed = (url || '').toString().trim();
-  if (!trimmed) return '';
-  
-  // Replace hardcoded localhost database entries with the current base URL
-  if (trimmed.startsWith('http://localhost') || trimmed.startsWith('http://192.168.')) {
-    const pathIndex = trimmed.indexOf('/', 8);
-    if (pathIndex !== -1) {
-      const path = trimmed.substring(pathIndex);
-      return `${API_HOST_BASE_URL}${path}`;
-    }
-  }
+const FALLBACK_ARTIST_IMAGE = FALLBACK_ARTIST_AVATAR;
 
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
-  if (trimmed.startsWith('/')) return `${API_HOST_BASE_URL}${trimmed}`;
-  return trimmed;
+function resolveImageUrl(url: string, type: 'song' | 'artist' | 'banner' | 'video' = 'artist') {
+  return resolveAppImageUrl(url, type);
 }
 
 export type ArtistDetail = {
@@ -91,8 +78,14 @@ export async function fetchArtistById(artistId: string): Promise<ArtistDetail | 
   if (!a) return null;
 
   const subscriptionPrice = Number(a.subscriptionPrice ?? 0);
-  const imageUrl =
-    resolveImageUrl((a.coverImageUrl || a.profileImageUrl || '').toString()) || FALLBACK_ARTIST_IMAGE;
+  const rawProfileImage =
+    a.profileImageUrl || (a.id ? `/api/v1/artist/assets/${a.id}/profile` : '');
+  const profileImageUrl =
+    resolveImageUrl(rawProfileImage.toString()) || FALLBACK_ARTIST_IMAGE;
+  const rawCoverImage =
+    a.coverImageUrl || (a.id ? `/api/v1/artist/assets/${a.id}/banner` : '');
+  const coverImageUrl =
+    (rawCoverImage ? resolveImageUrl(rawCoverImage.toString(), 'banner') : '') || profileImageUrl;
 
   const socials = (a.socialLinks ?? null) as any;
   const spotifyUrl = ((a.spotifyUrl ?? socials?.spotify) || null) ? String((a.spotifyUrl ?? socials?.spotify) as any) : null;
@@ -105,8 +98,8 @@ export async function fetchArtistById(artistId: string): Promise<ArtistDetail | 
     id: String(a.id),
     name: (a.name ?? 'Artist').toString(),
     isVerified: Boolean(a.isVerified ?? a.verified ?? false),
-    profileImageUrl: resolveImageUrl((a.profileImageUrl || '').toString()) || imageUrl,
-    coverImageUrl: imageUrl,
+    profileImageUrl,
+    coverImageUrl,
     bio: (a.bio ?? '').toString(),
     spotifyUrl,
     youtubeUrl,
@@ -138,6 +131,7 @@ export type ApiArtistContentItem = {
   userReaction?: 'like' | 'dislike' | null;
   subscriptionRequired?: boolean | number;
   subscription_required?: boolean | number;
+  durationMs?: number | null;
 };
 
 export type ArtistMediaItem = {
@@ -153,6 +147,7 @@ export type ArtistMediaItem = {
   likeCount?: number | null;
   dislikeCount?: number | null;
   userReaction?: 'like' | 'dislike' | null;
+  durationMs?: number;
 };
 
 function resolveMediaUrl(url: string) {
@@ -221,6 +216,10 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
     const effectiveVideoUrl = videoUrl || (isVideoOnly ? fallbackUrl : '');
 
     const createdAt = (it.createdAt || it.created_at || null) as string | null;
+    const durationMs =
+      Number.isFinite(Number(it.durationMs)) && Number(it.durationMs) > 0
+        ? Math.round(Number(it.durationMs))
+        : undefined;
 
     if (isAudioVideo) {
       if (effectiveAudioUrl || useStreamAccess) {
@@ -231,12 +230,13 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
           mediaType: 'audio',
           artworkUrl,
           mediaUrl: effectiveAudioUrl,
-          locked: Boolean(it.isLocked || it.locked || it.subscriptionRequired || it.subscription_required),
+          locked: typeof it.isLocked === 'boolean' ? it.isLocked : typeof it.locked === 'boolean' ? it.locked : Boolean(it.subscriptionRequired || it.subscription_required),
           useStreamAccess,
           createdAt,
           likeCount: it.likeCount,
           dislikeCount: it.dislikeCount,
           userReaction: it.userReaction,
+          durationMs,
         });
       }
       if (effectiveVideoUrl || useStreamAccess) {
@@ -247,12 +247,13 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
           mediaType: 'video',
           artworkUrl,
           mediaUrl: effectiveVideoUrl,
-          locked: Boolean(it.isLocked || it.locked || it.subscriptionRequired || it.subscription_required),
+          locked: typeof it.isLocked === 'boolean' ? it.isLocked : typeof it.locked === 'boolean' ? it.locked : Boolean(it.subscriptionRequired || it.subscription_required),
           useStreamAccess,
           createdAt,
           likeCount: it.likeCount,
           dislikeCount: it.dislikeCount,
           userReaction: it.userReaction,
+          durationMs,
         });
       }
       continue;
@@ -269,12 +270,13 @@ export async function fetchArtistMedia(artistId: string): Promise<ArtistMediaIte
       mediaType,
       artworkUrl,
       mediaUrl,
-      locked: Boolean(it.isLocked || it.locked || it.subscriptionRequired || it.subscription_required),
+      locked: typeof it.isLocked === 'boolean' ? it.isLocked : typeof it.locked === 'boolean' ? it.locked : Boolean(it.subscriptionRequired || it.subscription_required),
       useStreamAccess,
       createdAt,
       likeCount: it.likeCount,
       dislikeCount: it.dislikeCount,
       userReaction: it.userReaction,
+      durationMs,
     });
   }
 
@@ -292,11 +294,15 @@ export async function fetchVerifiedArtists(limit = 10, offset = 0): Promise<Arti
 
   return raw.map((a) => {
     const subscriptionPrice = Number(a.subscriptionPrice ?? 0);
+    const profileImageRaw =
+      a.profileImageUrl ||
+      (a as any).avatar ||
+      (a.id ? `/api/v1/artist/assets/${a.id}/profile` : '');
 
     return {
       id: String(a.id),
       name: (a.name ?? 'Artist').toString(),
-      image: resolveImageUrl((a.profileImageUrl || '').toString()) || FALLBACK_ARTIST_IMAGE,
+      image: resolveImageUrl(profileImageRaw.toString()) || FALLBACK_ARTIST_IMAGE,
       isVerified: Boolean(a.isVerified ?? a.verified ?? false),
       subscriptionPrice: Number.isFinite(subscriptionPrice) ? subscriptionPrice : 0,
       status: (a.status ?? 'ACTIVE').toString(),
@@ -317,9 +323,16 @@ export async function fetchFeaturedArtists(): Promise<FeaturedArtist[]> {
       ? res.data.artists
       : [];
 
-  return raw.map((a) => ({
-    id: String(a.id),
-    name: (a.name ?? 'Artist').toString(),
-    avatar: resolveImageUrl((a.avatar || '').toString()) || FALLBACK_ARTIST_IMAGE,
-  }));
+  return raw.map((a) => {
+    const avatarRaw =
+      a.avatar ||
+      (a as any).profileImageUrl ||
+      (a.id ? `/api/v1/artist/assets/${a.id}/profile` : '');
+
+    return {
+      id: String(a.id),
+      name: (a.name ?? 'Artist').toString(),
+      avatar: resolveImageUrl(avatarRaw.toString()) || FALLBACK_ARTIST_IMAGE,
+    };
+  });
 }

@@ -53,7 +53,9 @@ export default function SecondaryButton({ title, onPress, style }: SecondaryButt
       style={[styles.pressable, style]}
     >
       <Animated.View style={[styles.container, { transform: [{ scale }], opacity }]}>
-        <Text style={styles.text}>{title}</Text>
+        <Text style={styles.text} numberOfLines={1} ellipsizeMode="tail">
+          {title}
+        </Text>
       </Animated.View>
     </Pressable>
   );
@@ -69,15 +71,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderThin,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
+    height: 44,
+    minHeight: 44,
   },
   text: {
     color: colors.textPrimary,
-    fontSize: typography.buttonText,
+    fontSize: 13.5,
     fontWeight: typography.weightSemiBold,
   },
 });

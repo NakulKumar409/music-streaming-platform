@@ -1,7 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useCallback, useContext, useMemo, useState, useEffect } from 'react';
+import * as Sentry from '@sentry/react-native';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-import { api, JWT_STORAGE_KEY, USER_TOKEN_STORAGE_KEY } from '../services/api';
+import { api, setUnauthorizedHandler } from '../services/api';
+import { releaseActivePlaybackLease } from '../services/streamService';
+import {
+  clearAuthCredential,
+  readAuthCredential,
+  saveAuthCredential,
+} from '../security/credentialStorage';
 
 export type SessionUser = {
   id?: string | number;
@@ -10,7 +17,7 @@ export type SessionUser = {
   status?: AccountStatus;
 } & Record<string, unknown>;
 
-export type AccountStatus = 'ACTIVE' | 'SUSPENDED';
+export type AccountStatus = 'ACTIVE' | 'SUSPENDED' | 'INACTIVE' | 'UNKNOWN';
 
 const SESSION_USER_STORAGE_KEY = 'sessionUser';
 
@@ -35,8 +42,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 function extractToken(data: unknown): string | null {
   if (!data || typeof data !== 'object') return null;
   const record = data as Record<string, unknown>;
-  const candidate =
-    record.token ?? record.jwt ?? record.accessToken ?? (record.data as any)?.token;
+  const candidate = record.token ?? record.jwt ?? record.accessToken ?? (record.data as any)?.token;
   return typeof candidate === 'string' && candidate.length > 0 ? candidate : null;
 }
 
@@ -47,19 +53,20 @@ function extractUser(data: unknown): SessionUser | null {
   return typeof candidate === 'object' && candidate ? (candidate as SessionUser) : null;
 }
 
-function extractAccountStatus(data: unknown): AccountStatus | null {
-  if (!data || typeof data !== 'object') return null;
+function extractAccountStatus(data: unknown): AccountStatus {
+  if (!data || typeof data !== 'object') return 'UNKNOWN';
   const record = data as Record<string, unknown>;
   const user = extractUser(record);
-
   const candidate =
     (user as any)?.status ??
     (user as any)?.account_status ??
     record.status ??
     record.account_status;
 
-  if (candidate === 'ACTIVE' || candidate === 'SUSPENDED') return candidate;
-  return null;
+  if (candidate === 'ACTIVE' || candidate === 'SUSPENDED' || candidate === 'INACTIVE') {
+    return candidate;
+  }
+  return 'UNKNOWN';
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -67,20 +74,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [userAccountStatus, setUserAccountStatusState] = useState<AccountStatus>('UNKNOWN');
 
-  // Global account status with persistence
-  const [userAccountStatus, setUserAccountStatusState] = useState<AccountStatus>('ACTIVE');
+  const isAccountSuspended =
+    userAccountStatus === 'SUSPENDED' || userAccountStatus === 'INACTIVE';
+  const isAuthenticated = Boolean(token && token.trim().length > 0 && userAccountStatus === 'ACTIVE');
 
-  const isAccountSuspended = userAccountStatus === 'SUSPENDED';
+  const clearLocalSession = useCallback(async () => {
+    // When a valid auth token is still present, best-effort release the server
+    // playback lease before deleting local credentials. If this clear was
+    // triggered by a 401, the request can fail safely and server TTL cleanup
+    // remains the fallback.
+    await releaseActivePlaybackLease().catch(() => false);
 
-  const isAuthenticated = Boolean(token && token.trim().length > 0);
+    setTokenState(null);
+    setUser(null);
+    setUserAccountStatusState('UNKNOWN');
+    await AsyncStorage.removeItem(SESSION_USER_STORAGE_KEY);
+
+    try {
+      await clearAuthCredential();
+    } catch (error) {
+      // Session state must remain logged out even if the OS secure-store delete
+      // call fails. The persisted logout tombstone prevents token restoration.
+      Sentry.captureException(error, {
+        tags: { area: 'auth-storage', action: 'clear-local-session' },
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => clearLocalSession());
+    return () => setUnauthorizedHandler(null);
+  }, [clearLocalSession]);
 
   const restoreToken = useCallback(async () => {
     setIsRestoring(true);
     try {
-      const stored =
-        (await AsyncStorage.getItem(USER_TOKEN_STORAGE_KEY)) ??
-        (await AsyncStorage.getItem(JWT_STORAGE_KEY));
+      const stored = await readAuthCredential();
       setTokenState(stored);
       return stored;
     } finally {
@@ -90,11 +121,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const setToken = useCallback(async (next: string | null) => {
     if (next) {
-      await AsyncStorage.setItem(USER_TOKEN_STORAGE_KEY, next);
-      await AsyncStorage.removeItem(JWT_STORAGE_KEY);
+      // Explicit auth-context token writes represent a newly authenticated
+      // session. Background token rotation bypasses this path and cannot clear
+      // a logout tombstone.
+      await saveAuthCredential(next, 'fresh-auth');
     } else {
-      await AsyncStorage.removeItem(USER_TOKEN_STORAGE_KEY);
-      await AsyncStorage.removeItem(JWT_STORAGE_KEY);
+      await clearAuthCredential();
     }
     setTokenState(next);
   }, []);
@@ -103,60 +135,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await api.get('/auth/session');
       const nextUser = extractUser(res.data);
-
       const status = extractAccountStatus(res.data);
-      const mergedUser = nextUser
-        ? ({ ...nextUser, status: status ?? (nextUser as any)?.status } as SessionUser)
-        : null;
 
-      setUser(mergedUser);
-      if (mergedUser) {
-        await AsyncStorage.setItem(SESSION_USER_STORAGE_KEY, JSON.stringify(mergedUser));
-      } else {
-        await AsyncStorage.removeItem(SESSION_USER_STORAGE_KEY);
+      if (!nextUser || status !== 'ACTIVE') {
+        await clearLocalSession();
+        return null;
       }
 
-      setUserAccountStatusState(status ?? 'ACTIVE');
+      const mergedUser = { ...nextUser, status } as SessionUser;
+      setUser(mergedUser);
+      setUserAccountStatusState(status);
+      await AsyncStorage.setItem(SESSION_USER_STORAGE_KEY, JSON.stringify(mergedUser));
       return mergedUser;
     } catch {
-      setTokenState(null);
-      setUser(null);
-      setUserAccountStatusState('ACTIVE');
-      await AsyncStorage.removeItem(USER_TOKEN_STORAGE_KEY);
-      await AsyncStorage.removeItem(JWT_STORAGE_KEY);
-      await AsyncStorage.removeItem(SESSION_USER_STORAGE_KEY);
+      await clearLocalSession();
       return null;
     }
-  }, []);
+  }, [clearLocalSession]);
 
   const bootstrapAuth = useCallback(async () => {
     setIsRestoring(true);
     try {
-      const stored =
-        (await AsyncStorage.getItem(USER_TOKEN_STORAGE_KEY)) ??
-        (await AsyncStorage.getItem(JWT_STORAGE_KEY));
-      const storedUserRaw = await AsyncStorage.getItem(SESSION_USER_STORAGE_KEY);
-      const storedUser = storedUserRaw ? (JSON.parse(storedUserRaw) as SessionUser) : null;
+      const stored = await readAuthCredential();
+
+      if (!stored) {
+        await clearLocalSession();
+        return;
+      }
 
       setTokenState(stored);
-      setUser(storedUser);
-      if (storedUser?.status === 'ACTIVE' || storedUser?.status === 'SUSPENDED') {
-        setUserAccountStatusState(storedUser.status);
-      } else {
-        setUserAccountStatusState('ACTIVE');
-      }
-
-      if (stored) {
-        await fetchSession();
-      }
+      setUserAccountStatusState('UNKNOWN');
+      await fetchSession();
     } catch {
-      setTokenState(null);
-      setUser(null);
-      setUserAccountStatusState('ACTIVE');
+      await clearLocalSession();
     } finally {
       setIsRestoring(false);
     }
-  }, [fetchSession]);
+  }, [clearLocalSession, fetchSession]);
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -164,31 +179,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const res = await api.post('/auth/login', { email, password });
         const nextToken = extractToken(res.data);
-        if (!nextToken) {
-          throw new Error('Login succeeded but token was not returned by server.');
-        }
-
         const nextUser = extractUser(res.data);
         const status = extractAccountStatus(res.data);
-        const mergedUser = nextUser
-          ? ({ ...nextUser, status: status ?? (nextUser as any)?.status } as SessionUser)
-          : null;
+
+        if (!nextToken || !nextUser || status !== 'ACTIVE') {
+          throw new Error('Authentication response is incomplete.');
+        }
 
         await setToken(nextToken);
-
+        const mergedUser = { ...nextUser, status } as SessionUser;
         setUser(mergedUser);
-        if (mergedUser) {
-          await AsyncStorage.setItem(SESSION_USER_STORAGE_KEY, JSON.stringify(mergedUser));
-        } else {
-          await AsyncStorage.removeItem(SESSION_USER_STORAGE_KEY);
-        }
-
-        if (status) {
-          setUserAccountStatusState(status);
-        } else {
-          setUserAccountStatusState('ACTIVE');
-        }
-
+        setUserAccountStatusState(status);
+        await AsyncStorage.setItem(SESSION_USER_STORAGE_KEY, JSON.stringify(mergedUser));
         await fetchSession();
       } finally {
         setIsLoggingIn(false);
@@ -198,11 +200,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    await setToken(null);
-    setUser(null);
-    setUserAccountStatusState('ACTIVE');
-    await AsyncStorage.removeItem(SESSION_USER_STORAGE_KEY);
-  }, [setToken]);
+    try {
+      if (token) {
+        // Terminate media access while the current auth session can still
+        // authorize /stream/terminate, then revoke the auth session itself.
+        await releaseActivePlaybackLease().catch(() => false);
+        await api.post('/auth/logout');
+      }
+    } catch {
+      // Local logout must still complete if the session was already revoked or
+      // the network is unavailable.
+    } finally {
+      await clearLocalSession();
+    }
+  }, [clearLocalSession, token]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -242,8 +253,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
   return ctx;
 }
