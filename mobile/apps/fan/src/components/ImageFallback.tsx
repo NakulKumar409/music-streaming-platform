@@ -12,10 +12,11 @@ import { Image as ImageIcon } from 'lucide-react-native';
 import { colors } from '../theme-guest/colors';
 
 // ─── Dev diagnostic logger ────────────────────────────────────────────────────
-const IS_DEV = process.env.NODE_ENV !== 'production';
+const IS_DEV = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
+const DEBUG_IMAGE_LOGS = false;
 
 function imgLog(label: string, data: Record<string, unknown>) {
-  if (!IS_DEV) return;
+  if (!DEBUG_IMAGE_LOGS) return;
   console.log('[ImageFallback][' + label + ']', data);
 }
 // ──────────────────────────────────────────────────────────────────────────────

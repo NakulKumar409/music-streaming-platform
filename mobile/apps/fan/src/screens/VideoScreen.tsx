@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -91,6 +91,7 @@ import {
 } from "../utils/streaming";
 
 const REPORTED_CONTENT_STORAGE_KEY = "reportedContentIds";
+const DEBUG_PLAYBACK_RCA = false;
 
 let shakaModule: any = null;
 if (Platform.OS === "web") {
@@ -346,6 +347,66 @@ function normalizeCategory(raw: unknown): string {
   return c || "Trending";
 }
 
+interface VideoRowItemProps {
+  item: VideoCard;
+  isActive: boolean;
+  onPress: (item: VideoCard) => void;
+}
+
+const VideoRowItem = memo(
+  function VideoRowItem({ item, isActive, onPress }: VideoRowItemProps) {
+    return (
+      <Pressable style={styles.rowItem} onPress={() => onPress(item)}>
+        <View
+          style={[
+            styles.rowThumbWrap,
+            isActive ? styles.rowThumbWrapActive : null,
+          ]}>
+          <AppImage
+            uri={item.artworkUrl}
+            fallbackType="video"
+            style={styles.rowThumb}
+            resizeMode="cover"
+          />
+          {item.isLocked && (
+            <View style={styles.lockBadgeMini}>
+              <Lock size={12} color="#fff" />
+            </View>
+          )}
+          <View style={styles.rowThumbOverlay}>
+            <View style={styles.rowPlayBadge}>
+              <Image
+                source={PlayButtonImg}
+                style={styles.rowPlayImg}
+                resizeMode="contain"
+              />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.rowMeta}>
+          <Text style={styles.rowTitle} numberOfLines={2}>
+            {item.title}
+          </Text>
+          <Text style={styles.rowArtist} numberOfLines={1}>
+            {item.artistName}
+          </Text>
+          <Text style={styles.rowSub} numberOfLines={1}>
+            {formatDateLabel(item.createdAt) || ""}
+          </Text>
+        </View>
+      </Pressable>
+    );
+  },
+  (prev, next) =>
+    prev.item.id === next.item.id &&
+    prev.isActive === next.isActive &&
+    prev.item.artworkUrl === next.item.artworkUrl &&
+    prev.item.title === next.item.title &&
+    prev.item.artistName === next.item.artistName &&
+    prev.item.isLocked === next.item.isLocked
+);
+
 export default function VideoScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -422,6 +483,8 @@ export default function VideoScreen() {
   const seekSafetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shakaPlayerRef = useRef<any>(null);
   const loadedShakaUrlRef = useRef<string | null>(null);
+  const webVideoRef = useRef<HTMLVideoElement | null>(null);
+  const isShakaLoadingRef = useRef<boolean>(false);
 
   const setPendingSeek = useCallback((targetMs: number) => {
     pendingSeekTargetMsRef.current = targetMs;
@@ -576,29 +639,41 @@ export default function VideoScreen() {
   const userPausedRef = useRef<boolean>(false); // Track if user explicitly paused
 
   const safePlay = useCallback(async (target: { play?: () => any; playing?: boolean } | null | undefined, tag: string) => {
-    console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) called, target exists:`, Boolean(target), "playing:", target?.playing);
+    if (DEBUG_PLAYBACK_RCA) {
+      console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) called, target exists:`, Boolean(target), "playing:", target?.playing);
+    }
     if (!target || typeof target.play !== "function") return;
     if (currentItemRef.current?.mediaType === "audio" && playerState.isPlaying) {
-      console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) skipped - audio is active media item`);
+      if (DEBUG_PLAYBACK_RCA) {
+        console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) skipped - audio is active media item`);
+      }
       return;
     }
     if (target.playing) {
-      console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) skipped - already playing`);
+      if (DEBUG_PLAYBACK_RCA) {
+        console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) skipped - already playing`);
+      }
       return;
     }
-    console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) awaiting pauseAudio before video play`);
+    if (DEBUG_PLAYBACK_RCA) {
+      console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) awaiting pauseAudio before video play`);
+    }
     try {
       await pauseAudio?.();
     } catch (e) {
       console.warn(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) pauseAudio error`, e);
     }
     try {
-      console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) calling target.play()...`);
+      if (DEBUG_PLAYBACK_RCA) {
+        console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) calling target.play()...`);
+      }
       const maybePromise = target.play();
       if (maybePromise && typeof maybePromise.then === "function") {
         maybePromise
           .then((res: any) => {
-            console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) target.play() Promise resolved, res:`, res);
+            if (DEBUG_PLAYBACK_RCA) {
+              console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) target.play() Promise resolved, res:`, res);
+            }
           })
           .catch((err: any) => {
             const name = (err?.name || "").toString();
@@ -614,7 +689,9 @@ export default function VideoScreen() {
             });
           });
       } else {
-        console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) target.play() synchronous result:`, maybePromise);
+        if (DEBUG_PLAYBACK_RCA) {
+          console.log(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) target.play() synchronous result:`, maybePromise);
+        }
       }
     } catch (err: any) {
       console.error(`[PlaybackRCA] platform=${Platform.OS} action=safePlay(${tag}) synchronous throw:`, {
@@ -679,6 +756,13 @@ export default function VideoScreen() {
             return;
           }
           currentVideoSourceUrlRef.current = url;
+          if (Platform.OS === "web" && isHls) {
+            // On Web, Shaka Player handles HLS via MediaSource Extensions.
+            // Do NOT call playerRef.current.replace("") because VideoPlayerWeb calls
+            // video.removeAttribute('src') and video.load(), which wipes out MediaSource buffers.
+            console.log("[VideoScreen] Skipping VideoPlayer replace on Web for HLS (delegated to Shaka)");
+            return;
+          }
           const sanitizedUrl = url.includes("?")
             ? `${new URL(url).origin}${new URL(url).pathname}?[token-redacted]`
             : url;
@@ -1511,27 +1595,29 @@ export default function VideoScreen() {
       (event: any) => {
         const status = event.status;
         const error = event.error;
-        console.log(
-          `[VideoPlayer:NATIVE] statusChange: status=${status}, playing=${videoPlayer.playing}, currentTime=${videoPlayer.currentTime}, duration=${videoPlayer.duration}`,
-          error ? `error=${JSON.stringify(error)}` : ""
-        );
+        if (DEBUG_PLAYBACK_RCA) {
+          console.log(
+            `[VideoPlayer:NATIVE] statusChange: status=${status}, playing=${videoPlayer.playing}, currentTime=${videoPlayer.currentTime}, duration=${videoPlayer.duration}`,
+            error ? `error=${JSON.stringify(error)}` : ""
+          );
+        }
         setIsVideoReady(status === "readyToPlay");
         setIsBuffering(status === "loading");
 
         if (status === "readyToPlay") {
-          console.log("[VideoPlayer:NATIVE] Status is readyToPlay, checking auto-play intent. userPaused:", userPausedRef.current, "playing:", videoPlayer.playing);
+          if (DEBUG_PLAYBACK_RCA) {
+            console.log("[VideoPlayer:NATIVE] Status is readyToPlay, checking auto-play intent. userPaused:", userPausedRef.current, "playing:", videoPlayer.playing);
+          }
           if (qualityResumePositionRef.current !== null) {
             const targetSeconds = qualityResumePositionRef.current;
             qualityResumePositionRef.current = null;
             try {
               videoPlayer.currentTime = targetSeconds;
-              console.log("[VideoPlayer:NATIVE] Quality resume seek to", targetSeconds);
               safePlayRef.current?.(videoPlayer as any, "status-ready-quality");
             } catch (e) {
               console.error("[VideoPlayer:NATIVE] Quality resume seek failed", e);
             }
           } else if (!userPausedRef.current && !videoPlayer.playing) {
-            console.log("[VideoPlayer:NATIVE] Calling safePlay for readyToPlay");
             safePlayRef.current?.(videoPlayer as any, "status-readyToPlay");
           }
         } else if (status === "error" || status === "failed") {
@@ -1567,7 +1653,9 @@ export default function VideoScreen() {
       "playingChange",
       (event: any) => {
         const isPlaying = Boolean(typeof event === "object" ? event?.isPlaying : event);
-        console.log(`[VideoPlayer:NATIVE] playingChange: isPlaying=${isPlaying}, currentTime=${videoPlayer.currentTime}`);
+        if (DEBUG_PLAYBACK_RCA) {
+          console.log(`[VideoPlayer:NATIVE] playingChange: isPlaying=${isPlaying}, currentTime=${videoPlayer.currentTime}`);
+        }
         setIsVideoPlaying(isPlaying);
       }
     );
@@ -1581,7 +1669,7 @@ export default function VideoScreen() {
         const rawSec = playerSec > 0 ? playerSec : (eventSec > 0 ? eventSec : playerSec);
         const curMs = Math.round(Number(rawSec || 0) * 1000);
         const now = Date.now();
-        if (now - rcaLogTimeUpdateRef.current >= 1000) {
+        if (DEBUG_PLAYBACK_RCA && now - rcaLogTimeUpdateRef.current >= 1000) {
           rcaLogTimeUpdateRef.current = now;
           console.log(
             `[PlaybackTimeRCA] platform=${Platform.OS} source=timeUpdate playerTime=${Number(rawSec).toFixed(2)}s duration=${Number(videoPlayer.duration || 0).toFixed(2)}s eventTime=${event?.currentTime} positionMs=${curMs} displayPositionMs=${positionMsRef.current} elapsedLabel=${formatDurationLabel(curMs, "00:00")}`
@@ -1636,6 +1724,9 @@ export default function VideoScreen() {
     if (Platform.OS !== "web" || !videoPlayer) return;
 
     const getMountedVideo = (): HTMLVideoElement | null => {
+      if (webVideoRef.current && typeof webVideoRef.current.addEventListener === "function") {
+        return webVideoRef.current;
+      }
       const mounted = (videoPlayer as any)?._mountedVideos;
       if (mounted && mounted.size > 0) {
         const first = Array.from(mounted.values())[0] as HTMLVideoElement;
@@ -1663,7 +1754,7 @@ export default function VideoScreen() {
           if (isSeekingRef.current) return;
           const currentMs = Math.round(video.currentTime * 1000);
           const now = Date.now();
-          if (now - rcaLogWebTimeUpdateRef.current >= 1000) {
+          if (DEBUG_PLAYBACK_RCA && now - rcaLogWebTimeUpdateRef.current >= 1000) {
             rcaLogWebTimeUpdateRef.current = now;
             console.log(
               `[PlaybackTimeRCA] platform=web source=domTimeUpdate playerTime=${video.currentTime.toFixed(2)}s duration=${Number(video.duration || 0).toFixed(2)}s currentMs=${currentMs} displayPositionMs=${displayPositionMs} elapsedLabel=${formatDurationLabel(currentMs, "00:00")}`
@@ -1703,52 +1794,140 @@ export default function VideoScreen() {
           setPositionMs(Math.round(video.currentTime * 1000));
         };
 
+        const onPlay = () => {
+          setIsVideoPlaying(true);
+          setIsBuffering(false);
+        };
+        const onPause = () => {
+          if (!isSeekingRef.current) {
+            setIsVideoPlaying(false);
+          }
+        };
+        const onWaiting = () => {
+          setIsBuffering(true);
+        };
+        const onPlaying = () => {
+          setIsBuffering(false);
+          setIsVideoPlaying(true);
+          setIsVideoReady(true);
+        };
+
         video.addEventListener("timeupdate", onTimeUpdate);
         video.addEventListener("seeked", onSeeked);
+        video.addEventListener("play", onPlay);
+        video.addEventListener("pause", onPause);
+        video.addEventListener("waiting", onWaiting);
+        video.addEventListener("playing", onPlaying);
 
         cleanupListeners = () => {
           video.removeEventListener("timeupdate", onTimeUpdate);
           video.removeEventListener("seeked", onSeeked);
+          video.removeEventListener("play", onPlay);
+          video.removeEventListener("pause", onPause);
+          video.removeEventListener("waiting", onWaiting);
+          video.removeEventListener("playing", onPlaying);
         };
       }
 
       // Attach Shaka Player for HLS playback on Web (Chrome/Edge/Firefox)
       if (activePlaybackUrl && shakaModule && typeof shakaModule.Player === "function") {
-        if (!shakaPlayerRef.current || shakaPlayerRef.current.getMediaElement() !== video) {
-          if (shakaPlayerRef.current) {
-            try {
-              await shakaPlayerRef.current.destroy();
-            } catch {}
-          }
-          const sp = new shakaModule.Player(video);
+        if (!shakaPlayerRef.current) {
+          const sp = new shakaModule.Player();
           shakaPlayerRef.current = sp;
+          try {
+            await sp.attach(video);
+          } catch (attachErr) {
+            console.warn("[Shaka] Attach warning:", attachErr);
+          }
           sp.addEventListener("error", (event: any) => {
             console.error("[Shaka] Player error:", event);
           });
+          // Ultra-fast instant configuration: buffer 0.5s ahead, 0.2s rebuffering goal
+          if (typeof sp.configure === "function") {
+            sp.configure({
+              streaming: {
+                bufferingGoal: 0.5,
+                rebufferingGoal: 0.2,
+                bufferBehind: 5,
+                lowLatencyMode: true,
+                startAtSegmentBoundary: false,
+                retryParameters: {
+                  maxAttempts: 2,
+                  baseDelay: 100,
+                  backoffFactor: 1.2,
+                  fuzzFactor: 0.1,
+                  timeout: 3000,
+                },
+              },
+              manifest: {
+                retryParameters: {
+                  maxAttempts: 2,
+                  baseDelay: 100,
+                  backoffFactor: 1.2,
+                  fuzzFactor: 0.1,
+                  timeout: 3000,
+                },
+              },
+            });
+          }
+        } else if (shakaPlayerRef.current.getMediaElement() !== video) {
+          try {
+            await shakaPlayerRef.current.attach(video);
+          } catch {}
         }
 
-        if (loadedShakaUrlRef.current !== activePlaybackUrl) {
+        if (loadedShakaUrlRef.current !== activePlaybackUrl && !isShakaLoadingRef.current) {
+          isShakaLoadingRef.current = true;
           loadedShakaUrlRef.current = activePlaybackUrl;
           try {
-            console.log("[Shaka] Loading HLS stream on Web:", activePlaybackUrl.substring(0, 80));
-            await shakaPlayerRef.current.load(activePlaybackUrl);
-            console.log("[Shaka] Loaded HLS stream successfully!");
+            // Explicitly pass application/x-mpegurl MIME type to bypass DASH/HEAD format probing delay
+            await shakaPlayerRef.current.load(activePlaybackUrl, null, "application/x-mpegurl");
+            // Sync React VideoPlayerWeb src to blob URL so DOM reconciliation doesn't stomp it
+            if (video.src && video.src.startsWith("blob:")) {
+              if (videoPlayer) (videoPlayer as any).src = { uri: video.src };
+              if (playerRef.current) (playerRef.current as any).src = { uri: video.src };
+            }
             setIsVideoReady(true);
             setIsBuffering(false);
             setPlaybackError(null);
+            if (videoPlayer) {
+              (videoPlayer as any).status = "readyToPlay";
+            }
             if (!userPausedRef.current) {
-              video.play().catch(() => {});
+              const playPromise = video.play();
+              if (playPromise && typeof playPromise.catch === "function") {
+                playPromise.catch((err: any) => {
+                  if (err?.name === "NotAllowedError" || err?.name === "AbortError") {
+                    video.muted = true;
+                    setIsMuted(true);
+                    video.play().catch(() => {});
+                  }
+                });
+              }
             }
           } catch (err: any) {
             console.error("[Shaka] Failed to load HLS stream:", err);
             setPlaybackError(err?.message || "Failed to load video on Web");
+          } finally {
+            isShakaLoadingRef.current = false;
           }
         }
       }
     };
 
     bindToVideo();
-    const pollMount = setInterval(bindToVideo, 250);
+    let pollCount = 0;
+    const pollMount = setInterval(() => {
+      pollCount++;
+      if (shakaPlayerRef.current && loadedShakaUrlRef.current === activePlaybackUrl) {
+        clearInterval(pollMount);
+        return;
+      }
+      bindToVideo();
+      if (pollCount > 10) {
+        clearInterval(pollMount);
+      }
+    }, 100);
 
     return () => {
       clearInterval(pollMount);
@@ -1773,7 +1952,7 @@ export default function VideoScreen() {
       const durMs = toFiniteDurationMs(rawDurSec * 1000);
 
       const now = Date.now();
-      if (now - rcaLogIntervalRef.current >= 1000) {
+      if (DEBUG_PLAYBACK_RCA && now - rcaLogIntervalRef.current >= 1000) {
         rcaLogIntervalRef.current = now;
         console.log(
           `[PlaybackTimeRCA] platform=${Platform.OS} source=intervalSync status=${p.status} playing=${p.playing} playerTime=${rawSec.toFixed(2)}s duration=${rawDurSec.toFixed(2)}s rawCurMs=${curMs} positionMsRef=${positionMsRef.current} elapsedLabel=${formatDurationLabel(curMs, "00:00")}`
@@ -1953,13 +2132,8 @@ export default function VideoScreen() {
 
         setLoadingPlaybackUrl(true);
         try {
-          // PROACTIVE CHECK: Check if content is locked before even hitting the stream service
-          const accessRes = await userService.checkContentAccess(
-            Number(video.id),
-            video.artistId || ""
-          );
-
-          if (!accessRes.allowed) {
+          // If video card is already flagged locked, fail immediately to subscription modal without hitting stream network
+          if (video.isLocked) {
             setLastAttemptedVideo(video);
             setShowArtistLockModal({ visible: true, video });
             setPlaybackError("Subscription Required");
@@ -2027,7 +2201,13 @@ export default function VideoScreen() {
             return;
           }
           const msg = (err?.message || "").toLowerCase();
-          if (msg.includes("subscription") || msg.includes("access denied")) {
+          const code = (err?.code || "").toUpperCase();
+          if (
+            code.includes("SUBSCRIPTION") ||
+            code === "ACCESS_DENIED" ||
+            msg.includes("subscription") ||
+            msg.includes("access denied")
+          ) {
             setLastAttemptedVideo(video);
             setShowArtistLockModal({ visible: true, video });
             setPlaybackError("Subscription Required");
@@ -2619,23 +2799,13 @@ export default function VideoScreen() {
   );
 
   const toggleInlinePlayPause = useCallback(async () => {
-    console.log("[VideoScreen] toggleInlinePlayPause entered");
     try {
       const v = playerRef.current || videoPlayer;
-      console.log("[VideoScreen] toggleInlinePlayPause: player exists:", Boolean(v));
-      if (!v) {
-        console.log("[VideoScreen] toggleInlinePlayPause: No video player");
-        return;
-      }
-      console.log(
-        `[VideoScreen] toggleInlinePlayPause: Current playing state: ${v.playing}, status: ${v.status}, currentTime: ${v.currentTime}`
-      );
+      if (!v) return;
       if (v.playing) {
         userPausedRef.current = true;
-        console.log("[VideoScreen] Calling player.pause()...");
         v.pause();
         setIsVideoPlaying(false);
-        console.log("[VideoScreen] isPlaying updated to false");
         if (controlsHideTimerRef.current) {
           clearTimeout(controlsHideTimerRef.current);
           controlsHideTimerRef.current = null;
@@ -2643,18 +2813,14 @@ export default function VideoScreen() {
         setShowControls(true);
       } else {
         userPausedRef.current = false;
-        console.log("[VideoScreen] Calling safePlay from toggleInlinePlayPause...");
         safePlay(v as any, "toggleInlinePlayPause");
         setIsVideoPlaying(true);
-        console.log("[VideoScreen] isPlaying updated to true");
         resetControlsTimeout();
       }
     } catch (e: any) {
       console.error("[VideoScreen] toggleInlinePlayPause error:", {
         name: e?.name,
         message: e?.message,
-        stack: e?.stack,
-        cause: e?.cause,
       });
     }
   }, [videoPlayer, safePlay, resetControlsTimeout]);
@@ -2872,52 +3038,13 @@ export default function VideoScreen() {
   );
 
   const renderVideoItem = useCallback(
-    ({ item }: { item: VideoCard }) => {
-      const isActive =
-        activeVideoId != null && String(item.id) === String(activeVideoId);
-      return (
-        <Pressable style={styles.rowItem} onPress={() => onPressVideo(item)}>
-          <View
-            style={[
-              styles.rowThumbWrap,
-              isActive ? styles.rowThumbWrapActive : null,
-            ]}>
-            <AppImage
-              uri={item.artworkUrl}
-              fallbackType="video"
-              style={styles.rowThumb}
-              resizeMode="cover"
-            />
-            {item.isLocked && (
-              <View style={styles.lockBadgeMini}>
-                <Lock size={12} color="#fff" />
-              </View>
-            )}
-            <View style={styles.rowThumbOverlay}>
-              <View style={styles.rowPlayBadge}>
-                <Image
-                  source={PlayButtonImg}
-                  style={styles.rowPlayImg}
-                  resizeMode="contain"
-                />
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.rowMeta}>
-            <Text style={styles.rowTitle} numberOfLines={2}>
-              {item.title}
-            </Text>
-            <Text style={styles.rowArtist} numberOfLines={1}>
-              {item.artistName}
-            </Text>
-            <Text style={styles.rowSub} numberOfLines={1}>
-              {formatDateLabel(item.createdAt) || ""}
-            </Text>
-          </View>
-        </Pressable>
-      );
-    },
+    ({ item }: { item: VideoCard }) => (
+      <VideoRowItem
+        item={item}
+        isActive={activeVideoId != null && String(item.id) === String(activeVideoId)}
+        onPress={onPressVideo}
+      />
+    ),
     [activeVideoId, onPressVideo]
   );
 
@@ -3178,8 +3305,10 @@ export default function VideoScreen() {
             data={visibleItems}
             keyExtractor={(it) => it.id}
             initialNumToRender={5}
+            maxToRenderPerBatch={5}
+            updateCellsBatchingPeriod={50}
             windowSize={5}
-            removeClippedSubviews={true}
+            removeClippedSubviews={Platform.OS !== "web"}
             renderItem={renderVideoItem}
             showsVerticalScrollIndicator={false}
             onScroll={onListScroll}
@@ -3257,19 +3386,40 @@ export default function VideoScreen() {
                       onPress={onPressPlayerSurface}
                       onPressIn={handlePlayerPressIn}
                       onPressOut={handlePlayerPressOut}>
-                      <VideoView
-                        player={videoPlayer}
-                        style={[
-                          styles.video,
-                          {
+                      {Platform.OS === "web" ? (
+                        React.createElement("video", {
+                          ref: (el: HTMLVideoElement | null) => {
+                            if (el) {
+                              webVideoRef.current = el;
+                              if (videoPlayer && !(videoPlayer as any)._mountedVideos?.has(el)) {
+                                (videoPlayer as any).mountVideoView(el);
+                              }
+                            }
+                          },
+                          style: {
                             width: isFullscreen ? windowWidth : SCREEN_WIDTH,
                             height: isFullscreen ? windowHeight : HEADER_HEIGHT,
+                            objectFit: "contain",
+                            backgroundColor: "#000",
+                            pointerEvents: "none",
                           },
-                        ]}
-                        contentFit="contain"
-                        nativeControls={false}
-                        allowsVideoFrameAnalysis={false}
-                      />
+                          playsInline: true,
+                        })
+                      ) : (
+                        <VideoView
+                          player={videoPlayer}
+                          style={[
+                            styles.video,
+                            {
+                              width: isFullscreen ? windowWidth : SCREEN_WIDTH,
+                              height: isFullscreen ? windowHeight : HEADER_HEIGHT,
+                            },
+                          ]}
+                          contentFit="contain"
+                          nativeControls={false}
+                          allowsVideoFrameAnalysis={false}
+                        />
+                      )}
                     </Pressable>
                   ) : (
                     <View style={StyleSheet.absoluteFill}>
