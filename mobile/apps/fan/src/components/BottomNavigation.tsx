@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home as HomeIcon, Search, Music, PlayCircle, User } from 'lucide-react-native';
 import { useTheme } from '../providers/ThemeProvider';
@@ -29,9 +29,16 @@ export default function BottomNavigation({
 }: BottomNavigationProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { width, height } = useWindowDimensions();
 
   // Controlled or uncontrolled active tab state
   const [internalTab, setInternalTab] = useState<BottomNavTab>(activeTabProp || 'home');
+
+  // In native mobile app, landscape orientation is exclusively used for full-screen video playback.
+  // The bottom navigation tab bar must be completely hidden in landscape mode.
+  if (Platform.OS !== 'web' && width > height) {
+    return null;
+  }
 
   useEffect(() => {
     if (activeTabProp !== undefined) {

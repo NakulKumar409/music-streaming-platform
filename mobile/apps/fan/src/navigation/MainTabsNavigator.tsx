@@ -30,9 +30,16 @@ export default function MainTabsNavigator() {
   return (
     <Tab.Navigator
       id="fan-tabs"
-      tabBar={({ state, navigation }) => {
-        const currentRoute = state.routes[state.index]?.name || 'HomeTab';
-        const activeTab = ROUTE_TO_TAB[currentRoute] || 'home';
+      tabBar={({ state, descriptors, navigation }) => {
+        const currentRoute = state.routes[state.index];
+        const focusedOptions = descriptors[currentRoute?.key]?.options;
+        const tabBarStyle = focusedOptions?.tabBarStyle as any;
+        if (tabBarStyle?.display === 'none') {
+          return null;
+        }
+
+        const currentRouteName = currentRoute?.name || 'HomeTab';
+        const activeTab = ROUTE_TO_TAB[currentRouteName] || 'home';
 
         return (
           <BottomNavigation

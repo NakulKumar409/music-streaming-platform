@@ -1141,7 +1141,7 @@ export default function VideoScreen() {
     };
   }, [fetchAll, matchesQuery, normalizedQuery]);
 
-  const AUTO_HIDE_DELAY_MS = 2000;
+  const AUTO_HIDE_DELAY_MS = 2500;
 
   const hideControls = useCallback(() => {
     if (controlsHideTimerRef.current) {
@@ -1157,8 +1157,13 @@ export default function VideoScreen() {
       clearTimeout(controlsHideTimerRef.current);
       controlsHideTimerRef.current = null;
     }
+    const isPlaying =
+      isVideoPlaying ||
+      Boolean(videoPlayer?.playing) ||
+      Boolean(playerRef.current?.playing);
+
     if (
-      isVideoPlaying &&
+      isPlaying &&
       !isSeekingRef.current &&
       !showQualitySheet &&
       !showSpeedSheet &&
@@ -1171,6 +1176,7 @@ export default function VideoScreen() {
     }
   }, [
     isVideoPlaying,
+    videoPlayer,
     showQualitySheet,
     showSpeedSheet,
     showMoreOptionsSheet,
@@ -1184,8 +1190,13 @@ export default function VideoScreen() {
         controlsHideTimerRef.current = null;
       }
       if (next) {
+        const isPlaying =
+          isVideoPlaying ||
+          Boolean(videoPlayer?.playing) ||
+          Boolean(playerRef.current?.playing);
+
         if (
-          isVideoPlaying &&
+          isPlaying &&
           !isSeekingRef.current &&
           !showQualitySheet &&
           !showSpeedSheet &&
@@ -1203,21 +1214,27 @@ export default function VideoScreen() {
     });
   }, [
     isVideoPlaying,
+    videoPlayer,
     showQualitySheet,
     showSpeedSheet,
     showMoreOptionsSheet,
   ]);
 
   useEffect(() => {
-    if (isVideoPlaying && showControls) {
+    const isPlaying =
+      isVideoPlaying ||
+      Boolean(videoPlayer?.playing) ||
+      Boolean(playerRef.current?.playing);
+
+    if (isPlaying && showControls) {
       resetControlsTimeout();
-    } else if (!isVideoPlaying) {
+    } else if (!isPlaying) {
       if (controlsHideTimerRef.current) {
         clearTimeout(controlsHideTimerRef.current);
         controlsHideTimerRef.current = null;
       }
     }
-  }, [isVideoPlaying, showControls, resetControlsTimeout]);
+  }, [isVideoPlaying, showControls, resetControlsTimeout, videoPlayer]);
 
   const enterFullscreen = useCallback(async () => {
     setIsFullscreen(true);
@@ -1657,6 +1674,9 @@ export default function VideoScreen() {
           console.log(`[VideoPlayer:NATIVE] playingChange: isPlaying=${isPlaying}, currentTime=${videoPlayer.currentTime}`);
         }
         setIsVideoPlaying(isPlaying);
+        if (isPlaying) {
+          resetControlsTimeout();
+        }
       }
     );
 
@@ -1797,6 +1817,7 @@ export default function VideoScreen() {
         const onPlay = () => {
           setIsVideoPlaying(true);
           setIsBuffering(false);
+          resetControlsTimeout();
         };
         const onPause = () => {
           if (!isSeekingRef.current) {
@@ -1810,6 +1831,7 @@ export default function VideoScreen() {
           setIsBuffering(false);
           setIsVideoPlaying(true);
           setIsVideoReady(true);
+          resetControlsTimeout();
         };
 
         video.addEventListener("timeupdate", onTimeUpdate);
@@ -2416,11 +2438,8 @@ export default function VideoScreen() {
 
   useEffect(() => {
     if (!activePlaybackUrl) return;
-    if (controlsHideTimerRef.current) {
-      clearTimeout(controlsHideTimerRef.current);
-      controlsHideTimerRef.current = null;
-    }
-  }, [activePlaybackUrl]);
+    resetControlsTimeout();
+  }, [activePlaybackUrl, resetControlsTimeout]);
 
   useEffect(() => {
     return () => {
@@ -2450,19 +2469,30 @@ export default function VideoScreen() {
   useEffect(() => {
     if (!isFullscreen) return;
 
-    const tabParent: any =
-      navigation.getParent?.("fan-tabs") ??
-      navigation.getParent?.()?.getParent?.();
-    if (!tabParent?.setOptions) return;
+    resetControlsTimeout();
 
-    tabParent.setOptions({
-      tabBarStyle: { display: "none" },
+    const parents = [
+      navigation.getParent?.(),
+      navigation.getParent?.("fan-tabs"),
+      navigation.getParent?.()?.getParent?.(),
+    ].filter(Boolean);
+
+    parents.forEach((p: any) => {
+      try {
+        p?.setOptions?.({
+          tabBarStyle: { display: "none" },
+        });
+      } catch {}
     });
 
     return () => {
-      tabParent.setOptions({ tabBarStyle: undefined });
+      parents.forEach((p: any) => {
+        try {
+          p?.setOptions?.({ tabBarStyle: undefined });
+        } catch {}
+      });
     };
-  }, [isFullscreen, navigation]);
+  }, [isFullscreen, navigation, resetControlsTimeout]);
 
   useEffect(() => {
     Animated.timing(miniAnim, {
