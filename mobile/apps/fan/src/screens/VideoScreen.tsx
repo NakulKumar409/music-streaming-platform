@@ -17,6 +17,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  StatusBar,
   Switch,
   Text,
   TextInput,
@@ -1141,7 +1142,7 @@ export default function VideoScreen() {
     };
   }, [fetchAll, matchesQuery, normalizedQuery]);
 
-  const AUTO_HIDE_DELAY_MS = 2500;
+  const AUTO_HIDE_DELAY_MS = 3000;
 
   const hideControls = useCallback(() => {
     if (controlsHideTimerRef.current) {
@@ -1327,6 +1328,9 @@ export default function VideoScreen() {
       try {
         if (videoPlayer) {
           videoPlayer.muted = next;
+        }
+        if (Platform.OS === "web" && webVideoRef.current) {
+          webVideoRef.current.muted = next;
         }
       } catch (e) {
         console.warn("[VideoScreen] Failed to toggle mute", e);
@@ -2346,17 +2350,27 @@ export default function VideoScreen() {
   useEffect(() => {
     const unsubBlur = navigation.addListener("blur", () => {
       console.log(`[PlaybackRCA] platform=${Platform.OS} action=VideoScreen blurred - pausing video`);
-      setInlineVideoHostActive(false);
       if (playerRef.current) {
         try {
           playerRef.current.pause();
           setIsVideoPlaying(false);
         } catch {}
       }
+      setInlineVideoHostActive(false);
+      if (isFullscreen) {
+        exitFullscreen();
+      }
+      if (controlsHideTimerRef.current) {
+        clearTimeout(controlsHideTimerRef.current);
+        controlsHideTimerRef.current = null;
+      }
+      if (Platform.OS !== "web") {
+        StatusBar.setHidden(false, "fade");
+      }
     });
 
     return unsubBlur;
-  }, [navigation, setInlineVideoHostActive]);
+  }, [navigation, setInlineVideoHostActive, isFullscreen, exitFullscreen]);
 
   useFocusEffect(
     useCallback(() => {
@@ -2467,6 +2481,10 @@ export default function VideoScreen() {
   }, []);
 
   useEffect(() => {
+    if (Platform.OS !== "web") {
+      StatusBar.setHidden(isFullscreen, "fade");
+    }
+
     if (!isFullscreen) return;
 
     resetControlsTimeout();
@@ -2491,6 +2509,9 @@ export default function VideoScreen() {
           p?.setOptions?.({ tabBarStyle: undefined });
         } catch {}
       });
+      if (Platform.OS !== "web") {
+        StatusBar.setHidden(false, "fade");
+      }
     };
   }, [isFullscreen, navigation, resetControlsTimeout]);
 
@@ -3517,7 +3538,12 @@ export default function VideoScreen() {
                         <Pressable
                           style={styles.playerControlBtn}
                           hitSlop={10}
-                          onPress={() => {
+                          onPress={(e) => {
+                            e?.stopPropagation?.();
+                            isInteractingWithControlRef.current = true;
+                            setTimeout(() => {
+                              isInteractingWithControlRef.current = false;
+                            }, 250);
                             resetControlsTimeout();
                             if (isFullscreen) {
                               exitFullscreen();
@@ -3535,7 +3561,12 @@ export default function VideoScreen() {
                           <Pressable
                             style={styles.playerControlBtn}
                             hitSlop={10}
-                            onPress={() => {
+                            onPress={(e) => {
+                              e?.stopPropagation?.();
+                              isInteractingWithControlRef.current = true;
+                              setTimeout(() => {
+                                isInteractingWithControlRef.current = false;
+                              }, 250);
                               resetControlsTimeout();
                               toggleMute();
                             }}>
@@ -3552,7 +3583,12 @@ export default function VideoScreen() {
                               styles.playerSpeedControlBtn,
                             ]}
                             hitSlop={10}
-                            onPress={() => {
+                            onPress={(e) => {
+                              e?.stopPropagation?.();
+                              isInteractingWithControlRef.current = true;
+                              setTimeout(() => {
+                                isInteractingWithControlRef.current = false;
+                              }, 250);
                               resetControlsTimeout();
                               setShowSpeedSheet(true);
                             }}>
@@ -3566,7 +3602,12 @@ export default function VideoScreen() {
                           <Pressable
                             style={styles.playerControlBtn}
                             hitSlop={10}
-                            onPress={() => {
+                            onPress={(e) => {
+                              e?.stopPropagation?.();
+                              isInteractingWithControlRef.current = true;
+                              setTimeout(() => {
+                                isInteractingWithControlRef.current = false;
+                              }, 250);
                               resetControlsTimeout();
                               setShowMoreOptionsSheet(true);
                             }}>
@@ -3576,7 +3617,12 @@ export default function VideoScreen() {
                           <Pressable
                             style={styles.playerControlBtn}
                             hitSlop={10}
-                            onPress={() => {
+                            onPress={(e) => {
+                              e?.stopPropagation?.();
+                              isInteractingWithControlRef.current = true;
+                              setTimeout(() => {
+                                isInteractingWithControlRef.current = false;
+                              }, 250);
                               resetControlsTimeout();
                               if (isFullscreen) {
                                 exitFullscreen();
