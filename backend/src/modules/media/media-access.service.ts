@@ -17,6 +17,7 @@ import {
   MediaNotReadyException,
 } from "../../shared/exceptions/media.exception";
 import { resolveMediaIdentity } from "../../shared/media/media-asset-locator";
+import { getStorageProviderByName } from "../../shared/storage/factory/storage-provider.factory";
 import {
   checkMediaEntitlement,
   getContentForAccess,
@@ -155,6 +156,12 @@ export async function requestPlaybackAccess(
     }
   } else if (!storageKey) {
     throw new MediaNotReadyException(contentId, "storage key missing");
+  } else if (storageProvider === "local") {
+    const storage = getStorageProviderByName("local");
+    const metadata = await storage.getObjectMetadata(storageKey);
+    if (!metadata) {
+      throw new MediaNotReadyException(contentId, "media file missing from storage");
+    }
   }
 
   const parsedQuality = await validateQualityAccess(userId, input.quality);

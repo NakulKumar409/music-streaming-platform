@@ -647,7 +647,7 @@ async function run() {
 
   // Duplicate playback event rapid bursts
   {
-    let validContentRes = await pool.query("SELECT id FROM content_items LIMIT 1");
+    let validContentRes = await pool.query("SELECT id FROM content_items WHERE is_taken_down = FALSE AND status = 'READY' AND is_approved = TRUE LIMIT 1");
     let validSongId = validContentRes.rows[0]?.id;
     if (!validSongId) {
       const ins = await pool.query(

@@ -1793,6 +1793,7 @@ async function enforceTrackPlayerCapabilitiesContract(): Promise<void> {
 
       if (item.mediaType === "audio") {
         const generation = beginPendingSeek(safe);
+        setState((s) => ({ ...s, positionMs: safe }));
 
         if (!TrackPlayerAvailable) {
           const wa = webAudioRef.current;

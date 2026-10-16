@@ -321,6 +321,8 @@ export default function FullPlayerScreen({ navigation, route }: any) {
   }, [resolvedImage]);
 
   const isDraggingRef = useRef(false);
+  const lastScrubUpdateMsRef = useRef(0);
+  const lastScrubSecondRef = useRef(-1);
 
   // Reset scrub and drag state whenever active track changes
   const activeTrackKey = currentItem?.id ?? currentItem?.contentId ?? null;
@@ -343,18 +345,30 @@ export default function FullPlayerScreen({ navigation, route }: any) {
   // ── Seek ───────────────────────────────────────────────────────────────────
   const onSeekStart = useCallback(() => {
     isDraggingRef.current = true;
+    lastScrubSecondRef.current = Math.floor(enginePositionForUi / 1000);
+    lastScrubUpdateMsRef.current = Date.now();
     setScrubPosition(enginePositionForUi);
   }, [enginePositionForUi]);
 
   const onSeekChange = useCallback((v: number) => {
     isDraggingRef.current = true;
     const bounded = Math.max(0, Math.min(Math.round(v), playerState.durationMs || 0));
-    setScrubPosition(bounded);
+    const now = Date.now();
+    const currentSecond = Math.floor(bounded / 1000);
+    if (
+      currentSecond !== lastScrubSecondRef.current ||
+      now - lastScrubUpdateMsRef.current >= 32
+    ) {
+      lastScrubSecondRef.current = currentSecond;
+      lastScrubUpdateMsRef.current = now;
+      setScrubPosition(bounded);
+    }
   }, [playerState.durationMs]);
 
   const onSeekComplete = useCallback(
     (v: number) => {
       isDraggingRef.current = false;
+      lastScrubSecondRef.current = -1;
       const target = Math.max(0, Math.min(Math.round(v), playerState.durationMs || 0));
       // Keep the user's scrub value visible until the provider has registered
       // the pending seek target. No fixed timing window is involved.
@@ -363,6 +377,7 @@ export default function FullPlayerScreen({ navigation, route }: any) {
         .catch(() => undefined)
         .finally(() => {
           setScrubPosition(null);
+          isDraggingRef.current = false;
         });
     },
     [playerState.durationMs, seekTo]
