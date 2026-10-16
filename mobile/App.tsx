@@ -115,7 +115,8 @@ function PlaybackProgressLifecycleBridge() {
     pendingSeekPositionMs,
   } = useMediaPlayer();
   const { isAuthenticated, isRestoring } = useAuth();
-  const rawContentId = currentItem?.contentId ?? currentItem?.id ?? null;
+  const isVideo = currentItem?.mediaType === 'video';
+  const rawContentId = isVideo ? (currentItem?.contentId ?? currentItem?.id ?? null) : null;
   const contentKey = rawContentId === null ? null : String(rawContentId);
 
   const snapshotsRef = useRef<Map<string, ProgressSnapshot>>(new Map());
@@ -214,13 +215,10 @@ function PlaybackProgressLifecycleBridge() {
       return;
     }
 
-    // Catalog duration can be available before RNTP has actually loaded the
-    // audio source. For audio, wait for confirmed engine playback before
-    // applying persisted resume position so seekTo cannot target an old/empty
-    // native track. Video may safely use its source-loaded duration signal.
-    if (currentItem?.mediaType === 'audio') {
-      if (!state.isPlaying) return;
-    } else if (!state.isPlaying && state.durationMs <= 0) {
+    // Video may safely use its source-loaded duration signal; music playback
+    // intentionally starts from 0:00 on fresh launch without cross-session resume.
+    if (!isVideo) return;
+    if (!state.isPlaying && state.durationMs <= 0) {
       return;
     }
 

@@ -348,22 +348,24 @@ export default function FullPlayerScreen({ navigation, route }: any) {
 
   const onSeekChange = useCallback((v: number) => {
     isDraggingRef.current = true;
-    setScrubPosition(v);
-  }, []);
+    const bounded = Math.max(0, Math.min(Math.round(v), playerState.durationMs || 0));
+    setScrubPosition(bounded);
+  }, [playerState.durationMs]);
 
   const onSeekComplete = useCallback(
     (v: number) => {
       isDraggingRef.current = false;
+      const target = Math.max(0, Math.min(Math.round(v), playerState.durationMs || 0));
       // Keep the user's scrub value visible until the provider has registered
       // the pending seek target. No fixed timing window is involved.
-      setScrubPosition(v);
-      seekTo(v)
+      setScrubPosition(target);
+      seekTo(target)
         .catch(() => undefined)
         .finally(() => {
           setScrubPosition(null);
         });
     },
-    [seekTo]
+    [playerState.durationMs, seekTo]
   );
 
   const stopAndGoToAudio = useCallback(async () => {
@@ -522,6 +524,7 @@ export default function FullPlayerScreen({ navigation, route }: any) {
                 maximumValue={durationKnown ? playerState.durationMs : 1}
                 step={1}
                 value={sliderValue}
+                tapToSeek={true}
                 disabled={!durationKnown}
                 minimumTrackTintColor={theme?.primary || Colors.accent}
                 maximumTrackTintColor="rgba(255,255,255,0.20)"

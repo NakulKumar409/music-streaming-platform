@@ -478,13 +478,16 @@ test('foreground resume reconciles lock-screen native play and pause state', () 
 });
 
 
-test('persisted audio resume waits for confirmed engine playback rather than catalog duration', () => {
+test('persisted resume is restricted to video so audio starts at 0:00 on fresh launch', () => {
   const app = read('../mobile/App.tsx');
 
-  assert.match(app, /currentItem\?\.mediaType === 'audio'/);
   assert.match(
     app,
-    /if \(currentItem\?\.mediaType === 'audio'\) \{\s*if \(!state\.isPlaying\) return;\s*\}/s
+    /const isVideo = currentItem\?\.mediaType === 'video';/
+  );
+  assert.match(
+    app,
+    /const rawContentId = isVideo \? \(currentItem\?\.contentId \?\? currentItem\?\.id \?\? null\) : null;/
   );
 });
 
