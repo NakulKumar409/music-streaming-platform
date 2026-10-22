@@ -7,11 +7,15 @@ import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import AudioListItem from '../ui/audio/AudioListItem';
 import { LockedContentOverlay } from '../ui/SubscriptionUI';
 import { Colors } from '../theme';
+import AppImage from '../components/AppImage';
+import { useToast } from '../ui/ToastProvider';
+import { findMediaQueueIndex } from '../utils/mediaQueue';
 
 export default function AlbumDetailScreen({ route, navigation }: any) {
   const { albumId, title, artistName, coverImage, tracks } = route.params;
   const insets = useSafeAreaInsets();
   const { playQueue, currentItem, state: playerState } = useMediaPlayer();
+  const { showToast } = useToast();
   const [showArtistLockModal, setShowArtistLockModal] = useState<{ visible: boolean; item: any }>({
     visible: false,
     item: null,
@@ -23,6 +27,11 @@ export default function AlbumDetailScreen({ route, navigation }: any) {
     // Check if first track is locked
     const firstTrack = tracks[0];
     if (firstTrack.isLocked || firstTrack.locked) {
+      showToast({
+        tone: 'warning',
+        title: 'Subscription required',
+        message: `Subscribe to ${firstTrack.artistName || artistName || 'this artist'} to play this album.`,
+      });
       setShowArtistLockModal({ visible: true, item: firstTrack });
       return;
     }
@@ -38,6 +47,11 @@ export default function AlbumDetailScreen({ route, navigation }: any) {
       mediaUrl: x.mediaUrl || '',
       isLocked: Boolean(x.isLocked || x.locked),
       useStreamAccess: x.useStreamAccess,
+      duration:
+        Number.isFinite(Number(x.durationMs ?? x.duration)) &&
+        Number(x.durationMs ?? x.duration) > 0
+          ? Math.round(Number(x.durationMs ?? x.duration))
+          : undefined,
     }));
 
     navigation.navigate('FullPlayer', {
@@ -53,6 +67,11 @@ export default function AlbumDetailScreen({ route, navigation }: any) {
 
   const handlePressTrack = (song: any) => {
     if (song.isLocked || song.locked) {
+      showToast({
+        tone: 'warning',
+        title: 'Subscription required',
+        message: `Subscribe to ${song.artistName || artistName || 'this artist'} to play "${song.title}".`,
+      });
       setShowArtistLockModal({ visible: true, item: song });
       return;
     }
@@ -68,9 +87,22 @@ export default function AlbumDetailScreen({ route, navigation }: any) {
       mediaUrl: x.mediaUrl || '',
       isLocked: Boolean(x.isLocked || x.locked),
       useStreamAccess: x.useStreamAccess,
+      duration:
+        Number.isFinite(Number(x.durationMs ?? x.duration)) &&
+        Number(x.durationMs ?? x.duration) > 0
+          ? Math.round(Number(x.durationMs ?? x.duration))
+          : undefined,
     }));
     
-    const queueIndex = Math.max(0, queue.findIndex((q: any) => q.id === song.id || q.contentId === song.id));
+    const queueIndex = findMediaQueueIndex(queue, song);
+    if (queueIndex < 0) {
+      showToast({
+        tone: 'error',
+        title: "Couldn't open this song",
+        message: 'The album changed. Please go back and try again.',
+      });
+      return;
+    }
 
     navigation.navigate('FullPlayer', {
       songId: song.id,
@@ -90,7 +122,7 @@ export default function AlbumDetailScreen({ route, navigation }: any) {
       </Pressable>
       
       <View style={styles.coverWrapper}>
-        <Image source={{ uri: coverImage }} style={styles.coverImage} />
+        <AppImage uri={coverImage} fallbackType="song" style={styles.coverImage} resizeMode="cover" />
       </View>
       
       <Text style={styles.title}>{title}</Text>

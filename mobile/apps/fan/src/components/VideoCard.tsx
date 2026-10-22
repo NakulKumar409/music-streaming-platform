@@ -1,7 +1,9 @@
 import React, { useRef } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { Play } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import ImageFallback from './ImageFallback';
+import { resolveAppImageUrl, FALLBACK_BANNER } from '../utils/imageUtils';
 import { colors } from '../theme-guest/colors';
 import { spacing } from '../theme-guest/spacing';
 import { radius } from '../theme-guest/radius';
@@ -12,8 +14,8 @@ interface VideoCardProps {
     title: string;
     artistName: string;
     thumbnail: any;
-    duration: string;
-    viewCount: string;
+    duration?: string;
+    viewCount?: string;
   };
   onAction: () => void;
 }
@@ -45,21 +47,41 @@ export default function VideoCard({ video, onAction }: VideoCardProps) {
       style={styles.pressable}
     >
       <Animated.View style={[styles.container, { transform: [{ scale }] }]}>
-        <View style={styles.thumbnailContainer}>
-          <ImageFallback
-            source={video.thumbnail}
-            style={styles.thumbnail}
-            resizeMode="cover"
-          />
-          <View style={styles.playOverlay}>
-            <View style={styles.playCircle}>
-              <Play color="#FFFFFF" size={16} fill="#FFFFFF" />
+        <LinearGradient
+          colors={['#8B5CF6', '#3B82F6', '#06B6D4']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientBorder}
+        >
+          <View style={styles.thumbnailContainer}>
+            <ImageFallback
+              source={
+                typeof video.thumbnail === 'string'
+                  ? { uri: resolveAppImageUrl(video.thumbnail, 'video') }
+                  : (video.thumbnail?.uri
+                  ? { uri: resolveAppImageUrl(video.thumbnail.uri, 'video') }
+                  : video.thumbnail)
+              }
+              style={styles.thumbnail}
+              resizeMode="cover"
+            />
+            <View style={styles.playOverlay} pointerEvents="none">
+              <View style={styles.playCircle}>
+                <Play color="#FFFFFF" size={15} fill="#FFFFFF" style={styles.playIcon} />
+              </View>
             </View>
+            {video.viewCount ? (
+              <View style={styles.viewsBadge}>
+                <Text style={styles.viewsText}>{video.viewCount}</Text>
+              </View>
+            ) : null}
+            {video.duration ? (
+              <View style={styles.durationBadge}>
+                <Text style={styles.durationText}>{video.duration}</Text>
+              </View>
+            ) : null}
           </View>
-          <View style={styles.durationBadge}>
-            <Text style={styles.durationText}>{video.duration}</Text>
-          </View>
-        </View>
+        </LinearGradient>
 
         <View style={styles.infoContainer}>
           <Text style={styles.title} numberOfLines={1}>
@@ -68,7 +90,6 @@ export default function VideoCard({ video, onAction }: VideoCardProps) {
           <Text style={styles.artist} numberOfLines={1}>
             {video.artistName}
           </Text>
-          <Text style={styles.views}>{video.viewCount}</Text>
         </View>
       </Animated.View>
     </Pressable>
@@ -77,22 +98,31 @@ export default function VideoCard({ video, onAction }: VideoCardProps) {
 
 const styles = StyleSheet.create({
   pressable: {
-    marginRight: spacing.cardGap,
-    width: 220,
+    marginRight: 12,
+    width: 142,
   },
   container: {
     width: '100%',
-    backgroundColor: colors.backgroundCard,
-    borderRadius: radius.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.borderThin,
+  },
+  gradientBorder: {
+    width: '100%',
+    padding: 1.5,
+    borderRadius: 16,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   thumbnailContainer: {
     width: '100%',
-    height: 124,
+    aspectRatio: 1,
     position: 'relative',
-    backgroundColor: '#1E1E26',
+    backgroundColor: '#1a1a2e',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 14.5,
+    overflow: 'hidden',
   },
   thumbnail: {
     width: '100%',
@@ -100,51 +130,72 @@ const styles = StyleSheet.create({
   },
   playOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 5,
   },
   playCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  playIcon: {
+    marginLeft: 2,
+  },
+  viewsBadge: {
+    position: 'absolute',
+    bottom: 7,
+    left: 7,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    zIndex: 10,
+  },
+  viewsText: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 9.5,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
   durationBadge: {
     position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    bottom: 7,
+    right: 7,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radius.xs,
+    paddingVertical: 2.5,
+    borderRadius: 4,
+    zIndex: 10,
   },
   durationText: {
-    color: colors.textPrimary,
+    color: '#FFFFFF',
     fontSize: 10,
-    fontWeight: typography.weightMedium,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   infoContainer: {
-    padding: spacing.md,
+    paddingTop: 8,
+    paddingHorizontal: 2,
+    paddingBottom: 2,
   },
   title: {
-    color: colors.textPrimary,
-    fontSize: typography.cardTitle,
-    fontWeight: typography.weightBold,
+    color: '#FFFFFF',
+    fontSize: 13.5,
+    fontWeight: '700',
+    lineHeight: 18,
   },
   artist: {
-    color: colors.textSecondary,
-    fontSize: typography.metadata,
-    fontWeight: typography.weightMedium,
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '500',
     marginTop: 2,
-  },
-  views: {
-    color: colors.textMuted,
-    fontSize: typography.metadata - 1,
-    marginTop: 4,
+    lineHeight: 16,
   },
 });

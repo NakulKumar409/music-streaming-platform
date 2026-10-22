@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { apiV1 } from './api';
 import logger from '../utils/logger';
 
@@ -127,7 +128,7 @@ export interface UserService {
   checkStreamingQuality(): Promise<QualityResult>;
   updateProfile(input: UpdateProfileInput): Promise<any>;
   updatePassword(input: UpdatePasswordInput): Promise<any>;
-  uploadProfileImage(uri: string, mimeType: string, fileName: string): Promise<string>;
+  uploadProfileImage(uri: string, mimeType: string, fileName: string, base64?: string): Promise<string>;
   updateSettings(input: UpdateSettingsInput): Promise<any>;
   getPlatformConfig(): Promise<PlatformConfig | null>;
   getSubscriptionDetails(): Promise<{
@@ -205,9 +206,9 @@ export const userService: UserService = {
   async getListenTime() {
     try {
       const res = await apiV1.get('/user/listen-time');
-      return { 
-        totalMinutes: Number(res.data?.totalMinutes || 0), 
-        formattedTime: (res.data?.formattedTime || '0m').toString() 
+      return {
+        totalMinutes: Number(res.data?.totalMinutes || 0),
+        formattedTime: (res.data?.formattedTime || '0m').toString()
       };
     } catch (err: any) {
       logger.warn('[userService] getListenTime failed - status:', err?.response?.status, 'msg:', err?.message);
@@ -267,11 +268,15 @@ export const userService: UserService = {
       const res = await apiV1.get('/subscriptions/quality');
       return {
         quality: res.data?.quality === 'HD' ? 'HD' : 'SD',
-        maxResolution: (res.data?.maxResolution ?? '240p').toString(),
+        maxResolution: (res.data?.maxResolution ?? '1080p').toString(),
         isGrace: Boolean(res.data?.isGrace),
       };
     } catch {
-      return { quality: 'SD', maxResolution: '240p' };
+      // Phase 09A removed the historical commercial HD/SD entitlement. If this
+      // legacy compatibility endpoint is temporarily unavailable, never invent a
+      // 240p cap or platform-plan upsell. /stream/access remains authoritative
+      // for the actual source-backed adaptive rendition set.
+      return { quality: 'HD', maxResolution: '1080p' };
     }
   },
 
@@ -285,16 +290,41 @@ export const userService: UserService = {
     return res.data;
   },
 
-  async uploadProfileImage(uri: string, mimeType: string, fileName: string) {
+  async uploadProfileImage(uri: string, mimeType: string, fileName: string, base64?: string) {
     const formData = new FormData();
-    formData.append('image', {
-      uri,
-      type: mimeType,
-      name: fileName,
-    } as any);
+    if (Platform.OS === 'web') {
+      let appended = false;
+      try {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        formData.append('image', blob, fileName);
+        appended = true;
+      } catch (e) {
+        logger.warn('[userService] fetch blob failed, checking fallback:', e);
+      }
+
+      if (!appended && base64) {
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mimeType });
+        formData.append('image', blob, fileName);
+      }
+    } else {
+      formData.append('image', {
+        uri,
+        type: mimeType,
+        name: fileName,
+      } as any);
+    }
 
     const res = await apiV1.post('/user/profile-image', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
     });
     return res.data?.profileImageUrl;
   },

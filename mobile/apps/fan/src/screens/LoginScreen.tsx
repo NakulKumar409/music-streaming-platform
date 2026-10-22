@@ -1,11 +1,10 @@
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import { Eye, EyeOff, ArrowLeft } from "lucide-react-native";
+import { Eye, EyeOff, ArrowLeft, Smartphone } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -25,6 +24,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../navigation/types";
 import { useAuth } from "../store/authStore";
 import { Colors } from "../theme";
+import { normalizeApiError } from "../services/api";
+import StatusModal from "../components/StatusModal";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Login">;
 
@@ -34,12 +35,11 @@ export default function LoginScreen({ navigation, route }: Props) {
   const isDesktop = Platform.OS === "web" && width > 768;
   const webViewportStyle = Platform.OS === "web" ? { width, height } : null;
 
-  const isNative = Platform.OS === "ios" || Platform.OS === "android";
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [errorText, setErrorText] = useState("");
+  const [deviceLimitModalVisible, setDeviceLimitModalVisible] = useState(false);
 
   useEffect(() => {
     const prefillEmail = route?.params?.prefillEmail;
@@ -55,6 +55,7 @@ export default function LoginScreen({ navigation, route }: Props) {
 
   const onSubmit = async () => {
     setErrorText("");
+    setDeviceLimitModalVisible(false);
 
     if (!email.trim() || !password) {
       setErrorText("Please enter your email and password.");
@@ -64,26 +65,19 @@ export default function LoginScreen({ navigation, route }: Props) {
     try {
       await login(email.trim(), password);
     } catch (err: any) {
-      const status = err?.response?.status;
-      const serverMessage = err?.response?.data?.message;
+      const normalized = normalizeApiError(err);
+      const isDeviceLimit =
+        normalized.code === "DEVICE_LIMIT_REACHED" ||
+        /device.*limit/i.test(normalized.message);
 
-      let message =
-        typeof serverMessage === "string"
-          ? serverMessage
-          : status === 403
-          ? "Access forbidden."
-          : status === 401
-          ? "Invalid credentials."
-          : err?.message || "Login failed";
-
-      // Specific check for device limit
-      if (message.toLowerCase().includes("device limit")) {
-        message =
-          "Device Limit Reached: You can only have 2 active sessions. Please log out from another device.";
+      if (isDeviceLimit) {
+        // ONE clean Modal presentation ONLY per Phase 3 & 5. Do not duplicate as red text.
+        setErrorText("");
+        setDeviceLimitModalVisible(true);
+      } else {
+        // Normal field validation / invalid credentials: ONE clean inline presentation
+        setErrorText(normalized.message || "Invalid email or password.");
       }
-
-      setErrorText(message);
-      if (isNative) Alert.alert("Login Error", message);
     }
   };
 
@@ -230,6 +224,25 @@ export default function LoginScreen({ navigation, route }: Props) {
           </SafeAreaView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
+
+      <StatusModal
+        visible={deviceLimitModalVisible}
+        onClose={() => setDeviceLimitModalVisible(false)}
+        icon={<Smartphone size={32} color="#FF2553" />}
+        iconBgColor="rgba(255, 37, 83, 0.15)"
+        iconBorderColor="rgba(255, 37, 83, 0.3)"
+        title="Login Error"
+        message="You can only have 2 active sessions. Please log out from another device and try again."
+        primaryButtonText="OK"
+        primaryButtonColor={Colors.accent}
+        primaryButtonTextColor="#000"
+        onPrimaryPress={() => setDeviceLimitModalVisible(false)}
+        linkText="Go to Account Settings"
+        onLinkPress={() => {
+          setDeviceLimitModalVisible(false);
+          navigation.navigate("GuestHome");
+        }}
+      />
     </LinearGradient>
   );
 }

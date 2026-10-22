@@ -9,13 +9,14 @@ import {
   Dimensions,
   Easing,
   ImageBackground,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
-  Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Slider from '@react-native-community/slider';
@@ -24,9 +25,12 @@ import Svg, { Path, Rect, Circle } from 'react-native-svg';
 
 import { useMediaPlayer } from '../providers/MediaPlayerProvider';
 import { Colors } from '../theme';
+import { useTheme } from '../providers/ThemeProvider';
 import { formatDurationLabel, hasFiniteDuration } from '../utils/mediaTime';
 import type { MediaItem } from '../media.types';
 import { navigationRef } from '../navigation/rootNavigation';
+import { resolveAppImageUrl } from '../utils/imageUtils';
+import { useToast } from '../ui/ToastProvider';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const DISC_SIZE = Math.min(SCREEN_W - 72, 270);
@@ -87,6 +91,37 @@ function PauseIcon({ size = 32, color = '#000' }: { size?: number; color?: strin
   );
 }
 
+function ShuffleIcon({ size = 22, color = '#fff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M16 3h5v5M4 20l5.5-5.5M21 3l-7.5 7.5M4 4l17 17M16 21h5v-5"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function RepeatIcon({ size = 22, color = '#fff', one = false }: { size?: number; color?: string; one?: boolean }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M17 1l4 4-4 4M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 01-4 4H3"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {one ? (
+        <Path d="M12 9v6M10.5 10.5L12 9" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+      ) : null}
+    </Svg>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 type FullPlayerRouteParams = {
@@ -102,6 +137,8 @@ type FullPlayerRouteParams = {
 export default function FullPlayerScreen({ navigation, route }: any) {
   const params = (route?.params ?? {}) as Partial<FullPlayerRouteParams>;
 
+  const { showToast } = useToast();
+
   const {
     currentItem,
     state: playerState,
@@ -110,13 +147,37 @@ export default function FullPlayerScreen({ navigation, route }: any) {
     skipNext,
     skipPrev,
     seekTo,
+    pendingSeekPositionMs,
     setVolume,
     close,
+    toggleShuffle,
+    cycleRepeatMode,
   } = useMediaPlayer();
 
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+
+  // Dynamic layout metrics strictly preventing bottom navigation overlap
+  const isShortScreen = windowHeight < 720;
+  const isVeryShortScreen = windowHeight < 640;
+  const bottomNavHeight = 66 + Math.max(insets.bottom, Platform.OS === 'ios' ? 14 : 10);
+  const bottomSpacing = isShortScreen ? 14 : 20; // clearance above floating bottom nav
+  const bottomPadding = bottomNavHeight + bottomSpacing;
+
+  // Responsive artwork sizing: well-proportioned, leaving ample breathing room
+  const artSize = isVeryShortScreen
+    ? Math.min(windowWidth * 0.48, 160)
+    : isShortScreen
+    ? Math.min(windowWidth * 0.54, 185)
+    : Math.min(windowWidth * 0.60, 230);
+
+  const rimPadding = isShortScreen ? 14 : 18;
+  const rimSize = artSize + rimPadding * 2;
+  const artworkToTitleGap = isShortScreen ? 20 : 30;
+
   // ── Local UI state ─────────────────────────────────────────────────────────
-  const [isSeeking, setIsSeeking] = useState(false);
-  const seekValueRef = useRef(0);
+  const [scrubPosition, setScrubPosition] = useState<number | null>(null);
   const [isHearted, setIsHearted] = useState(false);
   const [hasAutoPlayed, setHasAutoPlayed] = useState(false);
 
@@ -150,7 +211,7 @@ export default function FullPlayerScreen({ navigation, route }: any) {
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.06,
+          toValue: 1.05,
           duration: 900,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
@@ -196,17 +257,45 @@ export default function FullPlayerScreen({ navigation, route }: any) {
   useEffect(() => {
     if (hasAutoPlayed) return;
     const queue = params.queue;
-    const queueIndex = params.queueIndex ?? 0;
-    if (!queue || queue.length === 0) return;
+    const queueIndex = params.queueIndex;
+    if (!queue || queue.length === 0) {
+      setHasAutoPlayed(true);
+      showToast({
+        tone: 'error',
+        title: "Couldn't open this song",
+        message: 'The song list is unavailable. Please go back and try again.',
+      });
+      return;
+    }
 
-    const currentKey =
-      currentItem?.mediaType === 'audio'
-        ? String(currentItem.contentId ?? currentItem.id ?? '')
-        : '';
-    const targetKey = params.songId ?? '';
+    if (
+      !Number.isInteger(queueIndex) ||
+      queueIndex === undefined ||
+      queueIndex < 0 ||
+      queueIndex >= queue.length
+    ) {
+      setHasAutoPlayed(true);
+      showToast({
+        tone: 'error',
+        title: "Couldn't open this song",
+        message: 'The song selection is no longer available. Please go back and try again.',
+      });
+      return;
+    }
 
-    // Already playing the right song — don't restart
-    if (currentKey && targetKey && currentKey === targetKey && playerState.isPlaying) {
+    const targetItem = queue[queueIndex];
+    const sameTrack =
+      currentItem?.mediaType === 'audio' &&
+      targetItem?.mediaType === 'audio' &&
+      (
+        String(currentItem.id ?? '') === String(targetItem.id ?? '') ||
+        String(currentItem.contentId ?? currentItem.id ?? '') ===
+          String(targetItem.contentId ?? targetItem.id ?? '')
+      );
+
+    // Opening the full player for the already-active logical audio item must
+    // not reset playback to 0 (notably for ids such as "123:audio").
+    if (sameTrack) {
       setHasAutoPlayed(true);
       return;
     }
@@ -219,24 +308,60 @@ export default function FullPlayerScreen({ navigation, route }: any) {
   // ── Derived display values ─────────────────────────────────────────────────
   const displayTitle = currentItem?.title ?? params.title ?? 'Unknown';
   const displayArtist = currentItem?.artistName ?? params.artist ?? 'Unknown';
-  const displayImage = currentItem?.artworkUrl ?? params.imageUrl ?? FALLBACK_ARTWORK;
+  const rawImage = currentItem?.artworkUrl ?? params.imageUrl;
+  const resolvedImage = React.useMemo(
+    () => (rawImage ? resolveAppImageUrl(rawImage, 'song') : FALLBACK_ARTWORK),
+    [rawImage]
+  );
+  const [imageError, setImageError] = useState(false);
+  const displayImage = imageError ? FALLBACK_ARTWORK : resolvedImage;
 
-  const positionForUi = isSeeking ? seekValueRef.current : playerState.positionMs;
+  useEffect(() => {
+    setImageError(false);
+  }, [resolvedImage]);
+
+  const isDraggingRef = useRef(false);
+
+  // Reset scrub and drag state whenever active track changes
+  const activeTrackKey = currentItem?.id ?? currentItem?.contentId ?? null;
+  useEffect(() => {
+    setScrubPosition(null);
+    isDraggingRef.current = false;
+  }, [activeTrackKey]);
+
+  const durationKnown = hasFiniteDuration(playerState.durationMs);
+  const enginePositionForUi =
+    pendingSeekPositionMs !== null
+      ? pendingSeekPositionMs
+      : playerState.positionMs;
+  const positionForUi =
+    scrubPosition !== null ? scrubPosition : enginePositionForUi;
+  const sliderValue = durationKnown
+    ? Math.min(Math.max(positionForUi, 0), playerState.durationMs)
+    : 0;
 
   // ── Seek ───────────────────────────────────────────────────────────────────
   const onSeekStart = useCallback(() => {
-    setIsSeeking(true);
-    seekValueRef.current = playerState.positionMs;
-  }, [playerState.positionMs]);
+    isDraggingRef.current = true;
+    setScrubPosition(enginePositionForUi);
+  }, [enginePositionForUi]);
 
   const onSeekChange = useCallback((v: number) => {
-    seekValueRef.current = v;
+    isDraggingRef.current = true;
+    setScrubPosition(v);
   }, []);
 
   const onSeekComplete = useCallback(
     (v: number) => {
-      setIsSeeking(false);
-      seekTo(v).catch(() => undefined);
+      isDraggingRef.current = false;
+      // Keep the user's scrub value visible until the provider has registered
+      // the pending seek target. No fixed timing window is involved.
+      setScrubPosition(v);
+      seekTo(v)
+        .catch(() => undefined)
+        .finally(() => {
+          setScrubPosition(null);
+        });
     },
     [seekTo]
   );
@@ -252,144 +377,229 @@ export default function FullPlayerScreen({ navigation, route }: any) {
     });
   }, [close]);
 
-
   // ── Glow opacity ──────────────────────────────────────────────────────────
   const glowOpacity = pulseAnim.interpolate({
-    inputRange: [1.0, 1.06],
-    outputRange: [0.3, 0.55],
+    inputRange: [1.0, 1.05],
+    outputRange: [0.25, 0.45],
   });
 
   return (
     <View style={styles.root}>
       {/* Blurred background */}
       <ImageBackground
-        source={{ uri: displayImage || FALLBACK_ARTWORK }}
+        source={{ uri: displayImage }}
         style={StyleSheet.absoluteFill}
         resizeMode="cover"
+        onError={() => setImageError(true)}
       >
         <BlurView intensity={85} tint="dark" style={StyleSheet.absoluteFill} />
         <LinearGradient
-          colors={['rgba(0,0,0,0.30)', 'rgba(0,0,0,0.72)', 'rgba(0,0,0,0.97)']}
+          colors={['rgba(0,0,0,0.32)', 'rgba(0,0,0,0.72)', 'rgba(0,0,0,0.98)']}
           locations={[0, 0.5, 1]}
           style={StyleSheet.absoluteFill}
         />
       </ImageBackground>
 
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-
-        {/* ── Top Bar ── */}
-        <View style={styles.topBar}>
-          <Pressable
-            style={styles.topIconBtn}
-            onPress={() => navigation.goBack()}
-            hitSlop={10}
-          >
-            <ArrowLeft size={22} color="#fff" />
-          </Pressable>
-
-          <View style={styles.topCenter}>
-            <Text style={styles.topLabel}>Now Playing</Text>
-            <Text style={styles.topTitle} numberOfLines={1}>{displayTitle}</Text>
-          </View>
-
-          <View style={styles.topRight}>
+      <SafeAreaView
+        style={[
+          styles.safeArea,
+          {
+            paddingBottom: bottomPadding,
+          },
+        ]}
+        edges={['top']}
+      >
+        <View style={styles.contentContainer}>
+          {/* ── Top Bar ── */}
+          <View style={styles.topBar}>
             <Pressable
               style={styles.topIconBtn}
-              onPress={() => setIsHearted((v) => !v)}
+              onPress={() => navigation.goBack()}
               hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
             >
-              <HeartIcon
-                size={22}
-                filled={isHearted}
-                color={isHearted ? Colors.accent : '#fff'}
+              <ArrowLeft size={22} color="#fff" />
+            </Pressable>
+
+            <View style={styles.topCenter}>
+              <Text style={styles.topHeading}>NOW PLAYING</Text>
+            </View>
+
+            <View style={styles.topRight}>
+              <Pressable
+                style={styles.topIconBtn}
+                onPress={() => setIsHearted((v) => !v)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Favorite"
+              >
+                <HeartIcon
+                  size={22}
+                  filled={isHearted}
+                  color={isHearted ? (theme?.primary || Colors.accent) : '#fff'}
+                />
+              </Pressable>
+              <Pressable
+                style={styles.topIconBtn}
+                onPress={() => stopAndGoToAudio().catch(() => undefined)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Close player"
+              >
+                <X size={22} color="#fff" />
+              </Pressable>
+            </View>
+          </View>
+
+          {/* ── Center Section: Disc & Song Info ── */}
+          <View style={styles.centerSection}>
+            {/* ── Disc / Artwork with amber rim ── */}
+            <View style={[styles.discOuterRim, { width: rimSize, height: rimSize, borderRadius: rimSize / 2 }]}>
+              {/* Glow ring */}
+              <Animated.View
+                style={[
+                  styles.discGlow,
+                  {
+                    width: rimSize,
+                    height: rimSize,
+                    borderRadius: rimSize / 2,
+                    backgroundColor: theme?.primary || Colors.accent,
+                    transform: [{ scale: pulseAnim }],
+                    opacity: glowOpacity,
+                  },
+                ]}
               />
-            </Pressable>
-            <Pressable
-              style={styles.topIconBtn}
-              onPress={() => stopAndGoToAudio().catch(() => undefined)}
-              hitSlop={10}
-            >
-              <X size={22} color="#fff" />
-            </Pressable>
+              {/* Concentric platter rim */}
+              <View
+                style={[
+                  styles.discRimLayer,
+                  {
+                    width: rimSize,
+                    height: rimSize,
+                    borderRadius: rimSize / 2,
+                    borderColor: `${theme?.primary || Colors.accent}45`,
+                  },
+                ]}
+              >
+                {/* Circular album artwork */}
+                <Animated.Image
+                  source={{ uri: displayImage }}
+                  style={[
+                    styles.disc,
+                    {
+                      width: artSize,
+                      height: artSize,
+                      borderRadius: artSize / 2,
+                      transform: [{ rotate: spin }],
+                    },
+                  ]}
+                  resizeMode="cover"
+                  onError={() => setImageError(true)}
+                />
+              </View>
+            </View>
+
+            {/* ── Song Info: Clearly separated from artwork ── */}
+            <View style={[styles.songInfo, { marginTop: artworkToTitleGap }]}>
+              <Text style={styles.songTitle} numberOfLines={1} ellipsizeMode="tail">
+                {displayTitle}
+              </Text>
+              <Text style={styles.songArtist} numberOfLines={1} ellipsizeMode="tail">
+                {displayArtist}
+              </Text>
+            </View>
+          </View>
+
+          {/* ── Bottom Section: Seek Bar & Controls ── */}
+          <View style={[styles.bottomSection, { marginTop: isShortScreen ? 12 : 20 }]}>
+            {/* ── Seek Bar (Slider above timestamps) ── */}
+            <View style={styles.seekSection}>
+              <Slider
+                key={`audio-slider-${currentItem?.id ?? 'track'}-${durationKnown ? playerState.durationMs : 0}`}
+                style={styles.seekSlider}
+                minimumValue={0}
+                maximumValue={durationKnown ? playerState.durationMs : 1}
+                step={1}
+                value={sliderValue}
+                disabled={!durationKnown}
+                minimumTrackTintColor={theme?.primary || Colors.accent}
+                maximumTrackTintColor="rgba(255,255,255,0.20)"
+                thumbTintColor={theme?.primary || Colors.accent}
+                onSlidingStart={onSeekStart}
+                onValueChange={onSeekChange}
+                onSlidingComplete={onSeekComplete}
+              />
+              <View style={styles.timesRow}>
+                <Text style={styles.timeText}>{formatDurationLabel(positionForUi, '00:00')}</Text>
+                <Text style={styles.timeText}>
+                  {durationKnown ? formatDurationLabel(playerState.durationMs, '--:--') : '--:--'}
+                </Text>
+              </View>
+            </View>
+
+            {/* ── Playback Controls: Balanced 5-button row with clear gaps ── */}
+            <View style={[styles.controlsRow, { marginTop: isShortScreen ? 14 : 22 }]}>
+              <Pressable
+                style={styles.auxControlBtn}
+                onPress={() => toggleShuffle()}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Shuffle"
+              >
+                <ShuffleIcon
+                  size={17}
+                  color={playerState.isShuffle ? (theme?.primary || Colors.accent) : 'rgba(255,255,255,0.65)'}
+                />
+              </Pressable>
+
+              <Pressable
+                style={styles.skipBtn}
+                onPress={() => skipPrev().catch(() => undefined)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Previous track"
+              >
+                <SkipPrevIcon size={20} color="#fff" />
+              </Pressable>
+
+              <Pressable
+                style={styles.playPauseBtn}
+                onPress={() => togglePlayPause().catch(() => undefined)}
+                accessibilityRole="button"
+                accessibilityLabel={playerState.isPlaying ? "Pause" : "Play"}
+              >
+                {playerState.isPlaying
+                  ? <PauseIcon size={25} color="#000" />
+                  : <PlayIcon size={25} color="#000" />}
+              </Pressable>
+
+              <Pressable
+                style={styles.skipBtn}
+                onPress={() => skipNext().catch(() => undefined)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Next track"
+              >
+                <SkipNextIcon size={20} color="#fff" />
+              </Pressable>
+
+              <Pressable
+                style={styles.auxControlBtn}
+                onPress={() => cycleRepeatMode()}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Repeat mode"
+              >
+                <RepeatIcon
+                  size={17}
+                  color={playerState.repeatMode !== 'off' ? (theme?.primary || Colors.accent) : 'rgba(255,255,255,0.65)'}
+                  one={playerState.repeatMode === 'one'}
+                />
+              </Pressable>
+            </View>
           </View>
         </View>
-
-        {/* ── Disc / Artwork ── */}
-        <View style={styles.discContainer}>
-          {/* Glow ring */}
-          <Animated.View
-            style={[
-              styles.discGlow,
-              { transform: [{ scale: pulseAnim }], opacity: glowOpacity },
-            ]}
-          />
-          {/* Spinning disc */}
-          <Animated.Image
-            source={{ uri: displayImage || FALLBACK_ARTWORK }}
-            style={[styles.disc, { transform: [{ rotate: spin }] }]}
-            resizeMode="cover"
-          />
-          {/* Center hole */}
-          <View style={styles.discHole} />
-        </View>
-
-        {/* ── Song Info ── */}
-        <View style={styles.songInfo}>
-          <Text style={styles.songTitle} numberOfLines={1}>{displayTitle}</Text>
-          <Text style={styles.songArtist} numberOfLines={1}>{displayArtist}</Text>
-        </View>
-
-
-        {/* ── Seek Bar ── */}
-        <View style={styles.seekSection}>
-          <View style={styles.timesRow}>
-            <Text style={styles.timeText}>{formatDurationLabel(positionForUi, '00:00')}</Text>
-            <Text style={styles.timeText}>{formatDurationLabel(playerState.durationMs, '--:--')}</Text>
-          </View>
-          <Slider
-            style={styles.seekSlider}
-            minimumValue={0}
-            maximumValue={Math.max(1, playerState.durationMs || 1)}
-            value={Math.min(positionForUi, playerState.durationMs || 1)}
-            disabled={!hasFiniteDuration(playerState.durationMs)}
-            minimumTrackTintColor={Colors.accent}
-            maximumTrackTintColor="rgba(255,255,255,0.20)"
-            thumbTintColor={Colors.accent}
-            onSlidingStart={onSeekStart}
-            onValueChange={onSeekChange}
-            onSlidingComplete={onSeekComplete}
-          />
-        </View>
-
-        {/* ── Playback Controls ── */}
-        <View style={styles.controlsRow}>
-          <Pressable
-            style={styles.skipBtn}
-            onPress={() => skipPrev().catch(() => undefined)}
-            hitSlop={10}
-          >
-            <SkipPrevIcon size={24} color="#fff" />
-          </Pressable>
-
-          <Pressable
-            style={[styles.playPauseBtn, playerState.isPlaying && styles.playPauseBtnActive]}
-            onPress={() => togglePlayPause().catch(() => undefined)}
-          >
-            {playerState.isPlaying
-              ? <PauseIcon size={30} color="#000" />
-              : <PlayIcon size={30} color="#000" />}
-          </Pressable>
-
-          <Pressable
-            style={styles.skipBtn}
-            onPress={() => skipNext().catch(() => undefined)}
-            hitSlop={10}
-          >
-            <SkipNextIcon size={24} color="#fff" />
-          </Pressable>
-        </View>
-
-
       </SafeAreaView>
     </View>
   );
@@ -398,6 +608,19 @@ export default function FullPlayerScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
   safeArea: { flex: 1, paddingHorizontal: 24 },
+  contentContainer: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  centerSection: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  bottomSection: {
+    width: '100%',
+  },
 
   // ── Top Bar ──
   topBar: {
@@ -405,7 +628,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: 8,
-    paddingBottom: 12,
+    paddingBottom: 8,
+    minHeight: 48,
   },
   topIconBtn: {
     width: 42,
@@ -420,6 +644,7 @@ const styles = StyleSheet.create({
   topCenter: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 8,
   },
   topRight: {
@@ -427,129 +652,118 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  topLabel: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 11,
+  topHeading: {
+    color: 'rgba(255,255,255,0.70)',
+    fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 1.2,
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
-  topTitle: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '800',
-    marginTop: 2,
-  },
 
-  // ── Disc ──
-  discContainer: {
+  // ── Circular Artwork & Rim ──
+  discOuterRim: {
     alignSelf: 'center',
-    width: DISC_SIZE,
-    height: DISC_SIZE,
-    marginTop: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
   discGlow: {
     position: 'absolute',
-    width: DISC_SIZE + 44,
-    height: DISC_SIZE + 44,
-    borderRadius: (DISC_SIZE + 44) / 2,
-    backgroundColor: Colors.accent,
+  },
+  discRimLayer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(120, 53, 15, 0.32)',
+    borderWidth: 1.5,
   },
   disc: {
-    width: DISC_SIZE,
-    height: DISC_SIZE,
-    borderRadius: DISC_SIZE / 2,
-    borderWidth: 5,
-    borderColor: 'rgba(255,255,255,0.10)',
-  },
-  discHole: {
-    position: 'absolute',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#111',
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.20)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.18)',
   },
 
+  // ── Song Info ──
   songInfo: {
     alignItems: 'center',
-    marginVertical: 32,
-    paddingHorizontal: 8,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    width: '100%',
   },
   songTitle: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 22,
-    fontWeight: '900',
+    fontWeight: '800',
     textAlign: 'center',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   songArtist: {
     color: 'rgba(255,255,255,0.60)',
     fontSize: 14,
-    fontWeight: '700',
-    marginTop: 5,
+    fontWeight: '500',
+    marginTop: 6,
     textAlign: 'center',
   },
 
-
   // ── Seek ──
   seekSection: {
-    marginTop: 24,
+    width: '100%',
+  },
+  seekSlider: {
+    width: '100%',
+    height: 28,
   },
   timesRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    paddingHorizontal: 4,
+    marginTop: 2,
   },
   timeText: {
     color: 'rgba(255,255,255,0.65)',
     fontSize: 12,
-    fontWeight: '800',
-  },
-  seekSlider: {
-    width: '100%',
-    height: 24,
+    fontWeight: '600',
   },
 
+  // ── Playback Controls ──
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 32,
-    marginTop: 32,
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    width: '100%',
   },
-  skipBtn: {
-    width: 54,
-    height: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 27,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+  auxControlBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
-  },
-  playPauseBtn: {
-    width: 74,
-    height: 74,
-    borderRadius: 37,
-    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#fff',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 18,
-    elevation: 10,
   },
-  playPauseBtnActive: {
-    backgroundColor: Colors.accent,
-    shadowColor: Colors.accent,
-    shadowOpacity: 0.60,
+  skipBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-
-
+  playPauseBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
+  },
 });
+

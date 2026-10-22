@@ -20,11 +20,15 @@ export default class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: unknown, info: React.ErrorInfo) {
-    console.error('[GLOBAL_ERROR_LOG]', {
-      label: this.props.label ?? '(unlabeled)',
-      error,
-      info,
-    });
+    const err = error as any;
+    console.error(
+      `[GLOBAL_ERROR_LOG] [${this.props.label ?? 'unlabeled'}]\n` +
+      `  Name: ${err?.name || 'Error'}\n` +
+      `  Message: ${err?.message || String(error)}\n` +
+      `  Cause: ${err?.cause ? (typeof err.cause === 'object' ? JSON.stringify(err.cause) : String(err.cause)) : 'none'}\n` +
+      `  Stack:\n${err?.stack || 'no stack'}\n` +
+      `  ComponentStack:\n${info?.componentStack || 'no component stack'}`
+    );
     Sentry.captureException(error, { extra: { ...info, label: this.props.label } });
   }
 
