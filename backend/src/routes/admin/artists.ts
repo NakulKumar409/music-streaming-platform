@@ -116,9 +116,9 @@ router.post("/create", requireAuth, requireAdmin, async (req, res) => {
     })();
 
     const coercedSubscriptionPrice = (() => {
-      if (subscriptionPrice === null || subscriptionPrice === undefined) return 0;
+      if (subscriptionPrice === null || subscriptionPrice === undefined) return 49;
       const n = Number(subscriptionPrice);
-      if (!Number.isFinite(n) || n < 0) return 0;
+      if (!Number.isFinite(n) || n < 0) return 49;
       return n;
     })();
 

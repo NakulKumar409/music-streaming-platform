@@ -150,7 +150,10 @@ export function validateUploadMetadata(input: {
   }
 
   const subscriptionRequired =
-    input.subscriptionRequired === true || String(input.subscriptionRequired || "").toLowerCase() === "true";
+    input.subscriptionRequired === undefined
+      ? true
+      : input.subscriptionRequired === true ||
+        String(input.subscriptionRequired || "").toLowerCase() === "true";
 
   return {
     artistId,

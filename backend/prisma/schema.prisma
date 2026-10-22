@@ -35,7 +35,7 @@ model users {
   banner_image_url          String?
   accent_color              String?                   @db.VarChar(20)
   social_links              Json?
-  subscription_price        Decimal                   @default(0) @db.Decimal
+  subscription_price        Decimal                   @default(49) @db.Decimal
   admin_remarks             String?
   artist_appeal_message     String?
   subscription_features     Json                      @default("[]")
@@ -121,7 +121,7 @@ model content_items {
   reportCount                  Int       @default(0) @map("report_count")
   created_at                   DateTime  @default(now()) @db.Timestamptz(6)
   published_at                 DateTime? @db.Timestamptz(6)
-  subscription_required        Boolean   @default(false)
+  subscription_required        Boolean   @default(true)
   storage_provider             String    @map("storage_provider") @db.VarChar(20)
   storage_key                  String?   @map("storage_key")
   thumbnail_storage_key        String    @map("thumbnail_storage_key")
